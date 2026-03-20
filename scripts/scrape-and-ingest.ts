@@ -232,13 +232,7 @@ async function main(): Promise<void> {
         await pageNavigationDelay();
 
         log.info(`Fetching discovery page: ${plan.url}`);
-        await page.goto(plan.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-
-        if (plan.waitForSelector) {
-          await page.waitForSelector(plan.waitForSelector, { timeout: plan.waitForTimeout ?? 10_000 }).catch(() => {
-            log.warn('Wait for selector timed out, proceeding with available content');
-          });
-        }
+        await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
 
         const html = await page.content();
         runCtx.incrementMetric('pagesFetched');
@@ -296,13 +290,7 @@ async function main(): Promise<void> {
           : `https://www.willhaben.at${item.detailUrl}`;
 
         log.info(`Fetching detail: ${detailUrl}`);
-        await page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-
-        await page.waitForSelector('h1[data-testid="ad-detail-header"], h1.ad-title', {
-          timeout: 10_000,
-        }).catch(() => {
-          log.warn('Detail page header selector not found, proceeding');
-        });
+        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
 
         const html = await page.content();
         runCtx.incrementMetric('http2xx');

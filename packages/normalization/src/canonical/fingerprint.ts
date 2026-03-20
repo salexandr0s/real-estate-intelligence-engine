@@ -57,5 +57,5 @@ export function computeContentFingerprint(listing: Partial<CanonicalListingInput
   // Deterministic JSON: sorted keys, no undefined
   const json = JSON.stringify(fields, Object.keys(fields).sort());
   const hash = createHash('sha256').update(json, 'utf8').digest('hex');
-  return `sha256:${hash}`;
+  return hash;
 }

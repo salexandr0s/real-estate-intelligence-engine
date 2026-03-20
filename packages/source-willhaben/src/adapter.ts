@@ -14,7 +14,7 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.willhaben.at';
-const SEARCH_PATH = '/iad/immobilien/eigentumswohnung/wien/';
+const SEARCH_PATH = '/iad/immobilien/eigentumswohnung/eigentumswohnung-angebote';
 
 export class WillhabenAdapter
   implements SourceAdapter<WillhabenDiscoveryItem, WillhabenDetailDTO>
@@ -31,11 +31,12 @@ export class WillhabenAdapter
       const url = new URL(SEARCH_PATH, BASE_URL);
       url.searchParams.set('page', String(page));
       url.searchParams.set('rows', '25');
-      if (profile.sortOrder) url.searchParams.set('sort', profile.sortOrder);
+      url.searchParams.set('sort', '1');
+      if (profile.regions?.length) url.searchParams.set('areaId', profile.regions[0]!);
 
       plans.push({
         url: url.toString(),
-        waitForSelector: '[data-testid="search-result-entry"], article.result-item',
+        waitForSelector: '#__NEXT_DATA__',
         waitForTimeout: 5000,
         metadata: { page },
       });
@@ -65,7 +66,7 @@ export class WillhabenAdapter
       url: item.detailUrl.startsWith('http')
         ? item.detailUrl
         : `${BASE_URL}${item.detailUrl}`,
-      waitForSelector: 'h1[data-testid="ad-detail-header"], h1.ad-title',
+      waitForSelector: '#__NEXT_DATA__',
       waitForTimeout: 5000,
     };
   }
