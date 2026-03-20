@@ -1,0 +1,22 @@
+{
+  "name": "@rei/source-willhaben",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ok'",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@rei/contracts": "*",
+    "@rei/scraper-core": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@rei/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "@rei/config": "*",
+    "@rei/contracts": "*",
+    "@rei/observability": "*"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx seeds/seed.ts",
+    "lint": "echo 'ok'",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@rei/config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ok'",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  }
+}

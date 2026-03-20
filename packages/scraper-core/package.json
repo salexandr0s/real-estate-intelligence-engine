@@ -1,0 +1,20 @@
+{
+  "name": "@rei/scraper-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@rei/contracts": "*",
+    "@rei/config": "*",
+    "@rei/observability": "*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ok'",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  }
+}

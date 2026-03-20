@@ -1,0 +1,282 @@
+import Foundation
+
+/// Actor-based API client for communicating with the Real Estate Intel backend.
+/// Thread-safe by design. Handles auth, request building, and response parsing.
+actor APIClient {
+
+    // MARK: - Configuration
+
+    private var baseURL: String
+    private var authToken: String?
+    private let session: URLSession
+    private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
+
+    init(
+        baseURL: String = "http://localhost:8080",
+        authToken: String? = nil
+    ) {
+        self.baseURL = baseURL
+        self.authToken = authToken
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        self.session = URLSession(configuration: config)
+
+        self.decoder = JSONDecoder()
+        self.decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        self.encoder = JSONEncoder()
+        self.encoder.keyEncodingStrategy = .convertToSnakeCase
+    }
+
+    // MARK: - Configuration Updates
+
+    func updateBaseURL(_ url: String) {
+        self.baseURL = url
+    }
+
+    func updateAuthToken(_ token: String?) {
+        self.authToken = token
+    }
+
+    // MARK: - Generic Request
+
+    func request<T: Codable>(_ endpoint: APIEndpoint) async throws -> T {
+        let urlRequest = try buildRequest(for: endpoint)
+        let (data, response) = try await performRequest(urlRequest)
+        try validateResponse(response, data: data)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    func requestPaginated<T: Codable>(_ endpoint: APIEndpoint) async throws -> PaginatedResponse<T> {
+        let urlRequest = try buildRequest(for: endpoint)
+        let (data, response) = try await performRequest(urlRequest)
+        try validateResponse(response, data: data)
+        return try decoder.decode(PaginatedResponse<T>.self, from: data)
+    }
+
+    func requestVoid(_ endpoint: APIEndpoint) async throws {
+        let urlRequest = try buildRequest(for: endpoint)
+        let (data, response) = try await performRequest(urlRequest)
+        try validateResponse(response, data: data)
+    }
+
+    // MARK: - Typed Convenience Methods
+
+    func fetchListings(query: ListingQuery = ListingQuery()) async throws -> [Listing] {
+        let response: PaginatedResponse<APIListingResponse> = try await requestPaginated(
+            .listListings(query: query)
+        )
+        return response.data.compactMap { $0.toDomain(decoder: decoder) }
+    }
+
+    func fetchListing(id: Int) async throws -> Listing {
+        let response: APIResponse<APIListingResponse> = try await request(.getListing(id: id))
+        guard let listing = response.data.toDomain(decoder: decoder) else {
+            throw APIError.decodingError(underlying: NSError(
+                domain: "APIClient", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to convert listing DTO"]
+            ))
+        }
+        return listing
+    }
+
+    func fetchScoreExplanation(listingId: Int) async throws -> ScoreExplanation {
+        let response: APIResponse<ScoreExplanation> = try await request(
+            .getScoreExplanation(listingId: listingId)
+        )
+        return response.data
+    }
+
+    func fetchFilters() async throws -> [Filter] {
+        let response: PaginatedResponse<APIFilterResponse> = try await requestPaginated(.listFilters)
+        return response.data.map { dto in
+            let iso = ISO8601DateFormatter()
+            return Filter(
+                id: dto.id,
+                name: dto.name,
+                filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
+                isActive: dto.isActive,
+                criteria: FilterCriteria(
+                    operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
+                    propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
+                    districts: dto.districts ?? [],
+                    minPriceEur: dto.minPriceEur,
+                    maxPriceEur: dto.maxPriceEur,
+                    minAreaSqm: dto.minAreaSqm,
+                    maxAreaSqm: dto.maxAreaSqm,
+                    minRooms: dto.minRooms,
+                    maxRooms: dto.maxRooms,
+                    minScore: dto.minScore,
+                    requiredKeywords: dto.requiredKeywords ?? [],
+                    excludedKeywords: dto.excludedKeywords ?? [],
+                    sortBy: dto.sortBy
+                ),
+                alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
+                createdAt: iso.date(from: dto.createdAt) ?? Date(),
+                updatedAt: iso.date(from: dto.updatedAt) ?? Date(),
+                matchCount: dto.matchCount
+            )
+        }
+    }
+
+    func createFilter(_ filter: APICreateFilterRequest) async throws -> Filter {
+        let body = try encoder.encode(filter)
+        let response: APIResponse<APIFilterResponse> = try await request(.createFilter(body: body))
+        let dto = response.data
+        let iso = ISO8601DateFormatter()
+        return Filter(
+            id: dto.id,
+            name: dto.name,
+            filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
+            isActive: dto.isActive,
+            criteria: FilterCriteria(
+                operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
+                propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
+                districts: dto.districts ?? [],
+                minPriceEur: dto.minPriceEur,
+                maxPriceEur: dto.maxPriceEur,
+                minAreaSqm: dto.minAreaSqm,
+                maxAreaSqm: dto.maxAreaSqm,
+                minRooms: dto.minRooms,
+                maxRooms: dto.maxRooms,
+                minScore: dto.minScore,
+                requiredKeywords: dto.requiredKeywords ?? [],
+                excludedKeywords: dto.excludedKeywords ?? [],
+                sortBy: dto.sortBy
+            ),
+            alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
+            createdAt: iso.date(from: dto.createdAt) ?? Date(),
+            updatedAt: iso.date(from: dto.updatedAt) ?? Date(),
+            matchCount: dto.matchCount
+        )
+    }
+
+    func fetchAlerts(query: AlertQuery? = nil) async throws -> [Alert] {
+        let response: PaginatedResponse<APIAlertResponse> = try await requestPaginated(
+            .listAlerts(query: query)
+        )
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return response.data.map { dto in
+            Alert(
+                id: dto.id,
+                alertType: AlertType(rawValue: dto.alertType) ?? .newMatch,
+                status: AlertStatus(rawValue: dto.status) ?? .unread,
+                title: dto.title,
+                body: dto.body,
+                matchedAt: iso.date(from: dto.matchedAt) ?? Date(),
+                filterName: dto.filterName,
+                listingId: dto.listingId,
+                listing: dto.listing?.toDomain(decoder: decoder)
+            )
+        }
+    }
+
+    func markAlertRead(id: Int) async throws {
+        let body = try encoder.encode(APIAlertUpdateRequest(status: "opened"))
+        try await requestVoid(.updateAlert(id: id, body: body))
+    }
+
+    func fetchUnreadCount() async throws -> Int {
+        let response: APIResponse<APIUnreadCountResponse> = try await request(.getUnreadCount)
+        return response.data.unreadCount
+    }
+
+    func fetchSources() async throws -> [Source] {
+        let response: PaginatedResponse<APISourceResponse> = try await requestPaginated(.listSources)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return response.data.map { dto in
+            Source(
+                id: dto.id,
+                code: dto.code,
+                name: dto.name,
+                isActive: dto.isActive,
+                healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
+                lastSuccessfulRun: dto.lastSuccessfulRun.flatMap { iso.date(from: $0) },
+                crawlIntervalMinutes: dto.crawlIntervalMinutes,
+                lastErrorSummary: dto.lastErrorSummary,
+                totalListingsIngested: dto.totalListingsIngested ?? 0,
+                successRatePct: dto.successRatePct ?? 0.0
+            )
+        }
+    }
+
+    // MARK: - Connection Test
+
+    func testConnection() async -> Bool {
+        do {
+            let _ = try await fetchUnreadCount()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Private Helpers
+
+    private func buildRequest(for endpoint: APIEndpoint) throws -> URLRequest {
+        guard var components = URLComponents(string: baseURL + endpoint.path) else {
+            throw APIError.invalidURL
+        }
+
+        if let queryItems = endpoint.queryItems, !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = endpoint.method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let body = endpoint.body {
+            request.httpBody = body
+        }
+
+        return request
+    }
+
+    private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch let error as URLError where error.code == .cannotConnectToHost
+            || error.code == .notConnectedToInternet
+            || error.code == .networkConnectionLost {
+            throw APIError.noConnection
+        } catch {
+            throw APIError.networkError(underlying: error)
+        }
+    }
+
+    private func validateResponse(_ response: URLResponse, data: Data) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.networkError(underlying: NSError(
+                domain: "APIClient", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response type"]
+            ))
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return
+        case 401:
+            throw APIError.unauthorized
+        case 404:
+            throw APIError.notFound
+        default:
+            let detail = try? decoder.decode(APIErrorResponse.self, from: data)
+            throw APIError.httpError(statusCode: httpResponse.statusCode, detail: detail?.error)
+        }
+    }
+}

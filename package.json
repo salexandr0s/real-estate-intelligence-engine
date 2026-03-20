@@ -1,0 +1,37 @@
+{
+  "name": "real-estate-intelligence-engine",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "npm@10.9.4",
+  "description": "Always-on real estate intelligence platform for Austrian property investment",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "db:migrate": "npm -w packages/db run migrate",
+    "db:seed": "npm -w packages/db run seed",
+    "clean": "turbo run clean",
+    "verify": "npm run lint && npm run typecheck && npm run test:unit",
+    "scrape": "npx tsx scripts/scrape-and-ingest.ts",
+    "baselines": "npx tsx scripts/compute-baselines.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2",
+    "prettier": "^3.8.1",
+    "turbo": "^2.8.20",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

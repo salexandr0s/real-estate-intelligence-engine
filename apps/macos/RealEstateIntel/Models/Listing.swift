@@ -1,0 +1,283 @@
+import Foundation
+
+/// Canonical listing model used throughout the app.
+/// Maps to the `/v1/listings` API response shape.
+struct Listing: Identifiable, Codable, Hashable {
+    let id: Int
+    let listingUid: String
+    let sourceCode: String
+    let title: String
+    let canonicalUrl: String
+    let operationType: OperationType
+    let propertyType: PropertyType
+    let city: String
+    let postalCode: String
+    let districtNo: Int
+    let districtName: String
+    let listPriceEur: Int
+    let livingAreaSqm: Double
+    let rooms: Int
+    let pricePerSqmEur: Double
+    let currentScore: Double
+    let firstSeenAt: Date
+    let listingStatus: ListingStatus
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case listingUid
+        case sourceCode
+        case title
+        case canonicalUrl
+        case operationType
+        case propertyType
+        case city
+        case postalCode
+        case districtNo
+        case districtName
+        case listPriceEur
+        case livingAreaSqm
+        case rooms
+        case pricePerSqmEur
+        case currentScore
+        case firstSeenAt
+        case listingStatus
+    }
+}
+
+// MARK: - Enums
+
+enum OperationType: String, Codable, CaseIterable, Hashable {
+    case sale
+    case rent
+}
+
+enum PropertyType: String, Codable, CaseIterable, Hashable, Identifiable {
+    case apartment
+    case house
+    case land
+    case commercial
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .apartment: return "Apartment"
+        case .house: return "House"
+        case .land: return "Land"
+        case .commercial: return "Commercial"
+        case .other: return "Other"
+        }
+    }
+}
+
+enum ListingStatus: String, Codable, CaseIterable, Hashable {
+    case active
+    case inactive
+    case withdrawn
+    case sold
+    case rented
+    case expired
+    case unknown
+}
+
+// MARK: - Score Explanation
+
+struct ScoreExplanation: Codable, Hashable {
+    let scoreVersion: Int
+    let overallScore: Double
+    let districtPriceScore: Double
+    let undervaluationScore: Double
+    let keywordSignalScore: Double
+    let timeOnMarketScore: Double
+    let confidenceScore: Double
+    let districtBaselinePpsqmEur: Double
+    let bucketBaselinePpsqmEur: Double
+    let discountToDistrictPct: Double
+    let discountToBucketPct: Double
+    let matchedPositiveKeywords: [String]
+    let matchedNegativeKeywords: [String]
+}
+
+// MARK: - Mock Data
+
+extension Listing {
+    static let samples: [Listing] = [
+        Listing(
+            id: 1,
+            listingUid: "8c891f71-0cbc-4d9a-a3b8-a1af4fd5f2ea",
+            sourceCode: "willhaben",
+            title: "Sonnige 3-Zimmer Eigentumswohnung nahe Prater",
+            canonicalUrl: "https://www.willhaben.at/iad/immobilien/d/eigentumswohnung/wien/wien-1020-leopoldstadt/12345",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1020",
+            districtNo: 2,
+            districtName: "Leopoldstadt",
+            listPriceEur: 299_000,
+            livingAreaSqm: 72.5,
+            rooms: 3,
+            pricePerSqmEur: 4124.14,
+            currentScore: 87.3,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 2,
+            listingUid: "a2f81c90-1234-4bca-9e47-deadbeef0002",
+            sourceCode: "willhaben",
+            title: "Provisionsfrei! Renovierte Altbauwohnung mit Balkon",
+            canonicalUrl: "https://www.willhaben.at/iad/immobilien/d/eigentumswohnung/wien/wien-1030-landstrasse/23456",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1030",
+            districtNo: 3,
+            districtName: "Landstrasse",
+            listPriceEur: 245_000,
+            livingAreaSqm: 58.0,
+            rooms: 2,
+            pricePerSqmEur: 4224.14,
+            currentScore: 82.1,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 3,
+            listingUid: "b3c92d01-5678-4abc-8f58-deadbeef0003",
+            sourceCode: "immoscout",
+            title: "Erstbezug nach Sanierung, 4 Zimmer, Loggia",
+            canonicalUrl: "https://www.immobilienscout24.at/expose/34567",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1050",
+            districtNo: 5,
+            districtName: "Margareten",
+            listPriceEur: 389_000,
+            livingAreaSqm: 95.0,
+            rooms: 4,
+            pricePerSqmEur: 4094.74,
+            currentScore: 78.5,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 4,
+            listingUid: "c4da3e12-9abc-4def-0a69-deadbeef0004",
+            sourceCode: "willhaben",
+            title: "Anlage-Hit: Vermietete 2-Zi in Top-Lage",
+            canonicalUrl: "https://www.willhaben.at/iad/immobilien/d/eigentumswohnung/wien/wien-1070-neubau/45678",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1070",
+            districtNo: 7,
+            districtName: "Neubau",
+            listPriceEur: 219_000,
+            livingAreaSqm: 48.3,
+            rooms: 2,
+            pricePerSqmEur: 4534.16,
+            currentScore: 71.2,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 5,
+            listingUid: "d5eb4f23-0bcd-4ef0-1b7a-deadbeef0005",
+            sourceCode: "immoscout",
+            title: "Dachgeschoss-Maisonette mit Terrasse, Fernblick",
+            canonicalUrl: "https://www.immobilienscout24.at/expose/56789",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1090",
+            districtNo: 9,
+            districtName: "Alsergrund",
+            listPriceEur: 520_000,
+            livingAreaSqm: 110.0,
+            rooms: 4,
+            pricePerSqmEur: 4727.27,
+            currentScore: 65.8,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 6,
+            listingUid: "e6fc5034-1cde-4f01-2c8b-deadbeef0006",
+            sourceCode: "willhaben",
+            title: "Garconniere zur Kapitalanlage, befristet vermietet",
+            canonicalUrl: "https://www.willhaben.at/iad/immobilien/d/eigentumswohnung/wien/wien-1100-favoriten/67890",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1100",
+            districtNo: 10,
+            districtName: "Favoriten",
+            listPriceEur: 129_000,
+            livingAreaSqm: 32.0,
+            rooms: 1,
+            pricePerSqmEur: 4031.25,
+            currentScore: 55.4,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 7,
+            listingUid: "f70d6145-2def-4012-3d9c-deadbeef0007",
+            sourceCode: "willhaben",
+            title: "Baurecht! Erdgeschoss-Wohnung mit Garten",
+            canonicalUrl: "https://www.willhaben.at/iad/immobilien/d/eigentumswohnung/wien/wien-1210-floridsdorf/78901",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1210",
+            districtNo: 21,
+            districtName: "Floridsdorf",
+            listPriceEur: 185_000,
+            livingAreaSqm: 65.0,
+            rooms: 3,
+            pricePerSqmEur: 2846.15,
+            currentScore: 42.1,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date())!,
+            listingStatus: .active
+        ),
+        Listing(
+            id: 8,
+            listingUid: "081e7256-3ef0-4123-4ead-deadbeef0008",
+            sourceCode: "immoscout",
+            title: "Preisreduziert! Helle 3-Zimmer nahe U3",
+            canonicalUrl: "https://www.immobilienscout24.at/expose/89012",
+            operationType: .sale,
+            propertyType: .apartment,
+            city: "Wien",
+            postalCode: "1060",
+            districtNo: 6,
+            districtName: "Mariahilf",
+            listPriceEur: 335_000,
+            livingAreaSqm: 78.0,
+            rooms: 3,
+            pricePerSqmEur: 4294.87,
+            currentScore: 25.6,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date())!,
+            listingStatus: .active
+        ),
+    ]
+
+    static let sampleExplanation = ScoreExplanation(
+        scoreVersion: 1,
+        overallScore: 87.3,
+        districtPriceScore: 93.0,
+        undervaluationScore: 88.0,
+        keywordSignalScore: 72.0,
+        timeOnMarketScore: 95.0,
+        confidenceScore: 90.0,
+        districtBaselinePpsqmEur: 5800.0,
+        bucketBaselinePpsqmEur: 5400.0,
+        discountToDistrictPct: 0.2889,
+        discountToBucketPct: 0.2363,
+        matchedPositiveKeywords: ["provisionsfrei", "renoviert"],
+        matchedNegativeKeywords: []
+    )
+}

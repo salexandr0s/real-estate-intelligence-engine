@@ -1,0 +1,29 @@
+{
+  "name": "@rei/ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ok'",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@rei/contracts": "*",
+    "@rei/config": "*",
+    "@rei/db": "*",
+    "@rei/normalization": "*",
+    "@rei/scoring": "*",
+    "@rei/filtering": "*",
+    "@rei/alerts": "*",
+    "@rei/scraper-core": "*",
+    "@rei/observability": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

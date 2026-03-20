@@ -1,0 +1,28 @@
+{
+  "name": "@rei/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "@fastify/cors": "^11.0.0",
+    "@rei/contracts": "*",
+    "@rei/config": "*",
+    "@rei/db": "*",
+    "@rei/observability": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'ok'",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  }
+}
