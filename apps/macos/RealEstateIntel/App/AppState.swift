@@ -1,94 +1,10 @@
 import SwiftUI
 
-// MARK: - Navigation
-
-/// Sidebar navigation items.
-enum NavigationItem: String, CaseIterable, Identifiable {
-    case dashboard
-    case listings
-    case filters
-    case alerts
-    case sources
-    case settings
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .dashboard: return "Dashboard"
-        case .listings: return "Listings"
-        case .filters: return "Filters"
-        case .alerts: return "Alerts"
-        case .sources: return "Sources"
-        case .settings: return "Settings"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .dashboard: return "square.grid.2x2"
-        case .listings: return "building.2"
-        case .filters: return "line.3.horizontal.decrease.circle"
-        case .alerts: return "bell"
-        case .sources: return "antenna.radiowaves.left.and.right"
-        case .settings: return "gearshape"
-        }
-    }
-
-    /// Keyboard shortcut number (Cmd+1 through Cmd+6).
-    var shortcutKey: KeyEquivalent? {
-        switch self {
-        case .dashboard: return "1"
-        case .listings: return "2"
-        case .filters: return "3"
-        case .alerts: return "4"
-        case .sources: return "5"
-        case .settings: return "6"
-        }
-    }
-}
-
-// MARK: - Connection Status
-
-enum ConnectionStatus: Equatable {
-    case connected
-    case connecting
-    case disconnected
-    case error(String)
-
-    var displayName: String {
-        switch self {
-        case .connected: return "Connected"
-        case .connecting: return "Connecting..."
-        case .disconnected: return "Disconnected"
-        case .error(let msg): return "Error: \(msg)"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .connected: return "circle.fill"
-        case .connecting: return "arrow.triangle.2.circlepath"
-        case .disconnected: return "circle"
-        case .error: return "exclamationmark.circle.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .connected: return .green
-        case .connecting: return .orange
-        case .disconnected: return .secondary
-        case .error: return .red
-        }
-    }
-}
-
 // MARK: - App State
 
 /// Central observable state for the application.
 /// Tracks navigation, connection status, and global counters.
-@Observable
+@MainActor @Observable
 final class AppState {
 
     // MARK: - Navigation
@@ -111,8 +27,8 @@ final class AppState {
     }
 
     var apiToken: String {
-        get { UserDefaults.standard.string(forKey: "apiToken") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "apiToken") }
+        get { KeychainHelper.get(key: "apiToken") ?? "" }
+        set { try? KeychainHelper.set(key: "apiToken", value: newValue) }
     }
 
     var refreshIntervalSeconds: Int {
@@ -142,12 +58,18 @@ final class AppState {
 
     // MARK: - API Client
 
-    lazy var apiClient: APIClient = {
-        APIClient(
-            baseURL: apiBaseURL,
-            authToken: apiToken.isEmpty ? nil : apiToken
+    let apiClient: APIClient
+
+    // MARK: - Init
+
+    init() {
+        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
+        let token = KeychainHelper.get(key: "apiToken") ?? ""
+        self.apiClient = APIClient(
+            baseURL: baseURL,
+            authToken: token.isEmpty ? nil : token
         )
-    }()
+    }
 
     // MARK: - Actions
 

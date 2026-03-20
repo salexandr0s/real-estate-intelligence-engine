@@ -10,10 +10,8 @@ struct RealEstateIntelApp: App {
         WindowGroup {
             ContentView()
                 .environment(appState)
-                .onAppear {
-                    Task {
-                        await appState.refreshConnection()
-                    }
+                .task {
+                    await appState.refreshConnection()
                 }
         }
         .defaultSize(width: 1200, height: 800)
@@ -65,7 +63,7 @@ struct RealEstateIntelApp: App {
             Image(systemName: "building.2")
             if appState.unreadAlertCount > 0 {
                 Text("\(appState.unreadAlertCount)")
-                    .font(.caption2.monospacedDigit())
+                    .font(.caption.monospacedDigit())
             }
         }
     }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// View model for the listings table with sorting, filtering, and search.
-@Observable
+@MainActor @Observable
 final class ListingsViewModel {
 
     // MARK: - State
@@ -34,12 +34,11 @@ final class ListingsViewModel {
 
         // Text search
         if !searchText.isEmpty {
-            let query = searchText.lowercased()
             result = result.filter { listing in
-                listing.title.lowercased().contains(query)
-                || listing.districtName.lowercased().contains(query)
-                || listing.postalCode.contains(query)
-                || listing.city.lowercased().contains(query)
+                listing.title.localizedStandardContains(searchText)
+                || listing.districtName.localizedStandardContains(searchText)
+                || listing.postalCode.localizedStandardContains(searchText)
+                || listing.city.localizedStandardContains(searchText)
             }
         }
 

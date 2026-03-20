@@ -50,7 +50,7 @@ struct ContentView: View {
                 Spacer()
                 if item == .alerts && appState.unreadAlertCount > 0 {
                     Text("\(appState.unreadAlertCount)")
-                        .font(.caption2.weight(.bold))
+                        .font(.caption.bold())
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)

@@ -21,82 +21,6 @@ struct Listing: Identifiable, Codable, Hashable {
     let currentScore: Double
     let firstSeenAt: Date
     let listingStatus: ListingStatus
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case listingUid
-        case sourceCode
-        case title
-        case canonicalUrl
-        case operationType
-        case propertyType
-        case city
-        case postalCode
-        case districtNo
-        case districtName
-        case listPriceEur
-        case livingAreaSqm
-        case rooms
-        case pricePerSqmEur
-        case currentScore
-        case firstSeenAt
-        case listingStatus
-    }
-}
-
-// MARK: - Enums
-
-enum OperationType: String, Codable, CaseIterable, Hashable {
-    case sale
-    case rent
-}
-
-enum PropertyType: String, Codable, CaseIterable, Hashable, Identifiable {
-    case apartment
-    case house
-    case land
-    case commercial
-    case other
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .apartment: return "Apartment"
-        case .house: return "House"
-        case .land: return "Land"
-        case .commercial: return "Commercial"
-        case .other: return "Other"
-        }
-    }
-}
-
-enum ListingStatus: String, Codable, CaseIterable, Hashable {
-    case active
-    case inactive
-    case withdrawn
-    case sold
-    case rented
-    case expired
-    case unknown
-}
-
-// MARK: - Score Explanation
-
-struct ScoreExplanation: Codable, Hashable {
-    let scoreVersion: Int
-    let overallScore: Double
-    let districtPriceScore: Double
-    let undervaluationScore: Double
-    let keywordSignalScore: Double
-    let timeOnMarketScore: Double
-    let confidenceScore: Double
-    let districtBaselinePpsqmEur: Double
-    let bucketBaselinePpsqmEur: Double
-    let discountToDistrictPct: Double
-    let discountToBucketPct: Double
-    let matchedPositiveKeywords: [String]
-    let matchedNegativeKeywords: [String]
 }
 
 // MARK: - Mock Data
@@ -120,7 +44,7 @@ extension Listing {
             rooms: 3,
             pricePerSqmEur: 4124.14,
             currentScore: 87.3,
-            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -140,7 +64,7 @@ extension Listing {
             rooms: 2,
             pricePerSqmEur: 4224.14,
             currentScore: 82.1,
-            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -160,7 +84,7 @@ extension Listing {
             rooms: 4,
             pricePerSqmEur: 4094.74,
             currentScore: 78.5,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -180,7 +104,7 @@ extension Listing {
             rooms: 2,
             pricePerSqmEur: 4534.16,
             currentScore: 71.2,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -200,7 +124,7 @@ extension Listing {
             rooms: 4,
             pricePerSqmEur: 4727.27,
             currentScore: 65.8,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -220,7 +144,7 @@ extension Listing {
             rooms: 1,
             pricePerSqmEur: 4031.25,
             currentScore: 55.4,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -240,7 +164,7 @@ extension Listing {
             rooms: 3,
             pricePerSqmEur: 2846.15,
             currentScore: 42.1,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date.now)!,
             listingStatus: .active
         ),
         Listing(
@@ -260,7 +184,7 @@ extension Listing {
             rooms: 3,
             pricePerSqmEur: 4294.87,
             currentScore: 25.6,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date())!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date.now)!,
             listingStatus: .active
         ),
     ]

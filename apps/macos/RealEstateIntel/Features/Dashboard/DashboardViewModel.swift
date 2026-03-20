@@ -1,7 +1,7 @@
 import Foundation
 
 /// View model for the Dashboard summary screen.
-@Observable
+@MainActor @Observable
 final class DashboardViewModel {
 
     // MARK: - State
@@ -59,7 +59,7 @@ final class DashboardViewModel {
     // MARK: - Summary Cards
 
     struct SummaryCard: Identifiable {
-        let id = UUID()
+        let id: String
         let title: String
         let value: String
         let icon: String
@@ -69,24 +69,28 @@ final class DashboardViewModel {
     var summaryCards: [SummaryCard] {
         [
             SummaryCard(
+                id: "active-listings",
                 title: "Active Listings",
                 value: "\(totalActiveListings)",
                 icon: "building.2.fill",
                 color: "blue"
             ),
             SummaryCard(
+                id: "new-today",
                 title: "New Today",
                 value: "\(newListingsToday)",
                 icon: "sparkles",
                 color: "green"
             ),
             SummaryCard(
+                id: "high-score",
                 title: "High Score (70+)",
                 value: "\(highScoreCount)",
                 icon: "star.fill",
                 color: "orange"
             ),
             SummaryCard(
+                id: "active-filters",
                 title: "Active Filters",
                 value: "\(activeFilterCount)",
                 icon: "line.3.horizontal.decrease.circle.fill",

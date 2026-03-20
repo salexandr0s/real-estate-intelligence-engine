@@ -9,20 +9,20 @@ enum Theme {
     /// Returns a color for a score value on the 0-100 scale.
     static func scoreColor(for score: Double) -> Color {
         switch score {
-        case 80...: return .scoreExcellent
-        case 60..<80: return .scoreGood
-        case 30..<60: return .scoreAverage
-        default: return .scorePoor
+        case 80...: .scoreExcellent
+        case 60..<80: .scoreGood
+        case 30..<60: .scoreAverage
+        default: .scorePoor
         }
     }
 
     /// Returns a text label for a score range.
     static func scoreLabel(for score: Double) -> String {
         switch score {
-        case 80...: return "Excellent"
-        case 60..<80: return "Good"
-        case 30..<60: return "Average"
-        default: return "Low"
+        case 80...: "Excellent"
+        case 60..<80: "Good"
+        case 30..<60: "Average"
+        default: "Low"
         }
     }
 
@@ -30,11 +30,11 @@ enum Theme {
 
     static func healthColor(for status: SourceHealthStatus) -> Color {
         switch status {
-        case .healthy: return .sourceHealthy
-        case .degraded: return .sourceDegraded
-        case .failing: return .sourceFailing
-        case .disabled: return .sourceDisabled
-        case .unknown: return .secondary
+        case .healthy: .sourceHealthy
+        case .degraded: .sourceDegraded
+        case .failing: .sourceFailing
+        case .disabled: .sourceDisabled
+        case .unknown: .secondary
         }
     }
 
@@ -42,11 +42,11 @@ enum Theme {
 
     static func alertColor(for alertType: AlertType) -> Color {
         switch alertType {
-        case .newMatch: return .accentColor
-        case .priceDrop: return .scoreExcellent
-        case .scoreUpgrade: return .scoreGood
-        case .scoreDowngrade: return .sourceDegraded
-        case .statusChange: return .secondary
+        case .newMatch: .accentColor
+        case .priceDrop: .scoreExcellent
+        case .scoreUpgrade: .scoreGood
+        case .scoreDowngrade: .sourceDegraded
+        case .statusChange: .secondary
         }
     }
 
@@ -92,22 +92,4 @@ extension Color {
     static let sourceDegraded = Color.orange
     static let sourceFailing = Color.red
     static let sourceDisabled = Color.gray
-}
-
-// MARK: - View Modifiers
-
-struct CardModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(Theme.Spacing.lg)
-            .background(Theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
-            .shadow(color: .black.opacity(0.06), radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
-    }
-}
-
-extension View {
-    func cardStyle() -> some View {
-        modifier(CardModifier())
-    }
 }

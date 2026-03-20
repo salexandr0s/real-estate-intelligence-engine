@@ -14,50 +14,6 @@ struct Alert: Identifiable, Codable, Hashable {
     let listing: Listing?
 }
 
-// MARK: - Enums
-
-enum AlertType: String, Codable, CaseIterable, Hashable {
-    case newMatch = "new_match"
-    case priceDrop = "price_drop"
-    case scoreUpgrade = "score_upgrade"
-    case scoreDowngrade = "score_downgrade"
-    case statusChange = "status_change"
-
-    var displayName: String {
-        switch self {
-        case .newMatch: return "New Match"
-        case .priceDrop: return "Price Drop"
-        case .scoreUpgrade: return "Score Upgrade"
-        case .scoreDowngrade: return "Score Downgrade"
-        case .statusChange: return "Status Change"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .newMatch: return "sparkles"
-        case .priceDrop: return "arrow.down.circle.fill"
-        case .scoreUpgrade: return "arrow.up.circle.fill"
-        case .scoreDowngrade: return "arrow.down.circle"
-        case .statusChange: return "arrow.triangle.2.circlepath"
-        }
-    }
-}
-
-enum AlertStatus: String, Codable, CaseIterable, Hashable {
-    case unread
-    case opened
-    case dismissed
-
-    var displayName: String {
-        switch self {
-        case .unread: return "Unread"
-        case .opened: return "Opened"
-        case .dismissed: return "Dismissed"
-        }
-    }
-}
-
 // MARK: - Mock Data
 
 extension Alert {
@@ -68,7 +24,7 @@ extension Alert {
             status: .unread,
             title: "New match: Sonnige 3-Zimmer nahe Prater",
             body: "Score 87.3 -- EUR 299,000 -- 72.5 sqm -- Leopoldstadt",
-            matchedAt: Calendar.current.date(byAdding: .hour, value: -1, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .hour, value: -1, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 1,
             listing: Listing.samples[0]
@@ -79,7 +35,7 @@ extension Alert {
             status: .unread,
             title: "Price drop: Preisreduziert! Helle 3-Zimmer nahe U3",
             body: "Price reduced from EUR 359,000 to EUR 335,000 (-6.7%)",
-            matchedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 8,
             listing: Listing.samples[7]
@@ -90,7 +46,7 @@ extension Alert {
             status: .unread,
             title: "New match: Provisionsfrei! Renovierte Altbauwohnung",
             body: "Score 82.1 -- EUR 245,000 -- 58.0 sqm -- Landstrasse",
-            matchedAt: Calendar.current.date(byAdding: .hour, value: -4, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .hour, value: -4, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 2,
             listing: Listing.samples[1]
@@ -101,7 +57,7 @@ extension Alert {
             status: .opened,
             title: "Score upgrade: Erstbezug nach Sanierung",
             body: "Score increased from 62.1 to 78.5 after price correction",
-            matchedAt: Calendar.current.date(byAdding: .hour, value: -8, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .hour, value: -8, to: Date.now)!,
             filterName: "Large Family Apartments",
             listingId: 3,
             listing: Listing.samples[2]
@@ -112,7 +68,7 @@ extension Alert {
             status: .opened,
             title: "New match: Anlage-Hit in Top-Lage",
             body: "Score 71.2 -- EUR 219,000 -- 48.3 sqm -- Neubau",
-            matchedAt: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 4,
             listing: Listing.samples[3]
@@ -123,7 +79,7 @@ extension Alert {
             status: .dismissed,
             title: "Price drop: Dachgeschoss-Maisonette mit Terrasse",
             body: "Price reduced from EUR 549,000 to EUR 520,000 (-5.3%)",
-            matchedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             filterName: nil,
             listingId: 5,
             listing: Listing.samples[4]
@@ -134,7 +90,7 @@ extension Alert {
             status: .dismissed,
             title: "Status change: Garconniere zur Kapitalanlage",
             body: "Listing status changed to inactive",
-            matchedAt: Calendar.current.date(byAdding: .day, value: -3, to: Date())!,
+            matchedAt: Calendar.current.date(byAdding: .day, value: -3, to: Date.now)!,
             filterName: "Sub-4000 EUR/sqm Deals",
             listingId: 6,
             listing: Listing.samples[5]

@@ -14,49 +14,6 @@ struct Filter: Identifiable, Codable, Hashable {
     var matchCount: Int?
 }
 
-// MARK: - Filter Criteria
-
-struct FilterCriteria: Codable, Hashable {
-    var operationType: OperationType?
-    var propertyTypes: [PropertyType]
-    var districts: [Int]
-    var minPriceEur: Int?
-    var maxPriceEur: Int?
-    var minAreaSqm: Double?
-    var maxAreaSqm: Double?
-    var minRooms: Int?
-    var maxRooms: Int?
-    var minScore: Double?
-    var requiredKeywords: [String]
-    var excludedKeywords: [String]
-    var sortBy: String?
-}
-
-// MARK: - Enums
-
-enum FilterKind: String, Codable, CaseIterable, Hashable {
-    case alert
-    case saved
-}
-
-enum AlertFrequency: String, Codable, CaseIterable, Hashable {
-    case instant
-    case hourly
-    case daily
-    case weekly
-    case off
-
-    var displayName: String {
-        switch self {
-        case .instant: return "Instant"
-        case .hourly: return "Hourly"
-        case .daily: return "Daily"
-        case .weekly: return "Weekly"
-        case .off: return "Off"
-        }
-    }
-}
-
 // MARK: - Mock Data
 
 extension Filter {
@@ -82,8 +39,8 @@ extension Filter {
                 sortBy: "score_desc"
             ),
             alertFrequency: .instant,
-            createdAt: Calendar.current.date(byAdding: .day, value: -30, to: Date())!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date())!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -30, to: Date.now)!,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             matchCount: 14
         ),
         Filter(
@@ -107,8 +64,8 @@ extension Filter {
                 sortBy: "price_asc"
             ),
             alertFrequency: .daily,
-            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date())!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date.now)!,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -5, to: Date.now)!,
             matchCount: 37
         ),
         Filter(
@@ -132,8 +89,8 @@ extension Filter {
                 sortBy: "score_desc"
             ),
             alertFrequency: .hourly,
-            createdAt: Calendar.current.date(byAdding: .day, value: -7, to: Date())!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -7, to: Date())!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
             matchCount: 8
         ),
     ]

@@ -57,8 +57,11 @@ enum PriceFormatter {
 
     /// Format area: "72,5 m2"
     static func formatArea(_ sqm: Double) -> String {
-        let formatted = String(format: "%.1f", sqm)
-            .replacingOccurrences(of: ".", with: ",")
+        let formatted = sqm.formatted(
+            .number
+            .precision(.fractionLength(1))
+            .locale(Locale(identifier: "de_AT"))
+        )
         return "\(formatted) m\u{00B2}"
     }
 
@@ -74,7 +77,7 @@ enum PriceFormatter {
 
     /// Short relative date: "3h ago", "2d ago"
     static func relativeDate(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
+        let interval = Date.now.timeIntervalSince(date)
         let minutes = Int(interval / 60)
         let hours = Int(interval / 3600)
         let days = Int(interval / 86400)
@@ -99,11 +102,15 @@ enum PriceFormatter {
         dateFormatter.string(from: date)
     }
 
-    /// Date with time: "20.03.2026 14:32"
-    static func formatDateTime(_ date: Date) -> String {
+    private static let dateTimeFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "dd.MM.yyyy HH:mm"
         fmt.locale = Locale(identifier: "de_AT")
-        return fmt.string(from: date)
+        return fmt
+    }()
+
+    /// Date with time: "20.03.2026 14:32"
+    static func formatDateTime(_ date: Date) -> String {
+        dateTimeFormatter.string(from: date)
     }
 }

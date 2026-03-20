@@ -1,0 +1,42 @@
+import SwiftUI
+
+/// Header section for the listing detail inspector showing status, title, price, and key metrics.
+struct ListingHeaderSection: View {
+    let listing: Listing
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack {
+                StatusBadge(listingStatus: listing.listingStatus)
+                Spacer()
+                Text(listing.sourceCode)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1), in: Capsule())
+            }
+
+            Text(listing.title)
+                .font(.title3.bold())
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(PriceFormatter.format(eur: listing.listPriceEur))
+                .font(.title2.bold().monospacedDigit())
+                .foregroundStyle(.blue)
+
+            HStack(spacing: Theme.Spacing.lg) {
+                Label(PriceFormatter.formatArea(listing.livingAreaSqm), systemImage: "ruler")
+                    .font(.subheadline)
+                Label("\(listing.rooms) rooms", systemImage: "square.split.2x2")
+                    .font(.subheadline)
+                Label(
+                    PriceFormatter.formatPerSqm(listing.pricePerSqmEur) + "/m\u{00B2}",
+                    systemImage: "eurosign"
+                )
+                .font(.subheadline.monospacedDigit())
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+}

@@ -128,7 +128,7 @@ struct ListingsView: View {
                     Text(listing.title)
                         .lineLimit(1)
                     Text(listing.sourceCode)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -138,7 +138,7 @@ struct ListingsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(listing.districtName)
                     Text(listing.postalCode)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -149,7 +149,7 @@ struct ListingsView: View {
                     Text(PriceFormatter.format(eur: listing.listPriceEur))
                         .monospacedDigit()
                     Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur) + "/m\u{00B2}")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
                 }
@@ -183,18 +183,11 @@ struct ListingsView: View {
         if let listing = viewModel.selectedListing {
             ListingDetailView(listing: listing)
         } else {
-            VStack(spacing: Theme.Spacing.md) {
-                Image(systemName: "building.2")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.quaternary)
-                Text("Select a listing")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+            ContentUnavailableView {
+                Label("Select a listing", systemImage: "building.2")
+            } description: {
                 Text("Click a row to view details")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

@@ -57,36 +57,8 @@ struct DashboardView: View {
             spacing: Theme.Spacing.lg
         ) {
             ForEach(viewModel.summaryCards) { card in
-                summaryCardView(card)
+                SummaryCardView(card: card)
             }
-        }
-    }
-
-    private func summaryCardView(_ card: DashboardViewModel.SummaryCard) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack {
-                Image(systemName: card.icon)
-                    .font(.title3)
-                    .foregroundStyle(cardColor(card.color))
-                Spacer()
-            }
-            Text(card.value)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(card.title)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .cardStyle()
-    }
-
-    private func cardColor(_ name: String) -> Color {
-        switch name {
-        case "blue": return .blue
-        case "green": return .green
-        case "orange": return .orange
-        case "purple": return .purple
-        default: return .accentColor
         }
     }
 
@@ -104,15 +76,15 @@ struct DashboardView: View {
             }
 
             if viewModel.recentHighScoreListings.isEmpty {
-                emptyState(
-                    icon: "building.2",
-                    title: "No high-score listings yet",
-                    subtitle: "Listings with score 60+ will appear here"
-                )
+                ContentUnavailableView {
+                    Label("No high-score listings yet", systemImage: "building.2")
+                } description: {
+                    Text("Listings with score 60+ will appear here")
+                }
             } else {
                 VStack(spacing: 0) {
                     ForEach(viewModel.recentHighScoreListings) { listing in
-                        dashboardListingRow(listing)
+                        DashboardListingRow(listing: listing)
                         if listing.id != viewModel.recentHighScoreListings.last?.id {
                             Divider()
                                 .padding(.leading, 52)
@@ -123,43 +95,6 @@ struct DashboardView: View {
         }
         .cardStyle()
         .frame(maxWidth: .infinity)
-    }
-
-    private func dashboardListingRow(_ listing: Listing) -> some View {
-        HStack(spacing: Theme.Spacing.md) {
-            ScoreIndicator(score: listing.currentScore, size: .compact)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text(listing.title)
-                    .font(.body)
-                    .lineLimit(1)
-                HStack(spacing: Theme.Spacing.sm) {
-                    Text(listing.districtName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("--")
-                        .font(.caption)
-                        .foregroundStyle(.quaternary)
-                    Text(PriceFormatter.format(eur: listing.listPriceEur))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Text("--")
-                        .font(.caption)
-                        .foregroundStyle(.quaternary)
-                    Text(PriceFormatter.formatArea(listing.livingAreaSqm))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            Text(PriceFormatter.relativeDate(listing.firstSeenAt))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, Theme.Spacing.sm)
-        .contentShape(Rectangle())
     }
 
     // MARK: - Source Health
@@ -177,7 +112,7 @@ struct DashboardView: View {
 
             VStack(spacing: 0) {
                 ForEach(viewModel.sources, id: \.id) { source in
-                    sourceRow(source)
+                    SourceHealthRow(source: source)
                     if source.id != viewModel.sources.last?.id {
                         Divider()
                     }
@@ -186,43 +121,6 @@ struct DashboardView: View {
         }
         .cardStyle()
         .frame(minWidth: 300, maxWidth: 400)
-    }
-
-    private func sourceRow(_ source: Source) -> some View {
-        HStack(spacing: Theme.Spacing.md) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text(source.name)
-                    .font(.body)
-                if let lastRun = source.lastSuccessfulRun {
-                    Text("Last run: \(PriceFormatter.relativeDate(lastRun))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            StatusBadge(healthStatus: source.healthStatus)
-        }
-        .padding(.vertical, Theme.Spacing.sm)
-    }
-
-    // MARK: - Empty State
-
-    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
-        VStack(spacing: Theme.Spacing.md) {
-            Image(systemName: icon)
-                .font(.largeTitle)
-                .foregroundStyle(.quaternary)
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Theme.Spacing.xxl)
     }
 }
 

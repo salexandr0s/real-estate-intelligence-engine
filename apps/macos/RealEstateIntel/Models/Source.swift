@@ -15,26 +15,6 @@ struct Source: Identifiable, Codable, Hashable {
     let successRatePct: Double
 }
 
-// MARK: - Enums
-
-enum SourceHealthStatus: String, Codable, CaseIterable, Hashable {
-    case healthy
-    case degraded
-    case failing
-    case disabled
-    case unknown
-
-    var displayName: String {
-        switch self {
-        case .healthy: return "Healthy"
-        case .degraded: return "Degraded"
-        case .failing: return "Failing"
-        case .disabled: return "Disabled"
-        case .unknown: return "Unknown"
-        }
-    }
-}
-
 // MARK: - Mock Data
 
 extension Source {
@@ -45,7 +25,7 @@ extension Source {
             name: "willhaben.at",
             isActive: true,
             healthStatus: .healthy,
-            lastSuccessfulRun: Calendar.current.date(byAdding: .minute, value: -8, to: Date())!,
+            lastSuccessfulRun: Calendar.current.date(byAdding: .minute, value: -8, to: Date.now)!,
             crawlIntervalMinutes: 15,
             lastErrorSummary: nil,
             totalListingsIngested: 12_847,
@@ -57,7 +37,7 @@ extension Source {
             name: "ImmobilienScout24.at",
             isActive: true,
             healthStatus: .healthy,
-            lastSuccessfulRun: Calendar.current.date(byAdding: .minute, value: -12, to: Date())!,
+            lastSuccessfulRun: Calendar.current.date(byAdding: .minute, value: -12, to: Date.now)!,
             crawlIntervalMinutes: 15,
             lastErrorSummary: nil,
             totalListingsIngested: 8_432,
@@ -69,7 +49,7 @@ extension Source {
             name: "Immo-World.at",
             isActive: true,
             healthStatus: .degraded,
-            lastSuccessfulRun: Calendar.current.date(byAdding: .hour, value: -2, to: Date())!,
+            lastSuccessfulRun: Calendar.current.date(byAdding: .hour, value: -2, to: Date.now)!,
             crawlIntervalMinutes: 30,
             lastErrorSummary: "Elevated 429 rate (23%) in last 30 min",
             totalListingsIngested: 3_291,
@@ -81,7 +61,7 @@ extension Source {
             name: "derStandard.at/Immobilien",
             isActive: false,
             healthStatus: .disabled,
-            lastSuccessfulRun: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
+            lastSuccessfulRun: Calendar.current.date(byAdding: .day, value: -5, to: Date.now)!,
             crawlIntervalMinutes: 60,
             lastErrorSummary: "Source adapter pending DOM update",
             totalListingsIngested: 1_104,
@@ -93,7 +73,7 @@ extension Source {
             name: "bazar.at",
             isActive: true,
             healthStatus: .failing,
-            lastSuccessfulRun: Calendar.current.date(byAdding: .hour, value: -18, to: Date())!,
+            lastSuccessfulRun: Calendar.current.date(byAdding: .hour, value: -18, to: Date.now)!,
             crawlIntervalMinutes: 60,
             lastErrorSummary: "CAPTCHA wall detected on discovery pages since 06:12 UTC",
             totalListingsIngested: 2_054,
