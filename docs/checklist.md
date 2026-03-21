@@ -3,16 +3,16 @@
 
 ## 0. Product and source discovery
 
-- [ ] Confirm initial operating mode: local Mac mini daemon or remote host
-- [ ] Confirm first source to onboard
-- [ ] Confirm initial target market: Vienna apartments for sale
-- [ ] Confirm high-priority districts
-- [ ] Confirm allowed source entry points
-- [ ] Review robots/terms/compliance status for each planned source
-- [ ] Document per-source crawl risk
-- [ ] Define success metrics for freshness, reliability, and alert lag
-- [ ] Define supported property types for v1
-- [ ] Define canonical operation types for v1
+- [x] Confirm initial operating mode: Mac mini daemon (see `docs/phase0/deployment-decision.md`)
+- [x] Confirm first source to onboard: willhaben (see `docs/phase0/first-source-decision.md`)
+- [x] Confirm initial target market: Vienna apartments for sale
+- [x] Confirm high-priority districts: all 23 Vienna districts
+- [x] Confirm allowed source entry points: public search + detail pages only
+- [x] Review robots/terms/compliance status for each planned source (see `docs/phase0/risk-feasibility.md`)
+- [x] Document per-source crawl risk (see `docs/phase0/risk-feasibility.md`)
+- [x] Define success metrics for freshness, reliability, and alert lag (see `docs/phase0/kpi-slo.md`)
+- [x] Define supported property types for v1: apartment, house, land, commercial, parking, other
+- [x] Define canonical operation types for v1: sale, rent
 
 ---
 
@@ -20,11 +20,11 @@
 
 - [x] Create monorepo layout
 - [x] Enable strict TypeScript configuration
-- [ ] Configure linting
+- [x] Configure linting
 - [x] Configure formatting
 - [x] Configure unit test runner
-- [ ] Configure integration test runner
-- [ ] Add Git hooks or CI enforcement
+- [x] Configure integration test runner
+- [x] Add Git hooks or CI enforcement
 - [x] Add migration tooling
 - [x] Add shared config package
 - [x] Add shared contracts package
@@ -34,7 +34,7 @@
 - [x] Add scoring package skeleton
 - [x] Add alerting package skeleton
 - [x] Add Swift macOS app project
-- [ ] Add CI pipeline for lint/test/build
+- [x] Add CI pipeline for lint/test/build
 - [ ] Add artifact retention for failed test snapshots
 
 ---
@@ -89,23 +89,23 @@
 - [x] Add latitude/longitude validation
 
 ### Indexes
-- [ ] Add active listing filter index
-- [ ] Add district + price partial index
-- [ ] Add district + area partial index
-- [ ] Add score sort partial index
-- [ ] Add source + last seen index
-- [ ] Add search vector index
-- [ ] Add raw listing dedupe index
-- [ ] Add scrape run status/time indexes
-- [ ] Add user filter active index
-- [ ] Add user filter districts GIN index
-- [ ] Add user filter property types GIN index
-- [ ] Add alert scheduling index
-- [ ] Add market baseline lookup index
+- [x] Add active listing filter index
+- [x] Add district + price partial index
+- [x] Add district + area partial index
+- [x] Add score sort partial index
+- [x] Add source + last seen index
+- [x] Add search vector index
+- [x] Add raw listing dedupe index
+- [x] Add scrape run status/time indexes
+- [x] Add user filter active index
+- [x] Add user filter districts GIN index
+- [x] Add user filter property types GIN index
+- [x] Add alert scheduling index
+- [x] Add market baseline lookup index
 
 ### Migration quality
-- [ ] Test migrations from empty database
-- [ ] Test rolling forward on seeded database
+- [x] Test migrations from empty database
+- [x] Test rolling forward on seeded database
 - [ ] Test rollback plan or compensating migration strategy
 - [ ] Document destructive migration rules
 
@@ -114,47 +114,47 @@
 ## 4. Scraper core
 
 ### Browser runtime
-- [ ] Implement Playwright browser pool
-- [ ] Implement browser context factory
-- [ ] Set locale to `de-AT`
-- [ ] Set timezone to `Europe/Vienna`
-- [ ] Add viewport rotation strategy
-- [ ] Add user-agent rotation strategy
-- [ ] Add headless/headful toggle
-- [ ] Add browser/context recycle policy
+- [x] Implement Playwright browser pool (`apps/worker-scraper/src/browser-pool.ts`)
+- [x] Implement browser context factory (`createScrapeContext()`)
+- [x] Set locale to `de-AT` (`DEFAULT_BROWSER_CONTEXT_CONFIG`)
+- [x] Set timezone to `Europe/Vienna` (`DEFAULT_BROWSER_CONTEXT_CONFIG`)
+- [x] Add viewport rotation strategy (`VIEWPORT_POOL` + `pickRandomViewport()`)
+- [x] Add user-agent rotation strategy (`USER_AGENT_POOL` + `pickRandomUserAgent()`)
+- [x] Add headless/headful toggle (`PLAYWRIGHT_HEADLESS` env var)
+- [x] Add browser/context recycle policy (per-job context lifecycle)
 
 ### Request execution
-- [ ] Implement request plan abstraction
-- [ ] Implement navigation timeout defaults
-- [ ] Implement wait condition helpers
-- [ ] Implement request interception policy
-- [ ] Implement cookie-consent helper
-- [ ] Implement page artifact capture helpers
+- [x] Implement request plan abstraction (`RequestPlan` in contracts)
+- [x] Implement navigation timeout defaults (30s in workers)
+- [x] Implement wait condition helpers (`waitForSelector` in RequestPlan)
+- [x] Implement request interception policy (`setupRequestInterception()`)
+- [x] Implement cookie-consent helper (`dismissCookieConsent()` per source)
+- [x] Implement page artifact capture helpers (`ArtifactWriter` with gzip)
 
 ### Reliability
-- [ ] Implement retry classification
-- [ ] Implement exponential backoff with jitter
-- [ ] Implement per-source concurrency limits
-- [ ] Implement per-source request-rate limits
-- [ ] Implement block/captcha signal detection
-- [ ] Implement source circuit breaker
-- [ ] Implement dead-letter handling
+- [x] Implement retry classification (`classifyScraperError()` — 5 categories)
+- [x] Implement exponential backoff with jitter (`withRetry()`)
+- [x] Implement per-source concurrency limits (concurrency: 1 in workers)
+- [x] Implement per-source request-rate limits (`PerDomainRateLimiter`)
+- [x] Implement block/captcha signal detection (`soft_anti_bot` classification)
+- [x] Implement source circuit breaker (`SourceCircuitBreaker`)
+- [x] Implement dead-letter handling (BullMQ default dead-letter)
 
 ### Persistence integration
-- [ ] Create scrape run at job start
-- [ ] Update scrape run counters while crawling
-- [ ] Close scrape run with final status
-- [ ] Persist raw snapshot metadata
-- [ ] Persist raw artifact pointers
-- [ ] Update observation count on duplicate raw snapshot
-- [ ] Keep raw writes idempotent
+- [x] Create scrape run at job start (scheduler + CLI)
+- [x] Update scrape run counters while crawling (`ScrapeRunContext`)
+- [x] Close scrape run with final status (`scrapeRuns.finish()`)
+- [x] Persist raw snapshot metadata (`upsertRawSnapshot()`)
+- [x] Persist raw artifact pointers (HTML + screenshot storage keys wired)
+- [x] Update observation count on duplicate raw snapshot (ON CONFLICT)
+- [x] Keep raw writes idempotent (unique constraint on source_id + key + hash)
 
 ### Diagnostics
-- [ ] Capture screenshot on parse failure
-- [ ] Capture HTML on parse failure
-- [ ] Capture HAR when configured
-- [ ] Log source/job correlation IDs
-- [ ] Expose scrape metrics
+- [x] Capture screenshot on parse failure (detail worker catch block)
+- [x] Capture HTML on parse failure (detail worker catch block)
+- [ ] Capture HAR when configured (deferred to Phase 9)
+- [x] Log source/job correlation IDs (in all workers)
+- [x] Expose scrape metrics (`ScrapeRunContext.getMetrics()`)
 
 ---
 
@@ -168,17 +168,17 @@
 - [ ] Define source runbook template
 - [ ] Define source health documentation template
 
-### First source
-- [ ] Implement discovery page extraction
-- [ ] Implement detail page extraction
-- [ ] Implement canonical URL normalization
-- [ ] Implement source-local listing key derivation
-- [ ] Implement unavailable/removed detection
-- [ ] Implement cookie flow for source
-- [ ] Tune delays for source
-- [ ] Tune concurrency for source
-- [ ] Save representative fixtures
-- [ ] Add parser tests from fixtures
+### First source (willhaben)
+- [x] Implement discovery page extraction (`packages/source-willhaben/src/discovery.ts`)
+- [x] Implement detail page extraction (`packages/source-willhaben/src/detail.ts`)
+- [x] Implement canonical URL normalization (`WillhabenAdapter.canonicalizeUrl()`)
+- [x] Implement source-local listing key derivation (`WillhabenAdapter.deriveSourceListingKey()`)
+- [x] Implement unavailable/removed detection (`detectDetailAvailability()`)
+- [x] Implement cookie flow for source (`dismissCookieConsent()` with willhaben selectors)
+- [x] Tune delays for source (10 RPM, 2–7s jitter)
+- [x] Tune concurrency for source (1 concurrent)
+- [x] Save representative fixtures (3: discovery, detail, sold)
+- [x] Add parser tests from fixtures (9 tests passing)
 - [ ] Add canary crawl for source
 - [ ] Write source runbook
 
@@ -193,20 +193,20 @@
 
 ## 6. Raw data handling
 
-- [ ] Define raw DTO contract
-- [ ] Preserve response headers/status
-- [ ] Preserve extraction status
-- [ ] Preserve parser version
-- [ ] Preserve canonical URL and detail URL
-- [ ] Preserve discovery URL where relevant
-- [ ] Preserve full raw payload JSON
-- [ ] Preserve HTML artifact pointer
-- [ ] Preserve screenshot artifact pointer
-- [ ] Preserve HAR artifact pointer
-- [ ] Compute raw content checksum
-- [ ] Verify re-observation updates `last_seen_at`
-- [ ] Verify identical raw snapshot does not duplicate row
-- [ ] Verify changed raw snapshot creates new row
+- [x] Define raw DTO contract (`RawListingUpsert`, `RawListingRow` in contracts)
+- [x] Preserve response headers/status (`responseStatus`, `responseHeaders` fields)
+- [x] Preserve extraction status (`extractionStatus` column)
+- [x] Preserve parser version (`parserVersion` column)
+- [x] Preserve canonical URL and detail URL (`canonicalUrl`, `detailUrl` columns)
+- [x] Preserve discovery URL where relevant (`discoveryUrl` column)
+- [x] Preserve full raw payload JSON (`rawPayload` JSONB column)
+- [x] Preserve HTML artifact pointer (`bodyStorageKey` / `htmlStorageKey`)
+- [x] Preserve screenshot artifact pointer (`screenshotStorageKey`)
+- [ ] Preserve HAR artifact pointer (deferred to Phase 9)
+- [x] Compute raw content checksum (`computeContentHash()` → `contentSha256`)
+- [x] Verify re-observation updates `last_seen_at` (ON CONFLICT clause)
+- [x] Verify identical raw snapshot does not duplicate row (unique constraint)
+- [x] Verify changed raw snapshot creates new row (different hash = new row)
 
 ---
 
