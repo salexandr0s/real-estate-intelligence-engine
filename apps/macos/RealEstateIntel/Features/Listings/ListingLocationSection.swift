@@ -9,24 +9,13 @@ struct ListingLocationSection: View {
             Text("Location")
                 .font(.headline)
 
-            detailRow("City", value: listing.city)
+            DetailRow(label: "City", value: listing.city)
             if let districtNo = listing.districtNo {
-                detailRow("District", value: "\(districtNo). \(listing.districtName ?? "")")
+                DetailRow(label: "District", value: "\(districtNo). \(listing.districtName ?? "")")
             }
             if let postalCode = listing.postalCode {
-                detailRow("Postal Code", value: postalCode)
+                DetailRow(label: "Postal Code", value: postalCode)
             }
-        }
-    }
-
-    private func detailRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.subheadline)
         }
     }
 }

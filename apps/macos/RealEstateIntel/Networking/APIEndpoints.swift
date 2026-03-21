@@ -35,21 +35,21 @@ enum APIEndpoint {
 
     var path: String {
         switch self {
-        case .listListings: return "/v1/listings"
-        case .getListing(let id): return "/v1/listings/\(id)"
-        case .getScoreExplanation(let id): return "/v1/listings/\(id)/score-explanation"
-        case .getListingHistory(let id): return "/v1/listings/\(id)/history"
-        case .listFilters: return "/v1/filters"
-        case .createFilter: return "/v1/filters"
-        case .getFilter(let id): return "/v1/filters/\(id)"
-        case .updateFilter(let id, _): return "/v1/filters/\(id)"
-        case .deleteFilter(let id): return "/v1/filters/\(id)"
-        case .testFilter(let id): return "/v1/filters/\(id)/test"
-        case .listAlerts: return "/v1/alerts"
-        case .updateAlert(let id, _): return "/v1/alerts/\(id)"
-        case .getUnreadCount: return "/v1/alerts/unread-count"
-        case .listSources: return "/v1/sources"
-        case .updateSource(let id, _): return "/v1/sources/\(id)"
+        case .listListings: "/v1/listings"
+        case .getListing(let id): "/v1/listings/\(id)"
+        case .getScoreExplanation(let id): "/v1/listings/\(id)/score-explanation"
+        case .getListingHistory(let id): "/v1/listings/\(id)/history"
+        case .listFilters: "/v1/filters"
+        case .createFilter: "/v1/filters"
+        case .getFilter(let id): "/v1/filters/\(id)"
+        case .updateFilter(let id, _): "/v1/filters/\(id)"
+        case .deleteFilter(let id): "/v1/filters/\(id)"
+        case .testFilter(let id): "/v1/filters/\(id)/test"
+        case .listAlerts: "/v1/alerts"
+        case .updateAlert(let id, _): "/v1/alerts/\(id)"
+        case .getUnreadCount: "/v1/alerts/unread-count"
+        case .listSources: "/v1/sources"
+        case .updateSource(let id, _): "/v1/sources/\(id)"
         }
     }
 
@@ -57,13 +57,13 @@ enum APIEndpoint {
         switch self {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources:
-            return "GET"
+            "GET"
         case .createFilter, .testFilter:
-            return "POST"
+            "POST"
         case .updateFilter, .updateAlert, .updateSource:
-            return "PATCH"
+            "PATCH"
         case .deleteFilter:
-            return "DELETE"
+            "DELETE"
         }
     }
 
@@ -86,61 +86,5 @@ enum APIEndpoint {
         default:
             return nil
         }
-    }
-}
-
-// MARK: - Query Parameter Types
-
-struct ListingQuery {
-    var status: String?
-    var operationType: String?
-    var propertyTypes: [String]?
-    var districts: [Int]?
-    var minPriceEur: Int?
-    var maxPriceEur: Int?
-    var minAreaSqm: Double?
-    var maxAreaSqm: Double?
-    var minRooms: Int?
-    var maxRooms: Int?
-    var minScore: Double?
-    var requiredKeywords: [String]?
-    var excludedKeywords: [String]?
-    var sortBy: String?
-    var limit: Int?
-    var cursor: String?
-
-    func toQueryItems() -> [URLQueryItem] {
-        var items: [URLQueryItem] = []
-        if let v = status { items.append(.init(name: "status", value: v)) }
-        if let v = operationType { items.append(.init(name: "operationType", value: v)) }
-        if let v = propertyTypes, !v.isEmpty { items.append(.init(name: "propertyTypes", value: v.joined(separator: ","))) }
-        if let v = districts, !v.isEmpty { items.append(.init(name: "districts", value: v.map(String.init).joined(separator: ","))) }
-        if let v = minPriceEur { items.append(.init(name: "minPriceEur", value: String(v))) }
-        if let v = maxPriceEur { items.append(.init(name: "maxPriceEur", value: String(v))) }
-        if let v = minAreaSqm { items.append(.init(name: "minAreaSqm", value: String(v))) }
-        if let v = maxAreaSqm { items.append(.init(name: "maxAreaSqm", value: String(v))) }
-        if let v = minRooms { items.append(.init(name: "minRooms", value: String(v))) }
-        if let v = maxRooms { items.append(.init(name: "maxRooms", value: String(v))) }
-        if let v = minScore { items.append(.init(name: "minScore", value: String(v))) }
-        if let v = sortBy { items.append(.init(name: "sortBy", value: v)) }
-        if let v = limit { items.append(.init(name: "limit", value: String(v))) }
-        if let v = cursor { items.append(.init(name: "cursor", value: v)) }
-        return items
-    }
-}
-
-struct AlertQuery {
-    var status: String?
-    var userFilterId: Int?
-    var limit: Int?
-    var cursor: String?
-
-    func toQueryItems() -> [URLQueryItem] {
-        var items: [URLQueryItem] = []
-        if let v = status { items.append(.init(name: "status", value: v)) }
-        if let v = userFilterId { items.append(.init(name: "userFilterId", value: String(v))) }
-        if let v = limit { items.append(.init(name: "limit", value: String(v))) }
-        if let v = cursor { items.append(.init(name: "cursor", value: v)) }
-        return items
     }
 }

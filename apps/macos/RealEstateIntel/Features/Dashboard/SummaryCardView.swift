@@ -9,7 +9,7 @@ struct SummaryCardView: View {
             HStack {
                 Image(systemName: card.icon)
                     .font(.title3)
-                    .foregroundStyle(cardColor)
+                    .foregroundStyle(card.color)
                 Spacer()
             }
             Text(card.value)
@@ -21,15 +21,5 @@ struct SummaryCardView: View {
                 .foregroundStyle(.secondary)
         }
         .cardStyle()
-    }
-
-    private var cardColor: Color {
-        switch card.color {
-        case "blue": .blue
-        case "green": .green
-        case "orange": .orange
-        case "purple": .purple
-        default: .accentColor
-        }
     }
 }

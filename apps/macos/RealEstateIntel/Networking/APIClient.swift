@@ -93,8 +93,7 @@ actor APIClient {
     func fetchFilters() async throws -> [Filter] {
         let response: PaginatedResponse<APIFilterResponse> = try await requestPaginated(.listFilters)
         return response.data.map { dto in
-            let iso = ISO8601DateFormatter()
-            return Filter(
+            Filter(
                 id: dto.id,
                 name: dto.name,
                 filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
@@ -115,8 +114,8 @@ actor APIClient {
                     sortBy: dto.sortBy
                 ),
                 alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
-                createdAt: iso.date(from: dto.createdAt) ?? Date(),
-                updatedAt: iso.date(from: dto.updatedAt) ?? Date(),
+                createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
+                updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
                 matchCount: dto.matchCount
             )
         }
@@ -126,7 +125,6 @@ actor APIClient {
         let body = try encoder.encode(filter)
         let response: APIResponse<APIFilterResponse> = try await request(.createFilter(body: body))
         let dto = response.data
-        let iso = ISO8601DateFormatter()
         return Filter(
             id: dto.id,
             name: dto.name,
@@ -148,8 +146,8 @@ actor APIClient {
                 sortBy: dto.sortBy
             ),
             alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
-            createdAt: iso.date(from: dto.createdAt) ?? Date(),
-            updatedAt: iso.date(from: dto.updatedAt) ?? Date(),
+            createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
+            updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
             matchCount: dto.matchCount
         )
     }
@@ -158,8 +156,6 @@ actor APIClient {
         let response: PaginatedResponse<APIAlertResponse> = try await requestPaginated(
             .listAlerts(query: query)
         )
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return response.data.map { dto in
             Alert(
                 id: dto.id,
@@ -167,7 +163,7 @@ actor APIClient {
                 status: AlertStatus(rawValue: dto.status) ?? .unread,
                 title: dto.title,
                 body: dto.body,
-                matchedAt: iso.date(from: dto.matchedAt) ?? Date(),
+                matchedAt: ISO8601DateFormatter.shared.date(from: dto.matchedAt) ?? .now,
                 filterName: dto.filterName,
                 listingId: dto.listingId,
                 listing: dto.listing?.toDomain(decoder: decoder)
@@ -187,8 +183,6 @@ actor APIClient {
 
     func fetchSources() async throws -> [Source] {
         let response: PaginatedResponse<APISourceResponse> = try await requestPaginated(.listSources)
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return response.data.map { dto in
             Source(
                 id: dto.id,
@@ -196,7 +190,7 @@ actor APIClient {
                 name: dto.name,
                 isActive: dto.isActive,
                 healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
-                lastSuccessfulRun: dto.lastSuccessfulRun.flatMap { iso.date(from: $0) },
+                lastSuccessfulRun: dto.lastSuccessfulRun.flatMap { ISO8601DateFormatter.shared.date(from: $0) },
                 crawlIntervalMinutes: dto.crawlIntervalMinutes,
                 lastErrorSummary: dto.lastErrorSummary,
                 totalListingsIngested: dto.totalListingsIngested ?? 0,

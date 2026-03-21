@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// View model for the Dashboard summary screen.
 @MainActor @Observable
@@ -18,7 +18,7 @@ final class DashboardViewModel {
     // MARK: - Computed
 
     var healthySources: Int {
-        sources.filter { $0.healthStatus == .healthy }.count
+        sources.count(where: { $0.healthStatus == .healthy })
     }
 
     var totalSources: Int {
@@ -26,7 +26,7 @@ final class DashboardViewModel {
     }
 
     var activeSources: Int {
-        sources.filter { $0.isActive }.count
+        sources.count(where: { $0.isActive })
     }
 
     // MARK: - Load
@@ -38,16 +38,16 @@ final class DashboardViewModel {
         do {
             let allListings = try await client.fetchListings(query: ListingQuery())
             totalActiveListings = allListings.count
-            newListingsToday = allListings.filter {
+            newListingsToday = allListings.count(where: {
                 Calendar.current.isDateInToday($0.firstSeenAt)
-            }.count
-            highScoreCount = allListings.filter { ($0.currentScore ?? 0) >= 70 }.count
+            })
+            highScoreCount = allListings.count(where: { ($0.currentScore ?? 0) >= 70 })
             recentHighScoreListings = allListings
                 .filter { ($0.currentScore ?? 0) >= 60 }
                 .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
 
             let filters = try await client.fetchFilters()
-            activeFilterCount = filters.filter { $0.isActive }.count
+            activeFilterCount = filters.count(where: { $0.isActive })
 
             sources = try await client.fetchSources()
         } catch {
@@ -56,11 +56,11 @@ final class DashboardViewModel {
             if totalActiveListings == 0 {
                 let allListings = Listing.samples
                 totalActiveListings = allListings.count
-                newListingsToday = allListings.filter {
+                newListingsToday = allListings.count(where: {
                     Calendar.current.isDateInToday($0.firstSeenAt)
-                }.count
-                highScoreCount = allListings.filter { ($0.currentScore ?? 0) >= 70 }.count
-                activeFilterCount = Filter.samples.filter { $0.isActive }.count
+                })
+                highScoreCount = allListings.count(where: { ($0.currentScore ?? 0) >= 70 })
+                activeFilterCount = Filter.samples.count(where: { $0.isActive })
                 recentHighScoreListings = allListings
                     .filter { ($0.currentScore ?? 0) >= 60 }
                     .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
@@ -78,7 +78,7 @@ final class DashboardViewModel {
         let title: String
         let value: String
         let icon: String
-        let color: String
+        let color: Color
     }
 
     var summaryCards: [SummaryCard] {
@@ -88,28 +88,28 @@ final class DashboardViewModel {
                 title: "Active Listings",
                 value: "\(totalActiveListings)",
                 icon: "building.2.fill",
-                color: "blue"
+                color: .blue
             ),
             SummaryCard(
                 id: "new-today",
                 title: "New Today",
                 value: "\(newListingsToday)",
                 icon: "sparkles",
-                color: "green"
+                color: .green
             ),
             SummaryCard(
                 id: "high-score",
                 title: "High Score (70+)",
                 value: "\(highScoreCount)",
                 icon: "star.fill",
-                color: "orange"
+                color: .orange
             ),
             SummaryCard(
                 id: "active-filters",
                 title: "Active Filters",
                 value: "\(activeFilterCount)",
                 icon: "line.3.horizontal.decrease.circle.fill",
-                color: "purple"
+                color: .purple
             ),
         ]
     }

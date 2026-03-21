@@ -23,9 +23,9 @@ struct RealEstateIntelApp: App {
         // MARK: - Menu Bar Extra
 
         MenuBarExtra {
-            menuBarContent
+            MenuBarContent()
         } label: {
-            menuBarLabel
+            MenuBarLabel(unreadAlertCount: appState.unreadAlertCount)
         }
     }
 
@@ -54,58 +54,5 @@ struct RealEstateIntelApp: App {
             }
             .keyboardShortcut("r", modifiers: .command)
         }
-    }
-
-    // MARK: - Menu Bar Extra Content
-
-    private var menuBarLabel: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "building.2")
-            if appState.unreadAlertCount > 0 {
-                Text("\(appState.unreadAlertCount)")
-                    .font(.caption.monospacedDigit())
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var menuBarContent: some View {
-        if appState.unreadAlertCount > 0 {
-            Text("\(appState.unreadAlertCount) unread alert\(appState.unreadAlertCount == 1 ? "" : "s")")
-                .font(.headline)
-        } else {
-            Text("No unread alerts")
-                .foregroundStyle(.secondary)
-        }
-
-        Divider()
-
-        Button("Open Dashboard") {
-            appState.navigateTo(.dashboard)
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        .keyboardShortcut("1", modifiers: .command)
-
-        Button("View Alerts") {
-            appState.navigateTo(.alerts)
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        .keyboardShortcut("4", modifiers: .command)
-
-        Divider()
-
-        Button("Refresh") {
-            Task {
-                await appState.refreshConnection()
-            }
-        }
-        .keyboardShortcut("r", modifiers: .command)
-
-        Divider()
-
-        Button("Quit Real Estate Intel") {
-            NSApplication.shared.terminate(nil)
-        }
-        .keyboardShortcut("q", modifiers: .command)
     }
 }
