@@ -35,6 +35,7 @@ export interface NormalizeAndUpsertListingData {
   firstSeenAt: Date;
   lastPriceChangeAt: Date | null;
   canonicalUrl: string;
+  currentScore: number | null;
 }
 
 export interface NormalizeAndUpsertResult {
@@ -50,11 +51,17 @@ export interface NormalizationDeps {
   findExistingListing: (
     sourceId: number,
     sourceListingKey: string,
-  ) => Promise<{ id: number; contentFingerprint: string; listingStatus: string; listPriceEurCents: number | null; firstSeenAt: Date; lastPriceChangeAt: Date | null } | null>;
+  ) => Promise<{
+    id: number;
+    contentFingerprint: string;
+    listingStatus: string;
+    listPriceEurCents: number | null;
+    firstSeenAt: Date;
+    lastPriceChangeAt: Date | null;
+    currentScore: number | null;
+  } | null>;
 
-  upsertListing: (
-    input: CanonicalListingInput,
-  ) => Promise<{ id: number; isNew: boolean }>;
+  upsertListing: (input: CanonicalListingInput) => Promise<{ id: number; isNew: boolean }>;
 
   appendListingVersion: (input: {
     listingId: number;
@@ -120,9 +127,16 @@ export class NormalizeAndUpsert {
     );
 
     // 3. Detect version reason
+    const INACTIVE_STATUSES = ['inactive', 'withdrawn', 'expired'] as const;
     let versionReason: VersionReason | null = null;
     if (!existing) {
       versionReason = 'first_seen';
+    } else if (
+      (INACTIVE_STATUSES as readonly string[]).includes(existing.listingStatus) &&
+      listing.listingStatus === 'active'
+    ) {
+      // Listing was previously inactive/withdrawn/expired and is now active again
+      versionReason = 'relist_detected';
     } else if (existing.contentFingerprint !== listing.contentFingerprint) {
       // Determine specific change type
       if (existing.listPriceEurCents !== listing.listPriceEurCents) {
@@ -195,14 +209,12 @@ export class NormalizeAndUpsert {
         firstSeenAt: existing?.firstSeenAt ?? new Date(),
         lastPriceChangeAt: existing?.lastPriceChangeAt ?? null,
         canonicalUrl: listing.canonicalUrl ?? context.canonicalUrl,
+        currentScore: existing?.currentScore ?? null,
       },
     };
   }
 
-  private computePricePerSqm(
-    priceCents: number | null,
-    areaSqm: number | null,
-  ): number | null {
+  private computePricePerSqm(priceCents: number | null, areaSqm: number | null): number | null {
     if (priceCents == null || areaSqm == null || areaSqm <= 0) return null;
     return Math.round((priceCents / 100 / areaSqm) * 100) / 100;
   }

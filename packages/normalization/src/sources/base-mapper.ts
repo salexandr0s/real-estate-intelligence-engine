@@ -1,5 +1,6 @@
 import type {
   CanonicalListingInput,
+  ListingStatus,
   NormalizationContext,
   NormalizationResult,
   NormalizationWarning,
@@ -9,9 +10,20 @@ import type {
   PropertyType,
 } from '@rei/contracts';
 import { createLogger } from '@rei/observability';
-import { parseEurPrice, parseSqm, parseRooms, parseBoolean, parseYear, parseFloor, normalizeWhitespace } from '../canonical/coerce.js';
+import {
+  parseEurPrice,
+  parseSqm,
+  parseRooms,
+  parseBoolean,
+  parseYear,
+  parseFloor,
+  normalizeWhitespace,
+} from '../canonical/coerce.js';
 import { computeCompletenessScore } from '../canonical/completeness.js';
-import { computeContentFingerprint } from '../canonical/fingerprint.js';
+import {
+  computeContentFingerprint,
+  computeCrossSourceFingerprint,
+} from '../canonical/fingerprint.js';
 import { resolveDistrict } from '../district/lookup.js';
 import { normalizePropertyType, normalizeOperationType } from '../canonical/property-type.js';
 
@@ -20,9 +32,47 @@ const logger = createLogger('normalization');
 const NORMALIZATION_VERSION = 1;
 
 /**
+ * Maps source-reported availability strings to canonical listing statuses.
+ * Supports both English and German terms.
+ */
+const SOURCE_STATUS_MAP: Record<string, ListingStatus> = {
+  active: 'active',
+  available: 'active',
+  sold: 'sold',
+  verkauft: 'sold',
+  rented: 'rented',
+  vermietet: 'rented',
+  reserved: 'unknown',
+  reserviert: 'unknown',
+  removed: 'withdrawn',
+  deleted: 'withdrawn',
+  inactive: 'inactive',
+  blocked: 'unknown',
+  not_found: 'withdrawn',
+};
+
+/**
+ * Resolves a raw source status string to a canonical ListingStatus.
+ * Returns 'active' when the input is null/undefined/empty (new listing assumed active).
+ * Returns 'unknown' for unrecognised non-empty values to avoid false positives.
+ */
+export function resolveListingStatus(rawStatusInput: string | null | undefined): ListingStatus {
+  if (rawStatusInput == null) return 'active';
+  const normalized = rawStatusInput.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (normalized === '') return 'active';
+  return SOURCE_STATUS_MAP[normalized] ?? 'unknown';
+}
+
+/**
  * Hard-fail fields: normalization fails if these are missing after mapping.
  */
-const _HARD_FAIL_FIELDS = ['sourceListingKey', 'canonicalUrl', 'operationType', 'propertyType', 'title'] as const;
+const _HARD_FAIL_FIELDS = [
+  'sourceListingKey',
+  'canonicalUrl',
+  'operationType',
+  'propertyType',
+  'title',
+] as const;
 
 /**
  * Base normalizer that implements the SourceNormalizer interface.
@@ -36,10 +86,7 @@ export class BaseSourceMapper implements SourceNormalizer {
     this.sourceCode = sourceCode;
   }
 
-  normalize(
-    rawPayload: SourceRawListingBase,
-    context: NormalizationContext,
-  ): NormalizationResult {
+  normalize(rawPayload: SourceRawListingBase, context: NormalizationContext): NormalizationResult {
     const warnings: NormalizationWarning[] = [];
     const errors: string[] = [];
     const provenance: Record<string, string> = {};
@@ -57,7 +104,8 @@ export class BaseSourceMapper implements SourceNormalizer {
       // Areas
       const livingAreaResult = parseSqm(rawPayload.livingAreaRaw);
       if (livingAreaResult.warning) warnings.push(livingAreaResult.warning);
-      provenance['livingArea'] = rawPayload.livingAreaRaw != null ? 'payload.livingAreaRaw' : 'missing';
+      provenance['livingArea'] =
+        rawPayload.livingAreaRaw != null ? 'payload.livingAreaRaw' : 'missing';
 
       const usableAreaResult = parseSqm(rawPayload.usableAreaRaw);
       if (usableAreaResult.warning) warnings.push(usableAreaResult.warning);
@@ -74,7 +122,8 @@ export class BaseSourceMapper implements SourceNormalizer {
       // Rooms
       const roomsResult = parseRooms(rawPayload.roomsRaw ?? rawPayload.roomsCountRaw);
       if (roomsResult.warning) warnings.push(roomsResult.warning);
-      provenance['rooms'] = (rawPayload.roomsRaw ?? rawPayload.roomsCountRaw) != null ? 'payload.roomsRaw' : 'missing';
+      provenance['rooms'] =
+        (rawPayload.roomsRaw ?? rawPayload.roomsCountRaw) != null ? 'payload.roomsRaw' : 'missing';
 
       // Floor
       const floorResult = parseFloor(rawPayload.floorRaw);
@@ -96,20 +145,39 @@ export class BaseSourceMapper implements SourceNormalizer {
 
       // Booleans (from attributes or explicit fields)
       const attrs = rawPayload.attributesRaw ?? {};
-      const hasBalcony = parseBoolean(attrs['balkon'] as string | undefined ?? attrs['balcony'] as string | undefined)
-        ?? (balconyAreaResult.value != null && balconyAreaResult.value > 0 ? true : null);
-      const hasTerrace = parseBoolean(attrs['terrasse'] as string | undefined ?? attrs['terrace'] as string | undefined)
-        ?? (terraceAreaResult.value != null && terraceAreaResult.value > 0 ? true : null);
-      const hasGarden = parseBoolean(attrs['garten'] as string | undefined ?? attrs['garden'] as string | undefined)
-        ?? (gardenAreaResult.value != null && gardenAreaResult.value > 0 ? true : null);
-      const hasElevator = parseBoolean(attrs['aufzug'] as string | undefined ?? attrs['lift'] as string | undefined ?? attrs['elevator'] as string | undefined);
-      const parkingAvailable = parseBoolean(attrs['parkplatz'] as string | undefined ?? attrs['parking'] as string | undefined ?? attrs['garage'] as string | undefined);
-      const isFurnished = parseBoolean(attrs['möbliert'] as string | undefined ?? attrs['furnished'] as string | undefined ?? attrs['moebliert'] as string | undefined);
+      const hasBalcony =
+        parseBoolean(
+          (attrs['balkon'] as string | undefined) ?? (attrs['balcony'] as string | undefined),
+        ) ?? (balconyAreaResult.value != null && balconyAreaResult.value > 0 ? true : null);
+      const hasTerrace =
+        parseBoolean(
+          (attrs['terrasse'] as string | undefined) ?? (attrs['terrace'] as string | undefined),
+        ) ?? (terraceAreaResult.value != null && terraceAreaResult.value > 0 ? true : null);
+      const hasGarden =
+        parseBoolean(
+          (attrs['garten'] as string | undefined) ?? (attrs['garden'] as string | undefined),
+        ) ?? (gardenAreaResult.value != null && gardenAreaResult.value > 0 ? true : null);
+      const hasElevator = parseBoolean(
+        (attrs['aufzug'] as string | undefined) ??
+          (attrs['lift'] as string | undefined) ??
+          (attrs['elevator'] as string | undefined),
+      );
+      const parkingAvailable = parseBoolean(
+        (attrs['parkplatz'] as string | undefined) ??
+          (attrs['parking'] as string | undefined) ??
+          (attrs['garage'] as string | undefined),
+      );
+      const isFurnished = parseBoolean(
+        (attrs['möbliert'] as string | undefined) ??
+          (attrs['furnished'] as string | undefined) ??
+          (attrs['moebliert'] as string | undefined),
+      );
 
       // ── Step 2: Property type normalization ──
       const propertyTypeResult = normalizePropertyType(rawPayload.propertyTypeRaw);
       const propertyType: PropertyType = propertyTypeResult?.propertyType ?? 'other';
-      const propertySubtype: string | null = rawPayload.propertySubtypeRaw ?? propertyTypeResult?.propertySubtype ?? null;
+      const propertySubtype: string | null =
+        rawPayload.propertySubtypeRaw ?? propertyTypeResult?.propertySubtype ?? null;
       if (!propertyTypeResult && rawPayload.propertyTypeRaw != null) {
         warnings.push({
           field: 'propertyType',
@@ -120,7 +188,9 @@ export class BaseSourceMapper implements SourceNormalizer {
       }
 
       // ── Step 3: Operation type normalization ──
-      const operationType: OperationType | null = normalizeOperationType(rawPayload.operationTypeRaw);
+      const operationType: OperationType | null = normalizeOperationType(
+        rawPayload.operationTypeRaw,
+      );
       if (operationType == null && rawPayload.operationTypeRaw != null) {
         warnings.push({
           field: 'operationType',
@@ -144,9 +214,10 @@ export class BaseSourceMapper implements SourceNormalizer {
           message: w,
         });
       }
-      provenance['district'] = districtResolution.districtNo != null
-        ? `inferred (confidence: ${districtResolution.confidence})`
-        : 'not_resolved';
+      provenance['district'] =
+        districtResolution.districtNo != null
+          ? `inferred (confidence: ${districtResolution.confidence})`
+          : 'not_resolved';
 
       // ── Step 5: Location fields ──
       const city = normalizeWhitespace(rawPayload.cityRaw) ?? 'Wien';
@@ -159,9 +230,22 @@ export class BaseSourceMapper implements SourceNormalizer {
       let latitude: number | null = null;
       let longitude: number | null = null;
       if (rawPayload.latRaw != null && rawPayload.lonRaw != null) {
-        const lat = typeof rawPayload.latRaw === 'number' ? rawPayload.latRaw : parseFloat(String(rawPayload.latRaw));
-        const lon = typeof rawPayload.lonRaw === 'number' ? rawPayload.lonRaw : parseFloat(String(rawPayload.lonRaw));
-        if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        const lat =
+          typeof rawPayload.latRaw === 'number'
+            ? rawPayload.latRaw
+            : parseFloat(String(rawPayload.latRaw));
+        const lon =
+          typeof rawPayload.lonRaw === 'number'
+            ? rawPayload.lonRaw
+            : parseFloat(String(rawPayload.lonRaw));
+        if (
+          Number.isFinite(lat) &&
+          Number.isFinite(lon) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lon >= -180 &&
+          lon <= 180
+        ) {
           latitude = lat;
           longitude = lon;
         }
@@ -174,7 +258,10 @@ export class BaseSourceMapper implements SourceNormalizer {
         pricePerSqmEur = Math.round((priceResult.value / 100 / effectiveArea) * 100) / 100;
       }
 
-      // ── Step 7: Build canonical listing ──
+      // ── Step 7: Derive listing status from source availability ──
+      const listingStatus: ListingStatus = resolveListingStatus(rawPayload.statusRaw);
+
+      // ── Step 8: Build canonical listing ──
       const listing: CanonicalListingInput = {
         sourceId: context.sourceId,
         sourceListingKey: context.sourceListingKey,
@@ -186,7 +273,7 @@ export class BaseSourceMapper implements SourceNormalizer {
         operationType: operationType ?? 'sale',
         propertyType,
         propertySubtype,
-        listingStatus: 'active',
+        listingStatus,
 
         title: title ?? '',
         description,
@@ -239,13 +326,16 @@ export class BaseSourceMapper implements SourceNormalizer {
         normalizationVersion: this.normalizationVersion,
       };
 
-      // ── Step 8: Completeness score ──
+      // ── Step 9: Completeness score ──
       listing.completenessScore = computeCompletenessScore(listing);
 
-      // ── Step 9: Content fingerprint ──
+      // ── Step 10: Content fingerprint ──
       listing.contentFingerprint = computeContentFingerprint(listing);
 
-      // ── Step 10: Hard-fail validation ──
+      // ── Step 10b: Cross-source fingerprint ──
+      listing.crossSourceFingerprint = computeCrossSourceFingerprint(listing);
+
+      // ── Step 11: Hard-fail validation ──
       if (!title || title.trim() === '') {
         errors.push('missing_title');
       }

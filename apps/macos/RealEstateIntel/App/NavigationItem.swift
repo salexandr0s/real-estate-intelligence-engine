@@ -7,6 +7,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     case filters
     case alerts
     case sources
+    case analytics
     case settings
 
     var id: String { rawValue }
@@ -18,6 +19,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .filters: "Filters"
         case .alerts: "Alerts"
         case .sources: "Sources"
+        case .analytics: "Analytics"
         case .settings: "Settings"
         }
     }
@@ -29,11 +31,12 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .filters: "line.3.horizontal.decrease.circle"
         case .alerts: "bell"
         case .sources: "antenna.radiowaves.left.and.right"
+        case .analytics: "chart.bar.xaxis"
         case .settings: "gearshape"
         }
     }
 
-    /// Keyboard shortcut number (Cmd+1 through Cmd+6).
+    /// Keyboard shortcut number (Cmd+1 through Cmd+7).
     var shortcutKey: KeyEquivalent? {
         switch self {
         case .dashboard: "1"
@@ -41,7 +44,8 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .filters: "3"
         case .alerts: "4"
         case .sources: "5"
-        case .settings: "6"
+        case .analytics: "6"
+        case .settings: "7"
         }
     }
 }

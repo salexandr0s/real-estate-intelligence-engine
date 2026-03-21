@@ -150,7 +150,7 @@ export function createPipeline(): FullIngestionPipeline {
   // Wrap ingestDetailCapture to add observability metrics
   const originalIngest = pipeline.ingestDetailCapture.bind(pipeline);
   pipeline.ingestDetailCapture = async (capture, sourceId, scrapeRunId) => {
-    const scoreStart = Date.now();
+    const pipelineStart = Date.now();
     const result = await originalIngest(capture, sourceId, scrapeRunId);
     const sourceCode = capture.sourceCode;
 
@@ -175,15 +175,16 @@ export function createPipeline(): FullIngestionPipeline {
       });
     }
 
-    // Score latency metric
+    // Score duration — currently measures full pipeline time as an upper bound.
+    // TODO: expose per-step timing from ScoreAndAlertResult for precise measurement
     if (result.scoring) {
-      const scoreDurationSec = (Date.now() - scoreStart) / 1000;
-      scoringDuration.observe(scoreDurationSec);
+      const durationSec = (Date.now() - pipelineStart) / 1000;
+      scoringDuration.observe(durationSec);
     }
 
-    // Alert lag metric (time from pipeline start to alert creation)
+    // Alert lag: end-to-end time from pipeline start to alert creation
     if (result.scoring && result.scoring.alertsCreated > 0) {
-      const lagSec = (Date.now() - scoreStart) / 1000;
+      const lagSec = (Date.now() - pipelineStart) / 1000;
       const alertType =
         result.normalization.versionReason === 'price_change'
           ? 'price_drop'

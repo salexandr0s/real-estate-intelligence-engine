@@ -10,7 +10,9 @@ final class ListingsViewModel {
     var selectedListingID: Int?
     var searchText: String = ""
     var isLoading: Bool = false
+    var isLoadingMore: Bool = false
     var errorMessage: String?
+    var nextCursor: String?
 
     // MARK: - Filters
 
@@ -28,6 +30,8 @@ final class ListingsViewModel {
     ]
 
     // MARK: - Computed
+
+    var hasMore: Bool { nextCursor != nil }
 
     var filteredListings: [Listing] {
         var result = listings
@@ -107,9 +111,12 @@ final class ListingsViewModel {
     func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil
+        nextCursor = nil
 
         do {
-            listings = try await client.fetchListings(query: ListingQuery())
+            let response = try await client.fetchListingsPaginated(query: ListingQuery())
+            listings = response.listings
+            nextCursor = response.nextCursor
         } catch {
             errorMessage = error.localizedDescription
             // Fall back to mock data if API unavailable
@@ -119,6 +126,27 @@ final class ListingsViewModel {
         }
 
         isLoading = false
+    }
+
+    func loadMore(using client: APIClient) async {
+        guard let cursor = nextCursor, !isLoadingMore else { return }
+
+        isLoadingMore = true
+
+        do {
+            var query = ListingQuery()
+            query.cursor = cursor
+            let response = try await client.fetchListingsPaginated(query: query)
+            // Deduplicate by ID before appending
+            let existingIDs = Set(listings.map(\.id))
+            let newListings = response.listings.filter { !existingIDs.contains($0.id) }
+            listings.append(contentsOf: newListings)
+            nextCursor = response.nextCursor
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoadingMore = false
     }
 
     func clearFilters() {

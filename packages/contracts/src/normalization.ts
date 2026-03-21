@@ -1,4 +1,10 @@
-import type { GeocodePrecision, ListingStatus, OperationType, PropertyType, VersionReason } from './domain.js';
+import type {
+  GeocodePrecision,
+  ListingStatus,
+  OperationType,
+  PropertyType,
+  VersionReason,
+} from './domain.js';
 
 // ── Canonical Listing Input ─────────────────────────────────────────────────
 
@@ -55,6 +61,8 @@ export interface CanonicalListingInput {
   hasElevator?: boolean | null;
   parkingAvailable?: boolean | null;
   isFurnished?: boolean | null;
+
+  crossSourceFingerprint?: string | null;
 
   normalizedPayload: Record<string, unknown>;
   completenessScore: number;
@@ -123,10 +131,7 @@ export interface SourceRawListingBase {
 export interface SourceNormalizer<TSourceDTO extends SourceRawListingBase = SourceRawListingBase> {
   readonly sourceCode: string;
   readonly normalizationVersion: number;
-  normalize(
-    rawPayload: TSourceDTO,
-    context: NormalizationContext,
-  ): NormalizationResult;
+  normalize(rawPayload: TSourceDTO, context: NormalizationContext): NormalizationResult;
 }
 
 export interface NormalizationContext {

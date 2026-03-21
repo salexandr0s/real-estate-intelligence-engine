@@ -16,6 +16,8 @@ struct DetailContentView: View {
             AlertsView()
         case .sources:
             SourcesView()
+        case .analytics:
+            AnalyticsView()
         case .settings:
             SettingsView()
         }

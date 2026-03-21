@@ -16,7 +16,13 @@ struct ListingDetailView: View {
                 Divider()
                 ListingLocationSection(listing: listing)
                 Divider()
-                PriceHistoryPlaceholder()
+                PriceHistoryView(versions: [
+                    PriceVersion(
+                        date: listing.firstSeenAt,
+                        priceEur: listing.listPriceEur,
+                        reason: "Current price"
+                    )
+                ])
                 Divider()
                 MapPlaceholder()
                 Divider()

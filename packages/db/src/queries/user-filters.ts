@@ -75,8 +75,10 @@ function toUserFilterRow(row: UserFilterDbRow): UserFilterRow {
 
 export async function create(input: FilterCreateInput): Promise<UserFilterRow> {
   const criteria = input.criteria;
-  const minPriceCents = criteria.minPriceEur != null ? Math.round(criteria.minPriceEur * 100) : null;
-  const maxPriceCents = criteria.maxPriceEur != null ? Math.round(criteria.maxPriceEur * 100) : null;
+  const minPriceCents =
+    criteria.minPriceEur != null ? Math.round(criteria.minPriceEur * 100) : null;
+  const maxPriceCents =
+    criteria.maxPriceEur != null ? Math.round(criteria.maxPriceEur * 100) : null;
 
   const rows = await query<UserFilterDbRow>(
     `INSERT INTO user_filters (
@@ -118,10 +120,7 @@ export async function create(input: FilterCreateInput): Promise<UserFilterRow> {
   return toUserFilterRow(rows[0]!);
 }
 
-export async function update(
-  id: number,
-  input: FilterUpdateInput,
-): Promise<UserFilterRow | null> {
+export async function update(id: number, input: FilterUpdateInput): Promise<UserFilterRow | null> {
   // Build SET clauses dynamically based on provided fields
   const setClauses: string[] = [];
   const params: unknown[] = [id];
@@ -244,10 +243,7 @@ export async function update(
 }
 
 export async function findById(id: number): Promise<UserFilterRow | null> {
-  const rows = await query<UserFilterDbRow>(
-    'SELECT * FROM user_filters WHERE id = $1',
-    [id],
-  );
+  const rows = await query<UserFilterDbRow>('SELECT * FROM user_filters WHERE id = $1', [id]);
   const row = rows[0];
   return row ? toUserFilterRow(row) : null;
 }
@@ -278,6 +274,34 @@ export async function findActiveFilters(): Promise<UserFilterRow[]> {
  * Uses SQL predicates on the flattened filter columns to efficiently
  * determine which filters a listing satisfies.
  */
+/**
+ * Pure keyword post-filter for reverse-match results.
+ * Exported for unit testing without DB access.
+ */
+export function filterByKeywords(
+  filters: UserFilterRow[],
+  title: string | null,
+  description: string | null,
+): UserFilterRow[] {
+  const text = ((title ?? '') + ' ' + (description ?? '')).toLowerCase();
+  return filters.filter((row) => {
+    if (row.requiredKeywords.length > 0) {
+      if (!row.requiredKeywords.every((kw) => text.includes(kw.toLowerCase()))) return false;
+    }
+    if (row.excludedKeywords.length > 0) {
+      if (row.excludedKeywords.some((kw) => text.includes(kw.toLowerCase()))) return false;
+    }
+    return true;
+  });
+}
+
+export interface ReverseMatchResult {
+  /** Filter IDs that passed SQL predicates (before keyword filtering) */
+  evaluatedIds: number[];
+  /** Filters that passed both SQL predicates and keyword post-filtering */
+  matched: UserFilterRow[];
+}
+
 export async function findMatchingFilters(listing: {
   operationType: string;
   propertyType: string;
@@ -286,7 +310,9 @@ export async function findMatchingFilters(listing: {
   livingAreaSqm: number | null;
   rooms: number | null;
   currentScore: number | null;
-}): Promise<UserFilterRow[]> {
+  title: string | null;
+  description: string | null;
+}): Promise<ReverseMatchResult> {
   const rows = await query<UserFilterDbRow>(
     `SELECT * FROM user_filters
      WHERE is_active = TRUE
@@ -311,5 +337,26 @@ export async function findMatchingFilters(listing: {
       listing.currentScore,
     ],
   );
-  return rows.map(toUserFilterRow);
+  const mapped = rows.map(toUserFilterRow);
+  const evaluatedIds = mapped.map((f) => f.id);
+
+  // Post-filter by keywords (can't efficiently do in SQL for reverse match)
+  const matched = filterByKeywords(mapped, listing.title, listing.description);
+  return { evaluatedIds, matched };
+}
+
+// ── Reverse-match metadata updates ──────────────────────────────────────────
+
+export async function updateEvaluatedAt(filterIds: number[]): Promise<void> {
+  if (filterIds.length === 0) return;
+  await query('UPDATE user_filters SET last_evaluated_at = NOW() WHERE id = ANY($1::bigint[])', [
+    filterIds,
+  ]);
+}
+
+export async function updateMatchedAt(filterIds: number[]): Promise<void> {
+  if (filterIds.length === 0) return;
+  await query('UPDATE user_filters SET last_match_at = NOW() WHERE id = ANY($1::bigint[])', [
+    filterIds,
+  ]);
 }

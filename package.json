@@ -23,6 +23,12 @@
     "clean": "turbo run clean",
     "verify": "npm run lint && npm run typecheck && npm run test:unit",
     "scrape": "npx tsx scripts/scrape-and-ingest.ts",
+    "rescore": "npx tsx scripts/rescore-listings.ts",
+    "replay:normalize": "npx tsx scripts/replay-normalization.ts",
+    "replay:scores": "npx tsx scripts/rescore-listings.ts",
+    "reparse": "npx tsx scripts/reparse-raw.ts",
+    "backfill": "npx tsx scripts/backfill-source.ts",
+    "report:quality": "npx tsx scripts/data-quality-report.ts",
     "baselines": "npx tsx scripts/compute-baselines.ts",
     "prepare": "husky"
   },

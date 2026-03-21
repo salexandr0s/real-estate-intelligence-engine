@@ -31,6 +31,10 @@ enum APIEndpoint {
     case listSources
     case updateSource(id: Int, body: Data)
 
+    // MARK: - Analytics
+
+    case getBaselines
+
     // MARK: - Path & Method
 
     var path: String {
@@ -50,13 +54,15 @@ enum APIEndpoint {
         case .getUnreadCount: "/v1/alerts/unread-count"
         case .listSources: "/v1/sources"
         case .updateSource(let id, _): "/v1/sources/\(id)"
+        case .getBaselines: "/v1/analytics/baselines"
         }
     }
 
     var method: String {
         switch self {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
-             .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources:
+             .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources,
+             .getBaselines:
             "GET"
         case .createFilter, .testFilter:
             "POST"

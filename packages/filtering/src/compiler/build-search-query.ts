@@ -10,8 +10,10 @@ export function decodeCursor(cursor: string | null | undefined): CursorData | nu
   try {
     const parsed: unknown = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
     if (
-      typeof parsed !== 'object' || parsed === null ||
-      !('sortValue' in parsed) || !('id' in parsed)
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('sortValue' in parsed) ||
+      !('id' in parsed)
     ) {
       return null;
     }
@@ -39,16 +41,18 @@ export function buildListingSearchQuery(
   limit: number,
 ): { sql: string; params: unknown[] } {
   const params: unknown[] = [
-    filter.operationType ?? null,           // $1
-    filter.propertyTypes ?? [],             // $2
-    filter.districts ?? [],                 // $3
-    filter.minPriceCents ?? null,           // $4
-    filter.maxPriceCents ?? null,           // $5
-    filter.minAreaSqm ?? null,             // $6
-    filter.maxAreaSqm ?? null,             // $7
-    filter.minRooms ?? null,               // $8
-    filter.maxRooms ?? null,               // $9
-    filter.minScore ?? null,               // $10
+    filter.operationType ?? null, // $1
+    filter.propertyTypes ?? [], // $2
+    filter.districts ?? [], // $3
+    filter.minPriceCents ?? null, // $4
+    filter.maxPriceCents ?? null, // $5
+    filter.minAreaSqm ?? null, // $6
+    filter.maxAreaSqm ?? null, // $7
+    filter.minRooms ?? null, // $8
+    filter.maxRooms ?? null, // $9
+    filter.minScore ?? null, // $10
+    filter.requiredKeywords ?? [], // $11
+    filter.excludedKeywords ?? [], // $12
   ];
 
   let cursorClause = '';
@@ -59,7 +63,7 @@ export function buildListingSearchQuery(
   if (decoded) {
     const cursorParamIdx = params.length + 1;
     params.push(decoded.sortValue); // cursor sort value
-    params.push(decoded.id);        // cursor id
+    params.push(decoded.id); // cursor id
     cursorClause = `AND (${sortConfig.column}, l.id) ${sortConfig.direction === 'DESC' ? '<' : '>'} ($${cursorParamIdx}::${sortConfig.castType}, $${cursorParamIdx + 1}::bigint)`;
   }
 
@@ -97,6 +101,15 @@ WHERE l.listing_status = 'active'
   AND ($8::numeric IS NULL OR l.rooms >= $8)
   AND ($9::numeric IS NULL OR l.rooms <= $9)
   AND ($10::numeric IS NULL OR l.current_score >= $10)
+  AND (COALESCE(array_length($11::text[], 1), 0) = 0
+       OR (SELECT bool_and(
+             l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+             OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\')
+           FROM unnest($11::text[]) AS kw))
+  AND (COALESCE(array_length($12::text[], 1), 0) = 0
+       OR NOT EXISTS (SELECT 1 FROM unnest($12::text[]) AS kw
+                      WHERE l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+                         OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'))
   ${cursorClause}
 ORDER BY ${sortConfig.column} ${sortConfig.direction}, l.id ${sortConfig.direction}
 LIMIT $${limitParamIdx}`;

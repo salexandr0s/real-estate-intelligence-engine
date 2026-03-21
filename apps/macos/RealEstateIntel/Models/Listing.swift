@@ -24,6 +24,9 @@ struct Listing: Identifiable, Codable, Hashable {
 
     /// Non-optional score for sorting (0 when nil).
     var sortableScore: Double { currentScore ?? 0 }
+
+    /// Transient flag set client-side when this listing has matching alerts.
+    var hasAlertMatch: Bool = false
 }
 
 // MARK: - Mock Data

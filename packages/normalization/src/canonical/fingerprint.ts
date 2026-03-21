@@ -1,6 +1,73 @@
 import { createHash } from 'node:crypto';
 import type { CanonicalListingInput } from '@rei/contracts';
 
+// ── Cross-Source Fingerprint ─────────────────────────────────────────────────
+
+/**
+ * Fields used to identify the same property across different sources.
+ * Uses normalized address + area + price (rounded to nearest 1000 EUR).
+ */
+interface CrossSourceFields {
+  addressNormalized: string | null;
+  livingAreaSqmRounded: number | null;
+  priceRoundedEur: number | null;
+}
+
+/**
+ * Computes a SHA-256 cross-source fingerprint from normalized address,
+ * living area, and price (rounded to nearest 1000 EUR).
+ *
+ * Returns a hex string, or null if insufficient data (needs at least
+ * address + one of area or price).
+ */
+export function computeCrossSourceFingerprint(
+  listing: Partial<CanonicalListingInput>,
+): string | null {
+  const address = buildNormalizedAddress(listing);
+  if (!address) return null;
+
+  const area = listing.livingAreaSqm ?? null;
+  const priceCents = listing.listPriceEurCents ?? null;
+
+  // Need address plus at least one of area or price
+  if (area == null && priceCents == null) return null;
+
+  const fields: CrossSourceFields = {
+    addressNormalized: address,
+    livingAreaSqmRounded: area != null ? Math.round(area) : null,
+    priceRoundedEur: priceCents != null ? Math.round(priceCents / 100 / 1000) * 1000 : null,
+  };
+
+  const json = JSON.stringify(fields, Object.keys(fields).sort());
+  return createHash('sha256').update(json, 'utf8').digest('hex');
+}
+
+/**
+ * Builds a normalized address string from available location fields.
+ * Returns null if no usable address components exist.
+ */
+function buildNormalizedAddress(listing: Partial<CanonicalListingInput>): string | null {
+  const parts: string[] = [];
+
+  if (listing.street) {
+    parts.push(listing.street.toLowerCase().trim());
+  }
+  if (listing.houseNumber) {
+    parts.push(listing.houseNumber.toLowerCase().trim());
+  }
+  if (listing.postalCode) {
+    parts.push(listing.postalCode.trim());
+  }
+  if (listing.city) {
+    parts.push(listing.city.toLowerCase().trim());
+  }
+
+  // Need at least city/postal + street for a meaningful address
+  if (parts.length < 2) return null;
+
+  return parts.join('|');
+}
+
 /**
  * Fields included in the content fingerprint.
  * These are fields that materially affect investment decisions.

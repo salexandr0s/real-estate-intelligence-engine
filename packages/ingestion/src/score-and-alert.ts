@@ -5,7 +5,7 @@ import type {
   ScoreResult,
   VersionReason,
 } from '@rei/contracts';
-import { buildAlertDedupeKey } from '@rei/contracts';
+import { buildAlertDedupeKey, getAreaBucket, getRoomBucket } from '@rei/contracts';
 import { createLogger } from '@rei/observability';
 
 const log = createLogger('ingestion:score-alert');
@@ -36,17 +36,9 @@ export interface ScoreAndAlertDeps {
 
   scoreListing: (input: ScoreInput, baseline: BaselineLookup) => ScoreResult;
 
-  persistScore: (
-    listingId: number,
-    listingVersionId: number,
-    score: ScoreResult,
-  ) => Promise<void>;
+  persistScore: (listingId: number, listingVersionId: number, score: ScoreResult) => Promise<void>;
 
-  updateListingScore: (
-    listingId: number,
-    score: number,
-    scoredAt: Date,
-  ) => Promise<void>;
+  updateListingScore: (listingId: number, score: number, scoredAt: Date) => Promise<void>;
 
   findMatchingFilters: (listing: {
     operationType: string;
@@ -56,7 +48,15 @@ export interface ScoreAndAlertDeps {
     livingAreaSqm: number | null;
     rooms: number | null;
     currentScore: number | null;
-  }) => Promise<Array<{ filterId: number; userId: number }>>;
+    title: string | null;
+    description: string | null;
+  }) => Promise<{
+    evaluatedIds: number[];
+    matched: Array<{ filterId: number; userId: number }>;
+  }>;
+
+  updateEvaluatedAt: (filterIds: number[]) => Promise<void>;
+  updateMatchedAt: (filterIds: number[]) => Promise<void>;
 
   createAlert: (alert: AlertCreate) => Promise<{ id: number } | null>;
 
@@ -85,6 +85,7 @@ export class ScoreAndAlert {
       firstSeenAt: Date;
       lastPriceChangeAt: Date | null;
       canonicalUrl: string;
+      currentScore: number | null;
     };
     sourceHealthScore: number;
     locationConfidence: number;
@@ -98,7 +99,6 @@ export class ScoreAndAlert {
         : null;
 
     // 1. Look up baselines
-    const { getAreaBucket, getRoomBucket } = await import('@rei/contracts');
     const areaBucket = getAreaBucket(effectiveArea);
     const roomBucket = getRoomBucket(listing.rooms);
 
@@ -167,13 +167,23 @@ export class ScoreAndAlert {
       livingAreaSqm: listing.livingAreaSqm,
       rooms: listing.rooms,
       currentScore: score.overallScore,
+      title: listing.title,
+      description: listing.description,
     });
+
+    // 4b. Update reverse-match metadata timestamps
+    const { evaluatedIds, matched } = matchingFilters;
+    await this.deps.updateEvaluatedAt(evaluatedIds);
+    if (matched.length > 0) {
+      await this.deps.updateMatchedAt(matched.map((m) => m.filterId));
+    }
 
     // 5. Create alerts
     let alertsCreated = 0;
-    const alertType = this.determineAlertType(versionReason);
+    const scoreImproved = listing.currentScore != null && score.overallScore > listing.currentScore;
+    const alertType = this.determineAlertType(versionReason, scoreImproved);
 
-    for (const match of matchingFilters) {
+    for (const match of matched) {
       const dedupeKey = buildAlertDedupeKey({
         filterId: match.filterId,
         listingId,
@@ -212,12 +222,15 @@ export class ScoreAndAlert {
 
   private determineAlertType(
     versionReason: VersionReason,
+    scoreImproved: boolean,
   ): 'new_match' | 'price_drop' | 'score_upgrade' | 'status_change' {
     switch (versionReason) {
       case 'first_seen':
         return 'new_match';
       case 'price_change':
         return 'price_drop';
+      case 'content_change':
+        return scoreImproved ? 'score_upgrade' : 'status_change';
       case 'status_change':
         return 'status_change';
       default:

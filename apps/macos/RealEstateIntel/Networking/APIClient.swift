@@ -72,6 +72,46 @@ actor APIClient {
         return response.data.compactMap { $0.toDomain(decoder: decoder) }
     }
 
+    /// Fetch listings with pagination metadata (cursor + data).
+    func fetchListingsPaginated(query: ListingQuery = ListingQuery()) async throws -> (listings: [Listing], nextCursor: String?) {
+        let response: PaginatedResponse<APIListingResponse> = try await requestPaginated(
+            .listListings(query: query)
+        )
+        let listings = response.data.compactMap { $0.toDomain(decoder: decoder) }
+        return (listings, response.meta?.nextCursor)
+    }
+
+    /// Test a filter against active listings.
+    func testFilter(id: Int) async throws -> [Listing] {
+        let response: PaginatedResponse<APIListingResponse> = try await requestPaginated(
+            .testFilter(id: id)
+        )
+        return response.data.compactMap { $0.toDomain(decoder: decoder) }
+    }
+
+    /// Fetch market baselines for analytics.
+    func fetchBaselines() async throws -> [MarketBaseline] {
+        let response: PaginatedResponse<APIBaselineResponse> = try await requestPaginated(
+            .getBaselines
+        )
+        return response.data.map { dto in
+            MarketBaseline(
+                city: dto.city,
+                districtNo: dto.districtNo,
+                operationType: dto.operationType,
+                propertyType: dto.propertyType,
+                areaBucket: dto.areaBucket,
+                roomBucket: dto.roomBucket,
+                sampleSize: dto.sampleSize,
+                medianPpsqmEur: dto.medianPpsqmEur,
+                p25PpsqmEur: dto.p25PpsqmEur,
+                p75PpsqmEur: dto.p75PpsqmEur,
+                stddevPpsqmEur: dto.stddevPpsqmEur,
+                baselineDate: dto.baselineDate.flatMap { ISO8601DateFormatter.shared.date(from: $0) } ?? .now
+            )
+        }
+    }
+
     func fetchListing(id: Int) async throws -> Listing {
         let response: APIResponse<APIListingResponse> = try await request(.getListing(id: id))
         guard let listing = response.data.toDomain(decoder: decoder) else {

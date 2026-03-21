@@ -13,7 +13,7 @@ struct SidebarView: View {
             }
 
             Section("Monitoring") {
-                ForEach([NavigationItem.alerts, .sources]) { item in
+                ForEach([NavigationItem.alerts, .sources, .analytics]) { item in
                     SidebarRow(item: item, unreadAlertCount: appState.unreadAlertCount)
                 }
             }

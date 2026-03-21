@@ -58,6 +58,8 @@ export function redactLogContext(ctx: LogContext): LogContext {
       result[key] = value.slice(0, 200) + `... [truncated ${value.length} chars]`;
     } else if (typeof value === 'string') {
       result[key] = value.replace(EMAIL_RE, '[email]');
+    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      result[key] = redactLogContext(value as LogContext);
     } else {
       result[key] = value;
     }
