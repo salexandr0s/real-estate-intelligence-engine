@@ -28,16 +28,24 @@ import {
   userFilters,
   alerts,
 } from '@rei/db';
+import {
+  rawSnapshotRate,
+  normalizationTotal,
+  versionCreationRate,
+  scoringDuration,
+  alertLagSeconds,
+} from '@rei/observability';
 
 export function buildPipelineDeps(): FullIngestionPipelineDeps {
   return {
     raw: {
       upsertRawSnapshot: async (input) => {
         const row = await rawListings.upsertRawSnapshot(input);
-        return { id: row.id, isNew: row.observationCount === 1 };
+        const isNew = row.observationCount === 1;
+        return { id: row.id, isNew };
       },
-      updateScrapeRunMetrics: async (runId, metrics) => {
-        await scrapeRuns.updateMetrics(runId, metrics);
+      updateScrapeRunMetrics: async (runId, metricsData) => {
+        await scrapeRuns.updateMetrics(runId, metricsData);
       },
       computeContentHash,
     },
@@ -52,6 +60,7 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
           listPriceEurCents: row.listPriceEurCents,
           firstSeenAt: row.firstSeenAt,
           lastPriceChangeAt: row.lastPriceChangeAt,
+          currentScore: row.currentScore ?? null,
         };
       },
       upsertListing: async (input) => {
@@ -98,8 +107,17 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         await listings.updateScore(listingId, score, scoredAt);
       },
       findMatchingFilters: async (listing) => {
-        const filters = await userFilters.findMatchingFilters(listing);
-        return filters.map((f) => ({ filterId: f.id, userId: f.userId }));
+        const result = await userFilters.findMatchingFilters(listing);
+        return {
+          evaluatedIds: result.evaluatedIds,
+          matched: result.matched.map((f) => ({ filterId: f.id, userId: f.userId })),
+        };
+      },
+      updateEvaluatedAt: async (filterIds) => {
+        await userFilters.updateEvaluatedAt(filterIds);
+      },
+      updateMatchedAt: async (filterIds) => {
+        await userFilters.updateMatchedAt(filterIds);
       },
       createAlert: async (alert) => {
         const row = await alerts.create(alert);
@@ -112,6 +130,10 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
   };
 }
 
+/**
+ * Creates an instrumented FullIngestionPipeline. After each pipeline invocation,
+ * metrics counters are incremented based on the stage results.
+ */
 export function createPipeline(): FullIngestionPipeline {
   const normalizers = new Map<string, BaseSourceMapper>([
     ['willhaben', new WillhabenMapper()],
@@ -123,5 +145,56 @@ export function createPipeline(): FullIngestionPipeline {
     ['remax', new RemaxMapper()],
   ]);
   const deps = buildPipelineDeps();
-  return new FullIngestionPipeline(normalizers, deps);
+  const pipeline = new FullIngestionPipeline(normalizers, deps);
+
+  // Wrap ingestDetailCapture to add observability metrics
+  const originalIngest = pipeline.ingestDetailCapture.bind(pipeline);
+  pipeline.ingestDetailCapture = async (capture, sourceId, scrapeRunId) => {
+    const scoreStart = Date.now();
+    const result = await originalIngest(capture, sourceId, scrapeRunId);
+    const sourceCode = capture.sourceCode;
+
+    // Raw snapshot metric
+    if (result.raw.isNewSnapshot) {
+      rawSnapshotRate.inc({ source: sourceCode });
+    }
+
+    // Normalization metric
+    const normOutcome = result.normalization.isNew
+      ? 'created'
+      : result.normalization.versionReason
+        ? 'updated'
+        : 'unchanged';
+    normalizationTotal.inc({ source: sourceCode, outcome: normOutcome });
+
+    // Version creation metric
+    if (result.normalization.versionReason) {
+      versionCreationRate.inc({
+        source: sourceCode,
+        reason: result.normalization.versionReason,
+      });
+    }
+
+    // Score latency metric
+    if (result.scoring) {
+      const scoreDurationSec = (Date.now() - scoreStart) / 1000;
+      scoringDuration.observe(scoreDurationSec);
+    }
+
+    // Alert lag metric (time from pipeline start to alert creation)
+    if (result.scoring && result.scoring.alertsCreated > 0) {
+      const lagSec = (Date.now() - scoreStart) / 1000;
+      const alertType =
+        result.normalization.versionReason === 'price_change'
+          ? 'price_drop'
+          : result.normalization.versionReason === 'first_seen'
+            ? 'new_match'
+            : 'score_upgrade';
+      alertLagSeconds.observe({ alert_type: alertType }, lagSec);
+    }
+
+    return result;
+  };
+
+  return pipeline;
 }

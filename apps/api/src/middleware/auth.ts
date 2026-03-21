@@ -15,7 +15,7 @@ declare module 'fastify' {
   }
 }
 
-const SKIP_AUTH_PATHS = new Set(['/health']);
+const SKIP_AUTH_PATHS = new Set(['/health', '/metrics']);
 
 export function registerAuth(app: FastifyInstance): void {
   const config = loadConfig();
@@ -23,8 +23,9 @@ export function registerAuth(app: FastifyInstance): void {
   app.decorateRequest('userId', 0);
 
   app.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
-    // Skip auth for health check and similar paths
-    if (SKIP_AUTH_PATHS.has(request.url)) {
+    // Skip auth for health check, metrics, docs, and similar paths
+    const urlPath = request.url.split('?')[0]!;
+    if (SKIP_AUTH_PATHS.has(urlPath) || urlPath.startsWith('/docs')) {
       request.userId = 0;
       return;
     }
@@ -37,7 +38,9 @@ export function registerAuth(app: FastifyInstance): void {
 
       const parts = authHeader.split(' ');
       if (parts.length !== 2 || parts[0] !== 'Bearer') {
-        throw new UnauthorizedError('Invalid Authorization header format. Expected: Bearer <token>');
+        throw new UnauthorizedError(
+          'Invalid Authorization header format. Expected: Bearer <token>',
+        );
       }
 
       const token = parts[1]!;

@@ -2,7 +2,7 @@
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LogContext {
+export interface LogContext {
   service?: string;
   sourceCode?: string;
   scrapeRunId?: number;
@@ -29,14 +29,51 @@ function shouldLog(level: LogLevel): boolean {
   return LOG_LEVEL_ORDER[level] >= LOG_LEVEL_ORDER[currentLevel];
 }
 
+// ── Log Redaction ───────────────────────────────────────────────────────────
+
+const REDACT_KEYS = new Set([
+  'password',
+  'token',
+  'secret',
+  'authorization',
+  'cookie',
+  'apikey',
+  'api_key',
+]);
+
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+/**
+ * Strips sensitive data from log context before serialization:
+ * - Secret/credential keys -> `[REDACTED]`
+ * - Large strings (>500 chars) -> truncated with length indicator
+ * - Email addresses -> `[email]`
+ */
+export function redactLogContext(ctx: LogContext): LogContext {
+  const result: LogContext = {};
+  for (const [key, value] of Object.entries(ctx)) {
+    if (REDACT_KEYS.has(key.toLowerCase())) {
+      result[key] = '[REDACTED]';
+    } else if (typeof value === 'string' && value.length > 500) {
+      result[key] = value.slice(0, 200) + `... [truncated ${value.length} chars]`;
+    } else if (typeof value === 'string') {
+      result[key] = value.replace(EMAIL_RE, '[email]');
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 function formatLog(level: LogLevel, message: string, context?: LogContext): string {
+  const redacted = context ? redactLogContext(context) : undefined;
   const entry = {
     timestamp: new Date().toISOString(),
     level,
     message,
-    ...context,
+    ...redacted,
   };
-  return JSON.stringify(entry);
+  return redactSensitive(JSON.stringify(entry));
 }
 
 export function createLogger(service: string) {
@@ -70,16 +107,20 @@ export function createLogger(service: string) {
       const merged = { ...baseCtx, ...extraCtx };
       return {
         debug: (msg: string, ctx?: LogContext) => {
-          if (shouldLog('debug')) process.stdout.write(formatLog('debug', msg, { ...merged, ...ctx }) + '\n');
+          if (shouldLog('debug'))
+            process.stdout.write(formatLog('debug', msg, { ...merged, ...ctx }) + '\n');
         },
         info: (msg: string, ctx?: LogContext) => {
-          if (shouldLog('info')) process.stdout.write(formatLog('info', msg, { ...merged, ...ctx }) + '\n');
+          if (shouldLog('info'))
+            process.stdout.write(formatLog('info', msg, { ...merged, ...ctx }) + '\n');
         },
         warn: (msg: string, ctx?: LogContext) => {
-          if (shouldLog('warn')) process.stderr.write(formatLog('warn', msg, { ...merged, ...ctx }) + '\n');
+          if (shouldLog('warn'))
+            process.stderr.write(formatLog('warn', msg, { ...merged, ...ctx }) + '\n');
         },
         error: (msg: string, ctx?: LogContext) => {
-          if (shouldLog('error')) process.stderr.write(formatLog('error', msg, { ...merged, ...ctx }) + '\n');
+          if (shouldLog('error'))
+            process.stderr.write(formatLog('error', msg, { ...merged, ...ctx }) + '\n');
         },
       };
     },
@@ -128,6 +169,42 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+// ── Warning / Error Severity Classes ────────────────────────────────────────
+
+export type ErrorSeverity = 'warning' | 'error' | 'critical';
+
+/** Operational warnings — not HTTP errors, but worth noting. */
+export class OperationalWarning extends AppError {
+  public readonly severity: ErrorSeverity = 'warning';
+
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, 200, details);
+    this.name = 'OperationalWarning';
+  }
+}
+
+/** Transient errors — retryable (e.g. network timeouts, rate limits). */
+export class TransientError extends AppError {
+  public readonly severity: ErrorSeverity = 'error';
+  public readonly retryable = true;
+
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, 503, details);
+    this.name = 'TransientError';
+  }
+}
+
+/** Fatal errors — non-retryable (e.g. schema violations, auth failures). */
+export class FatalError extends AppError {
+  public readonly severity: ErrorSeverity = 'critical';
+  public readonly retryable = false;
+
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, 500, details);
+    this.name = 'FatalError';
+  }
+}
+
 // ── URL Redaction ────────────────────────────────────────────────────────────
 
 export function redactUrl(url: string): string {
@@ -142,3 +219,57 @@ export function redactUrl(url: string): string {
     return '[redacted-url]';
   }
 }
+
+// ── Warning Classes ─────────────────────────────────────────────────────────
+
+export const WARN_CLASSES = {
+  PARSE_DEGRADED: 'parse_degraded',
+  RATE_LIMITED: 'rate_limited',
+  FALLBACK_USED: 'fallback_used',
+  CACHE_MISS: 'cache_miss',
+} as const;
+
+// ── Artifact Reference Helper ───────────────────────────────────────────────
+
+export function logArtifactRef(storageKey: string, sizeBytes?: number): Record<string, unknown> {
+  return { artifactRef: storageKey, sizeBytes, inline: false };
+}
+
+// ── Sensitive Data Redaction ────────────────────────────────────────────────
+
+const SENSITIVE_QUERY_PARAMS_RE = /([?&](?:token|key|secret|password|apikey|api_key)=)[^&]*/gi;
+const AUTH_HEADER_RE = /"authorization":"(Bearer|Basic)\s+[^"]+"/gi;
+const EMAIL_INLINE_RE = /([a-zA-Z])[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+
+/**
+ * Redacts sensitive data from a serialized string:
+ * - URL query params (token=, key=, secret=, password=, apikey=)
+ * - Authorization header values
+ * - Email addresses (preserves first char + domain)
+ */
+export function redactSensitive(value: string): string {
+  return value
+    .replace(SENSITIVE_QUERY_PARAMS_RE, '$1***')
+    .replace(AUTH_HEADER_RE, '"authorization":"$1 ***"')
+    .replace(EMAIL_INLINE_RE, '$1***@$2');
+}
+
+// ── Re-exports ──────────────────────────────────────────────────────────────
+
+export {
+  registry,
+  scrapeRunsTotal,
+  scrapePagesTotal,
+  scrapeListingsDiscovered,
+  scrapeErrorsTotal,
+  normalizationTotal,
+  rawSnapshotRate,
+  versionCreationRate,
+  scoringDuration,
+  alertsCreatedTotal,
+  alertLagSeconds,
+  apiRequestDuration,
+  queueDepth,
+  sourceHealthGauge,
+} from './metrics.js';
+export { initTracing, shutdownTracing } from './tracing.js';

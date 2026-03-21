@@ -1,5 +1,11 @@
 import { loadConfig } from '@rei/config';
-import { createLogger, setLogLevel, redactUrl } from '@rei/observability';
+import {
+  createLogger,
+  setLogLevel,
+  redactUrl,
+  initTracing,
+  shutdownTracing,
+} from '@rei/observability';
 import type { LogLevel } from '@rei/observability';
 import { closeRedisConnection } from '@rei/scraper-core';
 import { closePool } from '@rei/db';
@@ -13,6 +19,7 @@ const logger = createLogger('worker-scraper');
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
+  initTracing('rei-worker-scraper');
 
   logger.info('Scraper worker starting', {
     nodeEnv: config.nodeEnv,
@@ -32,6 +39,7 @@ async function main(): Promise<void> {
     await discoveryWorker.close();
     await detailWorker.close();
     await closeBrowser();
+    await shutdownTracing();
     await closeRedisConnection();
     await closePool();
     process.exit(0);

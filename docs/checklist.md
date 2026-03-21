@@ -410,7 +410,7 @@
 ## 12. API layer
 
 ### Contract
-- [ ] Define OpenAPI spec
+- [x] Define OpenAPI spec
 - [ ] Generate TypeScript server types
 - [ ] Generate Swift client types
 - [x] Version API under `/v1` (all routes use `/v1/` prefix)
@@ -431,7 +431,7 @@
 - [x] `POST /v1/scrape-runs`
 - [x] `GET /v1/analytics/baselines`
 - [x] `GET /v1/listings/{id}/score-explanation`
-- [ ] `GET /v1/stream/alerts`
+- [x] `GET /v1/stream/alerts`
 
 ### API quality
 - [x] Add auth middleware (`auth.ts` — bearer token with constant-time comparison)
@@ -439,7 +439,7 @@
 - [x] Add typed error responses (`error-handler.ts` — AppError, ValidationError, NotFoundError)
 - [x] Add cursor pagination helpers (cursor encode/decode in `listings.ts`)
 - [x] Add rate limits if exposed remotely (`@fastify/rate-limit` in `main.ts`)
-- [ ] Add endpoint integration tests
+- [x] Add endpoint integration tests
 
 ---
 

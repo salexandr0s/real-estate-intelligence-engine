@@ -18,7 +18,7 @@ export function registerAuditLog(app: FastifyInstance): void {
 
   app.addHook('onResponse', async (request, reply) => {
     const route = request.routeOptions.url ?? request.url;
-    if (route === '/health') return;
+    if (route === '/health' || route === '/metrics') return;
 
     const durationMs = Number(process.hrtime.bigint() - request.startTime) / 1_000_000;
     const statusCode = reply.statusCode;
