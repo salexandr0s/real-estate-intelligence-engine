@@ -19,7 +19,7 @@ import {
 import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
 import type { CrawlProfile } from '@rei/contracts';
 import { WillhabenAdapter } from '@rei/source-willhaben';
-import { scrapeRuns } from '@rei/db';
+import { scrapeRuns, sources } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 
 const log = createLogger('worker:discovery');
@@ -118,6 +118,11 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
 
         const finalStatus = totalEnqueued > 0 ? 'succeeded' : 'failed';
         await scrapeRuns.finish(scrapeRunId, finalStatus, metrics);
+
+        // Update source health so scheduler respects crawl interval
+        if (finalStatus === 'succeeded') {
+          await sources.updateHealthStatus(sourceId, 'healthy', new Date());
+        }
 
         log.info('Discovery job complete', { sourceCode, totalEnqueued, finalStatus });
       } finally {
