@@ -1,6 +1,13 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { loadConfig } from '@rei/config';
 import { UnauthorizedError } from '@rei/observability';
+
+function constantTimeEquals(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -33,8 +40,8 @@ export function registerAuth(app: FastifyInstance): void {
         throw new UnauthorizedError('Invalid Authorization header format. Expected: Bearer <token>');
       }
 
-      const token = parts[1];
-      if (token !== config.api.bearerToken) {
+      const token = parts[1]!;
+      if (!constantTimeEquals(token, config.api.bearerToken)) {
         throw new UnauthorizedError('Invalid bearer token');
       }
 

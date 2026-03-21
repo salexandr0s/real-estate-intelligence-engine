@@ -127,3 +127,18 @@ export class UnauthorizedError extends AppError {
     this.name = 'UnauthorizedError';
   }
 }
+
+// ── URL Redaction ────────────────────────────────────────────────────────────
+
+export function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) {
+      parsed.username = '***';
+      parsed.password = '***';
+    }
+    return parsed.toString();
+  } catch {
+    return '[redacted-url]';
+  }
+}

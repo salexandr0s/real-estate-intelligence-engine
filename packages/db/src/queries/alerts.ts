@@ -115,6 +115,18 @@ export async function findByUser(
 }
 
 /**
+ * Find a single alert by ID.
+ */
+export async function findById(id: number): Promise<AlertRow | null> {
+  const rows = await query<AlertDbRow>(
+    'SELECT * FROM alerts WHERE id = $1',
+    [id],
+  );
+  const row = rows[0];
+  return row ? toAlertRow(row) : null;
+}
+
+/**
  * Update alert status. Optionally sets sent_at or error_message.
  */
 export async function updateStatus(

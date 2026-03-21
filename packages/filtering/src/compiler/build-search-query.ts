@@ -8,7 +8,18 @@ interface CursorData {
 export function decodeCursor(cursor: string | null | undefined): CursorData | null {
   if (!cursor) return null;
   try {
-    return JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8')) as CursorData;
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+    if (
+      typeof parsed !== 'object' || parsed === null ||
+      !('sortValue' in parsed) || !('id' in parsed)
+    ) {
+      return null;
+    }
+    const obj = parsed as Record<string, unknown>;
+    return {
+      sortValue: typeof obj.sortValue === 'number' ? obj.sortValue : Number(obj.sortValue),
+      id: typeof obj.id === 'number' ? obj.id : Number(obj.id),
+    };
   } catch {
     return null;
   }

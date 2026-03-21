@@ -532,9 +532,20 @@ function encodeCursor(sortBy: SortBy, row: ListingSearchDbRow): string {
   return Buffer.from(JSON.stringify(data)).toString('base64url');
 }
 
-function decodeCursor(cursor: string): CursorData {
-  const json = Buffer.from(cursor, 'base64url').toString('utf8');
-  return JSON.parse(json) as CursorData;
+function decodeCursor(cursor: string): CursorData | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (
+      typeof parsed !== 'object' || parsed === null ||
+      !('sortValue' in parsed) || !('id' in parsed)
+    ) {
+      return null;
+    }
+    const obj = parsed as Record<string, unknown>;
+    return { sortValue: String(obj.sortValue), id: String(obj.id) };
+  } catch {
+    return null;
+  }
 }
 
 interface SortCursorResult {

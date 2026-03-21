@@ -1,5 +1,5 @@
 import { loadConfig } from '@rei/config';
-import { createLogger, setLogLevel } from '@rei/observability';
+import { createLogger, setLogLevel, redactUrl } from '@rei/observability';
 import type { LogLevel } from '@rei/observability';
 import { closeRedisConnection } from '@rei/scraper-core';
 import { closePool } from '@rei/db';
@@ -14,7 +14,7 @@ async function main(): Promise<void> {
 
   logger.info('Processing worker starting', {
     nodeEnv: config.nodeEnv,
-    redisUrl: config.redis.url,
+    redisUrl: redactUrl(config.redis.url),
   } as Record<string, unknown>);
 
   const ingestionWorker = createIngestionWorker();

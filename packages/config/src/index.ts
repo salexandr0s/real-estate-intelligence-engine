@@ -25,6 +25,12 @@ function envBool(key: string, fallback?: boolean): boolean {
   throw new Error(`Missing required environment variable: ${key}`);
 }
 
+function envStringList(key: string, fallback: string[]): string[] {
+  const raw = process.env[key];
+  if (raw !== undefined) return raw.split(',').map(s => s.trim()).filter(Boolean);
+  return fallback;
+}
+
 export interface AppConfig {
   nodeEnv: string;
   logLevel: string;
@@ -34,6 +40,10 @@ export interface AppConfig {
     baseUrl: string;
     authMode: string;
     bearerToken: string;
+    corsOrigins: string[];
+    rateLimitMax: number;
+    rateLimitWindowMs: number;
+    trustProxy: boolean | number | string;
   };
   database: {
     url: string;
@@ -91,15 +101,29 @@ let _config: AppConfig | null = null;
 export function loadConfig(): AppConfig {
   if (_config) return _config;
 
+  const nodeEnv = envStr('NODE_ENV', 'development');
+
   _config = {
-    nodeEnv: envStr('NODE_ENV', 'development'),
+    nodeEnv,
     logLevel: envStr('LOG_LEVEL', 'info'),
     api: {
       host: envStr('API_HOST', '0.0.0.0'),
       port: envInt('API_PORT', 8080),
       baseUrl: envStr('API_BASE_URL', 'http://localhost:8080'),
       authMode: envStr('API_AUTH_MODE', 'single_user_token'),
-      bearerToken: envStr('API_BEARER_TOKEN', 'dev-token'),
+      bearerToken: nodeEnv === 'production'
+        ? envStr('API_BEARER_TOKEN')
+        : envStr('API_BEARER_TOKEN', 'dev-token'),
+      corsOrigins: envStringList('API_CORS_ORIGINS', ['http://localhost:8080']),
+      rateLimitMax: envInt('API_RATE_LIMIT_MAX', 100),
+      rateLimitWindowMs: envInt('API_RATE_LIMIT_WINDOW_MS', 60000),
+      trustProxy: (() => {
+        const raw = envStr('API_TRUST_PROXY', '1');
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? raw : n;
+      })(),
     },
     database: {
       url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/real_estate_intel'),
