@@ -2,6 +2,10 @@
 export {
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   DEFAULT_SCRAPER_SOURCE_CONFIG,
+  VIEWPORT_POOL,
+  USER_AGENT_POOL,
+  pickRandomViewport,
+  pickRandomUserAgent,
   type BrowserContextConfig,
   type CaptureResult,
   type ScraperSourceConfig,
@@ -33,6 +37,7 @@ export {
   randomInt,
 } from './browser/delay.js';
 export { dismissCookieConsent, type CookieConsentConfig } from './browser/cookie-consent.js';
+export { setupRequestInterception } from './browser/request-interceptor.js';
 
 // ── Queues ──────────────────────────────────────────────────────────────────
 export {
@@ -42,8 +47,4 @@ export {
   type ProcessingJobData,
   type BaselineJobData,
 } from './queues/queue-names.js';
-export {
-  getRedisConnection,
-  closeRedisConnection,
-  getQueuePrefix,
-} from './queues/connection.js';
+export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';

@@ -16,6 +16,7 @@ import {
   pageNavigationDelay,
   classifyScraperError,
   dismissCookieConsent,
+  setupRequestInterception,
 } from '@rei/scraper-core';
 import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
 import type { CrawlProfile } from '@rei/contracts';
@@ -40,7 +41,9 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   // Cache source configs to avoid per-job DB lookups
   const sourceConfigCache = new Map<string, { rateLimitRpm: number | null; config: unknown }>();
 
-  async function getSourceConfig(sourceCode: string): Promise<{ rateLimitRpm: number | null; config: unknown }> {
+  async function getSourceConfig(
+    sourceCode: string,
+  ): Promise<{ rateLimitRpm: number | null; config: unknown }> {
     const cached = sourceConfigCache.get(sourceCode);
     if (cached) return cached;
     const row = await sources.findByCode(sourceCode);
@@ -79,6 +82,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
 
       const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
       const context = await createScrapeContext();
+      await setupRequestInterception(context);
 
       try {
         const page = await context.newPage();
@@ -114,7 +118,9 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
                 scrapeRunId,
                 detailUrl: item.detailUrl,
                 discoveryUrl: plan.url,
-                title: String((item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown'),
+                title: String(
+                  (item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown',
+                ),
                 externalId: item.externalId ?? undefined,
               });
               totalEnqueued++;

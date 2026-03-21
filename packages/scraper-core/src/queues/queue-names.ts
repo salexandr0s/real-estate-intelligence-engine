@@ -38,6 +38,10 @@ export interface ProcessingJobData {
   discoveryUrl: string;
   /** Serialized DetailCapture JSON. */
   captureJson: string;
+  /** Storage key for the captured HTML artifact, if saved. */
+  htmlStorageKey?: string;
+  /** Storage key for the failure screenshot artifact, if saved. */
+  screenshotStorageKey?: string;
 }
 
 /** Job data for baseline recomputation. */

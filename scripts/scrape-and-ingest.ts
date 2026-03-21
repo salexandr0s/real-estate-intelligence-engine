@@ -24,15 +24,15 @@ import {
   classifyScraperError,
   dismissCookieConsent,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
+  ArtifactWriter,
+  pickRandomViewport,
+  pickRandomUserAgent,
+  setupRequestInterception,
 } from '@rei/scraper-core';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
 import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
 import type { CrawlProfile } from '@rei/contracts';
-import {
-  sources,
-  scrapeRuns,
-  closePool,
-} from '@rei/db';
+import { sources, scrapeRuns, closePool } from '@rei/db';
 
 const log = createLogger('scrape-cli');
 
@@ -119,14 +119,26 @@ async function main(): Promise<void> {
   let context: BrowserContext | null = null;
 
   try {
-    browser = await chromium.launch({ headless: true });
+    const config = loadConfig();
+    const artifactWriter = new ArtifactWriter(config.s3.bucket);
+    const viewport = pickRandomViewport();
+    const userAgent = pickRandomUserAgent();
+
+    log.info('Browser config', {
+      headless: config.playwright.headless,
+      viewport,
+      userAgent: userAgent.slice(0, 40),
+    });
+
+    browser = await chromium.launch({ headless: config.playwright.headless });
     context = await browser.newContext({
-      viewport: DEFAULT_BROWSER_CONTEXT_CONFIG.viewport,
+      viewport,
       locale: DEFAULT_BROWSER_CONTEXT_CONFIG.locale,
       timezoneId: DEFAULT_BROWSER_CONTEXT_CONFIG.timezoneId,
-      userAgent: DEFAULT_BROWSER_CONTEXT_CONFIG.userAgent,
+      userAgent,
       javaScriptEnabled: DEFAULT_BROWSER_CONTEXT_CONFIG.javaScriptEnabled,
     });
+    await setupRequestInterception(context);
 
     const page = await context.newPage();
 
@@ -179,7 +191,9 @@ async function main(): Promise<void> {
         runCtx.incrementMetric('listingsDiscovered', discoveryResult.items.length);
         circuitBreaker.recordSuccess(sourceCode);
 
-        log.info(`Discovered ${discoveryResult.items.length} items from page ${(plan.metadata as Record<string, unknown>)?.page ?? '?'}`);
+        log.info(
+          `Discovered ${discoveryResult.items.length} items from page ${(plan.metadata as Record<string, unknown>)?.page ?? '?'}`,
+        );
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
@@ -223,6 +237,14 @@ async function main(): Promise<void> {
         const html = await page.content();
         runCtx.incrementMetric('http2xx');
 
+        // Persist HTML artifact
+        let htmlKey: string | undefined;
+        try {
+          htmlKey = await artifactWriter.writeHtml(sourceCode, String(run.id), detailUrl, html);
+        } catch (_writeErr) {
+          log.warn('Failed to write HTML artifact');
+        }
+
         // Extract detail
         const detailCapture = await adapter.extractDetailPage({
           page,
@@ -234,6 +256,7 @@ async function main(): Promise<void> {
         // Set sourceListingKeyCandidate
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = item.discoveryUrl;
+        detailCapture.htmlStorageKey = htmlKey ?? null;
 
         const payload = detailCapture.payload as Record<string, unknown>;
         const title = (payload.titleRaw as string) ?? item.title;
@@ -276,7 +299,8 @@ async function main(): Promise<void> {
 
     // 9. Finish scrape run
     const metrics = runCtx.getMetrics();
-    const finalStatus = ingested === 0 && failed > 0 ? 'failed' : failed > 0 ? 'partial' : 'succeeded';
+    const finalStatus =
+      ingested === 0 && failed > 0 ? 'failed' : failed > 0 ? 'partial' : 'succeeded';
 
     await scrapeRuns.finish(run.id, finalStatus, metrics);
 

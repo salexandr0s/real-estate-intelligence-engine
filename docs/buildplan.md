@@ -93,6 +93,18 @@ A production scraper fails most often because teams skip source profiling and di
 - highly volatile DOM
 - or terms that require a different ingestion approach
 
+### Phase 0 completion (2026-03-21)
+
+All deliverables are in `docs/phase0/`:
+- `source-inventory.md` — 7 sources profiled, willhaben selected as first
+- `risk-feasibility.md` — per-source technical and legal risk assessment with robots.txt findings
+- `crawl-policy-matrix.md` — rate limits, intervals, priorities per source
+- `kpi-slo.md` — freshness, reliability, alert lag, API perf, data quality targets
+- `deployment-decision.md` — Mac mini daemon, Docker Compose
+- `first-source-decision.md` — willhaben first, with evaluation matrix and onboarding order
+
+Exit criteria status: all met. See `docs/checklist.md` Section 0.
+
 ---
 
 ## 4. Phase 1 — Repository, infrastructure, and database foundations

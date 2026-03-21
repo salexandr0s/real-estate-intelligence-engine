@@ -15,8 +15,11 @@ import {
   pageNavigationDelay,
   classifyScraperError,
   dismissCookieConsent,
+  ArtifactWriter,
+  setupRequestInterception,
 } from '@rei/scraper-core';
 import type { DetailJobData, ProcessingJobData } from '@rei/scraper-core';
+import { loadConfig } from '@rei/config';
 import { sources } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
@@ -32,6 +35,8 @@ export function createDetailWorker(): Worker<DetailJobData> {
     prefix,
   });
 
+  const config = loadConfig();
+  const artifactWriter = new ArtifactWriter(config.s3.bucket);
   const rateLimiter = new PerDomainRateLimiter(12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
 
@@ -61,6 +66,11 @@ export function createDetailWorker(): Worker<DetailJobData> {
       await ensureRateLimit(sourceCode);
 
       const context = await createScrapeContext();
+      await setupRequestInterception(context);
+
+      let htmlStorageKey: string | undefined;
+      let screenshotStorageKey: string | undefined;
+
       try {
         const page = await context.newPage();
 
@@ -80,6 +90,22 @@ export function createDetailWorker(): Worker<DetailJobData> {
         await dismissCookieConsent(page, sourceCode);
         const html = await page.content();
 
+        // Persist HTML artifact
+        if (config.playwright.captureHtmlOnFailure) {
+          try {
+            htmlStorageKey = await artifactWriter.writeHtml(
+              sourceCode,
+              String(scrapeRunId),
+              detailUrl,
+              html,
+            );
+          } catch (writeErr) {
+            log.warn('Failed to write HTML artifact', {
+              error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+            });
+          }
+        }
+
         const detailCapture = await adapter.extractDetailPage({
           page,
           requestPlan: { url: fullUrl, metadata: { html } },
@@ -89,6 +115,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
 
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = discoveryUrl;
+        detailCapture.htmlStorageKey = htmlStorageKey ?? null;
 
         await processingQueue.add(`process:${sourceCode}`, {
           sourceCode,
@@ -97,6 +124,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
           detailUrl: fullUrl,
           discoveryUrl,
           captureJson: JSON.stringify(detailCapture),
+          htmlStorageKey,
         });
 
         circuitBreaker.recordSuccess(sourceCode);
@@ -105,9 +133,39 @@ export function createDetailWorker(): Worker<DetailJobData> {
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
+
+        // Capture failure artifacts (screenshot + HTML)
+        if (config.playwright.captureScreenshotOnFailure) {
+          try {
+            const pages = context.pages();
+            if (pages.length > 0) {
+              const buffer = await pages[0]!.screenshot({ fullPage: true });
+              screenshotStorageKey = await artifactWriter.writeScreenshot(
+                sourceCode,
+                String(scrapeRunId),
+                detailUrl,
+                buffer,
+              );
+              if (!htmlStorageKey) {
+                const failHtml = await pages[0]!.content();
+                htmlStorageKey = await artifactWriter.writeHtml(
+                  sourceCode,
+                  String(scrapeRunId),
+                  detailUrl,
+                  failHtml,
+                );
+              }
+            }
+          } catch (_captureErr) {
+            log.warn('Failed to capture failure artifacts');
+          }
+        }
+
         log.error('Detail extraction failed', {
           detailUrl,
           errorClass,
+          htmlStorageKey,
+          screenshotStorageKey,
           error: err instanceof Error ? err.message : String(err),
         });
         throw err;
