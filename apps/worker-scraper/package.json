@@ -11,6 +11,12 @@
     "@rei/observability": "*",
     "@rei/scraper-core": "*",
     "@rei/source-willhaben": "*",
+    "@rei/source-immoscout24": "*",
+    "@rei/source-wohnnet": "*",
+    "@rei/source-derstandard": "*",
+    "@rei/source-findmyhome": "*",
+    "@rei/source-openimmo": "*",
+    "@rei/source-remax": "*",
     "bullmq": "^5.71.0",
     "ioredis": "^5.10.1",
     "playwright": "^1.52.0"

@@ -7,7 +7,16 @@ import { FullIngestionPipeline } from '@rei/ingestion';
 import type { FullIngestionPipelineDeps } from '@rei/ingestion';
 import type { BaselineLookup, ListingStatus } from '@rei/contracts';
 import { computeContentHash } from '@rei/scraper-core';
-import { WillhabenMapper } from '@rei/normalization';
+import {
+  BaseSourceMapper,
+  WillhabenMapper,
+  Immoscout24Mapper,
+  WohnnetMapper,
+  DerStandardMapper,
+  FindMyHomeMapper,
+  OpenImmoMapper,
+  RemaxMapper,
+} from '@rei/normalization';
 import { scoreListing } from '@rei/scoring';
 import {
   rawListings,
@@ -104,7 +113,15 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
 }
 
 export function createPipeline(): FullIngestionPipeline {
-  const normalizers = new Map([['willhaben', new WillhabenMapper()]]);
+  const normalizers = new Map<string, BaseSourceMapper>([
+    ['willhaben', new WillhabenMapper()],
+    ['immoscout24', new Immoscout24Mapper()],
+    ['wohnnet', new WohnnetMapper()],
+    ['derstandard', new DerStandardMapper()],
+    ['findmyhome', new FindMyHomeMapper()],
+    ['openimmo', new OpenImmoMapper()],
+    ['remax', new RemaxMapper()],
+  ]);
   const deps = buildPipelineDeps();
   return new FullIngestionPipeline(normalizers, deps);
 }
