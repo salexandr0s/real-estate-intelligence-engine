@@ -558,7 +558,7 @@
 - [ ] Verify score sorting does not require heavy joins
 - [ ] Verify reverse matching cost on changed listing path
 - [ ] Verify raw tables do not affect hot query paths
-- [ ] Define archival/retention policy for artifacts
+- [x] Define archival/retention policy for artifacts (`infrastructure/storage/lifecycle-policy.json`)
 - [ ] Define partitioning strategy if data volume grows
 - [ ] Add load test for listing search endpoint
 - [x] Add crawl concurrency tuning doc
