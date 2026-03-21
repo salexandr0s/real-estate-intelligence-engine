@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { sources, scrapeRuns } from '@rei/db';
+import { parseOrThrow, paginationQuerySchema } from '../schemas.js';
 
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/sources - List all sources with health status
@@ -34,10 +35,10 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /v1/scrape-runs - List recent scrape runs
   app.get('/v1/scrape-runs', async (request, reply) => {
-    const query = request.query as Record<string, unknown>;
-    const limit = query['limit'] != null ? parseInt(String(query['limit']), 10) : undefined;
+    const { limit: rawLimit } = parseOrThrow(paginationQuerySchema, request.query);
+    const limit = rawLimit ?? 20;
 
-    const runs = await scrapeRuns.findRecentAll(null, limit ?? 20);
+    const runs = await scrapeRuns.findRecentAll(null, limit);
 
     const mappedData = runs.map((run) => ({
       id: run.id,

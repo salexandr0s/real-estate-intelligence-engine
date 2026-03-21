@@ -5,12 +5,15 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "dependencies": {
-    "fastify": "^5.2.1",
     "@fastify/cors": "^11.0.0",
-    "@rei/contracts": "*",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
     "@rei/config": "*",
+    "@rei/contracts": "*",
     "@rei/db": "*",
-    "@rei/observability": "*"
+    "@rei/observability": "*",
+    "fastify": "^5.2.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

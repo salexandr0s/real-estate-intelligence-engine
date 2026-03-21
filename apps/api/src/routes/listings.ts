@@ -1,32 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError, ValidationError } from '@rei/observability';
-import type { SortBy } from '@rei/contracts';
+import { NotFoundError } from '@rei/observability';
 import type { ListingSearchFilter } from '@rei/db';
 import { listings, listingScores } from '@rei/db';
-
-const VALID_SORT_VALUES = new Set<string>(['score_desc', 'newest', 'price_asc', 'price_desc', 'sqm_desc']);
-
-function parseCommaSeparatedStrings(value: unknown): string[] | undefined {
-  if (typeof value !== 'string' || value === '') return undefined;
-  return value.split(',').map((s) => s.trim()).filter(Boolean);
-}
-
-function parseCommaSeparatedNumbers(value: unknown): number[] | undefined {
-  if (typeof value !== 'string' || value === '') return undefined;
-  const nums = value.split(',').map((s) => {
-    const n = parseInt(s.trim(), 10);
-    if (Number.isNaN(n)) throw new ValidationError(`Invalid number in list: "${s.trim()}"`);
-    return n;
-  });
-  return nums;
-}
-
-function parseOptionalNumber(value: unknown): number | undefined {
-  if (value == null || value === '') return undefined;
-  const n = Number(value);
-  if (Number.isNaN(n)) throw new ValidationError(`Invalid number: "${String(value)}"`);
-  return n;
-}
+import { parseOrThrow, listingSearchQuerySchema, idParamSchema } from '../schemas.js';
 
 function eurToCents(eur: number | undefined): number | undefined {
   if (eur == null) return undefined;
@@ -41,67 +17,24 @@ function centsToEur(cents: number | null): number | null {
 export async function listingRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/listings - Search listings with filter params
   app.get('/v1/listings', async (request, reply) => {
-    const query = request.query as Record<string, unknown>;
-
-    const operationType = query['operationType'] as string | undefined;
-    const propertyTypes = parseCommaSeparatedStrings(query['propertyTypes']);
-    const districts = parseCommaSeparatedNumbers(query['districts']);
-    const minPriceEur = parseOptionalNumber(query['minPriceEur']);
-    const maxPriceEur = parseOptionalNumber(query['maxPriceEur']);
-    const minAreaSqm = parseOptionalNumber(query['minAreaSqm']);
-    const maxAreaSqm = parseOptionalNumber(query['maxAreaSqm']);
-    const minRooms = parseOptionalNumber(query['minRooms']);
-    const maxRooms = parseOptionalNumber(query['maxRooms']);
-    const minScore = parseOptionalNumber(query['minScore']);
-    const limit = parseOptionalNumber(query['limit']);
-    const cursor = query['cursor'] as string | undefined;
-
-    const sortBy = (query['sortBy'] as string) ?? 'score_desc';
-    if (!VALID_SORT_VALUES.has(sortBy)) {
-      throw new ValidationError(`Invalid sortBy value: "${sortBy}". Valid: ${[...VALID_SORT_VALUES].join(', ')}`);
-    }
-
-    // Validate price range
-    if (minPriceEur != null && maxPriceEur != null && minPriceEur > maxPriceEur) {
-      throw new ValidationError('maxPriceEur must be greater than or equal to minPriceEur', {
-        field: 'maxPriceEur',
-      });
-    }
-
-    // Validate area range
-    if (minAreaSqm != null && maxAreaSqm != null && minAreaSqm > maxAreaSqm) {
-      throw new ValidationError('maxAreaSqm must be greater than or equal to minAreaSqm', {
-        field: 'maxAreaSqm',
-      });
-    }
-
-    // Validate room range
-    if (minRooms != null && maxRooms != null && minRooms > maxRooms) {
-      throw new ValidationError('maxRooms must be greater than or equal to minRooms', {
-        field: 'maxRooms',
-      });
-    }
-
-    if (limit != null && (limit < 1 || limit > 200)) {
-      throw new ValidationError('limit must be between 1 and 200', { field: 'limit' });
-    }
+    const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
 
     const result = await listings.searchListings(
       {
-        operationType: operationType as ListingSearchFilter['operationType'],
-        propertyTypes: propertyTypes as ListingSearchFilter['propertyTypes'],
-        districts,
-        minPriceEurCents: eurToCents(minPriceEur),
-        maxPriceEurCents: eurToCents(maxPriceEur),
-        minAreaSqm,
-        maxAreaSqm,
-        minRooms,
-        maxRooms,
-        minScore,
-        sortBy: sortBy as SortBy,
+        operationType: parsed.operationType as ListingSearchFilter['operationType'],
+        propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
+        districts: parsed.districts,
+        minPriceEurCents: eurToCents(parsed.minPriceEur),
+        maxPriceEurCents: eurToCents(parsed.maxPriceEur),
+        minAreaSqm: parsed.minAreaSqm,
+        maxAreaSqm: parsed.maxAreaSqm,
+        minRooms: parsed.minRooms,
+        maxRooms: parsed.maxRooms,
+        minScore: parsed.minScore,
+        sortBy: parsed.sortBy,
       },
-      cursor ?? null,
-      limit ?? undefined,
+      parsed.cursor ?? null,
+      parsed.limit ?? undefined,
     );
 
     // Map cents to EUR for the API response
@@ -135,10 +68,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /v1/listings/:id - Get listing detail
   app.get<{ Params: { id: string } }>('/v1/listings/:id', async (request, reply) => {
-    const id = parseInt(request.params.id, 10);
-    if (Number.isNaN(id)) {
-      throw new ValidationError('Invalid listing id', { field: 'id' });
-    }
+    const { id } = parseOrThrow(idParamSchema, request.params);
 
     const listing = await listings.findById(id);
     if (!listing) {
@@ -208,10 +138,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /v1/listings/:id/score-explanation - Get score explanation
   app.get<{ Params: { id: string } }>('/v1/listings/:id/score-explanation', async (request, reply) => {
-    const id = parseInt(request.params.id, 10);
-    if (Number.isNaN(id)) {
-      throw new ValidationError('Invalid listing id', { field: 'id' });
-    }
+    const { id } = parseOrThrow(idParamSchema, request.params);
 
     // Verify listing exists
     const listing = await listings.findById(id);
