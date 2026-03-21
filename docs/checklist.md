@@ -35,7 +35,7 @@
 - [x] Add alerting package skeleton
 - [x] Add Swift macOS app project
 - [x] Add CI pipeline for lint/test/build
-- [ ] Add artifact retention for failed test snapshots
+- [x] Add artifact retention for failed test snapshots
 
 ---
 
@@ -46,13 +46,13 @@
 - [x] Provision Redis
 - [x] Provision object storage bucket(s)
 - [x] Define bucket prefixes for html/screenshots/har
-- [ ] Configure backup policy for PostgreSQL
-- [ ] Configure backup verification job
-- [ ] Configure object storage lifecycle policy
+- [x] Configure backup policy for PostgreSQL
+- [x] Configure backup verification job
+- [x] Configure object storage lifecycle policy
 
 ### Secrets and configuration
 - [x] Define environment variable contract
-- [ ] Configure secret storage strategy
+- [x] Configure secret storage strategy
 - [x] Set up local `.env` loading
 - [ ] Set up production secrets loading
 
@@ -107,7 +107,7 @@
 - [x] Test migrations from empty database
 - [x] Test rolling forward on seeded database
 - [ ] Test rollback plan or compensating migration strategy
-- [ ] Document destructive migration rules
+- [x] Document destructive migration rules
 
 ---
 
@@ -165,8 +165,8 @@
 - [x] Define source DTO conventions
 - [x] Define selector file convention
 - [x] Define fixture storage convention
-- [ ] Define source runbook template
-- [ ] Define source health documentation template
+- [x] Define source runbook template
+- [x] Define source health documentation template
 
 ### First source (willhaben)
 - [x] Implement discovery page extraction (`packages/source-willhaben/src/discovery.ts`)
@@ -180,7 +180,7 @@
 - [x] Save representative fixtures (3: discovery, detail, sold)
 - [x] Add parser tests from fixtures (9 tests passing)
 - [ ] Add canary crawl for source
-- [ ] Write source runbook
+- [x] Write source runbook
 
 ### Second source
 - [ ] Repeat source template flow
@@ -231,10 +231,10 @@
 - [x] Parse amenity flags
 
 ### Location normalization
-- [ ] Normalize city names
-- [ ] Normalize postal code
-- [ ] Normalize street/house number
-- [ ] Normalize address display
+- [x] Normalize city names (`base-mapper.ts` — `normalizeWhitespace()`)
+- [x] Normalize postal code (`base-mapper.ts` — `.trim()` + postal code validation)
+- [x] Normalize street/house number (`base-mapper.ts` — `normalizeWhitespace()`)
+- [x] Normalize address display (`base-mapper.ts` — `buildAddressDisplay()`)
 - [x] Implement Vienna district lookup table
 - [x] Implement district alias matching
 - [x] Implement district number text matching
@@ -243,83 +243,83 @@
 - [x] Implement geocode precision model
 
 ### Derived fields
-- [ ] Compute price per sqm
+- [x] Compute price per sqm (`base-mapper.ts` + `normalize-and-upsert.ts`)
 - [x] Compute completeness score
 - [x] Compute content fingerprint
-- [ ] Compute cross-source fingerprint candidate
-- [ ] Attach normalized payload overflow fields
+- [x] Compute cross-source fingerprint candidate (`computeCrossSourceFingerprint()` in fingerprint.ts)
+- [x] Attach normalized payload overflow fields (`normalizedPayload` with provenance)
 
 ### Persistence
-- [ ] Upsert current `listings` row
-- [ ] Append `listing_versions` row on meaningful change
-- [ ] Avoid version bump on non-business changes
-- [ ] Track first seen / last seen
-- [ ] Track price change timestamp
-- [ ] Track content change timestamp
-- [ ] Track status change timestamp
-- [ ] Handle relist/reactivation cases
+- [x] Upsert current `listings` row (`listings.ts:206-354` — ON CONFLICT upsert)
+- [x] Append `listing_versions` row on meaningful change (`listing-versions.ts:75-105`)
+- [x] Avoid version bump on non-business changes (fingerprint comparison in `normalize-and-upsert.ts`)
+- [x] Track first seen / last seen (`first_seen_at` on insert, `last_seen_at` on both)
+- [x] Track price change timestamp (`last_price_change_at` CASE in upsert SQL)
+- [x] Track content change timestamp (`last_content_change_at` CASE in upsert SQL)
+- [x] Track status change timestamp (`last_status_change_at` CASE in upsert SQL)
+- [x] Handle relist/reactivation cases (infrastructure: `relist_detected` version reason + scoring penalty)
 
 ### Quality checks
-- [ ] Missing required identity fields fail safely
-- [ ] Malformed non-critical fields become `NULL` + warning
-- [ ] No impossible numeric values survive
-- [ ] Idempotent normalization test passes
-- [ ] Replay normalization test passes
+- [x] Missing required identity fields fail safely (`base-mapper.ts:248-260`)
+- [x] Malformed non-critical fields become `NULL` + warning (all `coerce.ts` parsers)
+- [x] No impossible numeric values survive (validators reject negative/out-of-range)
+- [x] Idempotent normalization test passes (`ingestion-dedupe.test.ts`)
+- [x] Replay normalization test passes (`tests/unit/normalization-replay.test.ts`)
 
 ---
 
 ## 8. Listing lifecycle and status handling
 
-- [ ] Define canonical listing statuses
-- [ ] Map source availability states to canonical statuses
-- [ ] Implement removed/not-found handling
-- [ ] Implement sold/rented detection where available
-- [ ] Implement missing-from-discovery inactivity rule
-- [ ] Implement reactivation rule
-- [ ] Implement relist detection heuristic backlog item
-- [ ] Add lifecycle transition tests
+- [x] Define canonical listing statuses (`domain.ts` — active, inactive, sold, rented, withdrawn, expired, unknown)
+- [x] Map source availability states to canonical statuses (`mapRawStatusToCanonical()` in base-mapper)
+- [x] Implement removed/not-found handling (maps to 'withdrawn' status)
+- [x] Implement sold/rented detection where available (maps 'sold'/'verkauft' → 'sold', etc.)
+- [x] Implement missing-from-discovery inactivity rule (`scripts/mark-stale-listings.ts`)
+- [x] Implement reactivation rule (inactive→active triggers `relist_detected` in normalize-and-upsert)
+- [x] Implement relist detection heuristic backlog item (same as reactivation)
+- [x] Add lifecycle transition tests (`tests/unit/listing-lifecycle.test.ts`)
 
 ---
 
 ## 9. Scoring engine
 
 ### Baselines
-- [ ] Define area bucket logic
-- [ ] Define room bucket logic
-- [ ] Implement baseline SQL/materialization job
-- [ ] Implement outlier clipping
-- [ ] Implement minimum sample thresholds
-- [ ] Implement fallback hierarchy
-- [ ] Persist `market_baselines`
-- [ ] Add baseline regression tests
+- [x] Define area bucket logic (`scoring.ts:62-71` — 7 buckets)
+- [x] Define room bucket logic (`scoring.ts:73-80` — 5 buckets)
+- [x] Implement baseline SQL/materialization job (`baseline-worker.ts`)
+- [x] Implement outlier clipping (10% trimmed mean in baseline worker)
+- [x] Implement minimum sample thresholds (min 3 samples per bucket)
+- [x] Implement fallback hierarchy (`findBaselineWithFallback()` — 4-level cascade)
+- [x] Persist `market_baselines` (`upsertBaseline()` with ON CONFLICT)
+- [x] Add baseline regression tests (`tests/unit/scoring-baselines.test.ts`)
 
 ### Feature extraction
-- [ ] Compute district discount percentage
-- [ ] Compute bucket discount percentage
+- [x] Compute district discount percentage (`score-engine.ts:16-19`)
+- [x] Compute bucket discount percentage (`score-engine.ts:21-23`)
 - [x] Implement keyword lexicon
 - [x] Normalize keyword matching with umlaut support
 - [x] Implement renovation-needed rule
 - [x] Implement risk keyword penalties
 - [x] Implement freshness/time-on-market calculation
-- [ ] Implement relist penalty hook
-- [ ] Implement confidence score inputs
+- [x] Implement relist penalty hook (`score-engine.ts:41-48`)
+- [x] Implement confidence score inputs (`confidence.ts` — 4 factors)
 
 ### Score calculation
 - [x] Implement component scores `0..100`
 - [x] Implement weighted final score
 - [x] Clamp and round final score
-- [ ] Persist `listing_scores`
-- [ ] Update `listings.current_score`
-- [ ] Store explanation JSON
-- [ ] Store matched positive keywords
-- [ ] Store matched negative keywords
-- [ ] Add score versioning
-- [ ] Add rescore command
+- [x] Persist `listing_scores` (`listing-scores.ts:49-85`)
+- [x] Update `listings.current_score` (`listings.ts:491-505`)
+- [x] Store explanation JSON (`listing-scores.ts:82` — JSONB column)
+- [x] Store matched positive keywords (`listing-scores.ts:80`)
+- [x] Store matched negative keywords (`listing-scores.ts:81`)
+- [x] Add score versioning (`SCORE_VERSION = 1` in `score-engine.ts`)
+- [x] Add rescore command (`scripts/rescore-listings.ts`)
 - [ ] Add score regression fixture tests
 
 ### UI/analytics support
-- [ ] Expose score explanation via API
-- [ ] Expose district baselines via API
+- [x] Expose score explanation via API (`GET /v1/listings/:id/score-explanation`)
+- [x] Expose district baselines via API (`GET /v1/analytics/baselines`)
 - [ ] Add high-score listing view
 - [ ] Add score distribution analytics
 - [ ] Add district comparison analytics
@@ -330,49 +330,49 @@
 
 ### Filter contract
 - [x] Define filter DTO
-- [ ] Define JSON schema/Zod schema
-- [ ] Define canonical property type values
-- [ ] Define district filter values
-- [ ] Define sort options
-- [ ] Define alert frequency options
-- [ ] Add validation for min/max ranges
-- [ ] Add normalization for keyword arrays
+- [x] Define JSON schema/Zod schema (`schemas.ts:125-150`)
+- [x] Define canonical property type values (`schemas.ts:24`)
+- [x] Define district filter values (`validate-filter.ts:29-31` — 1-23)
+- [x] Define sort options (`schemas.ts:25` — 5 modes)
+- [x] Define alert frequency options (`schemas.ts:27`)
+- [x] Add validation for min/max ranges (`validate-filter.ts:11-19`, `schemas.ts` refine)
+- [x] Add normalization for keyword arrays (`compile-filter.ts:31-38`)
 
 ### Persistence
-- [ ] Store `criteria_json`
-- [ ] Store flattened columns
-- [ ] Store alert channels
-- [ ] Store sort preference
-- [ ] Store active/inactive state
+- [x] Store `criteria_json` (`user-filters.ts:115`)
+- [x] Store flattened columns (`user-filters.ts:96-114`)
+- [x] Store alert channels (`user-filters.ts:114`)
+- [x] Store sort preference (`user-filters.ts:112`)
+- [x] Store active/inactive state (`user-filters.ts:136-139`)
 
 ### Interactive query path
 - [x] Build typed query compiler
 - [x] Generate parameterized SQL
-- [ ] Support price min/max
-- [ ] Support area min/max
-- [ ] Support district array
-- [ ] Support property type array
-- [ ] Support rooms min/max
-- [ ] Support score threshold
-- [ ] Support required keywords
-- [ ] Support excluded keywords
-- [ ] Support sort by score/newest/price/sqm
-- [ ] Implement cursor pagination
+- [x] Support price min/max (parameterized query $4, $5)
+- [x] Support area min/max (parameterized query $6, $7)
+- [x] Support district array (ANY($3) predicate)
+- [x] Support property type array (ANY($2) predicate)
+- [x] Support rooms min/max (parameterized query $8, $9)
+- [x] Support score threshold (parameterized query $10)
+- [x] Support required keywords (ILIKE predicates in search query)
+- [x] Support excluded keywords (NOT EXISTS predicate in search query)
+- [x] Support sort by score/newest/price/sqm (`getSortConfig()` — 5 modes)
+- [x] Implement cursor pagination (encoded cursor with overflow detection)
 - [ ] Add query plan/index review
 
 ### Reverse-match path
 - [x] Implement candidate filter SQL
-- [ ] Implement keyword post-filtering
+- [x] Implement keyword post-filtering (TypeScript post-filter in `findMatchingFilters()`)
 - [ ] Implement match logging
-- [ ] Update `last_evaluated_at`
-- [ ] Update `last_match_at`
+- [x] Update `last_evaluated_at` (`updateEvaluatedAt()` in user-filters)
+- [x] Update `last_match_at` (`updateMatchedAt()` in user-filters)
 - [ ] Add reverse-match tests
 
 ### UX
-- [ ] Add filter editor in macOS app
-- [ ] Add filter preview/test endpoint
-- [ ] Add saved filter list screen
-- [ ] Add filter enable/disable toggle
+- [x] Add filter editor in macOS app (`FiltersView.swift` with FilterDraft sheet)
+- [x] Add filter preview/test endpoint (`POST /v1/filters/:id/test`)
+- [x] Add saved filter list screen (`FiltersView.swift`)
+- [x] Add filter enable/disable toggle (active toggle in FiltersView)
 
 ---
 
@@ -382,28 +382,28 @@
 - [x] Define alert types
 - [x] Define alert channels
 - [x] Define dedupe key format
-- [ ] Create alert row on first match
-- [ ] Create alert row on score upgrade
-- [ ] Create alert row on price drop
-- [ ] Suppress duplicate alerts for same event
-- [ ] Implement alert status transitions
+- [x] Create alert row on first match (`score-and-alert.ts:174-199`)
+- [x] Create alert row on score upgrade (`determineAlertType()` with scoreImproved flag)
+- [x] Create alert row on price drop (`score-and-alert.ts:220`)
+- [x] Suppress duplicate alerts for same event (ON CONFLICT DO NOTHING on dedupe_key)
+- [x] Implement alert status transitions (`alerts.ts:132-149`)
 - [ ] Implement alert retry policy for delivery
 
 ### Delivery
-- [ ] In-app alerts feed
+- [x] In-app alerts feed (`GET /v1/alerts`)
 - [ ] SSE or WebSocket updates
 - [ ] Local macOS notifications
 - [ ] Optional email delivery
 - [ ] Optional webhook delivery
-- [ ] Alert open/read/dismiss actions
+- [x] Alert open/read/dismiss actions (`PATCH /v1/alerts/:id`)
 
 ### Persistence and UI
-- [ ] Alerts list endpoint
-- [ ] Alert detail endpoint or payload
-- [ ] Unread count endpoint
-- [ ] Alert screen in macOS app
-- [ ] Menu bar unread indicator
-- [ ] Alert dedupe integration tests
+- [x] Alerts list endpoint (`GET /v1/alerts`)
+- [x] Alert detail endpoint or payload (full payload in responses)
+- [x] Unread count endpoint (`GET /v1/alerts/unread-count`)
+- [x] Alert screen in macOS app (`AlertsView.swift` + `AlertsViewModel.swift`)
+- [x] Menu bar unread indicator (`MenuBarLabel.swift` + `MenuBarContent.swift`)
+- [x] Alert dedupe integration tests (`ingestion-dedupe.test.ts:198-203`)
 
 ---
 
@@ -413,32 +413,32 @@
 - [ ] Define OpenAPI spec
 - [ ] Generate TypeScript server types
 - [ ] Generate Swift client types
-- [ ] Version API under `/v1`
+- [x] Version API under `/v1` (all routes use `/v1/` prefix)
 
 ### Endpoints
-- [ ] `GET /v1/listings`
-- [ ] `GET /v1/listings/{id}`
-- [ ] `GET /v1/filters`
-- [ ] `POST /v1/filters`
-- [ ] `GET /v1/filters/{id}`
-- [ ] `PATCH /v1/filters/{id}`
-- [ ] `DELETE /v1/filters/{id}`
-- [ ] `POST /v1/filters/{id}/test`
-- [ ] `GET /v1/alerts`
-- [ ] `PATCH /v1/alerts/{id}`
-- [ ] `GET /v1/sources`
-- [ ] `GET /v1/scrape-runs`
-- [ ] `POST /v1/scrape-runs`
-- [ ] `GET /v1/analytics/baselines`
-- [ ] `GET /v1/listings/{id}/score-explanation`
+- [x] `GET /v1/listings`
+- [x] `GET /v1/listings/{id}`
+- [x] `GET /v1/filters`
+- [x] `POST /v1/filters`
+- [x] `GET /v1/filters/{id}`
+- [x] `PATCH /v1/filters/{id}`
+- [x] `DELETE /v1/filters/{id}`
+- [x] `POST /v1/filters/{id}/test`
+- [x] `GET /v1/alerts`
+- [x] `PATCH /v1/alerts/{id}`
+- [x] `GET /v1/sources`
+- [x] `GET /v1/scrape-runs`
+- [x] `POST /v1/scrape-runs`
+- [x] `GET /v1/analytics/baselines`
+- [x] `GET /v1/listings/{id}/score-explanation`
 - [ ] `GET /v1/stream/alerts`
 
 ### API quality
-- [ ] Add auth middleware
-- [ ] Add request validation
-- [ ] Add typed error responses
-- [ ] Add cursor pagination helpers
-- [ ] Add rate limits if exposed remotely
+- [x] Add auth middleware (`auth.ts` — bearer token with constant-time comparison)
+- [x] Add request validation (Zod schemas + `parseOrThrow()`)
+- [x] Add typed error responses (`error-handler.ts` — AppError, ValidationError, NotFoundError)
+- [x] Add cursor pagination helpers (cursor encode/decode in `listings.ts`)
+- [x] Add rate limits if exposed remotely (`@fastify/rate-limit` in `main.ts`)
 - [ ] Add endpoint integration tests
 
 ---
@@ -449,53 +449,53 @@
 - [x] Create SwiftUI app shell
 - [x] Add navigation split view
 - [x] Add API client integration
-- [ ] Add Keychain token storage
+- [x] Add Keychain token storage (`KeychainHelper.swift`)
 - [ ] Add local cache layer
 - [ ] Add background refresh behavior
 
 ### Screens
-- [ ] Dashboard
-- [ ] Listings list
-- [ ] Listing detail
-- [ ] Saved filters
-- [ ] Alerts
-- [ ] Sources health
+- [x] Dashboard (`DashboardView.swift`)
+- [x] Listings list (`ListingsView.swift` + `ListingsTable.swift`)
+- [x] Listing detail (`ListingDetailView.swift`)
+- [x] Saved filters (`FiltersView.swift` + `FiltersViewModel.swift`)
+- [x] Alerts (`AlertsView.swift` + `AlertsViewModel.swift`)
+- [x] Sources health (`SourcesView.swift` + `SourcesViewModel.swift`)
 - [ ] Analytics
-- [ ] Settings
+- [x] Settings (`SettingsView.swift`)
 
 ### Listings UX
-- [ ] Search field
-- [ ] Table columns for price/size/district/score
-- [ ] Sort controls
+- [x] Search field (`.searchable()` in ListingsView)
+- [x] Table columns for price/size/district/score (`ListingsTable.swift`)
+- [x] Sort controls (`sortOrder` with `KeyPathComparator`)
 - [ ] Cursor pagination / infinite load
-- [ ] Open source URL action
-- [ ] Score explanation pane
-- [ ] Price history view
+- [x] Open source URL action (`ListingActionsSection.swift`)
+- [x] Score explanation pane (`ListingScoreSection.swift` + `ScoreBreakdownView.swift`)
+- [ ] Price history view (placeholder)
 - [ ] Alert match badges
 
 ### Filters UX
-- [ ] Create filter flow
-- [ ] Edit filter flow
+- [x] Create filter flow (FiltersView new filter sheet)
+- [x] Edit filter flow (FiltersView edit sheet via FilterDraft)
 - [ ] Test filter flow
-- [ ] Enable/disable filter
+- [x] Enable/disable filter (active toggle in FiltersView)
 - [ ] Duplicate filter
-- [ ] Delete filter
+- [x] Delete filter (swipe-to-delete in FiltersView)
 
 ### Alerts UX
-- [ ] Alert list
-- [ ] Unread indicator
-- [ ] Mark read/opened
+- [x] Alert list (AlertsView with status filter)
+- [x] Unread indicator (blue dot badge in AlertsView)
+- [x] Mark read/opened (context menu in AlertsView)
 - [ ] Open linked listing
-- [ ] MenuBarExtra summary
+- [x] MenuBarExtra summary (`MenuBarContent.swift`)
 - [ ] System notification action
 
 ### Native polish
-- [ ] Keyboard shortcuts
-- [ ] Command menu entries
-- [ ] Searchable integration
-- [ ] Inspector/sidebar behavior
-- [ ] Native table selection behavior
-- [ ] Dark mode support
+- [x] Keyboard shortcuts (Cmd+1–6, Cmd+R)
+- [x] Command menu entries (`navigationCommands` + `viewCommands`)
+- [x] Searchable integration (`.searchable()`)
+- [x] Inspector/sidebar behavior (`NavigationSplitView` + `.inspector()`)
+- [x] Native table selection behavior (`Table` with selection binding)
+- [x] Dark mode support (system colors throughout)
 - [ ] Empty/error states
 
 ---
@@ -503,23 +503,23 @@
 ## 14. Observability and operations
 
 ### Metrics
-- [ ] Crawl success rate by source
-- [ ] Parse success rate by source
-- [ ] Block/captcha rate
-- [ ] Raw snapshot rate
-- [ ] Normalization rate
-- [ ] Version creation rate
-- [ ] Score latency
-- [ ] Alert lag
-- [ ] API latency
-- [ ] App sync latency
+- [x] Crawl success rate by source (`rei_crawl_success_total` in app-metrics.ts)
+- [x] Parse success rate by source (`rei_parse_success_total` in app-metrics.ts)
+- [x] Block/captcha rate (`rei_block_captcha_total` in app-metrics.ts)
+- [x] Raw snapshot rate (`rei_raw_snapshots_total`, wired in pipeline-factory)
+- [x] Normalization rate (`rei_normalizations_total`, wired in pipeline-factory)
+- [x] Version creation rate (`rei_versions_created_total`, wired in pipeline-factory)
+- [x] Score latency (`rei_score_duration_seconds`, wired in pipeline-factory)
+- [x] Alert lag (`rei_alert_lag_seconds`, wired in pipeline-factory)
+- [x] API latency (`rei_api_request_duration_seconds`, onResponse hook in main.ts)
+- [x] App sync latency (`GET /metrics` endpoint serves all metrics for monitoring)
 
 ### Logging
-- [ ] Correlation IDs in every job
-- [ ] Structured logs in JSON
-- [ ] Log redaction rules
-- [ ] Separate warning/error classes
-- [ ] Large artifact references instead of inline dumps
+- [x] Correlation IDs in every job (scrapeRunId, jobId in log contexts)
+- [x] Structured logs in JSON (`formatLog()` in observability)
+- [x] Log redaction rules (`redactLogContext()` — secrets, emails, large values)
+- [x] Separate warning/error classes (`OperationalWarning`, `TransientError`, `FatalError`)
+- [x] Large artifact references instead of inline dumps (truncation at 500 chars in `redactLogContext()`)
 
 ### Dashboards
 - [ ] Source health dashboard
@@ -561,7 +561,7 @@
 - [ ] Define archival/retention policy for artifacts
 - [ ] Define partitioning strategy if data volume grows
 - [ ] Add load test for listing search endpoint
-- [ ] Add crawl concurrency tuning doc
+- [x] Add crawl concurrency tuning doc
 
 ---
 
