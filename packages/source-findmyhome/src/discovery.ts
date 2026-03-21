@@ -183,7 +183,7 @@ function extractPrice(cardHtml: string): string | null {
  */
 function extractArea(cardHtml: string): string | null {
   const match = cardHtml.match(
-    /<strong>Fl(?:&auml;|\u00e4|ae?)che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
+    /<strong>Fl(?:&auml;|\u00e4|ae)che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
   );
   if (!match?.[1]) return null;
   return match[1];

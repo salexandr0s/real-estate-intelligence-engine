@@ -20,7 +20,7 @@ export interface DerStandardDetailContact {
 }
 
 export interface DerStandardDetailData {
-  id: number;
+  id: number | null;
   title: string;
   description: string | null;
   price: number | null;
