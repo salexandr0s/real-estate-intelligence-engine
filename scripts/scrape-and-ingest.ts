@@ -2,11 +2,13 @@
 /**
  * CLI scrape-and-ingest script.
  *
- * Launches Playwright, scrapes willhaben discovery + detail pages,
+ * Launches Playwright, scrapes discovery + detail pages for any registered source,
  * and feeds captures through the FullIngestionPipeline.
  *
  * Usage:
- *   npx tsx scripts/scrape-and-ingest.ts [--max-pages N] [--dry-run]
+ *   npx tsx scripts/scrape-and-ingest.ts [--source <code>] [--max-pages N] [--dry-run]
+ *
+ * Default source: willhaben
  */
 
 import { chromium } from 'playwright';
@@ -18,27 +20,17 @@ import {
   PerDomainRateLimiter,
   SourceCircuitBreaker,
   ScrapeRunContext,
-  computeContentHash,
   pageNavigationDelay,
   classifyScraperError,
+  dismissCookieConsent,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
 } from '@rei/scraper-core';
-import { WillhabenAdapter } from '@rei/source-willhaben';
-import { WillhabenMapper } from '@rei/normalization';
-import { FullIngestionPipeline } from '@rei/ingestion';
-import type { FullIngestionPipelineDeps } from '@rei/ingestion';
-import type { BaselineLookup, CrawlProfile, ListingStatus } from '@rei/contracts';
-import { scoreListing } from '@rei/scoring';
+import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
+import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
+import type { CrawlProfile } from '@rei/contracts';
 import {
   sources,
   scrapeRuns,
-  rawListings,
-  listings,
-  listingVersions,
-  listingScores,
-  marketBaselines,
-  userFilters,
-  alerts,
   closePool,
 } from '@rei/db';
 
@@ -46,12 +38,17 @@ const log = createLogger('scrape-cli');
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 
-function parseArgs(): { maxPages: number; dryRun: boolean } {
+function parseArgs(): { sourceCode: string; maxPages: number; dryRun: boolean } {
   const args = process.argv.slice(2);
+  let sourceCode = 'willhaben';
   let maxPages = 3;
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--source' && args[i + 1]) {
+      sourceCode = args[i + 1]!;
+      i++;
+    }
     if (args[i] === '--max-pages' && args[i + 1]) {
       maxPages = parseInt(args[i + 1]!, 10);
       i++;
@@ -61,114 +58,32 @@ function parseArgs(): { maxPages: number; dryRun: boolean } {
     }
   }
 
-  return { maxPages, dryRun };
-}
-
-// ── Pipeline deps wiring ────────────────────────────────────────────────────
-
-function buildPipelineDeps(): FullIngestionPipelineDeps {
-  return {
-    raw: {
-      upsertRawSnapshot: async (input) => {
-        const row = await rawListings.upsertRawSnapshot(input);
-        return { id: row.id, isNew: row.observationCount === 1 };
-      },
-      updateScrapeRunMetrics: async (runId, metrics) => {
-        await scrapeRuns.updateMetrics(runId, metrics);
-      },
-      computeContentHash,
-    },
-    normalization: {
-      findExistingListing: async (sourceId, sourceListingKey) => {
-        const row = await listings.findBySourceKey(sourceId, sourceListingKey);
-        if (!row) return null;
-        return {
-          id: row.id,
-          contentFingerprint: row.contentFingerprint,
-          listingStatus: row.listingStatus,
-          listPriceEurCents: row.listPriceEurCents,
-          firstSeenAt: row.firstSeenAt,
-          lastPriceChangeAt: row.lastPriceChangeAt,
-        };
-      },
-      upsertListing: async (input) => {
-        const existing = await listings.findBySourceKey(input.sourceId, input.sourceListingKey);
-        const row = await listings.upsertListing(input);
-        return { id: row.id, isNew: !existing };
-      },
-      appendListingVersion: async (input) => {
-        const row = await listingVersions.appendVersion({
-          ...input,
-          listingStatus: input.listingStatus as ListingStatus,
-        });
-        return { id: row.id, versionNo: row.versionNo };
-      },
-      updateScrapeRunNormalizationCounts: async (runId, created, updated) => {
-        await scrapeRuns.updateMetrics(runId, {
-          normalizedCreated: created,
-          normalizedUpdated: updated,
-        });
-      },
-    },
-    scoreAndAlert: {
-      findBaseline: async (districtNo, operationType, propertyType, areaBucket, roomBucket) => {
-        const result = await marketBaselines.findBaselineWithFallback({
-          districtNo,
-          operationType,
-          propertyType,
-          areaBucket,
-          roomBucket,
-        });
-        const bl: BaselineLookup = {
-          districtBaselinePpsqmEur: result.baseline?.medianPpsqmEur ?? null,
-          bucketBaselinePpsqmEur: result.baseline?.medianPpsqmEur ?? null,
-          bucketSampleSize: result.baseline?.sampleSize ?? 0,
-          fallbackLevel: result.fallbackLevel,
-        };
-        return bl;
-      },
-      scoreListing,
-      persistScore: async (listingId, listingVersionId, score) => {
-        await listingScores.insertScore(listingId, listingVersionId, score);
-      },
-      updateListingScore: async (listingId, score, scoredAt) => {
-        await listings.updateScore(listingId, score, scoredAt);
-      },
-      findMatchingFilters: async (listing) => {
-        const filters = await userFilters.findMatchingFilters(listing);
-        return filters.map((f) => ({ filterId: f.id, userId: f.userId }));
-      },
-      createAlert: async (alert) => {
-        const row = await alerts.create(alert);
-        return row ? { id: row.id } : null;
-      },
-      findPreviousPrice: async (listingId) => {
-        return listingVersions.findPreviousPrice(listingId);
-      },
-    },
-  };
+  return { sourceCode, maxPages, dryRun };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { maxPages, dryRun } = parseArgs();
+  const { sourceCode, maxPages, dryRun } = parseArgs();
   loadConfig();
 
-  log.info('Starting scrape-and-ingest', { maxPages, dryRun });
+  log.info('Starting scrape-and-ingest', { sourceCode, maxPages, dryRun });
 
-  // 1. Look up willhaben source
-  const source = await sources.findByCode('willhaben');
+  // 1. Look up source
+  const source = await sources.findByCode(sourceCode);
   if (!source) {
-    log.error('Source "willhaben" not found in sources table. Run db:seed first.');
+    log.error(`Source "${sourceCode}" not found in sources table. Run db:seed first.`);
     process.exit(1);
   }
+
+  // 2. Get adapter from registry
+  const adapter = getAdapter(sourceCode);
 
   if (dryRun) {
     log.info('DRY RUN mode — will parse but not persist');
   }
 
-  // 2. Create scrape run
+  // 3. Create scrape run
   const run = await scrapeRuns.create({
     sourceId: source.id,
     triggerType: 'manual',
@@ -179,17 +94,27 @@ async function main(): Promise<void> {
   });
   await scrapeRuns.start(run.id);
 
-  const runCtx = new ScrapeRunContext(run.id, 'willhaben');
+  const runCtx = new ScrapeRunContext(run.id, sourceCode);
 
-  // 3. Setup adapter, pipeline, rate limiter, circuit breaker
-  const adapter = new WillhabenAdapter();
-  const normalizers = new Map([['willhaben', new WillhabenMapper()]]);
-  const deps = buildPipelineDeps();
-  const pipeline = new FullIngestionPipeline(normalizers, deps);
-  const rateLimiter = new PerDomainRateLimiter(source.rateLimitRpm);
+  // 4. Setup pipeline, rate limiter, circuit breaker
+  const pipeline = createPipeline();
+  const rateLimiter = new PerDomainRateLimiter(source.rateLimitRpm ?? 12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
 
-  // 4. Launch browser
+  // 5. Build crawl profile from source config
+  const sourceConfig = source.config as Record<string, unknown> | null;
+  const crawlConfig = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
+  const profile: CrawlProfile = {
+    name: `${sourceCode}-cli-scrape`,
+    sourceCode,
+    maxPages,
+    operationType: (crawlConfig?.operationType as string) ?? undefined,
+    propertyType: (crawlConfig?.propertyType as string) ?? undefined,
+    regions: (crawlConfig?.regions as string[]) ?? undefined,
+    sortOrder: (crawlConfig?.sortOrder as string) ?? 'published_desc',
+  };
+
+  // 6. Launch browser
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
 
@@ -205,18 +130,10 @@ async function main(): Promise<void> {
 
     const page = await context.newPage();
 
-    // 5. Build discovery URLs
-    const profile: CrawlProfile = {
-      name: 'willhaben-cli-scrape',
-      sourceCode: 'willhaben',
-      maxPages,
-      sortOrder: 'published_desc',
-    };
+    // 7. Discovery phase
     const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
-
     log.info(`Discovery: ${discoveryPlans.length} page(s) to fetch`);
 
-    // 6. Discovery phase
     const allDiscoveredItems: Array<{
       detailUrl: string;
       title: string;
@@ -225,17 +142,18 @@ async function main(): Promise<void> {
     }> = [];
 
     for (const plan of discoveryPlans) {
-      if (circuitBreaker.isOpen('willhaben')) {
+      if (circuitBreaker.isOpen(sourceCode)) {
         log.warn('Circuit breaker open, stopping discovery');
         break;
       }
 
       try {
-        await rateLimiter.waitForSlot('willhaben');
+        await rateLimiter.waitForSlot(sourceCode);
         await pageNavigationDelay();
 
         log.info(`Fetching discovery page: ${plan.url}`);
         await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+        await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();
         runCtx.incrementMetric('pagesFetched');
@@ -249,21 +167,22 @@ async function main(): Promise<void> {
         });
 
         for (const item of discoveryResult.items) {
+          const payload = item.summaryPayload as Record<string, unknown>;
           allDiscoveredItems.push({
             detailUrl: item.detailUrl,
-            title: item.summaryPayload.titleRaw ?? 'Unknown',
+            title: (payload.titleRaw as string) ?? 'Unknown',
             externalId: item.externalId ?? undefined,
             discoveryUrl: plan.url,
           });
         }
 
         runCtx.incrementMetric('listingsDiscovered', discoveryResult.items.length);
-        circuitBreaker.recordSuccess('willhaben');
+        circuitBreaker.recordSuccess(sourceCode);
 
         log.info(`Discovered ${discoveryResult.items.length} items from page ${(plan.metadata as Record<string, unknown>)?.page ?? '?'}`);
       } catch (err) {
         const errorClass = classifyScraperError(err);
-        circuitBreaker.recordFailure('willhaben', errorClass);
+        circuitBreaker.recordFailure(sourceCode, errorClass);
         log.error(`Discovery page failed: ${plan.url}`, { errorClass });
 
         if (errorClass === 'terminal_page') continue;
@@ -273,27 +192,33 @@ async function main(): Promise<void> {
 
     log.info(`Total discovered: ${allDiscoveredItems.length} listings`);
 
-    // 7. Detail phase
+    // 8. Detail phase
     let ingested = 0;
     let skipped = 0;
     let failed = 0;
 
     for (const item of allDiscoveredItems) {
-      if (circuitBreaker.isOpen('willhaben')) {
+      if (circuitBreaker.isOpen(sourceCode)) {
         log.warn('Circuit breaker open, stopping detail scraping');
         break;
       }
 
       try {
-        await rateLimiter.waitForSlot('willhaben');
+        await rateLimiter.waitForSlot(sourceCode);
         await pageNavigationDelay();
 
-        const detailUrl = item.detailUrl.startsWith('http')
-          ? item.detailUrl
-          : `https://www.willhaben.at${item.detailUrl}`;
+        // Use adapter's buildDetailRequest for URL resolution
+        const detailRequest = await adapter.buildDetailRequest({
+          detailUrl: item.detailUrl,
+          sourceCode,
+          summaryPayload: {},
+          discoveredAt: new Date().toISOString(),
+        });
+        const detailUrl = detailRequest?.url ?? item.detailUrl;
 
         log.info(`Fetching detail: ${detailUrl}`);
         await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+        await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();
         runCtx.incrementMetric('http2xx');
@@ -302,7 +227,7 @@ async function main(): Promise<void> {
         const detailCapture = await adapter.extractDetailPage({
           page,
           requestPlan: { url: detailUrl, metadata: { html } },
-          sourceCode: 'willhaben',
+          sourceCode,
           scrapeRunId: run.id,
         });
 
@@ -310,8 +235,11 @@ async function main(): Promise<void> {
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = item.discoveryUrl;
 
+        const payload = detailCapture.payload as Record<string, unknown>;
+        const title = (payload.titleRaw as string) ?? item.title;
+
         if (dryRun) {
-          log.info(`[DRY RUN] Parsed: ${detailCapture.payload.titleRaw ?? item.title}`);
+          log.info(`[DRY RUN] Parsed: ${title}`);
           ingested++;
           continue;
         }
@@ -322,16 +250,16 @@ async function main(): Promise<void> {
         const status = result.normalization.isNew ? 'NEW' : 'UPDATED';
         const score = result.scoring?.overallScore ?? null;
 
-        log.info(`${status}: ${detailCapture.payload.titleRaw ?? item.title}`, {
+        log.info(`${status}: ${title}`, {
           listingId: result.normalization.listingId,
           score,
         });
 
-        circuitBreaker.recordSuccess('willhaben');
+        circuitBreaker.recordSuccess(sourceCode);
         ingested++;
       } catch (err) {
         const errorClass = classifyScraperError(err);
-        circuitBreaker.recordFailure('willhaben', errorClass);
+        circuitBreaker.recordFailure(sourceCode, errorClass);
 
         if (errorClass === 'terminal_page') {
           log.warn(`Terminal: ${item.detailUrl} — skipping`);
@@ -346,15 +274,16 @@ async function main(): Promise<void> {
       }
     }
 
-    // 8. Finish scrape run
+    // 9. Finish scrape run
     const metrics = runCtx.getMetrics();
-    const finalStatus = failed > 0 ? 'partial' : 'succeeded';
+    const finalStatus = ingested === 0 && failed > 0 ? 'failed' : failed > 0 ? 'partial' : 'succeeded';
 
     await scrapeRuns.finish(run.id, finalStatus, metrics);
 
-    // 9. Print summary
+    // 10. Print summary
     const duration = runCtx.getDurationFormatted();
     console.log('\n=== Scrape Summary ===');
+    console.log(`Source:       ${sourceCode}`);
     console.log(`Duration:     ${duration}`);
     console.log(`Discovered:   ${allDiscoveredItems.length}`);
     console.log(`Ingested:     ${ingested}`);
@@ -365,7 +294,7 @@ async function main(): Promise<void> {
     console.log(`Status:       ${finalStatus}`);
     console.log('=====================\n');
   } finally {
-    // 10. Cleanup
+    // 11. Cleanup
     if (context) await context.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
     await closePool();

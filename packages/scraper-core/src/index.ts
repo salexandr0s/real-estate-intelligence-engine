@@ -32,6 +32,7 @@ export {
   pageNavigationDelay,
   randomInt,
 } from './browser/delay.js';
+export { dismissCookieConsent, type CookieConsentConfig } from './browser/cookie-consent.js';
 
 // ── Queues ──────────────────────────────────────────────────────────────────
 export {

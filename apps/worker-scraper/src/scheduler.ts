@@ -77,12 +77,17 @@ export async function startScheduler(): Promise<void> {
         });
         await scrapeRuns.start(run.id);
 
+        // Read crawl profile config from source
+        const sourceConfig = source.config as Record<string, unknown> | null;
+        const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
+        const maxPages = (crawlProfile?.maxPages as number) ?? 3;
+
         await discoveryQueue.add(`discovery:${source.code}`, {
           sourceCode: source.code,
           sourceId: source.id,
           scrapeRunId: run.id,
           page: 1,
-          maxPages: 3,
+          maxPages,
         });
       }
     } catch (err) {

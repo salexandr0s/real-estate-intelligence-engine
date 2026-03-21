@@ -15,16 +15,15 @@ import {
   ScrapeRunContext,
   pageNavigationDelay,
   classifyScraperError,
+  dismissCookieConsent,
 } from '@rei/scraper-core';
 import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
 import type { CrawlProfile } from '@rei/contracts';
-import { WillhabenAdapter } from '@rei/source-willhaben';
 import { scrapeRuns, sources } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
+import { getAdapter } from '../adapter-registry.js';
 
 const log = createLogger('worker:discovery');
-
-const adapters = new Map([['willhaben', new WillhabenAdapter()]]);
 
 export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
@@ -38,21 +37,44 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   const rateLimiter = new PerDomainRateLimiter(12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
 
+  // Cache source configs to avoid per-job DB lookups
+  const sourceConfigCache = new Map<string, { rateLimitRpm: number | null; config: unknown }>();
+
+  async function getSourceConfig(sourceCode: string): Promise<{ rateLimitRpm: number | null; config: unknown }> {
+    const cached = sourceConfigCache.get(sourceCode);
+    if (cached) return cached;
+    const row = await sources.findByCode(sourceCode);
+    const entry = { rateLimitRpm: row?.rateLimitRpm ?? null, config: row?.config ?? null };
+    sourceConfigCache.set(sourceCode, entry);
+    return entry;
+  }
+
   const worker = new Worker<DiscoveryJobData>(
     QUEUE_NAMES.SCRAPE_DISCOVERY,
     async (job: Job<DiscoveryJobData>) => {
       const { sourceCode, sourceId, scrapeRunId, maxPages } = job.data;
-      const adapter = adapters.get(sourceCode);
-      if (!adapter) throw new Error(`Unknown source: ${sourceCode}`);
+      const adapter = getAdapter(sourceCode);
 
       log.info('Discovery job started', { sourceCode, scrapeRunId, maxPages });
       const runCtx = new ScrapeRunContext(scrapeRunId, sourceCode);
 
+      // Wire per-source rate limit (cached)
+      const sourceCfg = await getSourceConfig(sourceCode);
+      if (sourceCfg.rateLimitRpm) {
+        rateLimiter.setDomainRpm(sourceCode, sourceCfg.rateLimitRpm);
+      }
+
+      // Build crawl profile from source config + job defaults
+      const sourceConfig = sourceCfg.config as Record<string, unknown> | null;
+      const crawlConfig = (sourceConfig?.crawlProfile ?? null) as Record<string, unknown> | null;
       const profile: CrawlProfile = {
         name: `${sourceCode}-scheduled`,
         sourceCode,
         maxPages,
-        sortOrder: 'published_desc',
+        operationType: crawlConfig?.operationType as string | undefined,
+        propertyType: crawlConfig?.propertyType as string | undefined,
+        regions: crawlConfig?.regions as string[] | undefined,
+        sortOrder: (crawlConfig?.sortOrder as string) ?? 'published_desc',
       };
 
       const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
@@ -73,6 +95,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
             await pageNavigationDelay();
 
             await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+            await dismissCookieConsent(page, sourceCode);
             const html = await page.content();
             runCtx.incrementMetric('pagesFetched');
             runCtx.incrementMetric('http2xx');
@@ -91,7 +114,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
                 scrapeRunId,
                 detailUrl: item.detailUrl,
                 discoveryUrl: plan.url,
-                title: item.summaryPayload.titleRaw ?? 'Unknown',
+                title: String((item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown'),
                 externalId: item.externalId ?? undefined,
               });
               totalEnqueued++;

@@ -14,14 +14,14 @@ import {
   SourceCircuitBreaker,
   pageNavigationDelay,
   classifyScraperError,
+  dismissCookieConsent,
 } from '@rei/scraper-core';
 import type { DetailJobData, ProcessingJobData } from '@rei/scraper-core';
-import { WillhabenAdapter } from '@rei/source-willhaben';
+import { sources } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
+import { getAdapter } from '../adapter-registry.js';
 
 const log = createLogger('worker:detail');
-
-const adapters = new Map([['willhaben', new WillhabenAdapter()]]);
 
 export function createDetailWorker(): Worker<DetailJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
@@ -35,17 +35,30 @@ export function createDetailWorker(): Worker<DetailJobData> {
   const rateLimiter = new PerDomainRateLimiter(12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
 
+  // Cache source configs to avoid per-job DB lookups
+  const rateLimitCache = new Map<string, boolean>();
+
+  async function ensureRateLimit(sourceCode: string): Promise<void> {
+    if (rateLimitCache.has(sourceCode)) return;
+    const row = await sources.findByCode(sourceCode);
+    if (row?.rateLimitRpm) {
+      rateLimiter.setDomainRpm(sourceCode, row.rateLimitRpm);
+    }
+    rateLimitCache.set(sourceCode, true);
+  }
+
   const worker = new Worker<DetailJobData>(
     QUEUE_NAMES.SCRAPE_DETAIL,
     async (job: Job<DetailJobData>) => {
       const { sourceCode, sourceId, scrapeRunId, detailUrl, discoveryUrl } = job.data;
-      const adapter = adapters.get(sourceCode);
-      if (!adapter) throw new Error(`Unknown source: ${sourceCode}`);
+      const adapter = getAdapter(sourceCode);
 
       if (circuitBreaker.isOpen(sourceCode)) {
         log.warn('Circuit breaker open, skipping detail', { sourceCode, detailUrl });
         return;
       }
+
+      await ensureRateLimit(sourceCode);
 
       const context = await createScrapeContext();
       try {
@@ -54,11 +67,17 @@ export function createDetailWorker(): Worker<DetailJobData> {
         await rateLimiter.waitForSlot(sourceCode);
         await pageNavigationDelay();
 
-        const fullUrl = detailUrl.startsWith('http')
-          ? detailUrl
-          : `https://www.willhaben.at${detailUrl}`;
+        // Use the adapter's buildDetailRequest for URL resolution
+        const detailRequest = await adapter.buildDetailRequest({
+          detailUrl,
+          sourceCode,
+          summaryPayload: {},
+          discoveredAt: new Date().toISOString(),
+        });
+        const fullUrl = detailRequest?.url ?? detailUrl;
 
         await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+        await dismissCookieConsent(page, sourceCode);
         const html = await page.content();
 
         const detailCapture = await adapter.extractDetailPage({
@@ -81,7 +100,8 @@ export function createDetailWorker(): Worker<DetailJobData> {
         });
 
         circuitBreaker.recordSuccess(sourceCode);
-        log.info('Detail extracted', { title: detailCapture.payload.titleRaw ?? 'Unknown' });
+        const payload = detailCapture.payload as Record<string, unknown>;
+        log.info('Detail extracted', { title: (payload.titleRaw as string) ?? 'Unknown' });
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
