@@ -126,6 +126,24 @@ describe('Detail page parsing', () => {
     const result = parseDetailPage(html, 'https://example.com/123', 'willhaben', 1);
     expect(result.extractionStatus).toBe('parse_failed');
     expect(result.payload.willhabenId).toBe('123');
+    expect(result.payload.operationTypeRaw).toBeNull();
+  });
+
+  it('normalizes Austrian decimal format correctly', () => {
+    const html = loadFixture('detail-page.html');
+    const result = parseDetailPage(html, 'https://example.com/987654321', 'willhaben', 1);
+    // "58,4" in fixture → "58.4" after normalizeDecimal
+    expect(result.payload.livingAreaRaw).toBe('58.4');
+  });
+
+  it('returns empty result for missing attributes', () => {
+    const html = `<script id="__NEXT_DATA__" type="application/json">
+      {"props":{"pageProps":{"advertDetails":{"id":"999","description":"Test","attributes":{"attribute":[]}}}}}
+    </script>`;
+    const result = parseDetailPage(html, 'https://example.com/test-999', 'willhaben', 1);
+    expect(result.externalId).toBe('999');
+    expect(result.payload.priceRaw).toBeNull();
+    expect(result.payload.livingAreaRaw).toBeNull();
   });
 });
 

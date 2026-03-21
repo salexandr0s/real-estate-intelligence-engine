@@ -1,34 +1,11 @@
 import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
-import type { WillhabenDiscoveryItem } from './dto.js';
+import type { WillhabenDiscoveryItem, WillhabenSearchResult } from './dto.js';
+import { getAttr } from './dto.js';
 
 /**
  * Willhaben serves listing data via Next.js __NEXT_DATA__ JSON embedded in HTML.
  * Structure: props.pageProps.searchResult.advertSummaryList.advertSummary[]
- * Each ad has id, description, attributes.attribute[] (name/values pairs), contextLinkList, etc.
  */
-
-interface WillhabenAttribute {
-  name: string;
-  values: string[];
-}
-
-interface WillhabenAdSummary {
-  id: string;
-  description: string;
-  attributes: { attribute: WillhabenAttribute[] };
-  contextLinkList?: { contextLink: Array<{ id: string; uri: string; relativePath: string }> };
-}
-
-interface WillhabenSearchResult {
-  rowsFound: number;
-  rowsReturned: number;
-  pageRequested: number;
-  advertSummaryList: { advertSummary: WillhabenAdSummary[] };
-}
-
-function getAttr(attrs: WillhabenAttribute[], name: string): string | null {
-  return attrs.find((a) => a.name === name)?.values?.[0] ?? null;
-}
 
 export function parseDiscoveryPage(
   html: string,
@@ -82,10 +59,9 @@ export function parseDiscoveryPage(
     });
   }
 
-  // Pagination: if we got results, assume there's a next page if items > 0
-  const pageNum = (requestPlan.metadata?.page as number) ?? 1;
+  const pageNum = Number(requestPlan.metadata?.page) || 1;
   const totalEstimate = searchResult.rowsFound ?? null;
-  const hasMore = ads.length > 0 && (totalEstimate === null || pageNum * 25 < totalEstimate);
+  const hasMore = items.length > 0 && (totalEstimate === null || pageNum * items.length < totalEstimate);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {

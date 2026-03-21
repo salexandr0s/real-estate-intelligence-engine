@@ -549,12 +549,12 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
   switch (sortBy) {
     case 'score_desc':
       return {
-        orderClause: 'l.current_score DESC NULLS LAST, l.first_seen_at DESC, l.id DESC',
+        orderClause: 'l.current_score DESC NULLS LAST, l.id DESC',
         cursorClause: parsed
-          ? '(l.current_score < $1::numeric OR (l.current_score = $1::numeric AND l.first_seen_at < $2::timestamptz) OR (l.current_score = $1::numeric AND l.first_seen_at = $2::timestamptz AND l.id < $3::bigint))'
+          ? '(l.current_score < $1::numeric OR (l.current_score = $1::numeric AND l.id < $2::bigint))'
           : null,
         cursorParams: parsed
-          ? [parsed.sortValue, parsed.sortValue, parsed.id]
+          ? [parsed.sortValue, parsed.id]
           : [],
       };
     case 'newest':

@@ -11,6 +11,7 @@ import { listingRoutes } from './routes/listings.js';
 import { filterRoutes } from './routes/filters.js';
 import { alertRoutes } from './routes/alerts.js';
 import { sourceRoutes } from './routes/sources.js';
+import { analyticsRoutes } from './routes/analytics.js';
 
 const logger = createLogger('api');
 
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
   await app.register(filterRoutes);
   await app.register(alertRoutes);
   await app.register(sourceRoutes);
+  await app.register(analyticsRoutes);
 
   // Verify DB connection
   try {

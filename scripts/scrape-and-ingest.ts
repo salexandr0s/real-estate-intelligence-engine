@@ -345,7 +345,7 @@ async function main(): Promise<void> {
 
     // 8. Finish scrape run
     const metrics = runCtx.getMetrics();
-    const finalStatus = failed > ingested ? 'partial' : 'succeeded';
+    const finalStatus = failed > 0 ? 'partial' : 'succeeded';
 
     await scrapeRuns.finish(run.id, finalStatus, metrics);
 

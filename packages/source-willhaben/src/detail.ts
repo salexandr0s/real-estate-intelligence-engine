@@ -1,31 +1,11 @@
 import type { DetailCapture, SourceAvailability } from '@rei/contracts';
-import type { WillhabenDetailDTO } from './dto.js';
+import type { WillhabenDetailDTO, WillhabenAdvertDetails } from './dto.js';
+import { getAttr, getAllAttrValues } from './dto.js';
 
 /**
  * Willhaben detail pages serve data via __NEXT_DATA__ JSON.
  * Structure: props.pageProps.advertDetails with attributes.attribute[] (name/values pairs).
  */
-
-interface WillhabenAttribute {
-  name: string;
-  values: string[];
-}
-
-interface WillhabenAdvertDetails {
-  id: string;
-  description: string;
-  publishedDate?: string;
-  firstPublishedDate?: string;
-  advertStatus?: { id: string; statusId: number };
-  attributes: { attribute: WillhabenAttribute[] };
-  advertImageList?: { advertImage: Array<{ mainImageUrl?: string; referenceImageUrl?: string }> };
-  advertContactDetails?: { contactName?: string; contactPhone?: string };
-  advertAddressDetails?: { address?: string; postcode?: string; city?: string };
-}
-
-function getAttr(attrs: WillhabenAttribute[], name: string): string | null {
-  return attrs.find((a) => a.name === name)?.values?.[0] ?? null;
-}
 
 export function parseDetailPage(
   html: string,
@@ -81,8 +61,11 @@ export function parseDetailPage(
   }
 
   const description = getAttr(attrs, 'DESCRIPTION') ?? getAttr(attrs, 'BODY_DYN');
-  const freeAreaType = getAttr(attrs, 'FREE_AREA/FREE_AREA_TYPE');
-  const freeAreaArea = getAttr(attrs, 'FREE_AREA/FREE_AREA_AREA');
+
+  // Handle multiple FREE_AREA entries
+  const freeAreaTypes = getAllAttrValues(attrs, 'FREE_AREA/FREE_AREA_TYPE');
+  const freeAreaAreas = getAllAttrValues(attrs, 'FREE_AREA/FREE_AREA_AREA');
+  const freeAreas = parseFreeAreas(freeAreaTypes, freeAreaAreas);
 
   const payload: WillhabenDetailDTO = {
     willhabenId,
@@ -105,9 +88,9 @@ export function parseDetailPage(
     heatingTypeRaw: getAttr(attrs, 'HEATING'),
     conditionRaw: getAttr(attrs, 'BUILDING_CONDITION'),
     energyCertificateRaw: getAttr(attrs, 'ENERGY_HWB_CLASS'),
-    balconyAreaRaw: freeAreaType?.includes('Balkon') ? freeAreaArea : null,
-    terraceAreaRaw: freeAreaType?.includes('Terrasse') ? freeAreaArea : null,
-    gardenAreaRaw: freeAreaType?.includes('Garten') ? freeAreaArea : null,
+    balconyAreaRaw: freeAreas.balcony,
+    terraceAreaRaw: freeAreas.terrace,
+    gardenAreaRaw: freeAreas.garden,
     commissionRaw: getAttr(attrs, 'COMMISSION'),
     operatingCostRaw: getAttr(attrs, 'OPERATING_COST'),
     reserveFundRaw: null,
@@ -125,7 +108,7 @@ export function parseDetailPage(
     sourceCode,
     sourceListingKeyCandidate: willhabenId,
     externalId: willhabenId,
-    canonicalUrl: url.split('?')[0]!,
+    canonicalUrl: url.split('?')[0] ?? url,
     detailUrl: url,
     extractedAt: new Date().toISOString(),
     payload,
@@ -143,7 +126,7 @@ function buildFailedCapture(
     sourceCode,
     sourceListingKeyCandidate: extractIdFromUrl(url) ?? '',
     externalId: extractIdFromUrl(url),
-    canonicalUrl: url.split('?')[0]!,
+    canonicalUrl: url.split('?')[0] ?? url,
     detailUrl: url,
     extractedAt: new Date().toISOString(),
     payload: {
@@ -159,7 +142,7 @@ function buildFailedCapture(
       districtRaw: null,
       cityRaw: null,
       propertyTypeRaw: null,
-      operationTypeRaw: 'sale',
+      operationTypeRaw: null,
       statusRaw: 'unknown',
       attributesRaw: {},
       mediaRaw: [],
@@ -173,7 +156,6 @@ function buildFailedCapture(
 }
 
 export function detectDetailAvailability(html: string): SourceAvailability {
-  // Check __NEXT_DATA__ first
   const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (nextDataMatch?.[1]) {
     try {
@@ -184,7 +166,7 @@ export function detectDetailAvailability(html: string): SourceAvailability {
       const ad = data.props?.pageProps?.advertDetails;
       if (ad) return detectDetailAvailabilityFromData(ad);
     } catch {
-      // fall through to HTML-based detection
+      // fall through
     }
   }
 
@@ -215,10 +197,19 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Normalize Austrian decimal format to standard format.
+ * Handles: "58,4" → "58.4", "1.250,50" → "1250.50", "86" → "86"
+ */
 function normalizeDecimal(value: string | null): string | null {
   if (!value) return null;
-  // Austrian format uses comma as decimal separator
-  return value.replace(',', '.');
+  const trimmed = value.trim();
+  if (trimmed.includes(',')) {
+    // Austrian/German format: dots are thousands separators, comma is decimal
+    // Remove dots (thousands), replace comma with dot (decimal)
+    return trimmed.replace(/\./g, '').replace(',', '.');
+  }
+  return trimmed;
 }
 
 function mapOperationType(ownageType: string | null): string {
@@ -231,7 +222,37 @@ function mapOperationType(ownageType: string | null): string {
 
 function extractDistrictFromAddress(address: string | null): string | null {
   if (!address) return null;
-  // Pattern: "Wien, 19. Bezirk, Döbling"
   const m = address.match(/(\d{1,2})\.\s*Bezirk/i);
   return m?.[1] ? `${m[1]}. Bezirk` : null;
+}
+
+/**
+ * Parse multiple FREE_AREA entries into typed free area values.
+ * Willhaben can have multiple FREE_AREA/FREE_AREA_TYPE attributes
+ * (e.g., "Balkon", "Terrasse", "Garten") each with a corresponding area.
+ */
+function parseFreeAreas(
+  types: string[],
+  areas: string[],
+): { balcony: string | null; terrace: string | null; garden: string | null } {
+  const result: { balcony: string | null; terrace: string | null; garden: string | null } = {
+    balcony: null,
+    terrace: null,
+    garden: null,
+  };
+
+  for (let i = 0; i < types.length; i++) {
+    const type = types[i]?.toLowerCase() ?? '';
+    const area = areas[i] ?? null;
+    if (type.includes('balkon') || type.includes('loggia')) {
+      result.balcony = result.balcony ?? area;
+    } else if (type.includes('terrasse') || type.includes('dachterrasse')) {
+      result.terrace = result.terrace ?? area;
+    } else if (type.includes('garten')) {
+      result.garden = result.garden ?? area;
+    }
+  }
+
+  // Also check combined FREE_AREA/FREE_AREA_TYPE_AND_AREA format
+  return result;
 }
