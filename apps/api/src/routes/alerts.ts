@@ -2,39 +2,61 @@ import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@rei/observability';
 import type { AlertStatus } from '@rei/contracts';
 import { alerts } from '@rei/db';
-import { parseOrThrow, idParamSchema, alertUpdateSchema, paginationQuerySchema } from '../schemas.js';
+import {
+  parseOrThrow,
+  idParamSchema,
+  alertUpdateSchema,
+  paginationQuerySchema,
+} from '../schemas.js';
 
 export async function alertRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/alerts - List alerts with cursor pagination
-  app.get('/v1/alerts', async (request, reply) => {
-    const userId = request.userId;
-    const { limit, cursor } = parseOrThrow(paginationQuerySchema, request.query);
-
-    const result = await alerts.findByUser(userId, null, cursor ?? null, limit);
-
-    const mappedData = result.data.map((alert) => ({
-      id: alert.id,
-      userFilterId: alert.userFilterId,
-      listingId: alert.listingId,
-      alertType: alert.alertType,
-      channel: alert.channel,
-      status: alert.status,
-      title: alert.title,
-      body: alert.body,
-      payload: alert.payload,
-      matchedAt: alert.matchedAt.toISOString(),
-      sentAt: alert.sentAt?.toISOString() ?? null,
-      createdAt: alert.createdAt.toISOString(),
-    }));
-
-    return reply.send({
-      data: mappedData,
-      meta: {
-        nextCursor: result.nextCursor,
-        pageSize: limit ?? 25,
+  app.get(
+    '/v1/alerts',
+    {
+      schema: {
+        tags: ['Alerts'],
+        summary: 'List alerts with cursor pagination',
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 200, description: 'Page size' },
+            cursor: { type: 'string', description: 'Pagination cursor' },
+          },
+          additionalProperties: true,
+        },
       },
-    });
-  });
+    },
+    async (request, reply) => {
+      const userId = request.userId;
+      const { limit, cursor } = parseOrThrow(paginationQuerySchema, request.query);
+
+      const result = await alerts.findByUser(userId, null, cursor ?? null, limit);
+
+      const mappedData = result.data.map((alert) => ({
+        id: alert.id,
+        userFilterId: alert.userFilterId,
+        listingId: alert.listingId,
+        alertType: alert.alertType,
+        channel: alert.channel,
+        status: alert.status,
+        title: alert.title,
+        body: alert.body,
+        payload: alert.payload,
+        matchedAt: alert.matchedAt.toISOString(),
+        sentAt: alert.sentAt?.toISOString() ?? null,
+        createdAt: alert.createdAt.toISOString(),
+      }));
+
+      return reply.send({
+        data: mappedData,
+        meta: {
+          nextCursor: result.nextCursor,
+          pageSize: limit ?? 25,
+        },
+      });
+    },
+  );
 
   // PATCH /v1/alerts/:id - Update alert status
   app.patch<{ Params: { id: string } }>('/v1/alerts/:id', async (request, reply) => {

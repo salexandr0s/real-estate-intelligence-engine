@@ -118,10 +118,7 @@ export async function findByUser(
  * Find a single alert by ID.
  */
 export async function findById(id: number): Promise<AlertRow | null> {
-  const rows = await query<AlertDbRow>(
-    'SELECT * FROM alerts WHERE id = $1',
-    [id],
-  );
+  const rows = await query<AlertDbRow>('SELECT * FROM alerts WHERE id = $1', [id]);
   const row = rows[0];
   return row ? toAlertRow(row) : null;
 }
@@ -152,7 +149,9 @@ export async function updateStatus(
  * Count unread (queued + sent but not opened/dismissed) alerts for a user.
  */
 export async function countUnread(userId: number): Promise<number> {
-  interface CountResult { count: string }
+  interface CountResult {
+    count: string;
+  }
   const rows = await query<CountResult>(
     `SELECT COUNT(*) AS count FROM alerts
      WHERE user_id = $1
@@ -160,4 +159,19 @@ export async function countUnread(userId: number): Promise<number> {
     [userId],
   );
   return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Find alerts for a user matched since a given timestamp.
+ * Used by the SSE stream endpoint to poll for new alerts.
+ */
+export async function findSince(userId: number, since: Date, limit = 100): Promise<AlertRow[]> {
+  const rows = await query<AlertDbRow>(
+    `SELECT * FROM alerts
+     WHERE user_id = $1 AND matched_at > $2
+     ORDER BY matched_at ASC
+     LIMIT $3`,
+    [userId, since, limit],
+  );
+  return rows.map(toAlertRow);
 }

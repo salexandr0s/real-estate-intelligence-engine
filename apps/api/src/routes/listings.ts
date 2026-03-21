@@ -16,159 +16,212 @@ function centsToEur(cents: number | null): number | null {
 
 export async function listingRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/listings - Search listings with filter params
-  app.get('/v1/listings', async (request, reply) => {
-    const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
-
-    const result = await listings.searchListings(
-      {
-        operationType: parsed.operationType as ListingSearchFilter['operationType'],
-        propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
-        districts: parsed.districts,
-        minPriceEurCents: eurToCents(parsed.minPriceEur),
-        maxPriceEurCents: eurToCents(parsed.maxPriceEur),
-        minAreaSqm: parsed.minAreaSqm,
-        maxAreaSqm: parsed.maxAreaSqm,
-        minRooms: parsed.minRooms,
-        maxRooms: parsed.maxRooms,
-        minScore: parsed.minScore,
-        sortBy: parsed.sortBy,
+  app.get(
+    '/v1/listings',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Search listings with filters',
+        querystring: {
+          type: 'object',
+          properties: {
+            operationType: { type: 'string', description: 'sale or rent' },
+            propertyTypes: {
+              type: 'string',
+              description: 'Comma-separated: apartment,house,land,commercial,parking,other',
+            },
+            districts: { type: 'string', description: 'Comma-separated district numbers' },
+            minPriceEur: { type: 'number' },
+            maxPriceEur: { type: 'number' },
+            minAreaSqm: { type: 'number' },
+            maxAreaSqm: { type: 'number' },
+            minRooms: { type: 'number' },
+            maxRooms: { type: 'number' },
+            minScore: { type: 'number' },
+            limit: { type: 'integer', minimum: 1, maximum: 200 },
+            cursor: { type: 'string' },
+            sortBy: {
+              type: 'string',
+              description: 'score_desc, newest, price_asc, price_desc, sqm_desc',
+            },
+          },
+          additionalProperties: false,
+        },
       },
-      parsed.cursor ?? null,
-      parsed.limit ?? undefined,
-    );
+    },
+    async (request, reply) => {
+      const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
 
-    // Map cents to EUR for the API response
-    const mappedData = result.data.map((listing) => ({
-      id: listing.id,
-      listingUid: listing.listingUid,
-      sourceCode: listing.sourceCode,
-      title: listing.title,
-      canonicalUrl: listing.canonicalUrl,
-      operationType: listing.operationType,
-      propertyType: listing.propertyType,
-      city: listing.city,
-      postalCode: listing.postalCode,
-      districtNo: listing.districtNo,
-      districtName: listing.districtName,
-      listPriceEur: centsToEur(listing.listPriceEurCents),
-      listPriceEurCents: listing.listPriceEurCents,
-      livingAreaSqm: listing.livingAreaSqm,
-      rooms: listing.rooms,
-      pricePerSqmEur: listing.pricePerSqmEur,
-      currentScore: listing.currentScore,
-      firstSeenAt: listing.firstSeenAt.toISOString(),
-      listingStatus: listing.listingStatus,
-    }));
+      const result = await listings.searchListings(
+        {
+          operationType: parsed.operationType as ListingSearchFilter['operationType'],
+          propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
+          districts: parsed.districts,
+          minPriceEurCents: eurToCents(parsed.minPriceEur),
+          maxPriceEurCents: eurToCents(parsed.maxPriceEur),
+          minAreaSqm: parsed.minAreaSqm,
+          maxAreaSqm: parsed.maxAreaSqm,
+          minRooms: parsed.minRooms,
+          maxRooms: parsed.maxRooms,
+          minScore: parsed.minScore,
+          sortBy: parsed.sortBy,
+        },
+        parsed.cursor ?? null,
+        parsed.limit ?? undefined,
+      );
 
-    return reply.send({
-      data: mappedData,
-      meta: result.meta,
-    });
-  });
-
-  // GET /v1/listings/:id - Get listing detail
-  app.get<{ Params: { id: string } }>('/v1/listings/:id', async (request, reply) => {
-    const { id } = parseOrThrow(idParamSchema, request.params);
-
-    const listing = await listings.findById(id);
-    if (!listing) {
-      throw new NotFoundError('Listing', id);
-    }
-
-    return reply.send({
-      data: {
+      // Map cents to EUR for the API response
+      const mappedData = result.data.map((listing) => ({
         id: listing.id,
         listingUid: listing.listingUid,
-        sourceListingKey: listing.sourceListingKey,
+        sourceCode: listing.sourceCode,
+        title: listing.title,
         canonicalUrl: listing.canonicalUrl,
         operationType: listing.operationType,
         propertyType: listing.propertyType,
-        propertySubtype: listing.propertySubtype,
-        listingStatus: listing.listingStatus,
-        title: listing.title,
-        description: listing.description,
         city: listing.city,
-        federalState: listing.federalState,
         postalCode: listing.postalCode,
         districtNo: listing.districtNo,
         districtName: listing.districtName,
-        street: listing.street,
-        houseNumber: listing.houseNumber,
-        addressDisplay: listing.addressDisplay,
-        latitude: listing.latitude,
-        longitude: listing.longitude,
-        geocodePrecision: listing.geocodePrecision,
         listPriceEur: centsToEur(listing.listPriceEurCents),
         listPriceEurCents: listing.listPriceEurCents,
-        monthlyOperatingCostEur: centsToEur(listing.monthlyOperatingCostEurCents),
-        reserveFundEur: centsToEur(listing.reserveFundEurCents),
-        commissionEur: centsToEur(listing.commissionEurCents),
         livingAreaSqm: listing.livingAreaSqm,
-        usableAreaSqm: listing.usableAreaSqm,
-        balconyAreaSqm: listing.balconyAreaSqm,
-        terraceAreaSqm: listing.terraceAreaSqm,
-        gardenAreaSqm: listing.gardenAreaSqm,
         rooms: listing.rooms,
-        floorLabel: listing.floorLabel,
-        floorNumber: listing.floorNumber,
-        yearBuilt: listing.yearBuilt,
-        conditionCategory: listing.conditionCategory,
-        heatingType: listing.heatingType,
-        energyCertificateClass: listing.energyCertificateClass,
-        hasBalcony: listing.hasBalcony,
-        hasTerrace: listing.hasTerrace,
-        hasGarden: listing.hasGarden,
-        hasElevator: listing.hasElevator,
-        parkingAvailable: listing.parkingAvailable,
-        isFurnished: listing.isFurnished,
         pricePerSqmEur: listing.pricePerSqmEur,
-        completenessScore: listing.completenessScore,
         currentScore: listing.currentScore,
         firstSeenAt: listing.firstSeenAt.toISOString(),
-        lastSeenAt: listing.lastSeenAt.toISOString(),
-        firstPublishedAt: listing.firstPublishedAt?.toISOString() ?? null,
-        lastPriceChangeAt: listing.lastPriceChangeAt?.toISOString() ?? null,
-        lastContentChangeAt: listing.lastContentChangeAt?.toISOString() ?? null,
-        lastStatusChangeAt: listing.lastStatusChangeAt?.toISOString() ?? null,
-        lastScoredAt: listing.lastScoredAt?.toISOString() ?? null,
+        listingStatus: listing.listingStatus,
+      }));
+
+      return reply.send({
+        data: mappedData,
+        meta: result.meta,
+      });
+    },
+  );
+
+  // GET /v1/listings/:id - Get listing detail
+  app.get<{ Params: { id: string } }>(
+    '/v1/listings/:id',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Get listing details by ID',
+        params: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', description: 'Listing ID' },
+          },
+          required: ['id'],
+        },
       },
-      meta: {},
-    });
-  });
+    },
+    async (request, reply) => {
+      const { id } = parseOrThrow(idParamSchema, request.params);
+
+      const listing = await listings.findById(id);
+      if (!listing) {
+        throw new NotFoundError('Listing', id);
+      }
+
+      return reply.send({
+        data: {
+          id: listing.id,
+          listingUid: listing.listingUid,
+          sourceListingKey: listing.sourceListingKey,
+          canonicalUrl: listing.canonicalUrl,
+          operationType: listing.operationType,
+          propertyType: listing.propertyType,
+          propertySubtype: listing.propertySubtype,
+          listingStatus: listing.listingStatus,
+          title: listing.title,
+          description: listing.description,
+          city: listing.city,
+          federalState: listing.federalState,
+          postalCode: listing.postalCode,
+          districtNo: listing.districtNo,
+          districtName: listing.districtName,
+          street: listing.street,
+          houseNumber: listing.houseNumber,
+          addressDisplay: listing.addressDisplay,
+          latitude: listing.latitude,
+          longitude: listing.longitude,
+          geocodePrecision: listing.geocodePrecision,
+          listPriceEur: centsToEur(listing.listPriceEurCents),
+          listPriceEurCents: listing.listPriceEurCents,
+          monthlyOperatingCostEur: centsToEur(listing.monthlyOperatingCostEurCents),
+          reserveFundEur: centsToEur(listing.reserveFundEurCents),
+          commissionEur: centsToEur(listing.commissionEurCents),
+          livingAreaSqm: listing.livingAreaSqm,
+          usableAreaSqm: listing.usableAreaSqm,
+          balconyAreaSqm: listing.balconyAreaSqm,
+          terraceAreaSqm: listing.terraceAreaSqm,
+          gardenAreaSqm: listing.gardenAreaSqm,
+          rooms: listing.rooms,
+          floorLabel: listing.floorLabel,
+          floorNumber: listing.floorNumber,
+          yearBuilt: listing.yearBuilt,
+          conditionCategory: listing.conditionCategory,
+          heatingType: listing.heatingType,
+          energyCertificateClass: listing.energyCertificateClass,
+          hasBalcony: listing.hasBalcony,
+          hasTerrace: listing.hasTerrace,
+          hasGarden: listing.hasGarden,
+          hasElevator: listing.hasElevator,
+          parkingAvailable: listing.parkingAvailable,
+          isFurnished: listing.isFurnished,
+          pricePerSqmEur: listing.pricePerSqmEur,
+          completenessScore: listing.completenessScore,
+          currentScore: listing.currentScore,
+          firstSeenAt: listing.firstSeenAt.toISOString(),
+          lastSeenAt: listing.lastSeenAt.toISOString(),
+          firstPublishedAt: listing.firstPublishedAt?.toISOString() ?? null,
+          lastPriceChangeAt: listing.lastPriceChangeAt?.toISOString() ?? null,
+          lastContentChangeAt: listing.lastContentChangeAt?.toISOString() ?? null,
+          lastStatusChangeAt: listing.lastStatusChangeAt?.toISOString() ?? null,
+          lastScoredAt: listing.lastScoredAt?.toISOString() ?? null,
+        },
+        meta: {},
+      });
+    },
+  );
 
   // GET /v1/listings/:id/score-explanation - Get score explanation
-  app.get<{ Params: { id: string } }>('/v1/listings/:id/score-explanation', async (request, reply) => {
-    const { id } = parseOrThrow(idParamSchema, request.params);
+  app.get<{ Params: { id: string } }>(
+    '/v1/listings/:id/score-explanation',
+    async (request, reply) => {
+      const { id } = parseOrThrow(idParamSchema, request.params);
 
-    // Verify listing exists
-    const listing = await listings.findById(id);
-    if (!listing) {
-      throw new NotFoundError('Listing', id);
-    }
+      // Verify listing exists
+      const listing = await listings.findById(id);
+      if (!listing) {
+        throw new NotFoundError('Listing', id);
+      }
 
-    const explanation = await listingScores.findLatestByListingId(id);
-    if (!explanation) {
-      throw new NotFoundError('Score explanation for listing', id);
-    }
+      const explanation = await listingScores.findLatestByListingId(id);
+      if (!explanation) {
+        throw new NotFoundError('Score explanation for listing', id);
+      }
 
-    return reply.send({
-      data: {
-        scoreVersion: explanation.scoreVersion,
-        overallScore: explanation.overallScore,
-        districtPriceScore: explanation.districtPriceScore,
-        undervaluationScore: explanation.undervaluationScore,
-        keywordSignalScore: explanation.keywordSignalScore,
-        timeOnMarketScore: explanation.timeOnMarketScore,
-        confidenceScore: explanation.confidenceScore,
-        districtBaselinePpsqmEur: explanation.districtBaselinePpsqmEur,
-        bucketBaselinePpsqmEur: explanation.bucketBaselinePpsqmEur,
-        discountToDistrictPct: explanation.discountToDistrictPct,
-        discountToBucketPct: explanation.discountToBucketPct,
-        matchedPositiveKeywords: explanation.matchedPositiveKeywords,
-        matchedNegativeKeywords: explanation.matchedNegativeKeywords,
-        explanation: explanation.explanation,
-      },
-      meta: {},
-    });
-  });
+      return reply.send({
+        data: {
+          scoreVersion: explanation.scoreVersion,
+          overallScore: explanation.overallScore,
+          districtPriceScore: explanation.districtPriceScore,
+          undervaluationScore: explanation.undervaluationScore,
+          keywordSignalScore: explanation.keywordSignalScore,
+          timeOnMarketScore: explanation.timeOnMarketScore,
+          confidenceScore: explanation.confidenceScore,
+          districtBaselinePpsqmEur: explanation.districtBaselinePpsqmEur,
+          bucketBaselinePpsqmEur: explanation.bucketBaselinePpsqmEur,
+          discountToDistrictPct: explanation.discountToDistrictPct,
+          discountToBucketPct: explanation.discountToBucketPct,
+          matchedPositiveKeywords: explanation.matchedPositiveKeywords,
+          matchedNegativeKeywords: explanation.matchedNegativeKeywords,
+          explanation: explanation.explanation,
+        },
+        meta: {},
+      });
+    },
+  );
 }
