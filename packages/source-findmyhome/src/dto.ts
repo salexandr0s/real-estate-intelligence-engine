@@ -1,6 +1,8 @@
 import type { SourceRawListingBase } from '@rei/contracts';
 
-// ── JSON-LD schema types for findmyhome.at ──────────────────────────────────
+// ── JSON-LD schema types for findmyhome.at detail pages ─────────────────────
+// Discovery parsing no longer uses JSON-LD (site serves HTML cards).
+// These types are retained for the detail page parser which still reads JSON-LD.
 
 export interface JsonLdOffer {
   '@type': string;
@@ -46,30 +48,6 @@ export interface JsonLdPhoto {
   '@type': string;
   contentUrl: string;
   caption?: string;
-}
-
-export interface JsonLdListItem {
-  '@type': 'ListItem';
-  position: number;
-  item: JsonLdApartmentSummary;
-}
-
-export interface JsonLdApartmentSummary {
-  '@type': string;
-  '@id': string;
-  name: string;
-  identifier: string;
-  offers?: JsonLdOffer;
-  floorSize?: JsonLdQuantitativeValue;
-  numberOfRooms?: string;
-  address?: JsonLdPostalAddress;
-}
-
-export interface JsonLdItemList {
-  '@context': string;
-  '@type': 'ItemList';
-  numberOfItems: number;
-  itemListElement: JsonLdListItem[];
 }
 
 export interface JsonLdApartmentDetail {

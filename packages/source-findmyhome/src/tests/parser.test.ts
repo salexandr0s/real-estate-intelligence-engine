@@ -17,7 +17,7 @@ describe('FindMyHomeAdapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('findmyhome');
     expect(adapter.sourceName).toBe('findmyhome.at');
-    expect(adapter.parserVersion).toBe(1);
+    expect(adapter.parserVersion).toBe(2);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -41,7 +41,7 @@ describe('FindMyHomeAdapter', () => {
       detailUrl: 'https://www.findmyhome.at/kaufen/wohnung/501234',
       extractedAt: new Date().toISOString(),
       payload: { findmyhomeId: '501234' } as never,
-      parserVersion: 1,
+      parserVersion: 2,
       extractionStatus: 'captured',
     });
     expect(key).toBe('findmyhome:501234');
@@ -55,7 +55,7 @@ describe('FindMyHomeAdapter', () => {
       detailUrl: 'https://www.findmyhome.at/kaufen/wohnung/999888',
       extractedAt: new Date().toISOString(),
       payload: { findmyhomeId: '' } as never,
-      parserVersion: 1,
+      parserVersion: 2,
       extractionStatus: 'captured',
     });
     expect(key).toBe('findmyhome:999888');
@@ -65,10 +65,10 @@ describe('FindMyHomeAdapter', () => {
 // ── Discovery parsing ───────────────────────────────────────────────────────
 
 describe('Discovery page parsing', () => {
-  it('extracts 3 listing items from JSON-LD ItemList', () => {
+  it('extracts 3 listing items from HTML cards', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
@@ -77,50 +77,78 @@ describe('Discovery page parsing', () => {
     expect(result.totalEstimate).toBe(250);
   });
 
+  it('extracts correct IDs from all items', () => {
+    const html = loadFixture('discovery-page.html');
+    const result = parseDiscoveryPage(html, 'findmyhome', {
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      metadata: { page: 1 },
+    });
+
+    expect(result.items[0]!.externalId).toBe('5501234');
+    expect(result.items[1]!.externalId).toBe('5501235');
+    expect(result.items[2]!.externalId).toBe('5501236');
+  });
+
   it('extracts correct fields from first discovery item', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
     const first = result.items[0]!;
-    expect(first.externalId).toBe('501234');
+    expect(first.externalId).toBe('5501234');
     expect(first.sourceCode).toBe('findmyhome');
-    expect(first.summaryPayload.findmyhomeId).toBe('501234');
+    expect(first.summaryPayload.findmyhomeId).toBe('5501234');
     expect(first.summaryPayload.titleRaw).toContain('3-Zimmer');
+    expect(first.summaryPayload.titleRaw).toContain('Leopoldstadt');
     expect(first.summaryPayload.priceRaw).toBe('310000');
-    expect(first.summaryPayload.locationRaw).toContain('1020');
-    expect(first.summaryPayload.locationRaw).toContain('Wien');
-    expect(first.summaryPayload.roomsRaw).toBe('3');
-    expect(first.summaryPayload.areaRaw).toBe('74,5');
-    expect(first.detailUrl).toContain('501234');
+    expect(first.summaryPayload.locationRaw).toBe('1020 Wien');
+    expect(first.summaryPayload.roomsRaw).toBe('3.0');
+    expect(first.summaryPayload.areaRaw).toBe('74');
+    expect(first.detailUrl).toBe('https://www.findmyhome.at/5501234');
   });
 
   it('extracts correct fields from second and third items', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
     const second = result.items[1]!;
-    expect(second.externalId).toBe('501235');
+    expect(second.externalId).toBe('5501235');
     expect(second.summaryPayload.priceRaw).toBe('245000');
-    expect(second.summaryPayload.roomsRaw).toBe('2');
-    expect(second.summaryPayload.locationRaw).toContain('1030');
+    expect(second.summaryPayload.roomsRaw).toBe('2.0');
+    expect(second.summaryPayload.locationRaw).toBe('1030 Wien');
+    expect(second.summaryPayload.areaRaw).toBe('52');
 
     const third = result.items[2]!;
-    expect(third.externalId).toBe('501236');
+    expect(third.externalId).toBe('5501236');
     expect(third.summaryPayload.priceRaw).toBe('420000');
-    expect(third.summaryPayload.roomsRaw).toBe('4');
+    expect(third.summaryPayload.roomsRaw).toBe('4.0');
+    expect(third.summaryPayload.locationRaw).toBe('1100 Wien');
     expect(third.summaryPayload.areaRaw).toBe('92');
+  });
+
+  it('strips ?tl=1 from extracted IDs (premium listing flag)', () => {
+    const html = loadFixture('discovery-page.html');
+    const result = parseDiscoveryPage(html, 'findmyhome', {
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      metadata: { page: 1 },
+    });
+
+    // Second card has ?tl=1 in its href
+    const second = result.items[1]!;
+    expect(second.externalId).toBe('5501235');
+    expect(second.detailUrl).toBe('https://www.findmyhome.at/5501235');
+    expect(second.detailUrl).not.toContain('?tl=1');
   });
 
   it('detects pagination when more items available', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
@@ -129,10 +157,10 @@ describe('Discovery page parsing', () => {
     expect(result.nextPagePlan!.metadata?.['page']).toBe(2);
   });
 
-  it('returns empty result for HTML without JSON-LD', () => {
+  it('returns empty result for HTML without listing cards', () => {
     const html = '<html><body><h1>No data here</h1></body></html>';
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
@@ -141,10 +169,10 @@ describe('Discovery page parsing', () => {
     expect(result.totalEstimate).toBeNull();
   });
 
-  it('returns empty result for malformed JSON-LD', () => {
-    const html = '<html><body><script type="application/ld+json">{not valid json</script></body></html>';
+  it('returns empty result for empty HTML', () => {
+    const html = '';
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/kaufen/wohnung/wien?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
       metadata: { page: 1 },
     });
 
@@ -367,7 +395,7 @@ describe('Availability detection', () => {
     expect(status.status).toBe('available');
   });
 
-  it('detects not_found from "nicht mehr verfügbar" marker', () => {
+  it('detects not_found from "nicht mehr verfugbar" marker', () => {
     const html = loadFixture('detail-sold.html');
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('not_found');

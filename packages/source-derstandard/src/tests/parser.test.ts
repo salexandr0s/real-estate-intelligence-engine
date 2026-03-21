@@ -239,8 +239,8 @@ describe('Discovery page parsing', () => {
   });
 });
 
-describe('Detail page parsing', () => {
-  it('extracts full listing data from embedded JSON', () => {
+describe('Detail page parsing — DOM fallback (real HTML format)', () => {
+  it('extracts full listing data from DOM-rendered HTML', () => {
     const html = loadFixture('detail-page.html');
     const result = parseDetailPage(
       html,
@@ -255,33 +255,27 @@ describe('Detail page parsing', () => {
 
     const p = result.payload;
     expect(p.standardId).toBe('15086452');
-    expect(p.titleRaw).toBe('Innenhof-Idylle nur wenige Schritte zur Neubaugasse - A');
+    expect(p.titleRaw).toBe('Innenhof-Idylle nur wenige Schritte zur Neubaugasse');
     expect(p.descriptionRaw).toContain('Helle, sanierte Altbauwohnung');
     expect(p.descriptionRaw).toContain('Balkon');
     expect(p.priceRaw).toBe('460000');
     expect(p.livingAreaRaw).toBe('87');
-    expect(p.usableAreaRaw).toBe('95.4');
     expect(p.roomsRaw).toBe('3');
-    expect(p.floorRaw).toBe('2');
-    expect(p.yearBuiltRaw).toBe('1905');
+    expect(p.floorRaw).toBe('4');
+    expect(p.yearBuiltRaw).toBe('1910');
     expect(p.cityRaw).toBe('Wien');
     expect(p.postalCodeRaw).toBe('1070');
     expect(p.districtRaw).toBe('7. Bezirk');
     expect(p.streetRaw).toBe('Neubaugasse 18');
-    expect(p.propertyTypeRaw).toBe('Wohnung');
-    expect(p.propertySubtypeRaw).toBe('Sonstige Wohnungen');
     expect(p.operationTypeRaw).toBe('sale');
-    expect(p.heatingTypeRaw).toBe('Fernwärme');
-    expect(p.conditionRaw).toBe('Erstbezug nach Sanierung');
+    expect(p.heatingTypeRaw).toBe('Fernw\u00E4rme');
     expect(p.energyCertificateRaw).toBe('B');
-    expect(p.operatingCostRaw).toBe('250');
-    expect(p.statusRaw).toBe('active');
     expect(p.contactName).toBe('Immobilien Wien GmbH');
-    expect(p.images).toHaveLength(3);
+    expect(p.images).toHaveLength(2);
     expect(p.images[0]).toContain('15086452');
   });
 
-  it('extracts coordinates', () => {
+  it('extracts coordinates from data attributes', () => {
     const html = loadFixture('detail-page.html');
     const result = parseDetailPage(
       html,
@@ -289,8 +283,8 @@ describe('Detail page parsing', () => {
       'derstandard',
       2,
     );
-    expect(result.payload.latRaw).toBe('48.1985');
-    expect(result.payload.lonRaw).toBe('16.3492');
+    expect(result.payload.latRaw).toBe('48.2010');
+    expect(result.payload.lonRaw).toBe('16.3490');
   });
 
   it('extracts features into attributesRaw', () => {
@@ -309,6 +303,89 @@ describe('Detail page parsing', () => {
     expect(attrs.hasGarden).toBe(false);
   });
 
+  it('sets DOM-unavailable fields to null', () => {
+    const html = loadFixture('detail-page.html');
+    const result = parseDetailPage(
+      html,
+      'https://immobilien.derstandard.at/detail/15086452/slug',
+      'derstandard',
+      2,
+    );
+    const p = result.payload;
+    // These fields are not available in DOM-rendered pages
+    expect(p.usableAreaRaw).toBeNull();
+    expect(p.propertyTypeRaw).toBeNull();
+    expect(p.propertySubtypeRaw).toBeNull();
+    expect(p.conditionRaw).toBeNull();
+    expect(p.operatingCostRaw).toBeNull();
+  });
+
+  it('sets canonicalUrl without query params', () => {
+    const html = loadFixture('detail-page.html');
+    const result = parseDetailPage(
+      html,
+      'https://immobilien.derstandard.at/detail/15086452/slug?tracking=abc&ref=search',
+      'derstandard',
+      2,
+    );
+    expect(result.canonicalUrl).toBe(
+      'https://immobilien.derstandard.at/detail/15086452/slug',
+    );
+  });
+});
+
+describe('Detail page parsing — JSON primary path', () => {
+  it('prefers embedded JSON when both paths could work', () => {
+    // Build HTML that has both embedded JSON and DOM content
+    const html = `
+      <html><body>
+      <h1>DOM Title</h1>
+      <div class="price-section"><span>Kaufpreis</span><span>\u20AC 999.000</span></div>
+      <script type="application/json" id="listing-detail-data">
+        {"id": 77777, "title": "JSON Title", "description": null, "price": 500000,
+         "livingArea": 60, "usableArea": null, "rooms": 2, "floor": 1, "yearBuilt": null,
+         "address": {"postalCode": "1010", "city": "Wien", "district": "Innere Stadt", "street": null},
+         "coordinates": null, "images": [], "contact": null,
+         "propertyType": null, "subType": null, "heatingType": null, "condition": null,
+         "energyCertificate": null, "features": [], "operatingCosts": null, "status": "active"}
+      </script>
+      </body></html>`;
+    const result = parseDetailPage(
+      html,
+      'https://immobilien.derstandard.at/detail/77777/test',
+      'derstandard',
+      2,
+    );
+    // Should use JSON path, not DOM
+    expect(result.payload.titleRaw).toBe('JSON Title');
+    expect(result.payload.priceRaw).toBe('500000');
+  });
+
+  it('returns empty result for missing fields in JSON', () => {
+    const html = `<script type="application/json" id="listing-detail-data">
+      {"id": 77777, "title": "", "description": null, "price": null, "livingArea": null,
+       "usableArea": null, "rooms": null, "floor": null, "yearBuilt": null,
+       "address": {"postalCode": "1010", "city": "Wien", "district": "Innere Stadt", "street": null},
+       "coordinates": null, "images": [], "contact": null,
+       "propertyType": null, "subType": null, "heatingType": null, "condition": null,
+       "energyCertificate": null, "features": [], "operatingCosts": null, "status": "active"}
+    </script>`;
+    const result = parseDetailPage(
+      html,
+      'https://immobilien.derstandard.at/detail/77777/test',
+      'derstandard',
+      2,
+    );
+    expect(result.externalId).toBe('77777');
+    expect(result.payload.priceRaw).toBeNull();
+    expect(result.payload.livingAreaRaw).toBeNull();
+    expect(result.payload.roomsRaw).toBeNull();
+    expect(result.payload.contactName).toBeNull();
+    expect(result.payload.districtRaw).toBe('1. Bezirk');
+  });
+});
+
+describe('Detail page parsing — failure cases', () => {
   it('handles parse failure gracefully', () => {
     const html = '<html><body>Empty page</body></html>';
     const result = parseDetailPage(
@@ -335,45 +412,29 @@ describe('Detail page parsing', () => {
     expect(result.payload.standardId).toBe('12345');
   });
 
-  it('returns empty result for missing fields', () => {
-    const html = `<script type="application/json" id="listing-detail-data">
-      {"id": 77777, "title": "", "description": null, "price": null, "livingArea": null,
-       "usableArea": null, "rooms": null, "floor": null, "yearBuilt": null,
-       "address": {"postalCode": "1010", "city": "Wien", "district": "Innere Stadt", "street": null},
-       "coordinates": null, "images": [], "contact": null,
-       "propertyType": null, "subType": null, "heatingType": null, "condition": null,
-       "energyCertificate": null, "features": [], "operatingCosts": null, "status": "active"}
-    </script>`;
+  it('falls back to DOM when JSON is malformed', () => {
+    const html = `
+      <html><body>
+      <h1>Fallback Title</h1>
+      <div class="price-section"><span>Kaufpreis</span><span>\u20AC 300.000</span></div>
+      <script type="application/json" id="listing-detail-data">
+        {INVALID JSON HERE}
+      </script>
+      </body></html>`;
     const result = parseDetailPage(
       html,
-      'https://immobilien.derstandard.at/detail/77777/test',
+      'https://immobilien.derstandard.at/detail/88888/test',
       'derstandard',
       2,
     );
-    expect(result.externalId).toBe('77777');
-    expect(result.payload.priceRaw).toBeNull();
-    expect(result.payload.livingAreaRaw).toBeNull();
-    expect(result.payload.roomsRaw).toBeNull();
-    expect(result.payload.contactName).toBeNull();
-    expect(result.payload.districtRaw).toBe('1. Bezirk');
-  });
-
-  it('sets canonicalUrl without query params', () => {
-    const html = loadFixture('detail-page.html');
-    const result = parseDetailPage(
-      html,
-      'https://immobilien.derstandard.at/detail/15086452/slug?tracking=abc&ref=search',
-      'derstandard',
-      2,
-    );
-    expect(result.canonicalUrl).toBe(
-      'https://immobilien.derstandard.at/detail/15086452/slug',
-    );
+    expect(result.extractionStatus).toBe('captured');
+    expect(result.payload.titleRaw).toBe('Fallback Title');
+    expect(result.payload.priceRaw).toBe('300000');
   });
 });
 
 describe('Availability detection', () => {
-  it('detects available listing from embedded data', () => {
+  it('detects available listing from DOM-rendered page', () => {
     const html = loadFixture('detail-page.html');
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('available');

@@ -77,7 +77,7 @@ async function seed(): Promise<void> {
       baseUrl: 'https://www.findmyhome.at',
       scrapeMode: 'browser',
       rateLimitRpm: 15,
-      isActive: false,
+      isActive: true,
       config: { crawlProfile: defaultCrawlProfile },
     },
     {

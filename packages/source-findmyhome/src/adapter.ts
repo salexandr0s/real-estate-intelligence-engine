@@ -1,8 +1,7 @@
-// NOTE: Site accessible as of 2026-03-21. Default search at /immobiliensuche shows results
-// server-side (821 listings found). Card structure uses Bootstrap grid with
-// <h3 class="obj_list">, <strong>Ort/Fläche/Zimmer</strong> fields, and /{numericId} detail URLs.
-// Parser uses synthetic fixtures — needs rewrite to match real HTML card structure.
-// Real HTML captured to /tmp/rei-captures/findmyhome/no-results.html.
+// findmyhome.at source adapter (parser v2).
+// Discovery parsing reads HTML cards with Bootstrap grid layout.
+// Card structure: <h3 class="obj_list">, <strong>Ort/Flaeche/Zimmer</strong>, /{numericId} detail URLs.
+// Detail parsing still uses JSON-LD Apartment schema.
 
 import type {
   CrawlProfile,
@@ -27,7 +26,7 @@ export class FindMyHomeAdapter
 {
   readonly sourceCode = 'findmyhome';
   readonly sourceName = 'findmyhome.at';
-  readonly parserVersion = 1;
+  readonly parserVersion = 2;
 
   async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
     const maxPages = profile.maxPages ?? 5;
@@ -42,7 +41,7 @@ export class FindMyHomeAdapter
 
       plans.push({
         url: url.toString(),
-        waitForSelector: 'script[type="application/ld+json"]',
+        waitForSelector: 'h3.obj_list',
         waitForTimeout: 5000,
         metadata: { page },
       });

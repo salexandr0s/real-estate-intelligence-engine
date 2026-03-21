@@ -82,7 +82,7 @@ export function parseDiscoveryPage(
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
         ...requestPlan,
-        url: requestPlan.url.replace(/pagenumber=\d+/, `pagenumber=${pageNum + 1}`),
+        url: requestPlan.url.replace(/\/seite-\d+|$/, `/seite-${pageNum + 1}`),
         metadata: { ...requestPlan.metadata, page: pageNum + 1 },
       }
     : null;

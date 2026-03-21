@@ -2,104 +2,94 @@
 <html lang="de-AT">
 <head>
   <meta charset="UTF-8">
-  <title>Wohnung kaufen Wien - findmyhome.at</title>
+  <title>Immobiliensuche - findmyhome.at</title>
 </head>
 <body>
-<header>
-  <nav><a href="/">findmyhome.at</a></nav>
-</header>
-<main>
-  <h1>Wohnung kaufen in Wien</h1>
-  <p>250 Ergebnisse</p>
-  <div class="listing-list">
-    <div class="listing-card" data-id="501234">
-      <h2>Sch&ouml;ne 3-Zimmer Wohnung in Leopoldstadt</h2>
-      <span class="price">&euro; 310.000</span>
-      <span class="area">74,5 m&sup2;</span>
-      <span class="rooms">3 Zimmer</span>
-      <span class="location">1020 Wien, Leopoldstadt</span>
+<div class="container">
+  <p>Wir haben 250 Immobilien zu deinen Kriterien gefunden. Zeige 1-20.</p>
+  <div class="pagination">
+    <a href="/immobiliensuche?seite=2">2</a>
+    <a href="/immobiliensuche?seite=3">3</a>
+  </div>
+
+  <!-- **** IMMO LIST ***** -->
+  <div class="row margin-top-20">
+    <div class="col-xs-12 col-sm-3 col-md-3 col-lg-3">
+      <a href="/5501234">
+        <img src="https://www.findmyhome.at/bilder/5501234/photo1.jpg" alt="Sch&ouml;ne 3-Zimmer Wohnung in Leopoldstadt">
+      </a>
     </div>
-    <div class="listing-card" data-id="501235">
-      <h2>Gem&uuml;tliche 2-Zimmer Wohnung nahe Belvedere</h2>
-      <span class="price">&euro; 245.000</span>
-      <span class="area">52 m&sup2;</span>
-      <span class="rooms">2 Zimmer</span>
-      <span class="location">1030 Wien, Landstra&szlig;e</span>
-    </div>
-    <div class="listing-card" data-id="501236">
-      <h2>Ger&auml;umige 4-Zimmer Familienwohnung in Favoriten</h2>
-      <span class="price">&euro; 420.000</span>
-      <span class="area">92 m&sup2;</span>
-      <span class="rooms">4 Zimmer</span>
-      <span class="location">1100 Wien, Favoriten</span>
+    <div class="col-xs-12 col-sm-9 col-md-9 col-lg-9">
+      <h3 class="obj_list">
+        <a href="/5501234" onclick="" class="btnHeadlineErgebnisliste">Sch&ouml;ne 3-Zimmer Wohnung in Leopoldstadt</a>
+      </h3>
+      <p class="immobilie_description more margin-top-10">Lichtdurchflutete Wohnung mit Balkon nahe Prater.</p>
+      <div class="row margin-top-10">
+        <div class="col-xs-12"><strong>Ort: 1020</strong> Wien</div>
+      </div>
+      <div class="row margin-top-10">
+        <div class="col-xs-4 col-lg-2"><strong>Kaufpreis:  </strong><br>310.000,- &euro;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Fl&auml;che: </strong><br>74 m&sup2;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Zimmer: </strong><br>3.0</div>
+      </div>
+      <div class="row margin-top-10">
+        <a href="/5501234" class="btn btnDetailErgebnisliste">DETAILS</a>
+      </div>
     </div>
   </div>
-</main>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "ItemList",
-  "numberOfItems": 250,
-  "itemListElement": [
-    {
-      "@type": "ListItem",
-      "position": 1,
-      "item": {
-        "@type": "Apartment",
-        "@id": "https://www.findmyhome.at/kaufen/wohnung/wien/schoene-3-zimmer-wohnung-501234",
-        "name": "Sch\u00f6ne 3-Zimmer Wohnung in Leopoldstadt",
-        "identifier": "501234",
-        "offers": { "@type": "Offer", "price": "310000", "priceCurrency": "EUR" },
-        "floorSize": { "@type": "QuantitativeValue", "value": "74,5", "unitCode": "MTK" },
-        "numberOfRooms": "3",
-        "address": {
-          "@type": "PostalAddress",
-          "postalCode": "1020",
-          "addressLocality": "Wien",
-          "addressRegion": "Leopoldstadt"
-        }
-      }
-    },
-    {
-      "@type": "ListItem",
-      "position": 2,
-      "item": {
-        "@type": "Apartment",
-        "@id": "https://www.findmyhome.at/kaufen/wohnung/wien/gemuetliche-2-zimmer-wohnung-501235",
-        "name": "Gem\u00fctliche 2-Zimmer Wohnung nahe Belvedere",
-        "identifier": "501235",
-        "offers": { "@type": "Offer", "price": "245000", "priceCurrency": "EUR" },
-        "floorSize": { "@type": "QuantitativeValue", "value": "52", "unitCode": "MTK" },
-        "numberOfRooms": "2",
-        "address": {
-          "@type": "PostalAddress",
-          "postalCode": "1030",
-          "addressLocality": "Wien",
-          "addressRegion": "Landstra\u00dfe"
-        }
-      }
-    },
-    {
-      "@type": "ListItem",
-      "position": 3,
-      "item": {
-        "@type": "Apartment",
-        "@id": "https://www.findmyhome.at/kaufen/wohnung/wien/geraeumige-4-zimmer-familienwohnung-501236",
-        "name": "Ger\u00e4umige 4-Zimmer Familienwohnung in Favoriten",
-        "identifier": "501236",
-        "offers": { "@type": "Offer", "price": "420000", "priceCurrency": "EUR" },
-        "floorSize": { "@type": "QuantitativeValue", "value": "92", "unitCode": "MTK" },
-        "numberOfRooms": "4",
-        "address": {
-          "@type": "PostalAddress",
-          "postalCode": "1100",
-          "addressLocality": "Wien",
-          "addressRegion": "Favoriten"
-        }
-      }
-    }
-  ]
-}
-</script>
+
+  <!-- **** IMMO LIST ***** -->
+  <div class="row margin-top-20">
+    <div class="col-xs-12 col-sm-3 col-md-3 col-lg-3">
+      <a href="/5501235?tl=1">
+        <img src="https://www.findmyhome.at/bilder/5501235/photo1.jpg" alt="Gem&uuml;tliche 2-Zimmer Wohnung nahe Belvedere">
+      </a>
+    </div>
+    <div class="col-xs-12 col-sm-9 col-md-9 col-lg-9">
+      <h3 class="obj_list">
+        <a href="/5501235?tl=1" onclick="" class="btnHeadlineErgebnisliste">Gem&uuml;tliche 2-Zimmer Wohnung nahe Belvedere</a>
+      </h3>
+      <p class="immobilie_description more margin-top-10">Charmante Altbauwohnung im Herzen des 3. Bezirks.</p>
+      <div class="row margin-top-10">
+        <div class="col-xs-12"><strong>Ort: 1030</strong> Wien</div>
+      </div>
+      <div class="row margin-top-10">
+        <div class="col-xs-4 col-lg-2"><strong>Kaufpreis:  </strong><br>245.000,- &euro;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Fl&auml;che: </strong><br>52 m&sup2;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Zimmer: </strong><br>2.0</div>
+      </div>
+      <div class="row margin-top-10">
+        <a href="/5501235?tl=1" class="btn btnDetailErgebnisliste">DETAILS</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- **** IMMO LIST ***** -->
+  <div class="row margin-top-20">
+    <div class="col-xs-12 col-sm-3 col-md-3 col-lg-3">
+      <a href="/5501236">
+        <img src="https://www.findmyhome.at/bilder/5501236/photo1.jpg" alt="Ger&auml;umige 4-Zimmer Familienwohnung in Favoriten">
+      </a>
+    </div>
+    <div class="col-xs-12 col-sm-9 col-md-9 col-lg-9">
+      <h3 class="obj_list">
+        <a href="/5501236" onclick="" class="btnHeadlineErgebnisliste">Ger&auml;umige 4-Zimmer Familienwohnung in Favoriten</a>
+      </h3>
+      <p class="immobilie_description more margin-top-10">Familienfreundliche Wohnung mit viel Platz.</p>
+      <div class="row margin-top-10">
+        <div class="col-xs-12"><strong>Ort: 1100</strong> Wien</div>
+      </div>
+      <div class="row margin-top-10">
+        <div class="col-xs-4 col-lg-2"><strong>Kaufpreis:  </strong><br>420.000,- &euro;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Fl&auml;che: </strong><br>92 m&sup2;</div>
+        <div class="col-xs-4 col-lg-2"><strong>Zimmer: </strong><br>4.0</div>
+      </div>
+      <div class="row margin-top-10">
+        <a href="/5501236" class="btn btnDetailErgebnisliste">DETAILS</a>
+      </div>
+    </div>
+  </div>
+
+</div>
 </body>
 </html>

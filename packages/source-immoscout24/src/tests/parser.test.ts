@@ -49,8 +49,9 @@ describe('Immoscout24Adapter', () => {
     });
     expect(plans).toHaveLength(2);
     expect(plans[0]!.waitForSelector).toBe('script[data-testid="collection-page-structured-data"]');
-    expect(plans[0]!.url).toContain('/regional/oesterreich/immobilien');
-    expect(plans[1]!.url).toContain('pagenumber=2');
+    expect(plans[0]!.url).toContain('/regional/wien/wien/immobilien');
+    expect(plans[0]!.url).not.toContain('/seite-');
+    expect(plans[1]!.url).toContain('/seite-2');
   });
 
   it('builds detail request with correct URL', async () => {
@@ -79,7 +80,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('extracts listing items from CollectionPage JSON-LD', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
 
@@ -100,7 +101,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('extracts all three listings with correct hex hash IDs', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
 
@@ -112,7 +113,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('parses Austrian decimal area correctly', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
 
@@ -127,17 +128,17 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('detects pagination and builds next page URL', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
     expect(result.nextPagePlan).not.toBeNull();
-    expect(result.nextPagePlan!.url).toContain('pagenumber=2');
+    expect(result.nextPagePlan!.url).toContain('/seite-2');
   });
 
   it('returns totalEstimate from numberOfItems', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
     expect(result.totalEstimate).toBe(15);
@@ -146,7 +147,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('returns empty result for missing JSON-LD', () => {
     const html = '<html><body>No data</body></html>';
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
     expect(result.items.length).toBe(0);
@@ -156,7 +157,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('returns empty result for invalid JSON', () => {
     const html = '<script data-testid="collection-page-structured-data" type="application/ld+json">{invalid json</script>';
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
     expect(result.items.length).toBe(0);
@@ -166,7 +167,7 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   it('includes discoveredAt and sourceCode on items', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/oesterreich/immobilien?pagenumber=1',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
     });
 

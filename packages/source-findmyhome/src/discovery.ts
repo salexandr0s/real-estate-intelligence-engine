@@ -1,11 +1,17 @@
 import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
-import type { FindMyHomeDiscoveryItem, JsonLdItemList, JsonLdListItem } from './dto.js';
+import type { FindMyHomeDiscoveryItem } from './dto.js';
 
-const JSON_LD_REGEX = /<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
+const BASE_URL = 'https://www.findmyhome.at';
 
 /**
- * findmyhome.at serves listing data via JSON-LD ItemList embedded in HTML.
- * Structure: { "@type": "ItemList", "itemListElement": [{ "@type": "ListItem", "item": {...} }] }
+ * findmyhome.at serves discovery listings as Bootstrap HTML cards separated by
+ * `<!-- **** IMMO LIST ***** -->` comment markers. Each card contains:
+ * - ID from `<a href="/{numericId}">` links
+ * - Title from `<a class="btnHeadlineErgebnisliste">` text
+ * - Location from `<strong>Ort: {PLZ}</strong> {City}`
+ * - Price from `<strong>Kaufpreis:</strong><br>{price}` or `<strong>Mieten:</strong><br>{price}`
+ * - Area from `<strong>Flaeche:</strong><br>{X} m2`
+ * - Rooms from `<strong>Zimmer:</strong><br>{X}`
  */
 export function parseDiscoveryPage(
   html: string,
@@ -14,55 +20,27 @@ export function parseDiscoveryPage(
 ): DiscoveryPageResult<FindMyHomeDiscoveryItem> {
   const items: DiscoveryItem<FindMyHomeDiscoveryItem>[] = [];
 
-  const itemList = extractItemList(html);
-  if (!itemList) {
-    return { items, nextPagePlan: null, totalEstimate: null, pageNumber: 1 };
-  }
+  const cards = splitCards(html);
 
-  const elements = itemList.itemListElement ?? [];
-
-  for (const element of elements) {
-    const listItem = element as JsonLdListItem;
-    if (listItem['@type'] !== 'ListItem' || !listItem.item) continue;
-
-    const apartment = listItem.item;
-    const id = apartment.identifier ?? extractIdFromAtId(apartment['@id']);
-    const detailUrl = apartment['@id'] ?? '';
-
-    if (!id || !detailUrl) continue;
-
-    const locationParts: string[] = [];
-    if (apartment.address?.postalCode) locationParts.push(apartment.address.postalCode);
-    if (apartment.address?.addressLocality) locationParts.push(apartment.address.addressLocality);
-    if (apartment.address?.addressRegion) locationParts.push(apartment.address.addressRegion);
-
-    items.push({
-      detailUrl,
-      canonicalUrl: detailUrl,
-      externalId: id,
-      sourceCode,
-      discoveredAt: new Date().toISOString(),
-      summaryPayload: {
-        findmyhomeId: id,
-        detailUrl,
-        titleRaw: apartment.name ?? null,
-        priceRaw: apartment.offers?.price ?? null,
-        locationRaw: locationParts.length > 0 ? locationParts.join(' ') : null,
-        roomsRaw: apartment.numberOfRooms ?? null,
-        areaRaw: apartment.floorSize?.value ?? null,
-      },
-    });
+  for (const card of cards) {
+    const parsed = parseCard(card, sourceCode);
+    if (parsed) {
+      items.push(parsed);
+    }
   }
 
   const pageNum = Number(requestPlan.metadata?.['page']) || 1;
-  const totalEstimate = itemList.numberOfItems ?? null;
-  const hasMore =
-    items.length > 0 && (totalEstimate === null || pageNum * items.length < totalEstimate);
+  const totalEstimate = extractTotalEstimate(html);
+  const hasNextPage = detectNextPage(html);
+
+  const hasMore = hasNextPage || (items.length > 0 && totalEstimate !== null && pageNum * 20 < totalEstimate);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
         ...requestPlan,
-        url: requestPlan.url.replace(/page=\d+/, `page=${pageNum + 1}`),
+        url: requestPlan.url.replace(/[?&]page=\d+/, `page=${pageNum + 1}`).includes(`page=${pageNum + 1}`)
+          ? requestPlan.url.replace(/page=\d+/, `page=${pageNum + 1}`)
+          : `${requestPlan.url}${requestPlan.url.includes('?') ? '&' : '?'}page=${pageNum + 1}`,
         metadata: { ...requestPlan.metadata, page: pageNum + 1 },
       }
     : null;
@@ -76,36 +54,216 @@ export function parseDiscoveryPage(
 }
 
 /**
- * Extracts the JSON-LD ItemList block from the HTML.
- * Scans all ld+json scripts and returns the first one with "@type": "ItemList".
+ * Split HTML into individual listing card chunks using the IMMO LIST comment markers.
+ * Falls back to splitting on `<h3 class="obj_list">` blocks if no comment markers found.
  */
-function extractItemList(html: string): JsonLdItemList | null {
-  let match: RegExpExecArray | null;
-  JSON_LD_REGEX.lastIndex = 0;
+function splitCards(html: string): string[] {
+  // Primary: split at comment markers
+  const commentParts = html.split(/<!--\s*\*+\s*IMMO LIST\s*\*+\s*-->/i);
 
-  while ((match = JSON_LD_REGEX.exec(html)) !== null) {
-    const jsonStr = match[1];
-    if (!jsonStr) continue;
-
-    try {
-      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
-      if (parsed['@type'] === 'ItemList') {
-        return parsed as unknown as JsonLdItemList;
-      }
-    } catch {
-      // skip malformed JSON-LD blocks
-    }
+  if (commentParts.length > 1) {
+    // First part is the content before the first marker -- skip it
+    return commentParts.slice(1);
   }
+
+  // Fallback: split at h3.obj_list headings
+  const h3Parts = html.split(/<h3\s+class="obj_list"/i);
+  if (h3Parts.length > 1) {
+    return h3Parts.slice(1).map((part) => `<h3 class="obj_list"${part}`);
+  }
+
+  return [];
+}
+
+/**
+ * Parse a single card HTML chunk into a DiscoveryItem.
+ */
+function parseCard(
+  cardHtml: string,
+  sourceCode: string,
+): DiscoveryItem<FindMyHomeDiscoveryItem> | null {
+  const id = extractId(cardHtml);
+  if (!id) return null;
+
+  const detailUrl = `${BASE_URL}/${id}`;
+  const title = extractTitle(cardHtml);
+  const location = extractLocation(cardHtml);
+  const price = extractPrice(cardHtml);
+  const area = extractArea(cardHtml);
+  const rooms = extractRooms(cardHtml);
+
+  return {
+    detailUrl,
+    canonicalUrl: detailUrl,
+    externalId: id,
+    sourceCode,
+    discoveredAt: new Date().toISOString(),
+    summaryPayload: {
+      findmyhomeId: id,
+      detailUrl,
+      titleRaw: title,
+      priceRaw: price,
+      locationRaw: location,
+      roomsRaw: rooms,
+      areaRaw: area,
+    },
+  };
+}
+
+// ── Field extractors ────────────────────────────────────────────────────────
+
+/**
+ * Extract numeric listing ID from href attributes.
+ * Handles both `/5487804` and `/5487804?tl=1` patterns.
+ */
+function extractId(cardHtml: string): string | null {
+  // Look for the headline link first (most reliable)
+  const headlineMatch = cardHtml.match(
+    /class="btnHeadlineErgebnisliste"[^>]*href="\/(\d+)(?:\?[^"]*)?"/,
+  );
+  if (headlineMatch?.[1]) return headlineMatch[1];
+
+  // Fallback: href="btnHeadlineErgebnisliste" with href before class
+  const hrefMatch = cardHtml.match(
+    /href="\/(\d+)(?:\?[^"]*)?"\s[^>]*class="btnHeadlineErgebnisliste"/,
+  );
+  if (hrefMatch?.[1]) return hrefMatch[1];
+
+  // General fallback: any link with numeric-only path
+  const anyMatch = cardHtml.match(/href="\/(\d+)(?:\?[^"]*)?"/)
+  if (anyMatch?.[1]) return anyMatch[1];
 
   return null;
 }
 
 /**
- * Extracts numeric ID from a JSON-LD @id URL.
- * Example: "https://www.findmyhome.at/kaufen/wohnung/wien/schoene-3-zimmer-wohnung-501234" -> "501234"
+ * Extract title from `<a class="btnHeadlineErgebnisliste">` text.
  */
-function extractIdFromAtId(atId: string | undefined): string | null {
-  if (!atId) return null;
-  const match = atId.match(/-(\d+)$/);
-  return match?.[1] ?? null;
+function extractTitle(cardHtml: string): string | null {
+  const match = cardHtml.match(
+    /class="btnHeadlineErgebnisliste"[^>]*>([^<]+)</,
+  );
+  if (match?.[1]) return decodeHtmlEntities(match[1].trim());
+
+  // Fallback: href before class
+  const fallback = cardHtml.match(
+    /href="[^"]*"[^>]*class="btnHeadlineErgebnisliste"[^>]*>([^<]+)</,
+  );
+  if (fallback?.[1]) return decodeHtmlEntities(fallback[1].trim());
+
+  return null;
+}
+
+/**
+ * Extract location from `<strong>Ort: {PLZ}</strong> {City}`.
+ */
+function extractLocation(cardHtml: string): string | null {
+  const match = cardHtml.match(/<strong>Ort:\s*(\d{4})<\/strong>\s*(\w+)/);
+  if (match?.[1] && match[2]) {
+    return `${match[1]} ${match[2]}`;
+  }
+  return null;
+}
+
+/**
+ * Extract and normalize price from `<strong>Kaufpreis:</strong><br>{price}`
+ * or `<strong>Mieten:</strong><br>{price}`.
+ * Normalizes Austrian format: "310.000,- EUR" -> "310000"
+ */
+function extractPrice(cardHtml: string): string | null {
+  const match = cardHtml.match(
+    /<strong>(?:Kaufpreis|Mieten?)[^<]*<\/strong><br>\s*([\d.,]+)/,
+  );
+  if (!match?.[1]) return null;
+
+  return normalizeAustrianPrice(match[1]);
+}
+
+/**
+ * Extract area from `<strong>Flaeche:</strong><br>{X} m2`.
+ * The HTML entity for "a umlaut" is decoded, so we match both Flaeche and Fl&auml;che.
+ */
+function extractArea(cardHtml: string): string | null {
+  const match = cardHtml.match(
+    /<strong>Fl[a&auml;]+che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
+  );
+  if (!match?.[1]) return null;
+  return match[1];
+}
+
+/**
+ * Extract rooms from `<strong>Zimmer:</strong><br>{X}`.
+ */
+function extractRooms(cardHtml: string): string | null {
+  const match = cardHtml.match(
+    /<strong>Zimmer[^<]*<\/strong><br>\s*([\d.,]+)/,
+  );
+  if (!match?.[1]) return null;
+  return match[1];
+}
+
+// ── Page-level extractors ───────────────────────────────────────────────────
+
+/**
+ * Extract total listing count from "Wir haben {N} Immobilien" text.
+ */
+function extractTotalEstimate(html: string): number | null {
+  const match = html.match(/Wir haben\s+(\d+)\s+Immobilien/);
+  if (match?.[1]) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+/**
+ * Detect if a next page link exists by looking for `seite=` pagination links.
+ */
+function detectNextPage(html: string): boolean {
+  return /[?&]seite=\d+/.test(html);
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Normalize Austrian price format to a plain numeric string.
+ * "310.000,-" -> "310000"
+ * "310.000,50" -> "310000.50"
+ * "245.000" -> "245000"
+ */
+function normalizeAustrianPrice(raw: string): string {
+  const trimmed = raw.trim();
+
+  // Remove trailing ",- " or ",-" (no cents indicator) and trailing comma
+  const withoutDash = trimmed.replace(/,-?\s*$/, '').replace(/,\s*$/, '');
+
+  // If there's a comma with digits after it (actual decimal), handle it
+  if (/,\d+$/.test(withoutDash)) {
+    // Austrian format: dots are thousands, comma is decimal
+    return withoutDash.replace(/\./g, '').replace(',', '.');
+  }
+
+  // No comma or comma already removed -- dots are thousands separators
+  return withoutDash.replace(/\./g, '');
+}
+
+/**
+ * Decode common HTML entities found in German text.
+ */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&ouml;/g, '\u00f6')
+    .replace(/&uuml;/g, '\u00fc')
+    .replace(/&auml;/g, '\u00e4')
+    .replace(/&Ouml;/g, '\u00d6')
+    .replace(/&Uuml;/g, '\u00dc')
+    .replace(/&Auml;/g, '\u00c4')
+    .replace(/&szlig;/g, '\u00df')
+    .replace(/&euro;/g, '\u20ac')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&sup2;/g, '\u00b2');
 }

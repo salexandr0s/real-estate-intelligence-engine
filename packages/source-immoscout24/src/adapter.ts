@@ -14,7 +14,7 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
-const SEARCH_PATH = '/regional/oesterreich/immobilien';
+const SEARCH_PATH = '/regional/wien/wien/immobilien';
 
 export class Immoscout24Adapter
   implements SourceAdapter<Immoscout24DiscoveryItem, Immoscout24DetailDTO>
@@ -28,8 +28,8 @@ export class Immoscout24Adapter
     const plans: RequestPlan[] = [];
 
     for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(SEARCH_PATH, BASE_URL);
-      url.searchParams.set('pagenumber', String(page));
+      const basePath = page === 1 ? SEARCH_PATH : `${SEARCH_PATH}/seite-${page}`;
+      const url = new URL(basePath, BASE_URL);
 
       plans.push({
         url: url.toString(),
