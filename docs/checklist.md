@@ -540,13 +540,13 @@
 
 ## 15. Security and compliance
 
-- [ ] Secrets removed from source control
-- [ ] Environment secret loading verified
+- [x] Secrets removed from source control (`.env` in `.gitignore`, 4 rules)
+- [x] Environment secret loading verified (`@rei/config` envStr/envBool/envInt)
 - [ ] Object storage access policy restricted
-- [ ] Keychain storage for app secrets
-- [ ] Auth token rotation path defined
-- [ ] No raw HTML in standard logs
-- [ ] Legal review recorded for enabled sources
+- [x] Keychain storage for app secrets (`KeychainHelper.swift`)
+- [x] Auth token rotation path defined (`docs/secrets-strategy.md`)
+- [x] No raw HTML in standard logs (`redactUrl()` + `logArtifactRef()` in observability)
+- [x] Legal review recorded for enabled sources (`docs/phase0/risk-feasibility.md`)
 - [ ] Public/private artifact access policy documented
 
 ---
@@ -567,14 +567,14 @@
 
 ## 17. Data quality and replay
 
-- [ ] Add normalization replay command
-- [ ] Add score replay command
-- [ ] Add raw snapshot reparse command
-- [ ] Add backfill command for source history
-- [ ] Add data quality report for missing critical fields
-- [ ] Add district inference audit report
-- [ ] Add outlier listing report
-- [ ] Add duplicate candidate report
+- [x] Add normalization replay command (`scripts/replay-normalization.ts`)
+- [x] Add score replay command (`scripts/rescore-listings.ts` with `--source`/`--limit`)
+- [x] Add raw snapshot reparse command (`scripts/reparse-raw.ts`)
+- [x] Add backfill command for source history (`scripts/backfill-source.ts`)
+- [x] Add data quality report for missing critical fields (`scripts/data-quality-report.ts`)
+- [x] Add district inference audit report (`scripts/data-quality-report.ts`)
+- [x] Add outlier listing report (`scripts/data-quality-report.ts`)
+- [x] Add duplicate candidate report (`scripts/data-quality-report.ts`)
 
 ---
 
