@@ -37,8 +37,8 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
     Math.floor((Date.now() - input.firstSeenAt.getTime()) / 86400000),
   );
 
-  const recentPriceDropPct = 0; // TODO: compute from listing versions
-  const relistDetected = false; // TODO: detect from listing history
+  const recentPriceDropPct = input.recentPriceDropPct;
+  const relistDetected = input.relistDetected;
 
   const timeOnMarketScore = computeTimeOnMarketScore(
     daysOnMarket,

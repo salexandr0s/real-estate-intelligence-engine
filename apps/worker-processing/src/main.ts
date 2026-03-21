@@ -1,6 +1,10 @@
 import { loadConfig } from '@rei/config';
 import { createLogger, setLogLevel } from '@rei/observability';
 import type { LogLevel } from '@rei/observability';
+import { closeRedisConnection } from '@rei/scraper-core';
+import { closePool } from '@rei/db';
+import { createIngestionWorker } from './workers/ingestion-worker.js';
+import { createBaselineWorker } from './workers/baseline-worker.js';
 
 const logger = createLogger('worker-processing');
 
@@ -10,22 +14,26 @@ async function main(): Promise<void> {
 
   logger.info('Processing worker starting', {
     nodeEnv: config.nodeEnv,
+    redisUrl: config.redis.url,
   } as Record<string, unknown>);
 
-  logger.info('Processing worker ready, waiting for queue implementation', {
-    redisUrl: config.redis.url,
-    prefix: config.redis.prefix,
-  } as Record<string, unknown>);
+  const ingestionWorker = createIngestionWorker();
+  const baselineWorker = createBaselineWorker();
+
+  logger.info('Ingestion and baseline workers ready');
 
   // Graceful shutdown
-  const shutdown = (signal: string) => {
+  const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down processing worker`);
-    // TODO: Close BullMQ workers, DB connections
+    await ingestionWorker.close();
+    await baselineWorker.close();
+    await closeRedisConnection();
+    await closePool();
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
 void main();

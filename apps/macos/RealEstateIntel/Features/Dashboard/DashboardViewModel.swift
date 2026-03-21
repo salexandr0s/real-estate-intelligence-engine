@@ -31,27 +31,42 @@ final class DashboardViewModel {
 
     // MARK: - Load
 
-    func loadMockData() {
-        let allListings = Listing.samples
-        totalActiveListings = allListings.count
-        newListingsToday = allListings.filter {
-            Calendar.current.isDateInToday($0.firstSeenAt)
-        }.count
-        highScoreCount = allListings.filter { $0.currentScore >= 70 }.count
-        activeFilterCount = Filter.samples.filter { $0.isActive }.count
-        recentHighScoreListings = allListings
-            .filter { $0.currentScore >= 60 }
-            .sorted { $0.currentScore > $1.currentScore }
-        sources = Source.samples
-    }
-
-    func refresh() async {
+    func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil
 
-        // Use mock data for now; replace with API calls when backend is live
-        try? await Task.sleep(for: .milliseconds(300))
-        loadMockData()
+        do {
+            let allListings = try await client.fetchListings(query: ListingQuery())
+            totalActiveListings = allListings.count
+            newListingsToday = allListings.filter {
+                Calendar.current.isDateInToday($0.firstSeenAt)
+            }.count
+            highScoreCount = allListings.filter { ($0.currentScore ?? 0) >= 70 }.count
+            recentHighScoreListings = allListings
+                .filter { ($0.currentScore ?? 0) >= 60 }
+                .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
+
+            let filters = try await client.fetchFilters()
+            activeFilterCount = filters.filter { $0.isActive }.count
+
+            sources = try await client.fetchSources()
+        } catch {
+            errorMessage = error.localizedDescription
+            // Fall back to mock data if API unavailable
+            if totalActiveListings == 0 {
+                let allListings = Listing.samples
+                totalActiveListings = allListings.count
+                newListingsToday = allListings.filter {
+                    Calendar.current.isDateInToday($0.firstSeenAt)
+                }.count
+                highScoreCount = allListings.filter { ($0.currentScore ?? 0) >= 70 }.count
+                activeFilterCount = Filter.samples.filter { $0.isActive }.count
+                recentHighScoreListings = allListings
+                    .filter { ($0.currentScore ?? 0) >= 60 }
+                    .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
+                sources = Source.samples
+            }
+        }
 
         isLoading = false
     }

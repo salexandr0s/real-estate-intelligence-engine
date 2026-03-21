@@ -105,6 +105,23 @@ export async function appendVersion(input: AppendVersionInput): Promise<ListingV
 }
 
 /**
+ * Find the price from the second-most-recent version (i.e., the previous price).
+ * Returns null if there is only one version or no price recorded.
+ */
+export async function findPreviousPrice(listingId: number): Promise<number | null> {
+  const rows = await query<{ list_price_eur_cents: string | null }>(
+    `SELECT list_price_eur_cents FROM listing_versions
+     WHERE listing_id = $1 AND list_price_eur_cents IS NOT NULL
+     ORDER BY version_no DESC
+     OFFSET 1
+     LIMIT 1`,
+    [listingId],
+  );
+  if (rows.length === 0 || rows[0]!.list_price_eur_cents == null) return null;
+  return Number(rows[0]!.list_price_eur_cents);
+}
+
+/**
  * Find version history for a listing, most recent first.
  */
 export async function findByListingId(

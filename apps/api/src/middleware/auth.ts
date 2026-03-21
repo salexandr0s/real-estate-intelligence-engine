@@ -15,7 +15,7 @@ export function registerAuth(app: FastifyInstance): void {
 
   app.decorateRequest('userId', 0);
 
-  app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     // Skip auth for health check and similar paths
     if (SKIP_AUTH_PATHS.has(request.url)) {
       request.userId = 0;

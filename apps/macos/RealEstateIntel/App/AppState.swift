@@ -17,7 +17,7 @@ final class AppState {
 
     // MARK: - Alerts
 
-    var unreadAlertCount: Int = 3
+    var unreadAlertCount: Int = 0
 
     // MARK: - Settings
 
@@ -81,6 +81,18 @@ final class AppState {
         connectionStatus = .connecting
         let connected = await apiClient.testConnection()
         connectionStatus = connected ? .connected : .disconnected
+
+        if connected {
+            await refreshUnreadCount()
+        }
+    }
+
+    func refreshUnreadCount() async {
+        do {
+            unreadAlertCount = try await apiClient.fetchUnreadCount()
+        } catch {
+            // Silently fail — count stays at last known value
+        }
     }
 }
 

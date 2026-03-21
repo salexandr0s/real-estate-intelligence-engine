@@ -22,7 +22,7 @@ const NORMALIZATION_VERSION = 1;
 /**
  * Hard-fail fields: normalization fails if these are missing after mapping.
  */
-const HARD_FAIL_FIELDS = ['sourceListingKey', 'canonicalUrl', 'operationType', 'propertyType', 'title'] as const;
+const _HARD_FAIL_FIELDS = ['sourceListingKey', 'canonicalUrl', 'operationType', 'propertyType', 'title'] as const;
 
 /**
  * Base normalizer that implements the SourceNormalizer interface.
@@ -108,8 +108,8 @@ export class BaseSourceMapper implements SourceNormalizer {
 
       // ── Step 2: Property type normalization ──
       const propertyTypeResult = normalizePropertyType(rawPayload.propertyTypeRaw);
-      let propertyType: PropertyType = propertyTypeResult?.propertyType ?? 'other';
-      let propertySubtype: string | null = rawPayload.propertySubtypeRaw ?? propertyTypeResult?.propertySubtype ?? null;
+      const propertyType: PropertyType = propertyTypeResult?.propertyType ?? 'other';
+      const propertySubtype: string | null = rawPayload.propertySubtypeRaw ?? propertyTypeResult?.propertySubtype ?? null;
       if (!propertyTypeResult && rawPayload.propertyTypeRaw != null) {
         warnings.push({
           field: 'propertyType',

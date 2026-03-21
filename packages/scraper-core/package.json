@@ -5,14 +5,16 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
-    "@rei/contracts": "*",
     "@rei/config": "*",
-    "@rei/observability": "*"
+    "@rei/contracts": "*",
+    "@rei/observability": "*",
+    "bullmq": "^5.71.0",
+    "ioredis": "^5.10.1"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'ok'",
+    "lint": "eslint src/",
     "test": "echo 'ok'",
     "test:unit": "echo 'ok'",
     "clean": "rm -rf dist"

@@ -20,7 +20,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'ok'",
+    "lint": "eslint src/",
     "test": "echo 'ok'",
     "test:unit": "echo 'ok'",
     "clean": "rm -rf dist"

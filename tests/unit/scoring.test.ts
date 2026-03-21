@@ -187,7 +187,7 @@ function computeConfidenceScore(
   ) / 100;
 }
 
-const SCORE_VERSION = 1;
+const _SCORE_VERSION = 1;
 
 interface ScoreTestInput {
   pricePerSqmEur: number | null;

@@ -11,12 +11,12 @@ struct ListingScoreSection: View {
                 Text("Score Analysis")
                     .font(.headline)
                 Spacer()
-                ScoreIndicator(score: listing.currentScore, size: .large)
+                ScoreIndicator(score: listing.currentScore ?? 0, size: .large)
             }
 
-            Text(Theme.scoreLabel(for: listing.currentScore))
+            Text(Theme.scoreLabel(for: listing.currentScore ?? 0))
                 .font(.subheadline.bold())
-                .foregroundStyle(Theme.scoreColor(for: listing.currentScore))
+                .foregroundStyle(Theme.scoreColor(for: listing.currentScore ?? 0))
 
             if let explanation {
                 scoreBreakdown(explanation)

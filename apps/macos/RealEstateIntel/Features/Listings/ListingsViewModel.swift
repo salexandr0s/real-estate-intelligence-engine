@@ -24,7 +24,7 @@ final class ListingsViewModel {
     // MARK: - Sorting
 
     var sortOrder: [KeyPathComparator<Listing>] = [
-        KeyPathComparator(\.currentScore, order: .reverse)
+        KeyPathComparator(\.sortableScore, order: .reverse)
     ]
 
     // MARK: - Computed
@@ -36,8 +36,8 @@ final class ListingsViewModel {
         if !searchText.isEmpty {
             result = result.filter { listing in
                 listing.title.localizedStandardContains(searchText)
-                || listing.districtName.localizedStandardContains(searchText)
-                || listing.postalCode.localizedStandardContains(searchText)
+                || (listing.districtName ?? "").localizedStandardContains(searchText)
+                || (listing.postalCode ?? "").localizedStandardContains(searchText)
                 || listing.city.localizedStandardContains(searchText)
             }
         }
@@ -67,7 +67,7 @@ final class ListingsViewModel {
 
         // Min score
         if let score = Double(minScore) {
-            result = result.filter { $0.currentScore >= score }
+            result = result.filter { ($0.currentScore ?? 0) >= score }
         }
 
         // Apply sort
@@ -85,8 +85,9 @@ final class ListingsViewModel {
         var seen = Set<Int>()
         var result: [(number: Int, name: String)] = []
         for listing in listings {
-            if seen.insert(listing.districtNo).inserted {
-                result.append((listing.districtNo, listing.districtName))
+            guard let districtNo = listing.districtNo else { continue }
+            if seen.insert(districtNo).inserted {
+                result.append((districtNo, listing.districtName ?? "District \(districtNo)"))
             }
         }
         return result.sorted { $0.number < $1.number }
@@ -103,16 +104,19 @@ final class ListingsViewModel {
 
     // MARK: - Actions
 
-    func loadMockData() {
-        listings = Listing.samples
-    }
-
-    func refresh() async {
+    func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil
 
-        try? await Task.sleep(for: .milliseconds(300))
-        loadMockData()
+        do {
+            listings = try await client.fetchListings(query: ListingQuery())
+        } catch {
+            errorMessage = error.localizedDescription
+            // Fall back to mock data if API unavailable
+            if listings.isEmpty {
+                listings = Listing.samples
+            }
+        }
 
         isLoading = false
     }

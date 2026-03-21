@@ -6,7 +6,7 @@ struct ListingRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            ScoreIndicator(score: listing.currentScore, size: .compact)
+            ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
 
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(listing.title)
@@ -14,7 +14,7 @@ struct ListingRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: Theme.Spacing.sm) {
-                    Label(listing.districtName, systemImage: "mappin")
+                    Label(listing.districtName ?? listing.city, systemImage: "mappin")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -23,11 +23,11 @@ struct ListingRow: View {
                     Text(PriceFormatter.format(eur: listing.listPriceEur))
                         .font(.caption.monospacedDigit().bold())
 
-                    Text(PriceFormatter.formatArea(listing.livingAreaSqm))
+                    Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
 
-                    Text("\(listing.rooms)R")
+                    Text("\(listing.rooms ?? 0)R")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

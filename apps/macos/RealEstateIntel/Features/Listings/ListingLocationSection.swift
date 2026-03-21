@@ -10,8 +10,12 @@ struct ListingLocationSection: View {
                 .font(.headline)
 
             detailRow("City", value: listing.city)
-            detailRow("District", value: "\(listing.districtNo). \(listing.districtName)")
-            detailRow("Postal Code", value: listing.postalCode)
+            if let districtNo = listing.districtNo {
+                detailRow("District", value: "\(districtNo). \(listing.districtName ?? "")")
+            }
+            if let postalCode = listing.postalCode {
+                detailRow("Postal Code", value: postalCode)
+            }
         }
     }
 

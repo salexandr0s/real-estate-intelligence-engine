@@ -104,7 +104,7 @@ export class FullIngestionPipeline {
           overallScore: scoreResult.overallScore,
           alertsCreated: scoreResult.alertsCreated,
         });
-      } catch (err) {
+      } catch (_err) {
         log.error('Scoring failed, continuing without score', {
           listingId: normResult.listingId,
           errorClass: 'scoring_failure',

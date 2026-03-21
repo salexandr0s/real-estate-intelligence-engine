@@ -14,16 +14,18 @@ final class FiltersViewModel {
 
     // MARK: - Actions
 
-    func loadMockData() {
-        filters = Filter.samples
-    }
-
-    func refresh() async {
+    func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil
 
-        try? await Task.sleep(for: .milliseconds(300))
-        loadMockData()
+        do {
+            filters = try await client.fetchFilters()
+        } catch {
+            errorMessage = error.localizedDescription
+            if filters.isEmpty {
+                filters = Filter.samples
+            }
+        }
 
         isLoading = false
     }

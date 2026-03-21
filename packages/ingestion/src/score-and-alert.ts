@@ -59,6 +59,8 @@ export interface ScoreAndAlertDeps {
   }) => Promise<Array<{ filterId: number; userId: number }>>;
 
   createAlert: (alert: AlertCreate) => Promise<{ id: number } | null>;
+
+  findPreviousPrice: (listingId: number) => Promise<number | null>;
 }
 
 export class ScoreAndAlert {
@@ -108,7 +110,19 @@ export class ScoreAndAlert {
       roomBucket,
     );
 
-    // 2. Score
+    // 2. Compute price history signals
+    let recentPriceDropPct = 0;
+    const previousPrice = await this.deps.findPreviousPrice(listingId);
+    if (previousPrice != null && listing.listPriceEurCents != null && previousPrice > 0) {
+      const priceDiff = previousPrice - listing.listPriceEurCents;
+      if (priceDiff > 0) {
+        recentPriceDropPct = priceDiff / previousPrice;
+      }
+    }
+
+    const relistDetected = versionReason === 'relist_detected';
+
+    // 3. Score
     const scoreInput: ScoreInput = {
       listingId,
       listingVersionId,
@@ -126,6 +140,8 @@ export class ScoreAndAlert {
       completenessScore: listing.completenessScore,
       sourceHealthScore: params.sourceHealthScore,
       locationConfidence: params.locationConfidence,
+      recentPriceDropPct,
+      relistDetected,
     };
 
     const score = this.deps.scoreListing(scoreInput, baseline);

@@ -11,16 +11,19 @@ struct Listing: Identifiable, Codable, Hashable {
     let operationType: OperationType
     let propertyType: PropertyType
     let city: String
-    let postalCode: String
-    let districtNo: Int
-    let districtName: String
+    let postalCode: String?
+    let districtNo: Int?
+    let districtName: String?
     let listPriceEur: Int
-    let livingAreaSqm: Double
-    let rooms: Int
-    let pricePerSqmEur: Double
-    let currentScore: Double
+    let livingAreaSqm: Double?
+    let rooms: Int?
+    let pricePerSqmEur: Double?
+    let currentScore: Double?
     let firstSeenAt: Date
     let listingStatus: ListingStatus
+
+    /// Non-optional score for sorting (0 when nil).
+    var sortableScore: Double { currentScore ?? 0 }
 }
 
 // MARK: - Mock Data

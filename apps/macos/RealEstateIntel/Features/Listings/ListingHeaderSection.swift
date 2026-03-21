@@ -26,12 +26,12 @@ struct ListingHeaderSection: View {
                 .foregroundStyle(.blue)
 
             HStack(spacing: Theme.Spacing.lg) {
-                Label(PriceFormatter.formatArea(listing.livingAreaSqm), systemImage: "ruler")
+                Label(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0), systemImage: "ruler")
                     .font(.subheadline)
-                Label("\(listing.rooms) rooms", systemImage: "square.split.2x2")
+                Label("\(listing.rooms ?? 0) rooms", systemImage: "square.split.2x2")
                     .font(.subheadline)
                 Label(
-                    PriceFormatter.formatPerSqm(listing.pricePerSqmEur) + "/m\u{00B2}",
+                    PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}",
                     systemImage: "eurosign"
                 )
                 .font(.subheadline.monospacedDigit())

@@ -307,7 +307,7 @@ export function parseYear(raw: string | number | null | undefined): {
 
 // ── Floor Parsing ──────────────────────────────────────────────────────────
 
-const FLOOR_PATTERNS: Array<{ pattern: RegExp; floor: number }> = [
+const _FLOOR_PATTERNS: Array<{ pattern: RegExp; floor: number }> = [
   { pattern: /\b(?:ug|untergeschoss|keller|souterrain)\b/i, floor: -1 },
   { pattern: /\b(?:eg|erdgeschoss|parterre)\b/i, floor: 0 },
   { pattern: /\b(?:hg|hochparterre)\b/i, floor: 0 },

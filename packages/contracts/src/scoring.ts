@@ -17,6 +17,8 @@ export interface ScoreInput {
   completenessScore: number;
   sourceHealthScore: number;
   locationConfidence: number;
+  recentPriceDropPct: number;
+  relistDetected: boolean;
 }
 
 // ── Baseline ────────────────────────────────────────────────────────────────

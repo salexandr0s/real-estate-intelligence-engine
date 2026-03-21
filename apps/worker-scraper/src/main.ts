@@ -1,6 +1,12 @@
 import { loadConfig } from '@rei/config';
 import { createLogger, setLogLevel } from '@rei/observability';
 import type { LogLevel } from '@rei/observability';
+import { closeRedisConnection } from '@rei/scraper-core';
+import { closePool } from '@rei/db';
+import { createDiscoveryWorker } from './workers/discovery-worker.js';
+import { createDetailWorker } from './workers/detail-worker.js';
+import { closeBrowser } from './browser-pool.js';
+import { startScheduler } from './scheduler.js';
 
 const logger = createLogger('worker-scraper');
 
@@ -10,24 +16,29 @@ async function main(): Promise<void> {
 
   logger.info('Scraper worker starting', {
     nodeEnv: config.nodeEnv,
+    redisUrl: config.redis.url,
   } as Record<string, unknown>);
 
-  logger.info('Scraper worker ready, waiting for queue implementation', {
-    redisUrl: config.redis.url,
-    prefix: config.redis.prefix,
-    defaultRateLimitRpm: config.scraper.defaultRateLimitRpm,
-    defaultConcurrency: config.scraper.defaultConcurrencyPerSource,
-  } as Record<string, unknown>);
+  const discoveryWorker = createDiscoveryWorker();
+  const detailWorker = createDetailWorker();
+
+  logger.info('Discovery and detail workers ready');
+
+  await startScheduler();
 
   // Graceful shutdown
-  const shutdown = (signal: string) => {
+  const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down scraper worker`);
-    // TODO: Close BullMQ workers, browser pool, DB connections
+    await discoveryWorker.close();
+    await detailWorker.close();
+    await closeBrowser();
+    await closeRedisConnection();
+    await closePool();
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
 void main();

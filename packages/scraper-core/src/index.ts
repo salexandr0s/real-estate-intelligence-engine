@@ -32,3 +32,17 @@ export {
   pageNavigationDelay,
   randomInt,
 } from './browser/delay.js';
+
+// ── Queues ──────────────────────────────────────────────────────────────────
+export {
+  QUEUE_NAMES,
+  type DiscoveryJobData,
+  type DetailJobData,
+  type ProcessingJobData,
+  type BaselineJobData,
+} from './queues/queue-names.js';
+export {
+  getRedisConnection,
+  closeRedisConnection,
+  getQueuePrefix,
+} from './queues/connection.js';

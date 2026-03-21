@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Dashboard overview with summary cards, recent high-score listings, and source health.
 struct DashboardView: View {
+    @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
@@ -20,7 +21,7 @@ struct DashboardView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Dashboard")
         .task {
-            await viewModel.refresh()
+            await viewModel.refresh(using: appState.apiClient)
         }
     }
 
@@ -36,7 +37,7 @@ struct DashboardView: View {
             }
             Spacer()
             Button {
-                Task { await viewModel.refresh() }
+                Task { await viewModel.refresh(using: appState.apiClient) }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }

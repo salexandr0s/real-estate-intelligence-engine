@@ -142,6 +142,9 @@ function buildPipelineDeps(): FullIngestionPipelineDeps {
         const row = await alerts.create(alert);
         return row ? { id: row.id } : null;
       },
+      findPreviousPrice: async (listingId) => {
+        return listingVersions.findPreviousPrice(listingId);
+      },
     },
   };
 }
@@ -150,7 +153,7 @@ function buildPipelineDeps(): FullIngestionPipelineDeps {
 
 async function main(): Promise<void> {
   const { maxPages, dryRun } = parseArgs();
-  const config = loadConfig();
+  loadConfig();
 
   log.info('Starting scrape-and-ingest', { maxPages, dryRun });
 

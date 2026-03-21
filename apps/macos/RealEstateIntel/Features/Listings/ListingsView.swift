@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Main listings view with native Table, sortable columns, filters, and detail inspector.
 struct ListingsView: View {
+    @Environment(AppState.self) private var appState
     @State private var viewModel = ListingsViewModel()
     @State private var showInspector: Bool = false
 
@@ -23,7 +24,7 @@ struct ListingsView: View {
             }
         }
         .task {
-            await viewModel.refresh()
+            await viewModel.refresh(using: appState.apiClient)
         }
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {
@@ -118,8 +119,8 @@ struct ListingsView: View {
             selection: $viewModel.selectedListingID,
             sortOrder: $viewModel.sortOrder
         ) {
-            TableColumn("Score", value: \.currentScore) { listing in
-                ScoreIndicator(score: listing.currentScore, size: .compact)
+            TableColumn("Score") { listing in
+                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
             }
             .width(min: 50, ideal: 56, max: 64)
 
@@ -134,10 +135,10 @@ struct ListingsView: View {
             }
             .width(min: 200, ideal: 300)
 
-            TableColumn("District", value: \.districtName) { listing in
+            TableColumn("District") { listing in
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(listing.districtName)
-                    Text(listing.postalCode)
+                    Text(listing.districtName ?? "—")
+                    Text(listing.postalCode ?? "")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -148,7 +149,7 @@ struct ListingsView: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(PriceFormatter.format(eur: listing.listPriceEur))
                         .monospacedDigit()
-                    Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur) + "/m\u{00B2}")
+                    Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
@@ -156,14 +157,14 @@ struct ListingsView: View {
             }
             .width(min: 100, ideal: 140)
 
-            TableColumn("Size", value: \.livingAreaSqm) { listing in
-                Text(PriceFormatter.formatArea(listing.livingAreaSqm))
+            TableColumn("Size") { listing in
+                Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
                     .monospacedDigit()
             }
             .width(min: 70, ideal: 80)
 
-            TableColumn("Rooms", value: \.rooms) { listing in
-                Text("\(listing.rooms)")
+            TableColumn("Rooms") { listing in
+                Text("\(listing.rooms ?? 0)")
                     .monospacedDigit()
             }
             .width(min: 50, ideal: 60)
@@ -203,7 +204,7 @@ struct ListingsView: View {
         .help("Toggle listing detail inspector")
 
         Button {
-            Task { await viewModel.refresh() }
+            Task { await viewModel.refresh(using: appState.apiClient) }
         } label: {
             Label("Refresh", systemImage: "arrow.clockwise")
         }

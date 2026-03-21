@@ -5,9 +5,15 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "dependencies": {
-    "@rei/contracts": "*",
     "@rei/config": "*",
-    "@rei/observability": "*"
+    "@rei/contracts": "*",
+    "@rei/db": "*",
+    "@rei/observability": "*",
+    "@rei/scraper-core": "*",
+    "@rei/source-willhaben": "*",
+    "bullmq": "^5.71.0",
+    "ioredis": "^5.10.1",
+    "playwright": "^1.52.0"
   },
   "devDependencies": {
     "tsx": "^4.19.0"
@@ -17,7 +23,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'ok'",
+    "lint": "eslint src/",
     "test": "echo 'ok'",
     "test:unit": "echo 'ok'",
     "clean": "rm -rf dist"
