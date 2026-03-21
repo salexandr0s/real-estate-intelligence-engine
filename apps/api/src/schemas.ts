@@ -28,6 +28,22 @@ const ALERT_FREQUENCIES = ['instant', 'hourly_digest', 'daily_digest', 'manual']
 const ALERT_CHANNELS = ['in_app', 'email', 'push', 'webhook'] as const;
 const ALERT_STATUSES = ['queued', 'sent', 'failed', 'dismissed', 'opened', 'suppressed'] as const;
 
+// ── Query param helpers ──────────────────────────────────────────────────────
+// Query params arrive as strings; empty strings (from ?key= with no value)
+// must be treated as absent to match the original manual parsing behavior.
+
+/** Coerce empty query-string values to undefined before number parsing */
+const optionalQueryNumber = z.preprocess(
+  (val) => (val === '' ? undefined : val),
+  z.coerce.number().optional(),
+);
+
+/** Coerce empty query-string values to undefined before limit parsing */
+const optionalQueryLimit = z.preprocess(
+  (val) => (val === '' ? undefined : val),
+  z.coerce.number().int().min(1, 'limit must be between 1 and 200').max(200, 'limit must be between 1 and 200').optional(),
+);
+
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
 export const idParamSchema = z.object({
@@ -35,28 +51,40 @@ export const idParamSchema = z.object({
 });
 
 export const paginationQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1, 'limit must be between 1 and 200').max(200, 'limit must be between 1 and 200').optional(),
+  limit: optionalQueryLimit,
   cursor: z.string().optional(),
 });
 
 export const listingSearchQuerySchema = z.object({
   operationType: z.enum(OPERATION_TYPES).optional(),
-  propertyTypes: z.string().transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)).optional(),
-  districts: z.string().transform((s) => {
-    return s.split(',').map((v) => {
-      const n = parseInt(v.trim(), 10);
-      if (Number.isNaN(n)) throw new ValidationError(`Invalid number in list: "${v.trim()}"`);
-      return n;
-    });
+  propertyTypes: z.string().transform((s) => {
+    if (s === '') return undefined;
+    return s.split(',').map((v) => v.trim()).filter(Boolean);
   }).optional(),
-  minPriceEur: z.coerce.number().optional(),
-  maxPriceEur: z.coerce.number().optional(),
-  minAreaSqm: z.coerce.number().optional(),
-  maxAreaSqm: z.coerce.number().optional(),
-  minRooms: z.coerce.number().optional(),
-  maxRooms: z.coerce.number().optional(),
-  minScore: z.coerce.number().optional(),
-  limit: z.coerce.number().int().min(1, 'limit must be between 1 and 200').max(200, 'limit must be between 1 and 200').optional(),
+  districts: z.string().transform((s, ctx) => {
+    if (s === '') return undefined;
+    const nums: number[] = [];
+    for (const part of s.split(',')) {
+      const n = parseInt(part.trim(), 10);
+      if (Number.isNaN(n)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Invalid number in list: "${part.trim()}"`,
+        });
+        return z.NEVER;
+      }
+      nums.push(n);
+    }
+    return nums;
+  }).optional(),
+  minPriceEur: optionalQueryNumber,
+  maxPriceEur: optionalQueryNumber,
+  minAreaSqm: optionalQueryNumber,
+  maxAreaSqm: optionalQueryNumber,
+  minRooms: optionalQueryNumber,
+  maxRooms: optionalQueryNumber,
+  minScore: optionalQueryNumber,
+  limit: optionalQueryLimit,
   cursor: z.string().optional(),
   sortBy: z.enum(SORT_BY_VALUES).default('score_desc'),
 }).refine(
@@ -94,7 +122,7 @@ export const filterUpdateSchema = z.object({
   name: z.string().trim().min(1, 'name must be a non-empty string').optional(),
   isActive: z.coerce.boolean().optional(),
   alertFrequency: z.enum(ALERT_FREQUENCIES).optional(),
-  alertChannels: z.array(z.string()).optional(),
+  alertChannels: z.array(z.enum(ALERT_CHANNELS)).optional(),
 });
 
 export const alertUpdateSchema = z.object({

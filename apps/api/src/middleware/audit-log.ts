@@ -25,11 +25,11 @@ export function registerAuditLog(app: FastifyInstance): void {
     const ctx = {
       userId: request.userId,
       method: request.method,
-      route: request.routeOptions?.url ?? request.url,
+      route: request.routeOptions.url ?? request.url,
       statusCode,
       durationMs: Math.round(durationMs * 100) / 100,
       ip: request.ip,
-    } as Record<string, unknown>;
+    };
 
     if (statusCode < 400) {
       auditLogger.info('request', ctx);
