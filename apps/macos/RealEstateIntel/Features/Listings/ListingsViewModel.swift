@@ -82,10 +82,14 @@ final class ListingsViewModel {
     }
 
     var availableDistricts: [(number: Int, name: String)] {
-        let districts = Set(listings.map { (number: $0.districtNo, name: $0.districtName) })
-        return districts
-            .sorted { $0.number < $1.number }
-            .map { ($0.number, $0.name) }
+        var seen = Set<Int>()
+        var result: [(number: Int, name: String)] = []
+        for listing in listings {
+            if seen.insert(listing.districtNo).inserted {
+                result.append((listing.districtNo, listing.districtName))
+            }
+        }
+        return result.sorted { $0.number < $1.number }
     }
 
     var hasActiveFilters: Bool {
