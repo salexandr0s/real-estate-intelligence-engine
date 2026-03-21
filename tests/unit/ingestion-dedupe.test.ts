@@ -1,57 +1,15 @@
 /**
  * Ingestion deduplication and upsert behavior tests.
  * Tests the core idempotency guarantees of the system.
+ * Imports real implementations where available; keeps inline-only for
+ * business-rule concepts not exported from packages.
  */
 import { describe, it, expect } from 'vitest';
-import { createHash } from 'crypto';
+import { computeContentHash } from '@rei/scraper-core';
+import { computeContentFingerprint } from '@rei/normalization';
+import type { CanonicalListingInput } from '@rei/contracts';
 
-// ── Content hashing (must match scraper-core implementation) ────────────────
-
-function computeContentHash(payload: Record<string, unknown>): string {
-  const sorted = JSON.stringify(payload, Object.keys(payload).sort());
-  return createHash('sha256').update(sorted).digest('hex');
-}
-
-// ── Content fingerprinting (for listing versions) ───────────────────────────
-
-interface FingerprintInput {
-  title: string;
-  description: string | null;
-  listPriceEurCents: number | null;
-  livingAreaSqm: number | null;
-  rooms: number | null;
-  propertyType: string;
-  districtNo: number | null;
-  postalCode: string | null;
-  city: string;
-  listingStatus: string;
-  hasBalcony: boolean | null;
-  hasTerrace: boolean | null;
-  hasGarden: boolean | null;
-  hasElevator: boolean | null;
-}
-
-function computeContentFingerprint(input: FingerprintInput): string {
-  const data = JSON.stringify({
-    title: input.title,
-    description: input.description,
-    listPriceEurCents: input.listPriceEurCents,
-    livingAreaSqm: input.livingAreaSqm,
-    rooms: input.rooms,
-    propertyType: input.propertyType,
-    districtNo: input.districtNo,
-    postalCode: input.postalCode,
-    city: input.city,
-    listingStatus: input.listingStatus,
-    hasBalcony: input.hasBalcony,
-    hasTerrace: input.hasTerrace,
-    hasGarden: input.hasGarden,
-    hasElevator: input.hasElevator,
-  });
-  return createHash('sha256').update(data).digest('hex');
-}
-
-// ── Version reason detection ────────────────────────────────────────────────
+// ── Business rule helpers (not exported from packages) ──────────────────────
 
 type VersionReason = 'first_seen' | 'price_change' | 'content_change' | 'status_change' | null;
 
@@ -66,12 +24,34 @@ function detectVersionReason(
   return 'content_change';
 }
 
-// ── Alert dedupe key ────────────────────────────────────────────────────────
-
 function buildDedupeKey(filterId: number, listingId: number, alertType: string, scoreVersion?: number): string {
   const parts = [`filter:${filterId}`, `listing:${listingId}`, `type:${alertType}`];
   if (scoreVersion != null) parts.push(`sv:${scoreVersion}`);
   return parts.join(':');
+}
+
+// ── Helper: build listing data for fingerprinting ──────────────────────────
+
+function makeListing(overrides: Partial<CanonicalListingInput> = {}): Partial<CanonicalListingInput> {
+  return {
+    title: '3-Zimmer Wohnung',
+    description: 'Schöne Wohnung',
+    listPriceEurCents: 29900000,
+    livingAreaSqm: 58.4,
+    rooms: 3,
+    propertyType: 'apartment',
+    districtNo: 2,
+    postalCode: '1020',
+    city: 'Wien',
+    listingStatus: 'active',
+    hasBalcony: true,
+    hasTerrace: false,
+    hasGarden: false,
+    hasElevator: true,
+    parkingAvailable: false,
+    isFurnished: false,
+    ...overrides,
+  };
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -103,51 +83,33 @@ describe('computeContentHash', () => {
 });
 
 describe('computeContentFingerprint', () => {
-  const baseListing: FingerprintInput = {
-    title: '3-Zimmer Wohnung',
-    description: 'Schöne Wohnung',
-    listPriceEurCents: 29900000,
-    livingAreaSqm: 58.4,
-    rooms: 3,
-    propertyType: 'apartment',
-    districtNo: 2,
-    postalCode: '1020',
-    city: 'Wien',
-    listingStatus: 'active',
-    hasBalcony: true,
-    hasTerrace: false,
-    hasGarden: false,
-    hasElevator: true,
-  };
-
   it('is stable for same data', () => {
-    const fp1 = computeContentFingerprint(baseListing);
-    const fp2 = computeContentFingerprint(baseListing);
+    const listing = makeListing();
+    const fp1 = computeContentFingerprint(listing);
+    const fp2 = computeContentFingerprint(listing);
     expect(fp1).toBe(fp2);
   });
 
   it('changes on price change', () => {
-    const fp1 = computeContentFingerprint(baseListing);
-    const fp2 = computeContentFingerprint({ ...baseListing, listPriceEurCents: 28000000 });
+    const fp1 = computeContentFingerprint(makeListing());
+    const fp2 = computeContentFingerprint(makeListing({ listPriceEurCents: 28000000 }));
     expect(fp1).not.toBe(fp2);
   });
 
   it('changes on status change', () => {
-    const fp1 = computeContentFingerprint(baseListing);
-    const fp2 = computeContentFingerprint({ ...baseListing, listingStatus: 'sold' });
+    const fp1 = computeContentFingerprint(makeListing());
+    const fp2 = computeContentFingerprint(makeListing({ listingStatus: 'sold' }));
     expect(fp1).not.toBe(fp2);
   });
 
   it('changes on area change', () => {
-    const fp1 = computeContentFingerprint(baseListing);
-    const fp2 = computeContentFingerprint({ ...baseListing, livingAreaSqm: 62.0 });
+    const fp1 = computeContentFingerprint(makeListing());
+    const fp2 = computeContentFingerprint(makeListing({ livingAreaSqm: 62.0 }));
     expect(fp1).not.toBe(fp2);
   });
 
-  it('does NOT change for fields excluded from fingerprint (verified by design)', () => {
-    // Fingerprint excludes timestamps, crawl IDs, artifact keys
-    // This is a design test: the fingerprint only includes the fields we listed
-    const fp = computeContentFingerprint(baseListing);
+  it('produces a valid 64-char hex string', () => {
+    const fp = computeContentFingerprint(makeListing());
     expect(fp).toMatch(/^[a-f0-9]{64}$/);
   });
 });
@@ -204,31 +166,16 @@ describe('buildDedupeKey', () => {
 
 describe('idempotency scenarios', () => {
   it('re-observation of identical raw payload should not create new version', () => {
-    // Simulate: same listing scraped twice with identical content
     const payload1 = { title: 'Test', price: 299000 };
     const payload2 = { title: 'Test', price: 299000 };
 
     const hash1 = computeContentHash(payload1);
     const hash2 = computeContentHash(payload2);
-
-    // Same hash → raw_listings ON CONFLICT updates observation_count, no new row
     expect(hash1).toBe(hash2);
 
-    // Same fingerprint → no new listing_versions row
-    const fp1 = computeContentFingerprint({
-      title: 'Test', description: null, listPriceEurCents: 29900000,
-      livingAreaSqm: 58, rooms: 3, propertyType: 'apartment',
-      districtNo: 2, postalCode: '1020', city: 'Wien',
-      listingStatus: 'active', hasBalcony: null, hasTerrace: null,
-      hasGarden: null, hasElevator: null,
-    });
-    const fp2 = computeContentFingerprint({
-      title: 'Test', description: null, listPriceEurCents: 29900000,
-      livingAreaSqm: 58, rooms: 3, propertyType: 'apartment',
-      districtNo: 2, postalCode: '1020', city: 'Wien',
-      listingStatus: 'active', hasBalcony: null, hasTerrace: null,
-      hasGarden: null, hasElevator: null,
-    });
+    const listing = makeListing();
+    const fp1 = computeContentFingerprint(listing);
+    const fp2 = computeContentFingerprint(listing);
 
     expect(fp1).toBe(fp2);
     expect(detectVersionReason(
@@ -238,20 +185,8 @@ describe('idempotency scenarios', () => {
   });
 
   it('price change creates new version and different hash', () => {
-    const fp1 = computeContentFingerprint({
-      title: 'Test', description: null, listPriceEurCents: 29900000,
-      livingAreaSqm: 58, rooms: 3, propertyType: 'apartment',
-      districtNo: 2, postalCode: '1020', city: 'Wien',
-      listingStatus: 'active', hasBalcony: null, hasTerrace: null,
-      hasGarden: null, hasElevator: null,
-    });
-    const fp2 = computeContentFingerprint({
-      title: 'Test', description: null, listPriceEurCents: 28000000, // price drop
-      livingAreaSqm: 58, rooms: 3, propertyType: 'apartment',
-      districtNo: 2, postalCode: '1020', city: 'Wien',
-      listingStatus: 'active', hasBalcony: null, hasTerrace: null,
-      hasGarden: null, hasElevator: null,
-    });
+    const fp1 = computeContentFingerprint(makeListing());
+    const fp2 = computeContentFingerprint(makeListing({ listPriceEurCents: 28000000 }));
 
     expect(fp1).not.toBe(fp2);
     expect(detectVersionReason(
@@ -263,7 +198,6 @@ describe('idempotency scenarios', () => {
   it('alert dedupe prevents duplicate alerts for same event', () => {
     const key1 = buildDedupeKey(1, 42, 'new_match', 1);
     const key2 = buildDedupeKey(1, 42, 'new_match', 1);
-    // Same key → ON CONFLICT DO NOTHING in alerts table
     expect(key1).toBe(key2);
   });
 });

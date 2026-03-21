@@ -8,11 +8,14 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
+    "test": "vitest run",
+    "test:unit": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@rei/contracts": "*"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.0"
   }
 }
