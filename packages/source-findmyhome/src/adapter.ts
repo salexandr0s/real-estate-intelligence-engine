@@ -34,7 +34,7 @@ export class FindMyHomeAdapter
 
     for (let page = 1; page <= maxPages; page++) {
       const url = new URL(SEARCH_PATH, BASE_URL);
-      url.searchParams.set('page', String(page));
+      url.searchParams.set('seite', String(page));
       if (profile.regions?.length) {
         url.searchParams.set('region', profile.regions[0]!);
       }

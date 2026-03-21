@@ -82,7 +82,7 @@ export function parseDiscoveryPage(
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
         ...requestPlan,
-        url: requestPlan.url.replace(/\/seite-\d+|$/, `/seite-${pageNum + 1}`),
+        url: buildNextPageUrl(requestPlan.url, pageNum + 1),
         metadata: { ...requestPlan.metadata, page: pageNum + 1 },
       }
     : null;
@@ -122,6 +122,14 @@ function buildLocation(listing: { mainEntity?: { address?: { postalCode?: string
   if (addr.postalCode) parts.push(addr.postalCode);
   if (addr.addressLocality) parts.push(addr.addressLocality);
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+/** Build next page URL by replacing or appending /seite-N path segment. */
+function buildNextPageUrl(currentUrl: string, nextPage: number): string {
+  const parsed = new URL(currentUrl);
+  parsed.pathname = parsed.pathname.replace(/\/seite-\d+$/, '');
+  parsed.pathname = `${parsed.pathname}/seite-${nextPage}`;
+  return parsed.toString();
 }
 
 /**

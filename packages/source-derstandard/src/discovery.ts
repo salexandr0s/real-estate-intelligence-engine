@@ -134,6 +134,10 @@ function normalizeNumericString(value: string): string {
  * "460.000" -> "460000", "219.000" -> "219000", "1.250.000" -> "1250000"
  */
 function normalizePrice(value: string): string {
-  // Remove dots (thousands separators) and commas
-  return value.replace(/\./g, '').replace(',', '');
+  // Austrian format: dots are thousands separators, comma is decimal
+  const trimmed = value.trim();
+  if (/,\d+$/.test(trimmed)) {
+    return trimmed.replace(/\./g, '').replace(',', '.');
+  }
+  return trimmed.replace(/\./g, '');
 }

@@ -44,7 +44,7 @@ function buildCaptureFromJson(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
-  const standardId = String(detailData.id) || extractIdFromUrl(url) || '';
+  const standardId = detailData.id != null ? String(detailData.id) : extractIdFromUrl(url) ?? '';
   const addr = detailData.address;
   const coords = detailData.coordinates;
   const contact = detailData.contact;

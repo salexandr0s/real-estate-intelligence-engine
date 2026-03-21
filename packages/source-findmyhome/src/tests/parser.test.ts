@@ -68,7 +68,7 @@ describe('Discovery page parsing', () => {
   it('extracts 3 listing items from HTML cards', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -80,7 +80,7 @@ describe('Discovery page parsing', () => {
   it('extracts correct IDs from all items', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -92,7 +92,7 @@ describe('Discovery page parsing', () => {
   it('extracts correct fields from first discovery item', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -112,7 +112,7 @@ describe('Discovery page parsing', () => {
   it('extracts correct fields from second and third items', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -134,7 +134,7 @@ describe('Discovery page parsing', () => {
   it('strips ?tl=1 from extracted IDs (premium listing flag)', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -148,19 +148,19 @@ describe('Discovery page parsing', () => {
   it('detects pagination when more items available', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
     expect(result.nextPagePlan).not.toBeNull();
-    expect(result.nextPagePlan!.url).toContain('page=2');
+    expect(result.nextPagePlan!.url).toContain('seite=2');
     expect(result.nextPagePlan!.metadata?.['page']).toBe(2);
   });
 
   it('returns empty result for HTML without listing cards', () => {
     const html = '<html><body><h1>No data here</h1></body></html>';
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 
@@ -172,7 +172,7 @@ describe('Discovery page parsing', () => {
   it('returns empty result for empty HTML', () => {
     const html = '';
     const result = parseDiscoveryPage(html, 'findmyhome', {
-      url: 'https://www.findmyhome.at/immobiliensuche?page=1',
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
       metadata: { page: 1 },
     });
 

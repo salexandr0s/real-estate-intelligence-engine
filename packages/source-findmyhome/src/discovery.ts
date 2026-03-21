@@ -38,9 +38,7 @@ export function parseDiscoveryPage(
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
         ...requestPlan,
-        url: requestPlan.url.replace(/[?&]page=\d+/, `page=${pageNum + 1}`).includes(`page=${pageNum + 1}`)
-          ? requestPlan.url.replace(/page=\d+/, `page=${pageNum + 1}`)
-          : `${requestPlan.url}${requestPlan.url.includes('?') ? '&' : '?'}page=${pageNum + 1}`,
+        url: buildNextPageUrl(requestPlan.url, pageNum + 1),
         metadata: { ...requestPlan.metadata, page: pageNum + 1 },
       }
     : null;
@@ -158,9 +156,9 @@ function extractTitle(cardHtml: string): string | null {
  * Extract location from `<strong>Ort: {PLZ}</strong> {City}`.
  */
 function extractLocation(cardHtml: string): string | null {
-  const match = cardHtml.match(/<strong>Ort:\s*(\d{4})<\/strong>\s*(\w+)/);
+  const match = cardHtml.match(/<strong>Ort:\s*(\d{4})<\/strong>\s*([\w\s\u00c0-\u00ff-]+)/);
   if (match?.[1] && match[2]) {
-    return `${match[1]} ${match[2]}`;
+    return `${match[1]} ${match[2].trim()}`;
   }
   return null;
 }
@@ -181,11 +179,11 @@ function extractPrice(cardHtml: string): string | null {
 
 /**
  * Extract area from `<strong>Flaeche:</strong><br>{X} m2`.
- * The HTML entity for "a umlaut" is decoded, so we match both Flaeche and Fl&auml;che.
+ * Handles raw entity `Fl&auml;che`, decoded umlaut `Fläche`, and ASCII `Flaeche`.
  */
 function extractArea(cardHtml: string): string | null {
   const match = cardHtml.match(
-    /<strong>Fl[a&auml;]+che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
+    /<strong>Fl(?:&auml;|\u00e4|ae?)che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
   );
   if (!match?.[1]) return null;
   return match[1];
@@ -220,6 +218,13 @@ function extractTotalEstimate(html: string): number | null {
  */
 function detectNextPage(html: string): boolean {
   return /[?&]seite=\d+/.test(html);
+}
+
+/** Build next page URL using the `seite` query parameter. */
+function buildNextPageUrl(currentUrl: string, nextPage: number): string {
+  const parsed = new URL(currentUrl);
+  parsed.searchParams.set('seite', String(nextPage));
+  return parsed.toString();
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
