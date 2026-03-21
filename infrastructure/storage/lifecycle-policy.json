@@ -1,0 +1,22 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-raw-html-90d",
+      "Filter": { "Prefix": "raw-html/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 90 }
+    },
+    {
+      "ID": "expire-screenshots-30d",
+      "Filter": { "Prefix": "screenshots/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 }
+    },
+    {
+      "ID": "expire-har-14d",
+      "Filter": { "Prefix": "har/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 14 }
+    }
+  ]
+}

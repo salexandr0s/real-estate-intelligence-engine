@@ -69,4 +69,24 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests
-        run: npx vitest run
+        run: npx vitest run --reporter=verbose 2>&1 | tee test-output.log
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-artifacts
+          path: |
+            **/test-results/
+            **/coverage/
+            **/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.log
+          retention-days: 7

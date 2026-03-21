@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NOTE: Before installing, you MUST replace:
+     1. REPLACE_WITH_ABSOLUTE_PATH → the absolute path to your repo checkout
+     2. REPLACE_WITH_DATABASE_URL  → your production DATABASE_URL
+     Install: cp this file to ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.rei.postgres-backup.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.rei.postgres-backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>REPLACE_WITH_ABSOLUTE_PATH/infrastructure/backup/backup-postgres.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/rei-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/rei-backup.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DATABASE_URL</key>
+        <string>REPLACE_WITH_DATABASE_URL</string>
+    </dict>
+</dict>
+</plist>
