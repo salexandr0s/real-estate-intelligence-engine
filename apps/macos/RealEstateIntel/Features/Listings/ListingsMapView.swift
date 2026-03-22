@@ -18,6 +18,11 @@ struct ListingsMapView: View {
     )
     @State private var districtBoundaries: [DistrictBoundary] = []
     @State private var showDistrictBoundaries: Bool = true
+    @State private var showPOIs: Bool = false
+    @State private var activePOICategories: Set<POICategory> = Set(POICategory.allCases)
+    @State private var visiblePOIs: [POI] = []
+    @State private var showDevelopments: Bool = false
+    @State private var visibleDevelopments: [WienDevelopment] = []
 
     private var mappableListings: [Listing] {
         viewModel.filteredListings.filter { $0.coordinate != nil }
@@ -63,6 +68,28 @@ struct ListingsMapView: View {
                             }
                             .tag(listing.id)
                             .annotationTitles(.hidden)
+                        }
+
+                        // POI pins
+                        if showPOIs {
+                            ForEach(visiblePOIs) { poi in
+                                Annotation(poi.name, coordinate: poi.coordinate, anchor: .center) {
+                                    POIAnnotation(poi: poi)
+                                }
+                                .annotationTitles(.hidden)
+                            }
+                        }
+
+                        // Wien development project markers
+                        if showDevelopments {
+                            ForEach(visibleDevelopments) { dev in
+                                if let coord = dev.coordinate {
+                                    Annotation(dev.name, coordinate: coord, anchor: .center) {
+                                        DevelopmentAnnotation(development: dev)
+                                    }
+                                    .annotationTitles(.automatic)
+                                }
+                            }
                         }
                     }
                     .mapStyle(mapStyle)
@@ -166,6 +193,26 @@ struct ListingsMapView: View {
             Divider()
                 .frame(width: 20)
 
+            poiLayerMenu
+
+            Button {
+                showDevelopments.toggle()
+                if showDevelopments {
+                    visibleDevelopments = ViennaDevelopmentStore.allDevelopments
+                } else {
+                    visibleDevelopments = []
+                }
+            } label: {
+                Image(systemName: showDevelopments ? "building.2.fill" : "building.2")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(showDevelopments ? .purple : nil)
+            .help(showDevelopments ? "Hide developments" : "Show Wien developments")
+
+            Divider()
+                .frame(width: 20)
+
             Button {
                 viewModel.isDrawingSelection.toggle()
             } label: {
@@ -192,6 +239,68 @@ struct ListingsMapView: View {
         .controlSize(.small)
         .frame(width: 32)
         .help("Change map style")
+    }
+
+    private var poiLayerMenu: some View {
+        Menu {
+            Button {
+                showPOIs.toggle()
+                updateVisiblePOIs()
+            } label: {
+                Label(showPOIs ? "Hide All POIs" : "Show All POIs",
+                      systemImage: showPOIs ? "mappin.slash" : "mappin.circle")
+            }
+
+            if showPOIs {
+                Divider()
+                ForEach(POICategory.allCases, id: \.self) { category in
+                    Button {
+                        if activePOICategories.contains(category) {
+                            activePOICategories.remove(category)
+                        } else {
+                            activePOICategories.insert(category)
+                        }
+                        updateVisiblePOIs()
+                    } label: {
+                        HStack {
+                            Image(systemName: category.systemImage)
+                            Text(category.displayName)
+                            if activePOICategories.contains(category) {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .frame(width: 32)
+        .tint(showPOIs ? .blue : nil)
+        .help("Points of interest")
+    }
+
+    private func updateVisiblePOIs() {
+        guard showPOIs else {
+            visiblePOIs = []
+            return
+        }
+        // Show POIs within the current visible area
+        // Use a default Vienna-wide region as fallback
+        let region = currentRegion
+        visiblePOIs = ViennaPOIStore.inRegion(region, categories: activePOICategories)
+    }
+
+    /// Approximate current visible region for viewport culling.
+    private var currentRegion: MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: Self.viennaCenter,
+            span: MKCoordinateSpan(latitudeDelta: 0.20, longitudeDelta: 0.20)
+        )
     }
 
     // MARK: - Status Bar

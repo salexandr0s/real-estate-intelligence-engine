@@ -242,6 +242,7 @@ extension Listing {
         keywordSignalScore: 72.0,
         timeOnMarketScore: 95.0,
         confidenceScore: 90.0,
+        locationScore: 75.0,
         districtBaselinePpsqmEur: 5800.0,
         bucketBaselinePpsqmEur: 5400.0,
         discountToDistrictPct: 0.2889,

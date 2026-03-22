@@ -8,6 +8,7 @@ struct ScoreExplanation: Codable, Hashable {
     let keywordSignalScore: Double
     let timeOnMarketScore: Double
     let confidenceScore: Double
+    let locationScore: Double?
     let districtBaselinePpsqmEur: Double
     let bucketBaselinePpsqmEur: Double
     let discountToDistrictPct: Double

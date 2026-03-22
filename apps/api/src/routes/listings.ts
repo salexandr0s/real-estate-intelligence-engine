@@ -333,6 +333,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           keywordSignalScore: explanation.keywordSignalScore,
           timeOnMarketScore: explanation.timeOnMarketScore,
           confidenceScore: explanation.confidenceScore,
+          locationScore: explanation.locationScore,
           districtBaselinePpsqmEur: explanation.districtBaselinePpsqmEur,
           bucketBaselinePpsqmEur: explanation.bucketBaselinePpsqmEur,
           discountToDistrictPct: explanation.discountToDistrictPct,

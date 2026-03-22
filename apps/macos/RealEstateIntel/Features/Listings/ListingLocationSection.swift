@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Location section showing city, district, and postal code.
+/// Location section showing city, district, postal code, and nearby POI metrics.
 struct ListingLocationSection: View {
     let listing: Listing
+
+    @State private var nearbyPOIs: [(poi: POI, distanceM: Double)] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
@@ -15,6 +17,25 @@ struct ListingLocationSection: View {
             }
             if let postalCode = listing.postalCode {
                 DetailRow(label: "Postal Code", value: postalCode)
+            }
+
+            if listing.coordinate != nil, !nearbyPOIs.isEmpty {
+                Divider()
+                Text("Nearby")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                ProximityMetricsView(nearbyPOIs: nearbyPOIs)
+            }
+        }
+        .task(id: listing.id) {
+            if let coord = listing.coordinate {
+                nearbyPOIs = ViennaPOIStore.nearby(
+                    coordinate: coord,
+                    radiusMeters: 1000
+                )
+            } else {
+                nearbyPOIs = []
             }
         }
     }

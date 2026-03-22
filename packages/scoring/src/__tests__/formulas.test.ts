@@ -17,11 +17,11 @@ function daysAgo(days: number): Date {
 
 describe('mapDistrictDiscountToScore edge cases', () => {
   it('returns 0 for extreme above-baseline', () => {
-    expect(mapDistrictDiscountToScore(-0.30)).toBe(0);
+    expect(mapDistrictDiscountToScore(-0.3)).toBe(0);
   });
 
   it('returns 100 for extreme below-baseline', () => {
-    expect(mapDistrictDiscountToScore(0.50)).toBe(100);
+    expect(mapDistrictDiscountToScore(0.5)).toBe(100);
   });
 
   it('interpolates between 0% and 5%', () => {
@@ -33,7 +33,7 @@ describe('mapDistrictDiscountToScore edge cases', () => {
   it('returns exact breakpoint values', () => {
     expect(mapDistrictDiscountToScore(-0.05)).toBe(20);
     expect(mapDistrictDiscountToScore(0.05)).toBe(65);
-    expect(mapDistrictDiscountToScore(0.10)).toBe(80);
+    expect(mapDistrictDiscountToScore(0.1)).toBe(80);
   });
 });
 
@@ -41,26 +41,26 @@ describe('mapDistrictDiscountToScore edge cases', () => {
 
 describe('mapBucketDiscountToScore sample thresholds', () => {
   it('halves score for very small sample (n=4)', () => {
-    const base = mapBucketDiscountToScore(0.10, 25);
-    const small = mapBucketDiscountToScore(0.10, 4);
+    const base = mapBucketDiscountToScore(0.1, 25);
+    const small = mapBucketDiscountToScore(0.1, 4);
     expect(small).toBeCloseTo(base * 0.5, 0);
   });
 
   it('uses 0.65 multiplier at sample=5', () => {
-    const base = mapBucketDiscountToScore(0.10, 25);
-    const mid = mapBucketDiscountToScore(0.10, 5);
+    const base = mapBucketDiscountToScore(0.1, 25);
+    const mid = mapBucketDiscountToScore(0.1, 5);
     expect(mid).toBeCloseTo(base * 0.65, 0);
   });
 
   it('uses 0.85 multiplier at sample=10', () => {
-    const base = mapBucketDiscountToScore(0.10, 25);
-    const mid = mapBucketDiscountToScore(0.10, 10);
+    const base = mapBucketDiscountToScore(0.1, 25);
+    const mid = mapBucketDiscountToScore(0.1, 10);
     expect(mid).toBeCloseTo(base * 0.85, 0);
   });
 
   it('uses 1.0 multiplier at sample=20+', () => {
-    const s20 = mapBucketDiscountToScore(0.10, 20);
-    const s25 = mapBucketDiscountToScore(0.10, 25);
+    const s20 = mapBucketDiscountToScore(0.1, 20);
+    const s25 = mapBucketDiscountToScore(0.1, 25);
     expect(s20).toBe(s25);
   });
 
@@ -73,9 +73,7 @@ describe('mapBucketDiscountToScore sample thresholds', () => {
 
 describe('computeKeywordSignalScore stacking', () => {
   it('stacks multiple quality keywords', () => {
-    const result = computeKeywordSignalScore(
-      'provisionsfrei saniert Terrasse', null, null,
-    );
+    const result = computeKeywordSignalScore('provisionsfrei saniert Terrasse', null, null);
     expect(result.score).toBe(50 + 8 + 6 + 6); // 70
     expect(result.matchedPositive).toContain('provisionsfrei');
     expect(result.matchedPositive).toContain('saniert');
@@ -83,9 +81,7 @@ describe('computeKeywordSignalScore stacking', () => {
   });
 
   it('handles umlaut normalization for opportunity keyword', () => {
-    const result = computeKeywordSignalScore(
-      'Sanierungsbedürftig Wohnung', null, 0.10,
-    );
+    const result = computeKeywordSignalScore('Sanierungsbedürftig Wohnung', null, 0.1);
     // Opportunity keyword matched + 7%+ discount → renovation_opportunity
     expect(result.matchedPositive).toContain('renovation_opportunity');
   });
@@ -98,9 +94,7 @@ describe('computeKeywordSignalScore stacking', () => {
   });
 
   it('clamps to 0 for heavily negative listing', () => {
-    const result = computeKeywordSignalScore(
-      'schimmel feuchtigkeit baurecht', null, null,
-    );
+    const result = computeKeywordSignalScore('schimmel feuchtigkeit baurecht', null, null);
     // 50 - 25 - 20 - 20 = -15 → clamped to 0
     expect(result.score).toBe(0);
   });
@@ -180,8 +174,8 @@ describe('scoreListing integration', () => {
     const result = scoreListing(input, baseline);
     expect(result.overallScore).toBeGreaterThanOrEqual(0);
     expect(result.overallScore).toBeLessThanOrEqual(100);
-    expect(result.scoreVersion).toBe(1);
-    expect(result.explanation).toHaveProperty('scoreVersion', 1);
+    expect(result.scoreVersion).toBe(2);
+    expect(result.explanation).toHaveProperty('scoreVersion', 2);
   });
 
   it('includes baseline info in result', () => {

@@ -5,3 +5,4 @@ export { mapBucketDiscountToScore } from './formulas/undervaluation.js';
 export { computeKeywordSignalScore } from './formulas/keyword-signal.js';
 export { computeTimeOnMarketScore } from './formulas/time-on-market.js';
 export { computeConfidenceScore } from './formulas/confidence.js';
+export { computeLocationScore } from './formulas/location-score.js';

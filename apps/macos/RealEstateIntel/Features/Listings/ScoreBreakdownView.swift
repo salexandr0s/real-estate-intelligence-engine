@@ -11,6 +11,9 @@ struct ScoreBreakdownView: View {
             ScoreRow(label: "Keyword Signals", value: explanation.keywordSignalScore)
             ScoreRow(label: "Time on Market", value: explanation.timeOnMarketScore)
             ScoreRow(label: "Confidence", value: explanation.confidenceScore)
+            if let locationScore = explanation.locationScore {
+                ScoreRow(label: "Location", value: locationScore)
+            }
 
             Divider()
 

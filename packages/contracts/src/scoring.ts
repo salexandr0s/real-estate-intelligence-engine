@@ -1,3 +1,15 @@
+// ── Proximity / Location Data ────────────────────────────────────────────────
+
+export interface ProximityInput {
+  nearestTransitDistanceM: number | null;
+  nearestTransitType: string | null;
+  nearestTransitName: string | null;
+  parksWithin500m: number;
+  schoolsWithin500m: number;
+  transitStopsWithin500m: number;
+  policeWithin1000m: number;
+}
+
 // ── Score Input ──────────────────────────────────────────────────────────────
 
 export interface ScoreInput {
@@ -19,6 +31,7 @@ export interface ScoreInput {
   locationConfidence: number;
   recentPriceDropPct: number;
   relistDetected: boolean;
+  proximityData?: ProximityInput | null;
 }
 
 // ── Baseline ────────────────────────────────────────────────────────────────
@@ -39,6 +52,7 @@ export interface ScoreResult {
   keywordSignalScore: number;
   timeOnMarketScore: number;
   confidenceScore: number;
+  locationScore: number;
   districtBaselinePpsqmEur: number | null;
   bucketBaselinePpsqmEur: number | null;
   discountToDistrictPct: number | null;

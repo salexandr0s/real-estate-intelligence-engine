@@ -4,18 +4,20 @@ import { mapBucketDiscountToScore } from './undervaluation.js';
 import { computeKeywordSignalScore } from './keyword-signal.js';
 import { computeTimeOnMarketScore } from './time-on-market.js';
 import { computeConfidenceScore } from './confidence.js';
+import { computeLocationScore } from './location-score.js';
 import { clamp } from './util.js';
 
-export const SCORE_VERSION = 1;
+export const SCORE_VERSION = 2;
 
 /**
  * Main scoring function. Produces a 0-100 weighted opportunity score.
- * Weights: 0.40 district + 0.25 undervaluation + 0.15 keyword + 0.10 time + 0.10 confidence
+ * Weights: 0.35 district + 0.20 undervaluation + 0.15 keyword + 0.10 time + 0.10 confidence + 0.10 location
  */
 export function scoreListing(input: ScoreInput, baseline: BaselineLookup): ScoreResult {
   const districtDiscountPct =
     baseline.districtBaselinePpsqmEur && input.pricePerSqmEur
-      ? (baseline.districtBaselinePpsqmEur - input.pricePerSqmEur) / baseline.districtBaselinePpsqmEur
+      ? (baseline.districtBaselinePpsqmEur - input.pricePerSqmEur) /
+        baseline.districtBaselinePpsqmEur
       : null;
 
   const bucketDiscountPct =
@@ -24,13 +26,12 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
       : null;
 
   const districtPriceScore = mapDistrictDiscountToScore(districtDiscountPct);
-  const undervaluationScore = mapBucketDiscountToScore(bucketDiscountPct, baseline.bucketSampleSize);
-
-  const kw = computeKeywordSignalScore(
-    input.title,
-    input.description,
+  const undervaluationScore = mapBucketDiscountToScore(
     bucketDiscountPct,
+    baseline.bucketSampleSize,
   );
+
+  const kw = computeKeywordSignalScore(input.title, input.description, bucketDiscountPct);
 
   const daysOnMarket = Math.max(
     0,
@@ -50,11 +51,21 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
   // Baseline confidence from fallback level
   let baselineConfidence = 20;
   switch (baseline.fallbackLevel) {
-    case 'district_bucket': baselineConfidence = 100; break;
-    case 'district_type': baselineConfidence = 80; break;
-    case 'city_bucket': baselineConfidence = 60; break;
-    case 'city_type': baselineConfidence = 40; break;
-    case 'none': baselineConfidence = 20; break;
+    case 'district_bucket':
+      baselineConfidence = 100;
+      break;
+    case 'district_type':
+      baselineConfidence = 80;
+      break;
+    case 'city_bucket':
+      baselineConfidence = 60;
+      break;
+    case 'city_type':
+      baselineConfidence = 40;
+      break;
+    case 'none':
+      baselineConfidence = 20;
+      break;
   }
 
   const confidenceScore = computeConfidenceScore(
@@ -64,12 +75,15 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
     input.locationConfidence,
   );
 
+  const locationScore = computeLocationScore(input.proximityData);
+
   const raw =
-    0.40 * districtPriceScore +
-    0.25 * undervaluationScore +
+    0.35 * districtPriceScore +
+    0.2 * undervaluationScore +
     0.15 * kw.score +
-    0.10 * timeOnMarketScore +
-    0.10 * confidenceScore;
+    0.1 * timeOnMarketScore +
+    0.1 * confidenceScore +
+    0.1 * locationScore;
 
   const overallScore = Math.round(clamp(raw, 0, 100) * 100) / 100;
 
@@ -80,6 +94,7 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
     keywordSignalScore: kw.score,
     timeOnMarketScore,
     confidenceScore,
+    locationScore,
     districtBaselinePpsqmEur: baseline.districtBaselinePpsqmEur,
     bucketBaselinePpsqmEur: baseline.bucketBaselinePpsqmEur,
     discountToDistrictPct: districtDiscountPct,
@@ -91,6 +106,8 @@ export function scoreListing(input: ScoreInput, baseline: BaselineLookup): Score
       daysOnMarket,
       baselineConfidence,
       fallbackLevel: baseline.fallbackLevel,
+      locationScore,
+      proximityData: input.proximityData ?? null,
     },
     scoreVersion: SCORE_VERSION,
   };

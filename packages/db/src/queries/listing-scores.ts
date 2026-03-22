@@ -14,6 +14,7 @@ interface ListingScoreDbRow {
   keyword_signal_score: string;
   time_on_market_score: string;
   confidence_score: string;
+  location_score: string | null;
   district_baseline_ppsqm_eur: string | null;
   bucket_baseline_ppsqm_eur: string | null;
   discount_to_district_pct: string | null;
@@ -33,6 +34,7 @@ function toScoreResult(row: ListingScoreDbRow): ScoreResult {
     keywordSignalScore: Number(row.keyword_signal_score),
     timeOnMarketScore: Number(row.time_on_market_score),
     confidenceScore: Number(row.confidence_score),
+    locationScore: row.location_score != null ? Number(row.location_score) : 50,
     districtBaselinePpsqmEur:
       row.district_baseline_ppsqm_eur != null ? Number(row.district_baseline_ppsqm_eur) : null,
     bucketBaselinePpsqmEur:
@@ -60,12 +62,13 @@ export async function insertScore(
        listing_id, listing_version_id, score_version,
        overall_score, district_price_score, undervaluation_score,
        keyword_signal_score, time_on_market_score, confidence_score,
+       location_score,
        district_baseline_ppsqm_eur, bucket_baseline_ppsqm_eur,
        discount_to_district_pct, discount_to_bucket_pct,
        matched_positive_keywords, matched_negative_keywords,
        explanation, scored_at
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()
      )
      ON CONFLICT (listing_version_id, score_version) DO UPDATE SET
        overall_score = EXCLUDED.overall_score,
@@ -74,6 +77,7 @@ export async function insertScore(
        keyword_signal_score = EXCLUDED.keyword_signal_score,
        time_on_market_score = EXCLUDED.time_on_market_score,
        confidence_score = EXCLUDED.confidence_score,
+       location_score = EXCLUDED.location_score,
        scored_at = NOW()`,
     [
       listingId,
@@ -85,6 +89,7 @@ export async function insertScore(
       score.keywordSignalScore,
       score.timeOnMarketScore,
       score.confidenceScore,
+      score.locationScore,
       score.districtBaselinePpsqmEur,
       score.bucketBaselinePpsqmEur,
       score.discountToDistrictPct,

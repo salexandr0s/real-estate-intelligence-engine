@@ -14,9 +14,13 @@ export * as userFilters from './queries/user-filters.js';
 export * as alerts from './queries/alerts.js';
 export * as listingScores from './queries/listing-scores.js';
 export * as marketBaselines from './queries/market-baselines.js';
+export * as pois from './queries/pois.js';
+export * as wienDevelopments from './queries/wien-developments.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
 export type { SourceCreateInput } from './queries/sources.js';
 export type { ListingSearchFilter } from './queries/listings.js';
 export type { AppendVersionInput, ListingVersionRow } from './queries/listing-versions.js';
 export type { UpsertBaselineInput, MarketBaselineRow } from './queries/market-baselines.js';
+export type { UpsertPoiInput, PoiRow, PoiNearbyRow } from './queries/pois.js';
+export type { UpsertDevelopmentInput, WienDevelopmentRow } from './queries/wien-developments.js';
