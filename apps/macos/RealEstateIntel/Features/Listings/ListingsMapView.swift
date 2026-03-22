@@ -418,16 +418,16 @@ struct ListingsMapView: View {
 
         let remaining = Self.maxAnnotations - kept.count
         if remaining > 0, !dense.isEmpty {
-            // Spatial thinning: keep at most one POI per sub-grid cell
-            // Cell size adapts to how many we need to drop
-            let thinFactor = max(1, Int(sqrt(Double(dense.count) / Double(remaining))))
-            let cellLat = region.span.latitudeDelta / Double(max(1, 20 / thinFactor))
-            let cellLon = region.span.longitudeDelta / Double(max(1, 20 / thinFactor))
+            // Spatial thinning: divide viewport into ~remaining cells,
+            // keep at most one POI per cell for even spatial distribution.
+            let gridDim = max(1, Int(sqrt(Double(remaining))))
+            let cellLat = region.span.latitudeDelta / Double(gridDim)
+            let cellLon = region.span.longitudeDelta / Double(gridDim)
 
             var seen = Set<Int>()
             for poi in dense {
-                let row = Int((poi.latitude - region.center.latitude + region.span.latitudeDelta / 2) / cellLat)
-                let col = Int((poi.longitude - region.center.longitude + region.span.longitudeDelta / 2) / cellLon)
+                let row = max(0, Int((poi.latitude - region.center.latitude + region.span.latitudeDelta / 2) / cellLat))
+                let col = max(0, Int((poi.longitude - region.center.longitude + region.span.longitudeDelta / 2) / cellLon))
                 let key = row * 10_000 + col
                 if seen.insert(key).inserted {
                     kept.append(poi)

@@ -56,6 +56,8 @@ struct POIGrid {
         let colLo = max(0, Int((lonLo - Self.lonMin) / lonStep))
         let colHi = min(cellsLon - 1, Int((lonHi - Self.lonMin) / lonStep))
 
+        guard rowLo <= rowHi, colLo <= colHi else { return [] }
+
         var result: [POI] = []
 
         for row in rowLo...rowHi {
@@ -88,6 +90,8 @@ struct POIGrid {
         let rowHi = min(cellsLat - 1, Int((coordinate.latitude + latDelta - Self.latMin) / latStep))
         let colLo = max(0, Int((coordinate.longitude - lonDelta - Self.lonMin) / lonStep))
         let colHi = min(cellsLon - 1, Int((coordinate.longitude + lonDelta - Self.lonMin) / lonStep))
+
+        guard rowLo <= rowHi, colLo <= colHi else { return [] }
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         var result: [(poi: POI, distanceM: Double)] = []
@@ -151,11 +155,13 @@ enum ViennaPOIStore {
     private nonisolated static func parsePOIsSync() -> [POI] {
         guard let url = Bundle.main.url(forResource: "vienna-pois", withExtension: "geojson"),
               let data = try? Data(contentsOf: url) else {
+            NSLog("[ViennaPOIStore] Failed to load vienna-pois.geojson")
             return []
         }
 
         let decoder = MKGeoJSONDecoder()
         guard let geoObjects = try? decoder.decode(data) else {
+            NSLog("[ViennaPOIStore] Failed to decode POI GeoJSON")
             return []
         }
 
