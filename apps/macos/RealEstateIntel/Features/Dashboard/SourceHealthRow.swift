@@ -6,6 +6,8 @@ struct SourceHealthRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
+            SourceLogo(sourceCode: source.code, size: 20)
+
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(source.name)
                     .font(.body)

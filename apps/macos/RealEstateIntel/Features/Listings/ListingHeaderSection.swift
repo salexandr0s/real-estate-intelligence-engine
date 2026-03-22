@@ -9,12 +9,15 @@ struct ListingHeaderSection: View {
             HStack {
                 StatusBadge(listingStatus: listing.listingStatus)
                 Spacer()
-                Text(listing.sourceCode)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1), in: Capsule())
+                HStack(spacing: Theme.Spacing.xs) {
+                    SourceLogo(sourceCode: listing.sourceCode, size: 14)
+                    Text(listing.sourceCode)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.1), in: Capsule())
             }
 
             Text(listing.title)

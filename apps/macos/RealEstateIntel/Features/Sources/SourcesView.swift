@@ -176,12 +176,19 @@ private struct SourceDetailCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row
             HStack(spacing: Theme.Spacing.md) {
-                // Active indicator (clickable)
-                Circle()
-                    .fill(source.isActive ? Color.green : Color.gray)
-                    .frame(width: 10, height: 10)
-                    .onTapGesture(perform: onToggle)
-                    .help(source.isActive ? "Click to pause" : "Click to resume")
+                // Source logo with active indicator overlay
+                ZStack(alignment: .bottomTrailing) {
+                    SourceLogo(sourceCode: source.code, size: 28)
+                    Circle()
+                        .fill(source.isActive ? Color.green : Color.gray)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
+                        )
+                        .offset(x: 2, y: 2)
+                }
+                .onTapGesture(perform: onToggle)
+                .help(source.isActive ? "Click to pause" : "Click to resume")
 
                 // Source name
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {

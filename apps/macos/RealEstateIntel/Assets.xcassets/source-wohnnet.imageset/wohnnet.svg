@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#e30613"/>
+  <!-- Roof triangle -->
+  <polygon points="32,12 18,24 46,24" fill="white" opacity="0.9"/>
+  <!-- W as path outline -->
+  <path d="M16,30 L22,50 L28,38 L32,46 L36,38 L42,50 L48,30 L44,30 L40,44 L36,34 L32,42 L28,34 L24,44 L20,30 Z" fill="white"/>
+</svg>

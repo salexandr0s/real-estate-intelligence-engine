@@ -83,9 +83,12 @@ struct ListingsTable: View {
                         .help("Matched a filter alert")
                 }
             }
-            Text(listing.sourceCode)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: Theme.Spacing.xs) {
+                SourceLogo(sourceCode: listing.sourceCode, size: 12)
+                Text(listing.sourceCode)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .onAppear {
             if listing.id == viewModel.filteredListings.last?.id, viewModel.hasMore {

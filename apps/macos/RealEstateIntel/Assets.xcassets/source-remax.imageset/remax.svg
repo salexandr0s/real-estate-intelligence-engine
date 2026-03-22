@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#003DA5"/>
+  <!-- Red divider stripe -->
+  <rect x="6" y="30" width="52" height="4" fill="#DC1C2E"/>
+  <!-- "RE" as paths (top half) -->
+  <path d="M14,12 L20,12 C24,12 26,14 26,17 C26,19.5 24.5,21 22.5,21.5 L27,28 L23,28 L19,22 L18,22 L18,28 L14,28 Z M18,15 L18,19 L20,19 C22,19 23,18 23,17 C23,16 22,15 20,15 Z" fill="white"/>
+  <path d="M30,12 L42,12 L42,15 L34,15 L34,18 L40,18 L40,21 L34,21 L34,25 L42,25 L42,28 L30,28 Z" fill="white"/>
+  <!-- "MAX" as paths (bottom half) -->
+  <path d="M10,36 L15,36 L19,44 L23,36 L28,36 L28,52 L24,52 L24,41 L20,48 L18,48 L14,41 L14,52 L10,52 Z" fill="white"/>
+  <path d="M31,52 L36,36 L40,36 L45,52 L41,52 L40,49 L36,49 L35,52 Z M37,46 L39,46 L38,41 Z" fill="white"/>
+  <path d="M46,36 L50,36 L53,42 L56,36 L60,36 L55,44 L60,52 L56,52 L53,46 L50,52 L46,52 L51,44 Z" fill="white"/>
+</svg>
