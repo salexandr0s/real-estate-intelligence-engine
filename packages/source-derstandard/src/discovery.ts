@@ -18,14 +18,19 @@ export function parseDiscoveryPage(
 ): DiscoveryPageResult<DerStandardDiscoveryItem> {
   const items: DiscoveryItem<DerStandardDiscoveryItem>[] = [];
 
-  // Match all <a href="/detail/{id}/{slug}...">...</a> card blocks
-  const cardPattern = /<a\s[^>]*href="(\/detail\/(\d+)\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  // Match full <li class="box resultitem ...">...</li> card blocks
+  const cardPattern = /<li\s[^>]*class="[^"]*resultitem[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
   let cardMatch: RegExpExecArray | null;
 
   while ((cardMatch = cardPattern.exec(html)) !== null) {
-    const href = cardMatch[1]!;
-    const id = cardMatch[2]!;
-    const cardBody = cardMatch[3]!;
+    const cardBody = cardMatch[1]!;
+
+    // Extract the detail URL from any <a> linking to /detail/{id}/{slug}
+    const linkMatch = cardBody.match(/href="(\/detail\/(\d+)\/[^"]*)"/i);
+    if (!linkMatch) continue;
+
+    const href = linkMatch[1]!;
+    const id = linkMatch[2]!;
 
     const item = parseCardBody(id, href, cardBody, sourceCode);
     if (item) {
@@ -82,20 +87,24 @@ function parseCardBody(
   const titleMatch = cardBody.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   const titleRaw = titleMatch?.[1]?.trim() ?? null;
 
-  // Extract location+type from <p> (e.g. "1070 Wien Wohnung, Kauf, Sonstige Wohnungen")
-  const locationMatch = cardBody.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  // Extract location from <span class="adress"> (e.g. "1090 Wien")
+  const locationMatch = cardBody.match(/<span\s[^>]*class="adress"[^>]*>([\s\S]*?)<\/span>/i);
   const locationRaw = locationMatch?.[1]?.trim() ?? null;
 
-  // Extract area from span text: "Wohnfläche 87 m²" or "Wohnfläche 52,3 m²"
-  const areaMatch = cardBody.match(/Wohnfl[aä]che\s+([\d.,]+)\s*m/i);
+  // Extract area: "<span>Wohnfläche</span>103 m²" or "Wohnfläche 87 m²"
+  const areaMatch =
+    cardBody.match(/Wohnfl[aä&;#228]che<\/span>\s*([\d.,]+)\s*m/i) ??
+    cardBody.match(/Wohnfl[aä]che\s+([\d.,]+)\s*m/i);
   const areaRaw = areaMatch?.[1] ? normalizeNumericString(areaMatch[1]) : null;
 
-  // Extract rooms from span text: "Zimmer 3"
-  const roomsMatch = cardBody.match(/Zimmer\s+(\d+)/i);
+  // Extract rooms: "<span>Zimmer</span> 3" or "Zimmer 3"
+  const roomsMatch = cardBody.match(/Zimmer<\/span>\s*(\d+)/i) ?? cardBody.match(/Zimmer\s+(\d+)/i);
   const roomsRaw = roomsMatch?.[1] ?? null;
 
-  // Extract price from span text: "Kaufpreis € 460.000"
-  const priceMatch = cardBody.match(/Kaufpreis\s*€?\s*([\d.,]+)/i);
+  // Extract price from span text: "Kaufpreis</span>€ 1.200.000" or "Kaufpreis € 460.000"
+  const priceMatch =
+    cardBody.match(/Kaufpreis<\/span>\s*€?\s*([\d.,]+)/i) ??
+    cardBody.match(/Kaufpreis\s*€?\s*([\d.,]+)/i);
   const priceRaw = priceMatch?.[1] ? normalizePrice(priceMatch[1]) : null;
 
   return {

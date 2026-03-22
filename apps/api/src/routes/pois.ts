@@ -47,7 +47,8 @@ export async function poiRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             categories: {
               type: 'string',
-              description: 'Comma-separated: transit,park,school,police',
+              description:
+                'Comma-separated: ubahn,tram,bus,taxi,park,school,police,fire_station,supermarket,hospital,doctor',
             },
           },
           additionalProperties: false,
@@ -94,7 +95,8 @@ export async function poiRoutes(app: FastifyInstance): Promise<void> {
             },
             categories: {
               type: 'string',
-              description: 'Comma-separated: transit,park,school,police',
+              description:
+                'Comma-separated: ubahn,tram,bus,taxi,park,school,police,fire_station,supermarket,hospital,doctor',
             },
           },
           required: ['lat', 'lon'],

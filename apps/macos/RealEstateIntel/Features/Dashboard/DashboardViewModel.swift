@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Server-side dashboard stats returned by GET /v1/dashboard/stats.
+struct DashboardStats: Codable, Sendable {
+    let totalActive: Int
+    let newToday: Int
+    let highScore70: Int
+}
+
 /// View model for the Dashboard summary screen.
 @MainActor @Observable
 final class DashboardViewModel {
@@ -37,20 +44,25 @@ final class DashboardViewModel {
         errorMessage = nil
 
         do {
-            let allListings = try await client.fetchListings(query: ListingQuery())
-            totalActiveListings = allListings.count
-            newListingsToday = allListings.count(where: {
-                Calendar.current.isDateInToday($0.firstSeenAt)
-            })
-            highScoreCount = allListings.count(where: { ($0.currentScore ?? 0) >= 70 })
-            recentHighScoreListings = allListings
-                .filter { ($0.currentScore ?? 0) >= 60 }
-                .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
+            // Fetch stats, high-score listings, filters, sources in parallel
+            async let statsTask = client.fetchDashboardStats()
+            async let listingsTask = client.fetchListings(
+                query: ListingQuery(minScore: 60, sortBy: "score_desc")
+            )
+            async let filtersTask = client.fetchFilters()
+            async let sourcesTask = client.fetchSources()
 
-            let filters = try await client.fetchFilters()
+            let stats = try await statsTask
+            totalActiveListings = stats.totalActive
+            newListingsToday = stats.newToday
+            highScoreCount = stats.highScore70
+
+            recentHighScoreListings = try await listingsTask
+
+            let filters = try await filtersTask
             activeFilterCount = filters.count(where: { $0.isActive })
 
-            sources = try await client.fetchSources()
+            sources = try await sourcesTask
 
             do {
                 temperatureData = try await client.fetchMarketTemperature()

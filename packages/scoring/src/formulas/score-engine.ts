@@ -7,7 +7,7 @@ import { computeConfidenceScore } from './confidence.js';
 import { computeLocationScore } from './location-score.js';
 import { clamp } from './util.js';
 
-export const SCORE_VERSION = 2;
+export const SCORE_VERSION = 3;
 
 /**
  * Main scoring function. Produces a 0-100 weighted opportunity score.

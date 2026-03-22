@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseDiscoveryPage } from '../discovery.js';
-import { parseDetailPage, detectDetailAvailability, normalizeDecimal, stripHtml, extractIdFromUrl } from '../detail.js';
+import {
+  parseDetailPage,
+  detectDetailAvailability,
+  normalizeDecimal,
+  stripHtml,
+  extractIdFromUrl,
+} from '../detail.js';
 import { FindMyHomeAdapter } from '../adapter.js';
 
 function loadFixture(name: string): string {
@@ -153,7 +159,7 @@ describe('Discovery page parsing', () => {
     });
 
     expect(result.nextPagePlan).not.toBeNull();
-    expect(result.nextPagePlan!.url).toContain('seite=2');
+    expect(result.nextPagePlan!.url).toContain('entry=20');
     expect(result.nextPagePlan!.metadata?.['page']).toBe(2);
   });
 
@@ -366,7 +372,9 @@ describe('stripHtml', () => {
 
 describe('extractIdFromUrl', () => {
   it('extracts ID from slug-ID URL pattern', () => {
-    expect(extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/schoene-wohnung-501234')).toBe('501234');
+    expect(
+      extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/schoene-wohnung-501234'),
+    ).toBe('501234');
   });
 
   it('extracts ID from numeric path segment', () => {
@@ -374,11 +382,15 @@ describe('extractIdFromUrl', () => {
   });
 
   it('handles trailing slash', () => {
-    expect(extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/wohnung-501234/')).toBe('501234');
+    expect(extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/wohnung-501234/')).toBe(
+      '501234',
+    );
   });
 
   it('handles query parameters', () => {
-    expect(extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/wohnung-501234?ref=search')).toBe('501234');
+    expect(
+      extractIdFromUrl('https://www.findmyhome.at/kaufen/wohnung/wien/wohnung-501234?ref=search'),
+    ).toBe('501234');
   });
 
   it('returns null for non-numeric path', () => {

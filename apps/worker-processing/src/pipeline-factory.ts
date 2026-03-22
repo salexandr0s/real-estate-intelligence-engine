@@ -27,6 +27,7 @@ import {
   marketBaselines,
   userFilters,
   alerts,
+  proximity,
 } from '@rei/db';
 import {
   rawSnapshotRate,
@@ -125,6 +126,14 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
       },
       findPreviousPrice: async (listingId) => {
         return listingVersions.findPreviousPrice(listingId);
+      },
+      computeProximity: async (latitude, longitude) => {
+        return proximity.computeProximity(latitude, longitude);
+      },
+      getListingCoordinates: async (listingId) => {
+        const row = await listings.findById(listingId);
+        if (!row || row.latitude == null || row.longitude == null) return null;
+        return { latitude: row.latitude, longitude: row.longitude };
       },
     },
   };

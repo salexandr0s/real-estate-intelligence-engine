@@ -174,8 +174,8 @@ describe('scoreListing integration', () => {
     const result = scoreListing(input, baseline);
     expect(result.overallScore).toBeGreaterThanOrEqual(0);
     expect(result.overallScore).toBeLessThanOrEqual(100);
-    expect(result.scoreVersion).toBe(2);
-    expect(result.explanation).toHaveProperty('scoreVersion', 2);
+    expect(result.scoreVersion).toBe(3);
+    expect(result.explanation).toHaveProperty('scoreVersion', 3);
   });
 
   it('includes baseline info in result', () => {

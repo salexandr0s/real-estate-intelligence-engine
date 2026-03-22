@@ -16,9 +16,10 @@ import { parseDetailPage, detectDetailAvailability } from './detail.js';
 const BASE_URL = 'https://immobilien.derstandard.at';
 const SEARCH_PATH = '/immobiliensuche/i/kaufen/wohnung/wien';
 
-export class DerStandardAdapter
-  implements SourceAdapter<DerStandardDiscoveryItem, DerStandardDetailDTO>
-{
+export class DerStandardAdapter implements SourceAdapter<
+  DerStandardDiscoveryItem,
+  DerStandardDetailDTO
+> {
   readonly sourceCode = 'derstandard';
   readonly sourceName = 'derstandard.at Immobilien';
   readonly parserVersion = 2;
@@ -33,7 +34,7 @@ export class DerStandardAdapter
 
       plans.push({
         url: url.toString(),
-        waitForSelector: '.results-container a[href*="/detail/"]',
+        waitForSelector: '.resultitem a[href*="/detail/"]',
         waitForTimeout: 5000,
         metadata: { page },
       });
@@ -47,9 +48,7 @@ export class DerStandardAdapter
   ): Promise<DiscoveryPageResult<DerStandardDiscoveryItem>> {
     // In live mode, this would use ctx.page (Playwright Page)
     // For fixtures, we support passing HTML content through ctx.requestPlan.metadata
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as
-      | string
-      | undefined;
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as string | undefined;
     if (html) {
       return parseDiscoveryPage(html, ctx.profile.sourceCode, ctx.requestPlan);
     }
@@ -62,20 +61,14 @@ export class DerStandardAdapter
     item: DiscoveryItem<DerStandardDiscoveryItem>,
   ): Promise<RequestPlan | null> {
     return {
-      url: item.detailUrl.startsWith('http')
-        ? item.detailUrl
-        : `${BASE_URL}${item.detailUrl}`,
+      url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
       waitForSelector: '#listing-detail-data',
       waitForTimeout: 5000,
     };
   }
 
-  async extractDetailPage(
-    ctx: DetailContext,
-  ): Promise<DetailCapture<DerStandardDetailDTO>> {
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as
-      | string
-      | undefined;
+  async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<DerStandardDetailDTO>> {
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as string | undefined;
     if (html) {
       return parseDetailPage(html, ctx.requestPlan.url, ctx.sourceCode, this.parserVersion);
     }
@@ -101,9 +94,7 @@ export class DerStandardAdapter
   }
 
   detectAvailability(ctx: DetailContext): SourceAvailability {
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as
-      | string
-      | undefined;
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as string | undefined;
     if (html) {
       return detectDetailAvailability(html);
     }

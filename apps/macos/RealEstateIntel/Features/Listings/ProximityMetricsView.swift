@@ -11,17 +11,64 @@ struct ProximityMetricsView: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             } else {
-                // Nearest transit
-                if let nearest = nearestTransit {
+                // Transit — show nearest of each type
+                if let ubahn = nearest(for: .ubahn) {
                     proximityRow(
                         icon: "tram.fill",
                         color: .blue,
-                        text: walkTimeText(nearest),
-                        detail: nearest.poi.name
+                        text: walkTimeText(ubahn, label: "U-Bahn"),
+                        detail: ubahn.poi.name
+                    )
+                }
+                if let tram = nearest(for: .tram) {
+                    proximityRow(
+                        icon: "cablecar.fill",
+                        color: .cyan,
+                        text: walkTimeText(tram, label: "tram"),
+                        detail: tram.poi.name
+                    )
+                }
+                if let bus = nearest(for: .bus) {
+                    proximityRow(
+                        icon: "bus.fill",
+                        color: .indigo,
+                        text: walkTimeText(bus, label: "bus"),
+                        detail: bus.poi.name
                     )
                 }
 
-                // Parks count
+                // Daily life
+                let marketCount = count(for: .supermarket)
+                if marketCount > 0 {
+                    proximityRow(
+                        icon: "cart.fill",
+                        color: .mint,
+                        text: "\(marketCount) supermarket\(marketCount == 1 ? "" : "s") within 500m",
+                        detail: nil
+                    )
+                }
+
+                let docCount = count(for: .doctor)
+                if docCount > 0 {
+                    proximityRow(
+                        icon: "stethoscope",
+                        color: .purple,
+                        text: "\(docCount) doctor\(docCount == 1 ? "" : "s") within 500m",
+                        detail: nil
+                    )
+                }
+
+                let hospitalCount = nearbyPOIs.filter { $0.poi.category == .hospital && $0.distanceM <= 2000 }.count
+                if hospitalCount > 0 {
+                    proximityRow(
+                        icon: "cross.case.fill",
+                        color: .pink,
+                        text: "Hospital within 2km",
+                        detail: nil
+                    )
+                }
+
+                // Parks
                 let parkCount = count(for: .park)
                 if parkCount > 0 {
                     proximityRow(
@@ -32,7 +79,7 @@ struct ProximityMetricsView: View {
                     )
                 }
 
-                // Schools/kindergartens
+                // Education
                 let eduCount = count(for: .school)
                 if eduCount > 0 {
                     proximityRow(
@@ -43,13 +90,18 @@ struct ProximityMetricsView: View {
                     )
                 }
 
-                // Police
+                // Safety
                 let policeCount = nearbyPOIs.filter { $0.poi.category == .police && $0.distanceM <= 1000 }.count
-                if policeCount > 0 {
+                let fireCount = nearbyPOIs.filter { $0.poi.category == .fireStation && $0.distanceM <= 1000 }.count
+                if policeCount > 0 || fireCount > 0 {
+                    let parts = [
+                        policeCount > 0 ? "\(policeCount) police" : nil,
+                        fireCount > 0 ? "\(fireCount) fire" : nil,
+                    ].compactMap { $0 }.joined(separator: " + ")
                     proximityRow(
                         icon: "shield.fill",
                         color: .gray,
-                        text: "\(policeCount) police station\(policeCount == 1 ? "" : "s") within 1km",
+                        text: "\(parts) within 1km",
                         detail: nil
                     )
                 }
@@ -57,18 +109,17 @@ struct ProximityMetricsView: View {
         }
     }
 
-    private var nearestTransit: (poi: POI, distanceM: Double)? {
-        nearbyPOIs.first { $0.poi.category == .transit }
+    private func nearest(for category: POICategory) -> (poi: POI, distanceM: Double)? {
+        nearbyPOIs.first { $0.poi.category == category }
     }
 
     private func count(for category: POICategory) -> Int {
         nearbyPOIs.filter { $0.poi.category == category && $0.distanceM <= 500 }.count
     }
 
-    private func walkTimeText(_ entry: (poi: POI, distanceM: Double)) -> String {
+    private func walkTimeText(_ entry: (poi: POI, distanceM: Double), label: String) -> String {
         let minutes = max(1, Int(entry.distanceM / 80)) // ~80m per minute walking
-        let typeLabel = entry.poi.subcategory == "u-bahn" ? "U-Bahn" : "transit"
-        return "\(minutes) min walk to \(typeLabel)"
+        return "\(minutes) min walk to \(label)"
     }
 
     private func proximityRow(icon: String, color: Color, text: String, detail: String?) -> some View {

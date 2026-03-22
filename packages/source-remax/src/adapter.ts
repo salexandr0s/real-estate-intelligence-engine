@@ -16,9 +16,7 @@ import { parseDetailPage, detectDetailAvailability } from './detail.js';
 const BASE_URL = 'https://www.remax.at';
 const SEARCH_PATH = '/de/immobilien/immobilien-suchen';
 
-export class RemaxAdapter
-  implements SourceAdapter<RemaxDiscoveryItem, RemaxDetailDTO>
-{
+export class RemaxAdapter implements SourceAdapter<RemaxDiscoveryItem, RemaxDetailDTO> {
   readonly sourceCode = 'remax';
   readonly sourceName = 'RE/MAX Austria';
   readonly parserVersion = 2;
@@ -35,7 +33,7 @@ export class RemaxAdapter
 
       plans.push({
         url: url.toString(),
-        waitForSelector: '.property-card',
+        waitForSelector: '.real-estate-wrapper',
         waitForTimeout: 5000,
         metadata: { page },
       });
@@ -60,9 +58,7 @@ export class RemaxAdapter
     throw new Error('Live Playwright extraction not implemented -- use fixtures for testing');
   }
 
-  async buildDetailRequest(
-    item: DiscoveryItem<RemaxDiscoveryItem>,
-  ): Promise<RequestPlan | null> {
+  async buildDetailRequest(item: DiscoveryItem<RemaxDiscoveryItem>): Promise<RequestPlan | null> {
     // Detail URLs from discovery are already full URLs with id= param
     const url = item.detailUrl.startsWith('http')
       ? item.detailUrl
@@ -75,9 +71,7 @@ export class RemaxAdapter
     };
   }
 
-  async extractDetailPage(
-    ctx: DetailContext,
-  ): Promise<DetailCapture<RemaxDetailDTO>> {
+  async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<RemaxDetailDTO>> {
     const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as
       | string
       | undefined;
@@ -88,9 +82,7 @@ export class RemaxAdapter
     throw new Error('Live Playwright extraction not implemented -- use fixtures for testing');
   }
 
-  deriveSourceListingKey(
-    detail: DetailCapture<RemaxDetailDTO>,
-  ): string {
+  deriveSourceListingKey(detail: DetailCapture<RemaxDetailDTO>): string {
     const id = detail.payload.remaxId || detail.externalId || '';
     return `remax:${id}`;
   }

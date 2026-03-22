@@ -33,7 +33,8 @@ export function parseDiscoveryPage(
   const totalEstimate = extractTotalEstimate(html);
   const hasNextPage = detectNextPage(html);
 
-  const hasMore = hasNextPage || (items.length > 0 && totalEstimate !== null && pageNum * 20 < totalEstimate);
+  const hasMore =
+    hasNextPage || (items.length > 0 && totalEstimate !== null && pageNum * 20 < totalEstimate);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
@@ -128,7 +129,7 @@ function extractId(cardHtml: string): string | null {
   if (hrefMatch?.[1]) return hrefMatch[1];
 
   // General fallback: any link with numeric-only path
-  const anyMatch = cardHtml.match(/href="\/(\d+)(?:\?[^"]*)?"/)
+  const anyMatch = cardHtml.match(/href="\/(\d+)(?:\?[^"]*)?"/);
   if (anyMatch?.[1]) return anyMatch[1];
 
   return null;
@@ -138,9 +139,7 @@ function extractId(cardHtml: string): string | null {
  * Extract title from `<a class="btnHeadlineErgebnisliste">` text.
  */
 function extractTitle(cardHtml: string): string | null {
-  const match = cardHtml.match(
-    /class="btnHeadlineErgebnisliste"[^>]*>([^<]+)</,
-  );
+  const match = cardHtml.match(/class="btnHeadlineErgebnisliste"[^>]*>([^<]+)</);
   if (match?.[1]) return decodeHtmlEntities(match[1].trim());
 
   // Fallback: href before class
@@ -170,7 +169,7 @@ function extractLocation(cardHtml: string): string | null {
  */
 function extractPrice(cardHtml: string): string | null {
   const match = cardHtml.match(
-    /<strong>(?:Kaufpreis|Mieten?)[^<]*<\/strong><br>\s*([\d.,]+)/,
+    /<strong>(?:Kaufpreis|Kauf|Mieten?)[^<]*<\/strong>\s*(?:<br\s*\/?>)?\s*([\d.,]+)/i,
   );
   if (!match?.[1]) return null;
 
@@ -183,7 +182,7 @@ function extractPrice(cardHtml: string): string | null {
  */
 function extractArea(cardHtml: string): string | null {
   const match = cardHtml.match(
-    /<strong>Fl(?:&auml;|\u00e4|ae)che[^<]*<\/strong><br>\s*([\d.,]+)\s*m/i,
+    /<strong>Fl(?:&auml;|\u00e4|ae|&#228;)che[^<]*<\/strong>\s*(?:<br\s*\/?>)?\s*([\d.,]+)\s*m/i,
   );
   if (!match?.[1]) return null;
   return match[1];
@@ -193,9 +192,7 @@ function extractArea(cardHtml: string): string | null {
  * Extract rooms from `<strong>Zimmer:</strong><br>{X}`.
  */
 function extractRooms(cardHtml: string): string | null {
-  const match = cardHtml.match(
-    /<strong>Zimmer[^<]*<\/strong><br>\s*([\d.,]+)/,
-  );
+  const match = cardHtml.match(/<strong>Zimmer[^<]*<\/strong>\s*(?:<br\s*\/?>)?\s*([\d.,]+)/i);
   if (!match?.[1]) return null;
   return match[1];
 }
@@ -217,13 +214,13 @@ function extractTotalEstimate(html: string): number | null {
  * Detect if a next page link exists by looking for `seite=` pagination links.
  */
 function detectNextPage(html: string): boolean {
-  return /[?&]seite=\d+/.test(html);
+  return /[?&](?:seite|entry)=\d+/.test(html) || /class="pagination"/.test(html);
 }
 
-/** Build next page URL using the `seite` query parameter. */
+/** Build next page URL using the `entry` offset parameter (20 items per page). */
 function buildNextPageUrl(currentUrl: string, nextPage: number): string {
   const parsed = new URL(currentUrl);
-  parsed.searchParams.set('seite', String(nextPage));
+  parsed.searchParams.set('entry', String((nextPage - 1) * 20));
   return parsed.toString();
 }
 

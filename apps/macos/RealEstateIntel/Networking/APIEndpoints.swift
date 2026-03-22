@@ -54,6 +54,10 @@ enum APIEndpoint {
     case getFeedback(listingId: Int)
     case deleteFeedback(listingId: Int)
 
+    // MARK: - Dashboard
+
+    case getDashboardStats
+
     // MARK: - Analytics
 
     case getBaselines
@@ -93,6 +97,7 @@ enum APIEndpoint {
         case .submitFeedback: "/v1/feedback"
         case .getFeedback(let listingId): "/v1/feedback/\(listingId)"
         case .deleteFeedback(let listingId): "/v1/feedback/\(listingId)"
+        case .getDashboardStats: "/v1/dashboard/stats"
         case .getBaselines: "/v1/analytics/baselines"
         case .getDistrictTrends: "/v1/analytics/district-trends"
         case .getMarketTemperature: "/v1/analytics/market-temperature"
@@ -104,6 +109,7 @@ enum APIEndpoint {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources, .getListingCluster, .listScrapeRuns,
              .listSavedListings, .checkSavedListings, .exportSavedListings, .exportListings,
+             .getDashboardStats,
              .getBaselines, .getDistrictTrends, .getMarketTemperature,
              .getFeedback:
             "GET"

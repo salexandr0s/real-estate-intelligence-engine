@@ -20,16 +20,14 @@ describe('DerStandardAdapter', () => {
 
   it('canonicalizes URLs correctly', () => {
     expect(
-      adapter.canonicalizeUrl(
-        'https://immobilien.derstandard.at/detail/15086452/slug?ref=search',
-      ),
+      adapter.canonicalizeUrl('https://immobilien.derstandard.at/detail/15086452/slug?ref=search'),
     ).toBe('https://immobilien.derstandard.at/detail/15086452/slug');
   });
 
   it('strips trailing slash during canonicalization', () => {
-    expect(
-      adapter.canonicalizeUrl('https://immobilien.derstandard.at/detail/15086452/slug/'),
-    ).toBe('https://immobilien.derstandard.at/detail/15086452/slug');
+    expect(adapter.canonicalizeUrl('https://immobilien.derstandard.at/detail/15086452/slug/')).toBe(
+      'https://immobilien.derstandard.at/detail/15086452/slug',
+    );
   });
 
   it('derives source listing key', () => {
@@ -64,7 +62,7 @@ describe('DerStandardAdapter', () => {
       sourceCode: 'derstandard',
       maxPages: 1,
     });
-    expect(plans[0]!.waitForSelector).toBe('.results-container a[href*="/detail/"]');
+    expect(plans[0]!.waitForSelector).toBe('.resultitem a[href*="/detail/"]');
   });
 
   it('builds detail request from discovery item', async () => {
@@ -77,7 +75,7 @@ describe('DerStandardAdapter', () => {
         detailUrl: '/detail/15086452/slug',
         titleRaw: 'Test',
         priceRaw: '460000',
-        locationRaw: '1070 Wien Wohnung, Kauf, Sonstige Wohnungen',
+        locationRaw: '1070 Wien',
         roomsRaw: '3',
         areaRaw: '87',
       },
@@ -125,9 +123,7 @@ describe('Discovery page parsing', () => {
       'Innenhof-Idylle nur wenige Schritte zur Neubaugasse - A',
     );
     expect(first.summaryPayload.priceRaw).toBe('460000');
-    expect(first.summaryPayload.locationRaw).toBe(
-      '1070 Wien Wohnung, Kauf, Sonstige Wohnungen',
-    );
+    expect(first.summaryPayload.locationRaw).toBe('1070 Wien');
     expect(first.summaryPayload.roomsRaw).toBe('3');
     expect(first.summaryPayload.areaRaw).toBe('87');
     expect(first.detailUrl).toBe(
@@ -222,13 +218,15 @@ describe('Discovery page parsing', () => {
 
   it('returns no next page when there is no pagination link', () => {
     const html = `<html><body>
-      <a href="/detail/99999/test-listing">
-        <h2>Test Listing</h2>
-        <p>1010 Wien Wohnung, Kauf</p>
-        <span>Wohnfläche 50 m²</span>
-        <span>Zimmer 2</span>
-        <span>Kaufpreis € 300.000</span>
-      </a>
+      <li class="box resultitem">
+        <a href="/detail/99999/test-listing">
+          <h2>Test Listing</h2>
+          <span class="adress">1010 Wien</span>
+          <span>Wohnfläche</span>50 m²
+          <span>Zimmer</span> 2
+          <span>Kaufpreis</span>€ 300.000
+        </a>
+      </li>
     </body></html>`;
     const result = parseDiscoveryPage(html, 'derstandard', {
       url: 'https://immobilien.derstandard.at/immobiliensuche?page=1',
@@ -328,9 +326,7 @@ describe('Detail page parsing — DOM fallback (real HTML format)', () => {
       'derstandard',
       2,
     );
-    expect(result.canonicalUrl).toBe(
-      'https://immobilien.derstandard.at/detail/15086452/slug',
-    );
+    expect(result.canonicalUrl).toBe('https://immobilien.derstandard.at/detail/15086452/slug');
   });
 });
 

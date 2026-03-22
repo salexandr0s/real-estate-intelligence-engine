@@ -25,9 +25,7 @@ describe('RemaxAdapter', () => {
       adapter.canonicalizeUrl(
         'https://www.remax.at/de/immobilien/wohnung-kaufen-wien-leopoldstadt/id350755?ref=search&utm=abc',
       ),
-    ).toBe(
-      'https://www.remax.at/de/immobilien/wohnung-kaufen-wien-leopoldstadt/id350755',
-    );
+    ).toBe('https://www.remax.at/de/immobilien/wohnung-kaufen-wien-leopoldstadt/id350755');
   });
 
   it('canonicalizes query-param URLs keeping only id', () => {
@@ -35,15 +33,13 @@ describe('RemaxAdapter', () => {
       adapter.canonicalizeUrl(
         'https://www.remax.at/index.php?page=objekt&t=1&srid=-1&s=1&id=350755&p=1&lang=de',
       ),
-    ).toBe(
-      'https://www.remax.at/index.php?id=350755',
-    );
+    ).toBe('https://www.remax.at/index.php?id=350755');
   });
 
   it('removes trailing slash from canonical URL', () => {
-    expect(
-      adapter.canonicalizeUrl('https://www.remax.at/de/immobilien/id350755/'),
-    ).toBe('https://www.remax.at/de/immobilien/id350755');
+    expect(adapter.canonicalizeUrl('https://www.remax.at/de/immobilien/id350755/')).toBe(
+      'https://www.remax.at/de/immobilien/id350755',
+    );
   });
 
   it('derives source listing key from detail capture', () => {
@@ -69,7 +65,7 @@ describe('RemaxAdapter', () => {
     expect(plans[0]!.url).toContain('page=1');
     expect(plans[1]!.url).toContain('page=2');
     expect(plans[2]!.url).toContain('page=3');
-    expect(plans[0]!.waitForSelector).toBe('.property-card');
+    expect(plans[0]!.waitForSelector).toBe('.real-estate-wrapper');
   });
 
   it('builds detail request from discovery item', async () => {
@@ -147,7 +143,7 @@ describe('Discovery page parsing', () => {
     expect(payload.roomsRaw).toBe('3');
     expect(payload.areaRaw).toBe('68.7');
     expect(payload.agentName).toBe('Maria Huber');
-    expect(payload.agentCompany).toBe('RE/MAX Donaustadt');
+    expect(payload.agentCompany).toBeNull();
   });
 
   it('extracts fields from second and third items', () => {
@@ -170,15 +166,14 @@ describe('Discovery page parsing', () => {
     expect(third.summaryPayload.areaRaw).toBe('95.2');
   });
 
-  it('builds next page plan when items exist', () => {
+  it('returns null nextPagePlan (all results on one page)', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'remax', {
       url: 'https://www.remax.at/de/immobilien/immobilien-suchen?page=1',
       metadata: { page: 1 },
     });
 
-    expect(result.nextPagePlan).not.toBeNull();
-    expect(result.nextPagePlan!.url).toContain('page=2');
+    expect(result.nextPagePlan).toBeNull();
   });
 
   it('returns null nextPagePlan when no items found', () => {
@@ -193,7 +188,7 @@ describe('Discovery page parsing', () => {
     expect(result.totalEstimate).toBeNull();
   });
 
-  it('extracts id from URL query parameters', () => {
+  it('extracts id from data-id attribute', () => {
     const html = loadFixture('discovery-page.html');
     const result = parseDiscoveryPage(html, 'remax', {
       url: 'https://www.remax.at/de/immobilien/immobilien-suchen?page=1',
@@ -378,9 +373,7 @@ describe('Detail page parsing', () => {
       'remax',
       2,
     );
-    expect(result.canonicalUrl).toBe(
-      'https://www.remax.at/index.php',
-    );
+    expect(result.canonicalUrl).toBe('https://www.remax.at/index.php');
   });
 });
 

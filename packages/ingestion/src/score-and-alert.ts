@@ -2,6 +2,7 @@ import type {
   AlertCreate,
   AlertType,
   BaselineLookup,
+  ProximityInput,
   ScoreInput,
   ScoreResult,
   VersionReason,
@@ -62,6 +63,12 @@ export interface ScoreAndAlertDeps {
   createAlert: (alert: AlertCreate) => Promise<{ id: number } | null>;
 
   findPreviousPrice: (listingId: number) => Promise<number | null>;
+
+  computeProximity: (latitude: number, longitude: number) => Promise<ProximityInput>;
+
+  getListingCoordinates: (
+    listingId: number,
+  ) => Promise<{ latitude: number; longitude: number } | null>;
 }
 
 export class ScoreAndAlert {
@@ -123,6 +130,20 @@ export class ScoreAndAlert {
 
     const relistDetected = versionReason === 'relist_detected';
 
+    // 2b. Compute proximity data for location score
+    let proximityData: ProximityInput | null = null;
+    const coords = await this.deps.getListingCoordinates(listingId);
+    if (coords) {
+      try {
+        proximityData = await this.deps.computeProximity(coords.latitude, coords.longitude);
+      } catch (err) {
+        log.warn('Proximity computation failed, using default', {
+          listingId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     // 3. Score
     const scoreInput: ScoreInput = {
       listingId,
@@ -143,6 +164,7 @@ export class ScoreAndAlert {
       locationConfidence: params.locationConfidence,
       recentPriceDropPct,
       relistDetected,
+      proximityData,
     };
 
     const score = this.deps.scoreListing(scoreInput, baseline);

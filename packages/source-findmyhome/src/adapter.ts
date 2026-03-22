@@ -19,11 +19,12 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.findmyhome.at';
-const SEARCH_PATH = '/immobiliensuche';
+const SEARCH_PATH = '/immo/wohnung-kaufen/wien';
 
-export class FindMyHomeAdapter
-  implements SourceAdapter<FindMyHomeDiscoveryItem, FindMyHomeDetailDTO>
-{
+export class FindMyHomeAdapter implements SourceAdapter<
+  FindMyHomeDiscoveryItem,
+  FindMyHomeDetailDTO
+> {
   readonly sourceCode = 'findmyhome';
   readonly sourceName = 'findmyhome.at';
   readonly parserVersion = 2;
@@ -34,9 +35,9 @@ export class FindMyHomeAdapter
 
     for (let page = 1; page <= maxPages; page++) {
       const url = new URL(SEARCH_PATH, BASE_URL);
-      url.searchParams.set('seite', String(page));
-      if (profile.regions?.length) {
-        url.searchParams.set('region', profile.regions[0]!);
+      if (page > 1) {
+        // findmyhome uses entry= offset (20 items per page)
+        url.searchParams.set('entry', String((page - 1) * 20));
       }
 
       plans.push({

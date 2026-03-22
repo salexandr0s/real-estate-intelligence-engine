@@ -456,7 +456,7 @@ export async function searchListings(
     LIMIT $${limitParamIndex}
   `;
 
-  const params: unknown[] = [
+  const filterParams: unknown[] = [
     filter.operationType ?? null,
     filter.propertyTypes && filter.propertyTypes.length > 0 ? filter.propertyTypes : null,
     filter.districts && filter.districts.length > 0 ? filter.districts : null,
@@ -467,12 +467,38 @@ export async function searchListings(
     filter.minRooms ?? null,
     filter.maxRooms ?? null,
     filter.minScore ?? null,
+  ];
+
+  const params: unknown[] = [
+    ...filterParams,
     ...cursorParams,
     limit + 1, // Fetch one extra to detect hasMore
   ];
 
-  const rows = await query<ListingSearchDbRow>(sql, params);
+  // Run data query and count query in parallel
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM listings l
+    WHERE l.listing_status = 'active'
+      AND l.district_no IS NOT NULL
+      AND ($1::text IS NULL OR l.operation_type = $1)
+      AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR l.property_type = ANY($2))
+      AND (COALESCE(array_length($3::smallint[], 1), 0) = 0 OR l.district_no = ANY($3))
+      AND ($4::bigint IS NULL OR l.list_price_eur_cents >= $4)
+      AND ($5::bigint IS NULL OR l.list_price_eur_cents <= $5)
+      AND ($6::numeric IS NULL OR l.living_area_sqm >= $6)
+      AND ($7::numeric IS NULL OR l.living_area_sqm <= $7)
+      AND ($8::numeric IS NULL OR l.rooms >= $8)
+      AND ($9::numeric IS NULL OR l.rooms <= $9)
+      AND ($10::numeric IS NULL OR l.current_score >= $10)
+  `;
 
+  const [rows, countRows] = await Promise.all([
+    query<ListingSearchDbRow>(sql, params),
+    query<{ total: string }>(countSql, filterParams),
+  ]);
+
+  const totalCount = Number(countRows[0]?.total ?? 0);
   const hasMore = rows.length > limit;
   const resultRows = hasMore ? rows.slice(0, limit) : rows;
   const data = resultRows.map(toListingSearchResult);
@@ -488,6 +514,7 @@ export async function searchListings(
     meta: {
       nextCursor,
       pageSize: limit,
+      totalCount,
     },
   };
 }

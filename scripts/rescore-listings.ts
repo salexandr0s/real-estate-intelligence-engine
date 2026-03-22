@@ -13,6 +13,7 @@ import {
   listingScores,
   listingVersions,
   marketBaselines,
+  proximity,
   closePool,
 } from '@rei/db';
 import { scoreListing, SCORE_VERSION } from '@rei/scoring';
@@ -66,6 +67,8 @@ interface ListingRow {
   first_seen_at: Date;
   last_price_change_at: Date | null;
   current_score: string | null;
+  latitude: string | null;
+  longitude: string | null;
 }
 
 async function main(): Promise<void> {
@@ -102,7 +105,7 @@ async function main(): Promise<void> {
     `SELECT id, title, description, operation_type, property_type,
             district_no, city, list_price_eur_cents, living_area_sqm,
             usable_area_sqm, rooms, completeness_score, first_seen_at,
-            last_price_change_at, current_score
+            last_price_change_at, current_score, latitude, longitude
      FROM listings
      WHERE ${whereClause}
      ${limitClause}`,
@@ -146,6 +149,18 @@ async function main(): Promise<void> {
         fallbackLevel: baseline.fallbackLevel,
       };
 
+      // Compute proximity data for location score
+      const lat = row.latitude != null ? Number(row.latitude) : null;
+      const lon = row.longitude != null ? Number(row.longitude) : null;
+      let proximityData = null;
+      if (lat != null && lon != null) {
+        try {
+          proximityData = await proximity.computeProximity(lat, lon);
+        } catch {
+          // Proximity failure is non-fatal — location score will default to 50
+        }
+      }
+
       const input: ScoreInput = {
         listingId: row.id,
         listingVersionId: 0,
@@ -165,6 +180,7 @@ async function main(): Promise<void> {
         completenessScore: Number(row.completeness_score),
         sourceHealthScore: 90,
         locationConfidence: 75,
+        proximityData,
       };
 
       const score = scoreListing(input, bl);

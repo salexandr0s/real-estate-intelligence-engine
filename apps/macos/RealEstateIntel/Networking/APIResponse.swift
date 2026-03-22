@@ -11,6 +11,7 @@ struct APIResponse<T: Codable & Sendable>: Codable, Sendable {
 struct APIResponseMeta: Codable, Sendable {
     let nextCursor: String?
     let pageSize: Int?
+    let totalCount: Int?
 }
 
 /// Paginated list response.

@@ -284,10 +284,9 @@ struct ListingsMapView: View {
             Image(systemName: "map")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.primary)
-                .frame(width: 36, height: 36)
         }
         .menuStyle(.borderlessButton)
-        .fixedSize()
+        .frame(width: 36, height: 36)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
         .help("Map Style")
@@ -306,17 +305,28 @@ struct ListingsMapView: View {
         .buttonStyle(.plain)
         .help("Points of Interest")
         .popover(isPresented: $showPOIPicker, arrowEdge: .leading) {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(POICategory.allCases, id: \.self) { category in
-                    Toggle(isOn: poiCategoryBinding(for: category)) {
-                        Label(category.displayName, systemImage: category.systemImage)
-                            .font(.system(size: 12))
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(POICategoryGroup.allCases, id: \.self) { group in
+                    if group != POICategoryGroup.allCases.first {
+                        Divider().padding(.vertical, 2)
                     }
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
+
+                    Text(group.displayName)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+
+                    ForEach(group.categories, id: \.self) { category in
+                        Toggle(isOn: poiCategoryBinding(for: category)) {
+                            Label(category.displayName, systemImage: category.systemImage)
+                                .font(.system(size: 12))
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
                 }
 
-                Divider()
+                Divider().padding(.vertical, 2)
 
                 Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
                     if activePOICategories.count == POICategory.allCases.count {

@@ -4,11 +4,15 @@ import type { RemaxDiscoveryItem } from './dto.js';
 const BASE_URL = 'https://www.remax.at';
 
 /**
- * RE/MAX Austria serves discovery pages with HTML property cards.
- * There is no embedded JSON for listings -- the real site uses
- * `<div class="property-card">` elements with HTMX lazy loading.
+ * RE/MAX Austria serves discovery pages with `<div class="real-estate-wrapper">`
+ * card elements. Each card contains:
+ * - Title in `.inner.inner-h4 h2.h4`
+ * - Detail URL in the first `<a href="...id=NNNNN...">`
+ * - Price/rooms/area in `div.d-flex.flex-column` groups with label spans
+ * - Location in `span.inner-title-info` with `Lage:` label
+ * - Listing ID in `a.favorite-button-little[data-id]`
  *
- * Exclusive (login-walled) cards have class "exclusive" and are skipped.
+ * Exclusive (MyRE/MAX only) cards are skipped — they have hidden price/details.
  */
 
 export function parseDiscoveryPage(
@@ -18,65 +22,65 @@ export function parseDiscoveryPage(
 ): DiscoveryPageResult<RemaxDiscoveryItem> {
   const items: DiscoveryItem<RemaxDiscoveryItem>[] = [];
 
-  // Match all property-card divs. Use a regex that captures the full block.
-  // We iterate over card blocks and skip those with the "exclusive" class.
-  const cards = splitPropertyCards(html);
+  const cards = splitCards(html);
 
   for (const card of cards) {
-    // Skip exclusive listings (login-walled)
-    if (/class="property-card\s+exclusive"/.test(card) || /class="property-card exclusive"/.test(card)) {
-      continue;
+    // Skip exclusive/login-walled listings
+    if (/Exklusiv\s+f[uü]r\s+MyRE/i.test(card)) continue;
+
+    // Extract listing ID from data-id attribute
+    const dataIdMatch = card.match(/data-id="(\d+)"/);
+    const remaxId = dataIdMatch?.[1] ?? null;
+
+    // Extract detail URL from first anchor with id= param
+    const hrefMatch = card.match(/<a\s[^>]*href="([^"]*[?&]id=\d+[^"]*)"/);
+    if (!hrefMatch?.[1] || !remaxId) continue;
+
+    const href = hrefMatch[1].replace(/&amp;/g, '&');
+
+    // Extract title from h2.h4
+    const titleMatch = card.match(/<h2\s[^>]*class="h4"[^>]*>([\s\S]*?)<\/h2>/);
+    const titleRaw = titleMatch?.[1]
+      ? decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '').trim())
+      : null;
+
+    // Extract rooms, area, price from flex columns
+    // Pattern: <span>{value}</span><span class="small">{label}</span>
+    const flexCols = [...card.matchAll(/<div\s+class="d-flex flex-column">([\s\S]*?)<\/div>/gi)];
+    let roomsRaw: string | null = null;
+    let areaRaw: string | null = null;
+    let priceRaw: string | null = null;
+
+    for (const col of flexCols) {
+      const colHtml = col[1] ?? '';
+      const label =
+        colHtml
+          .match(/<span\s+class="small">([\s\S]*?)<\/span>/i)?.[1]
+          ?.replace(/<[^>]+>/g, '')
+          .trim()
+          .toLowerCase() ?? '';
+      const valueSpan = colHtml.match(/<span>([^<]*)<\/span>/)?.[1]?.trim() ?? '';
+
+      if (label.includes('zimmer')) {
+        roomsRaw = valueSpan.match(/(\d+)/)?.[1] ?? null;
+      } else if (label.includes('wohnfl') || label.includes('fl')) {
+        const areaMatch = valueSpan.match(/([\d.,]+)\s*m/);
+        areaRaw = areaMatch?.[1]?.replace(',', '.') ?? null;
+      } else if (label.includes('kaufpreis') || label.includes('miete')) {
+        const priceMatch = valueSpan.match(/EUR\s*([\d.,]+)/i) ?? valueSpan.match(/([\d.,]+)/);
+        priceRaw = priceMatch?.[1]?.replace(/\./g, '').replace(',', '') ?? null;
+      }
     }
 
-    // Extract URL and id from the <a href="...id=NNNNN...">
-    const hrefMatch = card.match(/<a\s+href="([^"]+)"/);
-    if (!hrefMatch?.[1]) continue;
+    // Extract location from inner-title-info span with "Lage:"
+    const locationMatch = card.match(/Lage:<\/strong>\s*([\s\S]*?)<\/span>/i);
+    const locationRaw = locationMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? null;
 
-    const href = hrefMatch[1];
-    const idMatch = href.match(/[?&]id=(\d+)/);
-    if (!idMatch?.[1]) continue;
+    // Extract agent from broker-wrapper
+    const agentNameMatch = card.match(/<a\s[^>]*rel="author"[^>]*>([\s\S]*?)<\/a>/);
+    const agentName = agentNameMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? null;
 
-    const remaxId = idMatch[1];
-
-    // Extract title from <h3>
-    const titleMatch = card.match(/<h3>([\s\S]*?)<\/h3>/);
-    const titleRaw = titleMatch?.[1]
-      ? decodeHtmlEntities(titleMatch[1].trim())
-      : null;
-
-    // Extract rooms from <span class="rooms">
-    const roomsSpanMatch = card.match(/<span\s+class="rooms">([\s\S]*?)<\/span>/);
-    const roomsText = roomsSpanMatch?.[1] ?? '';
-    const roomsNumMatch = roomsText.match(/(\d+)\s*Zimmer/);
-    const roomsRaw = roomsNumMatch?.[1] ?? null;
-
-    // Extract area from <span class="area">
-    const areaSpanMatch = card.match(/<span\s+class="area">([\s\S]*?)<\/span>/);
-    const areaText = areaSpanMatch?.[1] ?? '';
-    const areaNumMatch = areaText.match(/(\d+[.,]?\d*)m/);
-    const areaRaw = areaNumMatch?.[1]
-      ? areaNumMatch[1].replace(',', '.')
-      : null;
-
-    // Extract price from <span class="price">
-    const priceSpanMatch = card.match(/<span\s+class="price">([\s\S]*?)<\/span>/);
-    const priceText = priceSpanMatch?.[1] ?? '';
-    const priceNumMatch = priceText.match(/EUR\s*([\d.,]+)/);
-    const priceRaw = priceNumMatch?.[1]
-      ? priceNumMatch[1].replace(/\./g, '').replace(',', '')
-      : null;
-
-    // Extract agent info from .agent-info spans
-    const agentBlockMatch = card.match(/<div\s+class="agent-info">([\s\S]*?)<\/div>/);
-    const agentBlock = agentBlockMatch?.[1] ?? '';
-    const agentSpans = [...agentBlock.matchAll(/<span>([\s\S]*?)<\/span>/g)];
-    const agentName = agentSpans[0]?.[1]?.trim() ?? null;
-    const agentCompany = agentSpans[1]?.[1]?.trim() ?? null;
-
-    // Build detail URL
-    const detailUrl = href.startsWith('http')
-      ? href
-      : `${BASE_URL}${href}`;
+    const detailUrl = href.startsWith('http') ? href : `${BASE_URL}${href}`;
 
     items.push({
       detailUrl,
@@ -89,52 +93,39 @@ export function parseDiscoveryPage(
         detailUrl,
         titleRaw,
         priceRaw,
-        locationRaw: null, // Not available in card HTML; resolved from detail page
+        locationRaw,
         roomsRaw,
         areaRaw,
         agentName,
-        agentCompany,
+        agentCompany: null,
       },
     });
   }
 
   const pageNum = Number(requestPlan.metadata?.['page']) || 1;
 
-  // RE/MAX uses HTMX lazy loading -- no traditional pagination data in HTML.
-  // The caller (worker) handles pagination via scroll/HTMX triggers.
-  // We signal "has more" if we found any items (the worker will attempt next page).
-  const nextPagePlan: RequestPlan | null =
-    items.length > 0
-      ? {
-          ...requestPlan,
-          url: requestPlan.url.replace(/page=\d+/, `page=${pageNum + 1}`),
-          metadata: { ...requestPlan.metadata, page: pageNum + 1 },
-        }
-      : null;
-
+  // RE/MAX shows all results on one page (no traditional pagination).
+  // Signal no more pages.
   return {
     items,
-    nextPagePlan,
-    totalEstimate: null, // Not available in HTML cards
+    nextPagePlan: null,
+    totalEstimate: null,
     pageNumber: pageNum,
   };
 }
 
 /**
- * Split the HTML into individual property-card blocks.
- * Each block starts with `<div class="property-card` and includes
- * nested content up to the closing boundary.
+ * Split HTML into individual real-estate-wrapper card blocks.
  */
-function splitPropertyCards(html: string): string[] {
+function splitCards(html: string): string[] {
   const cards: string[] = [];
-  const marker = '<div class="property-card';
+  const marker = '<div class="real-estate-wrapper';
   let searchFrom = 0;
 
   while (true) {
     const start = html.indexOf(marker, searchFrom);
     if (start === -1) break;
 
-    // Find the next card start or end of document
     const nextStart = html.indexOf(marker, start + marker.length);
     const end = nextStart === -1 ? html.length : nextStart;
     cards.push(html.slice(start, end));

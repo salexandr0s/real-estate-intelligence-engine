@@ -207,6 +207,12 @@ actor APIClient {
         return response.data
     }
 
+    /// Fetch dashboard summary stats (total active, new today, high score) in one call.
+    func fetchDashboardStats() async throws -> DashboardStats {
+        let data = try await requestRawData(.getDashboardStats)
+        return try decoder.decode(DashboardStats.self, from: data)
+    }
+
     func fetchScoreExplanation(listingId: Int) async throws -> ScoreExplanation {
         let response: APIResponse<ScoreExplanation> = try await request(
             .getScoreExplanation(listingId: listingId)

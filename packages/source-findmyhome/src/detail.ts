@@ -14,86 +14,78 @@ export function parseDetailPage(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<FindMyHomeDetailDTO> {
+  // Try JSON-LD first (legacy), then fall back to DOM extraction
   const apartment = extractApartmentLd(html);
+  const findmyhomeId = apartment?.identifier ?? extractIdFromUrl(url) ?? '';
 
-  if (!apartment) {
+  let payload: FindMyHomeDetailDTO;
+
+  if (apartment) {
+    // JSON-LD path (legacy)
+    const address = apartment.address;
+    const geo = apartment.geo;
+    const images: string[] = [];
+    if (apartment.photo) {
+      for (const photo of apartment.photo) {
+        if (photo.contentUrl) images.push(photo.contentUrl);
+      }
+    }
+    const amenities = (apartment.amenityFeature ?? []).map((a) => a.name);
+    const hasBalcony = amenities.some((a) => /balkon/i.test(a));
+    const hasElevator = amenities.some((a) => /lift|aufzug/i.test(a));
+    const additionalProps = new Map<string, string>();
+    if (apartment.additionalProperty) {
+      for (const prop of apartment.additionalProperty) {
+        additionalProps.set(prop.name, prop.value);
+      }
+    }
+    payload = {
+      findmyhomeId,
+      titleRaw: apartment.name ?? null,
+      descriptionRaw: apartment.description ? stripHtml(apartment.description) : null,
+      priceRaw: apartment.offers?.price ?? null,
+      livingAreaRaw: normalizeDecimal(apartment.floorSize?.value ?? null),
+      usableAreaRaw: null,
+      roomsRaw: apartment.numberOfRooms ?? null,
+      addressRaw: address
+        ? [address.streetAddress, address.postalCode, address.addressLocality]
+            .filter(Boolean)
+            .join(', ')
+        : null,
+      postalCodeRaw: address?.postalCode ?? null,
+      districtRaw: address?.addressRegion ?? null,
+      cityRaw: address?.addressLocality ?? null,
+      federalStateRaw: null,
+      floorRaw: additionalProps.get('Stockwerk') ?? null,
+      yearBuiltRaw: apartment.yearBuilt ?? null,
+      propertyTypeRaw:
+        apartment['@type'] === 'Apartment' ? 'Wohnung' : (apartment['@type'] ?? null),
+      operationTypeRaw: 'sale',
+      statusRaw: 'active',
+      heatingTypeRaw: additionalProps.get('Heizung') ?? null,
+      conditionRaw: additionalProps.get('Zustand') ?? null,
+      energyCertificateRaw: additionalProps.get('Energieklasse') ?? null,
+      balconyAreaRaw: null,
+      terraceAreaRaw: null,
+      gardenAreaRaw: null,
+      commissionRaw: additionalProps.get('Provision') ?? null,
+      operatingCostRaw: additionalProps.get('Betriebskosten') ?? null,
+      reserveFundRaw: null,
+      latRaw: geo?.latitude ?? null,
+      lonRaw: geo?.longitude ?? null,
+      attributesRaw: { amenities, hasBalcony, hasElevator, ...Object.fromEntries(additionalProps) },
+      mediaRaw: [],
+      images,
+      contactName: apartment.contactPoint?.name ?? null,
+    };
+  } else {
+    // DOM fallback — extract from HTML table rows and OG meta tags
+    payload = extractFromDom(html, findmyhomeId);
+  }
+
+  if (!payload.titleRaw) {
     return buildFailedCapture(url, sourceCode, parserVersion);
   }
-
-  const findmyhomeId = apartment.identifier ?? extractIdFromUrl(url) ?? '';
-  const address = apartment.address;
-  const geo = apartment.geo;
-
-  // Extract images from photo array
-  const images: string[] = [];
-  if (apartment.photo) {
-    for (const photo of apartment.photo) {
-      if (photo.contentUrl) images.push(photo.contentUrl);
-    }
-  }
-
-  // Extract amenity features
-  const amenities = (apartment.amenityFeature ?? []).map((a) => a.name);
-  const hasBalcony = amenities.some((a) => /balkon/i.test(a));
-  const hasElevator = amenities.some((a) => /lift|aufzug/i.test(a));
-
-  // Extract additional properties (heating, energy cert, condition, operating costs)
-  const additionalProps = new Map<string, string>();
-  if (apartment.additionalProperty) {
-    for (const prop of apartment.additionalProperty) {
-      additionalProps.set(prop.name, prop.value);
-    }
-  }
-
-  // Extract contact info
-  const contactName = apartment.contactPoint?.name ?? null;
-
-  // Build district from address region
-  const districtRaw = address?.addressRegion ?? null;
-
-  const payload: FindMyHomeDetailDTO = {
-    findmyhomeId,
-    titleRaw: apartment.name ?? null,
-    descriptionRaw: apartment.description ? stripHtml(apartment.description) : null,
-    priceRaw: apartment.offers?.price ?? null,
-    livingAreaRaw: normalizeDecimal(apartment.floorSize?.value ?? null),
-    usableAreaRaw: null,
-    roomsRaw: apartment.numberOfRooms ?? null,
-    addressRaw: address
-      ? [address.streetAddress, address.postalCode, address.addressLocality]
-          .filter(Boolean)
-          .join(', ')
-      : null,
-    postalCodeRaw: address?.postalCode ?? null,
-    districtRaw,
-    cityRaw: address?.addressLocality ?? null,
-    federalStateRaw: null,
-    floorRaw: additionalProps.get('Stockwerk') ?? null,
-    yearBuiltRaw: apartment.yearBuilt ?? null,
-    propertyTypeRaw: apartment['@type'] === 'Apartment' ? 'Wohnung' : apartment['@type'] ?? null,
-    operationTypeRaw: 'sale',
-    statusRaw: 'active',
-    heatingTypeRaw: additionalProps.get('Heizung') ?? null,
-    conditionRaw: additionalProps.get('Zustand') ?? null,
-    energyCertificateRaw: additionalProps.get('Energieklasse') ?? null,
-    balconyAreaRaw: null,
-    terraceAreaRaw: null,
-    gardenAreaRaw: null,
-    commissionRaw: additionalProps.get('Provision') ?? null,
-    operatingCostRaw: additionalProps.get('Betriebskosten') ?? null,
-    reserveFundRaw: null,
-    latRaw: geo?.latitude ?? null,
-    lonRaw: geo?.longitude ?? null,
-    attributesRaw: {
-      amenities,
-      hasBalcony,
-      hasElevator,
-      ...Object.fromEntries(additionalProps),
-    },
-    mediaRaw: [],
-    images,
-    contactName,
-  };
 
   return {
     sourceCode,
@@ -165,9 +157,14 @@ export function detectDetailAvailability(html: string): SourceAvailability {
     return { status: 'reserved' };
   }
 
-  // Check if there is a valid JSON-LD Apartment block — if so, listing is available
+  // Check if there is a valid JSON-LD Apartment block or price indicator — if so, listing is available
   const apartment = extractApartmentLd(html);
   if (apartment) {
+    return { status: 'available' };
+  }
+
+  // DOM-based: check for price or listing header
+  if (/class="immo_header_value"/i.test(html) || /<h1[^>]*>.*<\/h1>/i.test(html)) {
     return { status: 'available' };
   }
 
@@ -177,6 +174,99 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   }
 
   return { status: 'unknown' };
+}
+
+// ── DOM fallback extraction ──────────────────────────────────────────────────
+
+/**
+ * Extract listing data from HTML when JSON-LD is absent.
+ * Uses OG meta tags, table rows, and header price spans.
+ */
+function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO {
+  // Title from og:title or <h1>
+  const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i)?.[1] ?? null;
+  const h1Title =
+    html
+      .match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
+      ?.replace(/<[^>]+>/g, '')
+      .trim() ?? null;
+  const titleRaw = ogTitle ?? h1Title;
+
+  // Description from og:description or page text
+  const ogDesc = html.match(/<meta\s+property="og:description"\s+content="([^"]*)"/i)?.[1] ?? null;
+
+  // Price from span.immo_header_value or table
+  const priceMatch = html.match(/class="immo_header_value"[^>]*>([\s\S]*?)<\/span>/i);
+  const priceRaw =
+    priceMatch?.[1]
+      ?.replace(/<[^>]+>/g, '')
+      .replace(/[^\d.,]/g, '')
+      .trim() ?? null;
+
+  // Extract table rows: <tr><td>Label</td><td>Value</td></tr>
+  const facts = new Map<string, string>();
+  const rowPattern = /<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowPattern.exec(html)) !== null) {
+    const key = rowMatch[1]!.replace(/<[^>]+>/g, '').trim();
+    const value = rowMatch[2]!.replace(/<[^>]+>/g, '').trim();
+    if (key && value) facts.set(key, value);
+  }
+
+  const livingAreaStr =
+    facts.get('Fläche') ?? facts.get('Wohnfläche') ?? facts.get('Flaeche') ?? null;
+  const roomsStr = facts.get('Zimmer') ?? null;
+  const locationStr = facts.get('Ort') ?? facts.get('Lage') ?? null;
+
+  // Extract postal code from location like "1050 Wien"
+  const postalMatch = locationStr?.match(/(\d{4})\s/);
+  const postalCodeRaw = postalMatch?.[1] ?? null;
+  const cityRaw =
+    locationStr
+      ?.replace(/^\d{4}\s*/, '')
+      .split(',')[0]
+      ?.trim() ?? null;
+
+  // Images from og:image
+  const ogImage = html.match(/<meta\s+property="og:image"\s+content="([^"]*)"/i)?.[1];
+  const images = ogImage ? [ogImage] : [];
+
+  return {
+    findmyhomeId,
+    titleRaw: titleRaw ? stripHtml(titleRaw) : null,
+    descriptionRaw: ogDesc ? stripHtml(ogDesc) : null,
+    priceRaw: priceRaw ? normalizeDecimal(priceRaw) : null,
+    livingAreaRaw: livingAreaStr
+      ? normalizeDecimal(livingAreaStr.replace(/\s*m.*$/, '').trim())
+      : null,
+    usableAreaRaw: null,
+    roomsRaw: roomsStr ?? null,
+    addressRaw: locationStr,
+    postalCodeRaw,
+    districtRaw: null,
+    cityRaw,
+    federalStateRaw: null,
+    floorRaw: facts.get('Stockwerk') ?? facts.get('Etage') ?? null,
+    yearBuiltRaw: facts.get('Baujahr') ?? null,
+    propertyTypeRaw: facts.get('Typ') ?? facts.get('Objekttyp') ?? null,
+    operationTypeRaw: 'sale',
+    statusRaw: 'active',
+    heatingTypeRaw: facts.get('Heizung') ?? null,
+    conditionRaw: facts.get('Zustand') ?? null,
+    energyCertificateRaw: facts.get('Energieklasse') ?? facts.get('Energieausweis') ?? null,
+    balconyAreaRaw: null,
+    terraceAreaRaw: null,
+    gardenAreaRaw: null,
+    commissionRaw: facts.get('Provision') ?? null,
+    operatingCostRaw: facts.get('Betriebskosten') ?? null,
+    reserveFundRaw: null,
+    latRaw: null,
+    lonRaw: null,
+    attributesRaw: Object.fromEntries(facts),
+    mediaRaw: [],
+    images,
+    contactName: null,
+  };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -221,7 +311,10 @@ export function extractIdFromUrl(url: string): string | null {
  * Strip HTML tags from a string, collapsing whitespace.
  */
 export function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

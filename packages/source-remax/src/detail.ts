@@ -1,8 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@rei/contracts';
-import type {
-  RemaxDetailDTO,
-  RemaxDataLayer,
-} from './dto.js';
+import type { RemaxDetailDTO, RemaxDataLayer } from './dto.js';
 
 /**
  * RE/MAX Austria detail pages provide data through three channels:
@@ -48,7 +45,9 @@ export function parseDetailPage(
   parserVersion: number,
 ): DetailCapture<RemaxDetailDTO> {
   const jsonLdBlocks = parseJsonLdBlocks(html);
-  const product = findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'Product');
+  const product =
+    findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'RealEstateListing') ??
+    findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'Product');
   const agent = findJsonLdByType<JsonLdAgent>(jsonLdBlocks, 'RealEstateAgent');
   const dataLayer = parseDataLayer(html);
 
@@ -76,13 +75,13 @@ export function parseDetailPage(
   const commission = parseCommission(html);
 
   // -- Merge sources ---------------------------------------------------------
-  const titleRaw = product?.name
-    ?? extractH1(html)
-    ?? null;
+  const titleRaw = product?.name ?? extractH1(html) ?? null;
 
   const priceRaw = priceFromLd
     ? priceFromLd.replace(/[.,]/g, '') // "315000" already clean from JSON-LD
-    : (facts['Kaufpreis'] ? parseAustrianPrice(facts['Kaufpreis']) : null);
+    : facts['Kaufpreis']
+      ? parseAustrianPrice(facts['Kaufpreis'])
+      : null;
 
   const roomsRaw = facts['Zimmer'] ?? null;
 
@@ -95,9 +94,7 @@ export function parseDetailPage(
   const balconyRaw = facts['Balkon'] ?? null;
   const balconyAreaRaw = balconyRaw ? normalizeAreaValue(balconyRaw) : null;
 
-  const floorRaw = facts['Stockwerk']
-    ? extractFloorNumber(facts['Stockwerk'])
-    : null;
+  const floorRaw = facts['Stockwerk'] ? extractFloorNumber(facts['Stockwerk']) : null;
 
   const yearBuiltRaw = facts['Baujahr'] ?? null;
   const heatingTypeRaw = facts['Heizung'] ?? null;
@@ -306,26 +303,37 @@ function parseDataLayer(html: string): RemaxDataLayer | null {
   }
 }
 
-/** Parse "Daten & Fakten" list items into a key-value map */
+/** Parse "Daten & Fakten" from table.factsheet or legacy section.facts */
 function parseDatenUndFakten(html: string): Record<string, string> {
   const result: Record<string, string> = {};
 
-  // Find the facts section
-  const sectionMatch = html.match(
-    /<section[^>]*class="facts"[^>]*>([\s\S]*?)<\/section>/,
-  );
+  // New layout: table.factsheet with <td>Label</td><td>Value</td>
+  const tableMatch = html.match(/<table[^>]*class="[^"]*factsheet[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
+  if (tableMatch?.[1]) {
+    const tdRegex = /<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+    let tdMatch: RegExpExecArray | null;
+    while ((tdMatch = tdRegex.exec(tableMatch[1])) !== null) {
+      const key = decodeEntities((tdMatch[1] ?? '').replace(/<[^>]+>/g, '').trim()).replace(
+        /:$/,
+        '',
+      );
+      const value = decodeEntities((tdMatch[2] ?? '').replace(/<[^>]+>/g, '').trim());
+      if (key && value) result[key] = value;
+    }
+    return result;
+  }
+
+  // Legacy: <section class="facts"> with <li><strong>Key:</strong> Value</li>
+  const sectionMatch = html.match(/<section[^>]*class="facts"[^>]*>([\s\S]*?)<\/section>/);
   if (!sectionMatch?.[1]) return result;
 
-  // Match <li><strong>Key:</strong> Value</li> patterns
   const liRegex = /<li>\s*<strong>([\s\S]*?):?\s*<\/strong>\s*([\s\S]*?)\s*<\/li>/g;
   let liMatch: RegExpExecArray | null;
 
   while ((liMatch = liRegex.exec(sectionMatch[1])) !== null) {
     const key = decodeEntities(liMatch[1]?.trim() ?? '').replace(/:$/, '');
     const value = decodeEntities(liMatch[2]?.trim() ?? '');
-    if (key && value) {
-      result[key] = value;
-    }
+    if (key && value) result[key] = value;
   }
 
   return result;
@@ -335,9 +343,7 @@ function parseDatenUndFakten(html: string): Record<string, string> {
 function parseEnergySection(html: string): Record<string, string> {
   const result: Record<string, string> = {};
 
-  const sectionMatch = html.match(
-    /<section[^>]*class="energy-section"[^>]*>([\s\S]*?)<\/section>/,
-  );
+  const sectionMatch = html.match(/<section[^>]*class="energy-section"[^>]*>([\s\S]*?)<\/section>/);
   if (!sectionMatch?.[1]) return result;
 
   const liRegex = /<li>\s*<strong>([\s\S]*?):?\s*<\/strong>\s*([\s\S]*?)\s*<\/li>/g;
@@ -358,9 +364,7 @@ function parseEnergySection(html: string): Record<string, string> {
 function parseCostsSection(html: string): Record<string, string> {
   const result: Record<string, string> = {};
 
-  const sectionMatch = html.match(
-    /<section[^>]*class="costs-section"[^>]*>([\s\S]*?)<\/section>/,
-  );
+  const sectionMatch = html.match(/<section[^>]*class="costs-section"[^>]*>([\s\S]*?)<\/section>/);
   if (!sectionMatch?.[1]) return result;
 
   const liRegex = /<li>\s*<strong>([\s\S]*?):?\s*<\/strong>\s*([\s\S]*?)\s*<\/li>/g;
@@ -404,9 +408,7 @@ function parseAgentSection(html: string): {
   phone: string | null;
   email: string | null;
 } {
-  const sectionMatch = html.match(
-    /<section[^>]*class="agent-section"[^>]*>([\s\S]*?)<\/section>/,
-  );
+  const sectionMatch = html.match(/<section[^>]*class="agent-section"[^>]*>([\s\S]*?)<\/section>/);
   if (!sectionMatch?.[1]) {
     return { name: null, company: null, phone: null, email: null };
   }
@@ -456,9 +458,7 @@ function extractH1(html: string): string | null {
 /** Parse gallery images from HTML */
 function parseGalleryImages(html: string): string[] {
   const images: string[] = [];
-  const sectionMatch = html.match(
-    /<section[^>]*class="gallery"[^>]*>([\s\S]*?)<\/section>/,
-  );
+  const sectionMatch = html.match(/<section[^>]*class="gallery"[^>]*>([\s\S]*?)<\/section>/);
   if (!sectionMatch?.[1]) return images;
 
   const imgRegex = /<img\s+src="([^"]+)"/g;
@@ -565,11 +565,11 @@ function mapOperationType(transactionType: string): string {
 /** Decode common HTML entities */
 function decodeEntities(text: string): string {
   return text
-    .replace(/&#228;/g, '\u00E4')     // a-umlaut
-    .replace(/&#246;/g, '\u00F6')     // o-umlaut
-    .replace(/&#252;/g, '\u00FC')     // u-umlaut
-    .replace(/&#223;/g, '\u00DF')     // eszett
-    .replace(/&#178;/g, '\u00B2')     // superscript 2
+    .replace(/&#228;/g, '\u00E4') // a-umlaut
+    .replace(/&#246;/g, '\u00F6') // o-umlaut
+    .replace(/&#252;/g, '\u00FC') // u-umlaut
+    .replace(/&#223;/g, '\u00DF') // eszett
+    .replace(/&#178;/g, '\u00B2') // superscript 2
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')

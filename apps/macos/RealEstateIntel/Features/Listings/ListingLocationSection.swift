@@ -32,7 +32,7 @@ struct ListingLocationSection: View {
             if let coord = listing.coordinate {
                 nearbyPOIs = ViennaPOIStore.nearby(
                     coordinate: coord,
-                    radiusMeters: 1000
+                    radiusMeters: 2000
                 )
             } else {
                 nearbyPOIs = []

@@ -1,13 +1,21 @@
 // ── Proximity / Location Data ────────────────────────────────────────────────
 
 export interface ProximityInput {
-  nearestTransitDistanceM: number | null;
-  nearestTransitType: string | null;
-  nearestTransitName: string | null;
+  // Transit (split by type — distance to nearest of each)
+  nearestUbahnDistanceM: number | null;
+  nearestTramDistanceM: number | null;
+  nearestBusDistanceM: number | null;
+  // Green space
   parksWithin500m: number;
+  // Education
   schoolsWithin500m: number;
-  transitStopsWithin500m: number;
+  // Safety
   policeWithin1000m: number;
+  fireStationsWithin1000m: number;
+  // Daily life
+  supermarketsWithin500m: number;
+  hospitalsWithin2000m: number;
+  doctorsWithin500m: number;
 }
 
 // ── Score Input ──────────────────────────────────────────────────────────────

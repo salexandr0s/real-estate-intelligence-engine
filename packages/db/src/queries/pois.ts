@@ -123,21 +123,20 @@ export async function findNearby(
   categories?: string[],
 ): Promise<PoiNearbyRow[]> {
   const rows = await query<PoiNearbyDbRow>(
-    `SELECT *,
-       (6371000 * acos(LEAST(1.0,
-         cos(radians($1)) * cos(radians(latitude)) *
-         cos(radians(longitude) - radians($2)) +
-         sin(radians($1)) * sin(radians(latitude))
-       ))) AS distance_m
-     FROM pois
-     WHERE latitude BETWEEN $1 - ($3::numeric / 111320.0) AND $1 + ($3::numeric / 111320.0)
-       AND longitude BETWEEN $2 - ($3::numeric / (111320.0 * cos(radians($1)))) AND $2 + ($3::numeric / (111320.0 * cos(radians($1))))
-       AND ($4::text[] IS NULL OR category = ANY($4))
-     HAVING (6371000 * acos(LEAST(1.0,
-         cos(radians($1)) * cos(radians(latitude)) *
-         cos(radians(longitude) - radians($2)) +
-         sin(radians($1)) * sin(radians(latitude))
-       ))) <= $3
+    `WITH poi_distances AS (
+       SELECT *,
+         (6371000 * acos(LEAST(1.0,
+           cos(radians($1)) * cos(radians(latitude)) *
+           cos(radians(longitude) - radians($2)) +
+           sin(radians($1)) * sin(radians(latitude))
+         ))) AS distance_m
+       FROM pois
+       WHERE latitude BETWEEN $1 - ($3::numeric / 111320.0) AND $1 + ($3::numeric / 111320.0)
+         AND longitude BETWEEN $2 - ($3::numeric / (111320.0 * cos(radians($1)))) AND $2 + ($3::numeric / (111320.0 * cos(radians($1))))
+         AND ($4::text[] IS NULL OR category = ANY($4))
+     )
+     SELECT * FROM poi_distances
+     WHERE distance_m <= $3
      ORDER BY distance_m`,
     [latitude, longitude, radiusMeters, categories && categories.length > 0 ? categories : null],
   );

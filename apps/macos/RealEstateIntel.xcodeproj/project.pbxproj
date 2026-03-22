@@ -36,7 +36,6 @@
 		2B7E47D9807D4851BD6B4F90 /* ViennaDistricts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFF289EA6E7F917733FC167 /* ViennaDistricts.swift */; };
 		2D165385FF4885B707E491CF /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D88D32212DD16B6BDB4F082 /* SidebarView.swift */; };
 		2DD32768CD2F379BD15BE14D /* vienna-developments.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 7CA68D9C8A6B847147396B76 /* vienna-developments.geojson */; };
-		3A1F8B72E4C9D05A91B7E3C0 /* vienna-boundary.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */; };
 		30E5F041FAC96ED9EA6F161C /* ListingHeaderSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D50A6B47FE17EE6A92C32D0 /* ListingHeaderSection.swift */; };
 		319A6157074293135DD4D7BB /* AlertStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DF2CB64F183CEA895198D0 /* AlertStatus.swift */; };
 		3251ADC11B1225E7A8C4E240 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C289FCD074A3A964C4C98A3F /* KeychainHelper.swift */; };
@@ -101,6 +100,7 @@
 		BD0E56328BE92928373C890C /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4E9E9013CA6D2F8CF1511B /* APIError.swift */; };
 		BE88A7E3C06843E03E9674B4 /* FilterDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF1A98F028F70D1B15D7FA9 /* FilterDraft.swift */; };
 		BF3680D3EBB4B9028DE2E61A /* APIAlertResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E97108CD8CB42F7D0317D6 /* APIAlertResponse.swift */; };
+		C25C87BE2A9646DD85839230 /* vienna-boundary.geojson in Resources */ = {isa = PBXBuildFile; fileRef = D70E8FE4FAABF44E1FD8D5EA /* vienna-boundary.geojson */; };
 		C64D1EE71B17DFCCE57921F8 /* ListingsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A52FDDD09441E42D72D58FB /* ListingsTable.swift */; };
 		C73F2283BA373ADC6B8F76D2 /* OperationType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB8F4CCF4091C88106A89B1 /* OperationType.swift */; };
 		C78B78B52FD61FBF916F97F6 /* AlertFrequency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520CF1A8627621B50AA6B2DF /* AlertFrequency.swift */; };
@@ -192,7 +192,6 @@
 		67C0FA2AE32101CBD998672F /* PriceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceFormatter.swift; sourceTree = "<group>"; };
 		6D50A6B47FE17EE6A92C32D0 /* ListingHeaderSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingHeaderSection.swift; sourceTree = "<group>"; };
 		6D88D32212DD16B6BDB4F082 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
-		5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */ = {isa = PBXFileReference; path = "vienna-boundary.geojson"; sourceTree = "<group>"; };
 		6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */ = {isa = PBXFileReference; path = "vienna-districts.geojson"; sourceTree = "<group>"; };
 		70300F90D6EDB8A837EBF773 /* SourceHealthStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthStatus.swift; sourceTree = "<group>"; };
 		71FCE478C964B36CF4F6B450 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -238,6 +237,7 @@
 		D00B6C48740072BB50DF60A6 /* DashboardHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardHeader.swift; sourceTree = "<group>"; };
 		D1D1720F5D2AAC9E594AB832 /* ListingsMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsMapView.swift; sourceTree = "<group>"; };
 		D2935C92AC4DA5E19FFB224C /* AlertQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertQuery.swift; sourceTree = "<group>"; };
+		D70E8FE4FAABF44E1FD8D5EA /* vienna-boundary.geojson */ = {isa = PBXFileReference; path = "vienna-boundary.geojson"; sourceTree = "<group>"; };
 		DA46508A4E3EAC7C9467F910 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		DAF1A98F028F70D1B15D7FA9 /* FilterDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDraft.swift; sourceTree = "<group>"; };
 		DE43878F26C362EFC14BB2CE /* ListingQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingQuery.swift; sourceTree = "<group>"; };
@@ -495,7 +495,7 @@
 		D76AABBEBD01CA3D98BEBD75 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */,
+				D70E8FE4FAABF44E1FD8D5EA /* vienna-boundary.geojson */,
 				7CA68D9C8A6B847147396B76 /* vienna-developments.geojson */,
 				6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */,
 				17364EC32F3ACB9390D9271F /* vienna-pois.geojson */,
@@ -612,7 +612,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0F0B204E6FFF1237B4A6F63B /* Assets.xcassets in Resources */,
-				3A1F8B72E4C9D05A91B7E3C0 /* vienna-boundary.geojson in Resources */,
+				C25C87BE2A9646DD85839230 /* vienna-boundary.geojson in Resources */,
 				2DD32768CD2F379BD15BE14D /* vienna-developments.geojson in Resources */,
 				8627DB41DEC147395E1C397C /* vienna-districts.geojson in Resources */,
 				42EAEE61677AE5433261789F /* vienna-pois.geojson in Resources */,

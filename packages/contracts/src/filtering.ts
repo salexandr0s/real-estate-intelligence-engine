@@ -117,5 +117,6 @@ export interface PaginatedResult<T> {
   meta: {
     nextCursor: string | null;
     pageSize: number;
+    totalCount?: number;
   };
 }
