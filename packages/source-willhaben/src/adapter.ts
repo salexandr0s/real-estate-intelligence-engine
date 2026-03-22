@@ -26,7 +26,7 @@ export class WillhabenAdapter implements SourceAdapter<WillhabenDiscoveryItem, W
     const plans: RequestPlan[] = [];
 
     const regionSlug = profile.regions?.[0] ?? 'wien';
-    const searchPath = `${BASE_SEARCH_PATH}/${regionSlug}/eigentumswohnung-angebote`;
+    const searchPath = `${BASE_SEARCH_PATH}/${regionSlug}`;
 
     for (let page = 1; page <= maxPages; page++) {
       const url = new URL(searchPath, BASE_URL);

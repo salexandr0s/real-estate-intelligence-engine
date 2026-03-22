@@ -37,10 +37,17 @@ export function parseDetailPage(
   const coords = getAttr(attrs, 'COORDINATES');
   const [lat, lon] = coords?.split(',').map((s) => s.trim()) ?? [];
 
+  const streetRaw = getAttr(attrs, 'LOCATION/ADDRESS_1');
   const addressDisplay = getAttr(attrs, 'LOCATION/ADDRESS_2');
   const city = getAttr(attrs, 'LOCATION/ADDRESS_3') ?? getAttr(attrs, 'LOCATION/ADDRESS_4');
-  const postalCode = getAttr(attrs, 'CONTACT/ADDRESS_POSTCODE');
   const district = extractDistrictFromAddress(addressDisplay);
+
+  // Derive postal code from district number (CONTACT/ADDRESS_POSTCODE is the agent's, not the property's)
+  const districtNo = district ? parseInt(district, 10) : null;
+  const postalCode =
+    districtNo != null && districtNo >= 1 && districtNo <= 23
+      ? `1${String(districtNo).padStart(2, '0')}0`
+      : getAttr(attrs, 'CONTACT/ADDRESS_POSTCODE');
 
   // Extract images from advertImageList
   const images: string[] = [];
@@ -73,8 +80,11 @@ export function parseDetailPage(
     descriptionRaw: description ? stripHtml(description) : null,
     priceRaw: getAttr(attrs, 'ESTATE_PRICE/PRICE_SUGGESTION') ?? getAttr(attrs, 'PRICE'),
     livingAreaRaw: normalizeDecimal(getAttr(attrs, 'ESTATE_SIZE/LIVING_AREA')),
-    usableAreaRaw: normalizeDecimal(getAttr(attrs, 'ESTATE_SIZE/USEABLE_AREA') ?? getAttr(attrs, 'ESTATE_SIZE')),
+    usableAreaRaw: normalizeDecimal(
+      getAttr(attrs, 'ESTATE_SIZE/USEABLE_AREA') ?? getAttr(attrs, 'ESTATE_SIZE'),
+    ),
     roomsRaw: getAttr(attrs, 'NO_OF_ROOMS') ?? getAttr(attrs, 'NUMBER_OF_ROOMS'),
+    streetRaw: streetRaw,
     addressRaw: addressDisplay,
     postalCodeRaw: postalCode,
     districtRaw: district,
@@ -99,8 +109,7 @@ export function parseDetailPage(
     attributesRaw: Object.fromEntries(attrs.map((a) => [a.name, a.values[0] ?? null])),
     mediaRaw: [],
     images,
-    contactName:
-      getAttr(attrs, 'CONTACT/NAME') ?? getAttr(attrs, 'CONTACT/COMPANYNAME') ?? null,
+    contactName: getAttr(attrs, 'CONTACT/NAME') ?? getAttr(attrs, 'CONTACT/COMPANYNAME') ?? null,
     contactPhone: getAttr(attrs, 'CONTACT/PHONE') ?? null,
   };
 
@@ -194,7 +203,10 @@ function extractIdFromUrl(url: string): string | null {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
