@@ -12,6 +12,7 @@ struct ListingsTable: View {
                 loadingIndicator
             }
         }
+        .frame(maxHeight: .infinity)
     }
 
     private var listingTable: some View {

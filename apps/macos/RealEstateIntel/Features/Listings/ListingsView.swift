@@ -31,13 +31,45 @@ struct ListingsView: View {
                     .background(Color.red.opacity(0.1))
                     Divider()
                 }
-                if viewModel.isMapMode {
+                if viewModel.isLoading && viewModel.listings.isEmpty {
+                    ContentUnavailableView {
+                        Label("Loading Listings", systemImage: "building.2")
+                    } description: {
+                        Text("Fetching listings from the server\u{2026}")
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay {
+                        ProgressView()
+                            .controlSize(.large)
+                            .offset(y: -60)
+                    }
+                } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
+                    ContentUnavailableView {
+                        Label(
+                            viewModel.hasActiveFilters ? "No Matching Listings" : "No Listings",
+                            systemImage: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle" : "building.2"
+                        )
+                    } description: {
+                        Text(
+                            viewModel.hasActiveFilters
+                                ? "No listings match your current filters."
+                                : "No listings available yet."
+                        )
+                    } actions: {
+                        if viewModel.hasActiveFilters {
+                            Button("Clear Filters") {
+                                viewModel.clearFilters()
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.isMapMode {
                     ListingsMapView(viewModel: viewModel)
                 } else {
                     ListingsTable(viewModel: viewModel)
                 }
             }
-            .frame(minWidth: 400)
+            .frame(minWidth: 400, maxHeight: .infinity)
 
             if showInspector {
                 ListingsInspectorContent(listing: viewModel.selectedListing) {
@@ -103,6 +135,13 @@ struct ListingsView: View {
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {
                 showInspector = true
+            }
+        }
+        .onChange(of: appState.deepLinkListingId) { _, newValue in
+            if let listingId = newValue {
+                viewModel.selectedListingID = listingId
+                showInspector = true
+                appState.deepLinkListingId = nil
             }
         }
         .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {} message: {

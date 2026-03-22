@@ -14,6 +14,7 @@ final class ListingsViewModel {
     var searchText: String = ""
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
+    var hasLoaded: Bool = false
     var errorMessage: String?
     var nextCursor: String?
 
@@ -153,6 +154,7 @@ final class ListingsViewModel {
         // Check cache first
         if let cache, let cached = cache.get(Self.listingsCacheKey, as: [Listing].self) {
             listings = cached
+            hasLoaded = true
             isLoading = false
             // Still refresh alert badges
             await refreshAlertBadges(using: client)
@@ -184,6 +186,7 @@ final class ListingsViewModel {
         // Fetch alerts to cross-reference listing IDs for badge display
         await refreshAlertBadges(using: client)
 
+        hasLoaded = true
         isLoading = false
     }
 
