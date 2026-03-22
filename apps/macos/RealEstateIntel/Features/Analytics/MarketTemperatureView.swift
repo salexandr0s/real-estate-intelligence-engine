@@ -77,7 +77,7 @@ private struct TemperatureCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(String(format: "%.1f%%", point.velocity * 100))
+                Text("\((point.velocity * 100).formatted(.number.precision(.fractionLength(1))))%")
                     .font(.caption.monospacedDigit().bold())
                     .foregroundStyle(point.temperatureColor)
             }

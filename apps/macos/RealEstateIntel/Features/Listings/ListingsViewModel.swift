@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import os
 
 /// View model for the listings table with sorting, filtering, and search.
 @MainActor @Observable
@@ -163,11 +164,11 @@ final class ListingsViewModel {
             listings = response.listings
             nextCursor = response.nextCursor
             cache?.set(Self.listingsCacheKey, value: listings)
-            NSLog("[ListingsVM] Fetched %d listings, cursor: %@", response.listings.count, response.nextCursor ?? "nil")
+            Log.ui.info("Fetched \(response.listings.count) listings, cursor: \(response.nextCursor ?? "nil", privacy: .public)")
         } catch {
             // Show detailed decode error, not just localized description
             errorMessage = String(describing: error)
-            NSLog("[ListingsVM] Fetch error: %@", String(describing: error))
+            Log.ui.error("Fetch error: \(error, privacy: .public)")
         }
 
         // Fetch alerts to cross-reference listing IDs for badge display

@@ -15,8 +15,10 @@ struct ListingsTable: View {
     }
 
     private var listingTable: some View {
-        Table(
-            viewModel.filteredListings,
+        let filtered = viewModel.filteredListings
+        let lastID = filtered.last?.id
+        return Table(
+            filtered,
             selection: $viewModel.selectedListingID,
             sortOrder: $viewModel.sortOrder
         ) {
@@ -26,7 +28,7 @@ struct ListingsTable: View {
             .width(min: 50, ideal: 56, max: 64)
 
             TableColumn("Title", value: \.title) { (listing: Listing) in
-                titleCell(listing)
+                titleCell(listing, isLast: listing.id == lastID)
             }
             .width(min: 160, ideal: 300)
 
@@ -42,10 +44,15 @@ struct ListingsTable: View {
             .width(min: 70, ideal: 80)
 
             TableColumn("Price", value: \.listPriceEur) { (listing: Listing) in
-                Text(PriceFormatter.format(eur: listing.listPriceEur))
-                    .monospacedDigit()
+                HStack(spacing: 4) {
+                    Text(PriceFormatter.format(eur: listing.listPriceEur))
+                        .monospacedDigit()
+                    if let pct = listing.lastPriceChangePct, pct != 0 {
+                        PriceTrendBadge(changePct: pct)
+                    }
+                }
             }
-            .width(min: 90, ideal: 130)
+            .width(min: 90, ideal: 150)
 
             TableColumn("Price/m\u{00B2}") { (listing: Listing) in
                 Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0))
@@ -71,7 +78,7 @@ struct ListingsTable: View {
     // MARK: - Cell Views
 
     @ViewBuilder
-    private func titleCell(_ listing: Listing) -> some View {
+    private func titleCell(_ listing: Listing, isLast: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: Theme.Spacing.xs) {
                 Text(listing.title)
@@ -91,7 +98,7 @@ struct ListingsTable: View {
             }
         }
         .onAppear {
-            if listing.id == viewModel.filteredListings.last?.id, viewModel.hasMore {
+            if isLast, viewModel.hasMore {
                 Task { await viewModel.loadMore(using: appState.apiClient) }
             }
         }

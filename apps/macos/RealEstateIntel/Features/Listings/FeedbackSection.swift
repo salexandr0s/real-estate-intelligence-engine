@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 /// Investor feedback rating buttons for a listing detail view.
@@ -8,6 +9,7 @@ struct FeedbackSection: View {
     @State private var notes: String = ""
     @State private var showNotes: Bool = false
     @State private var isSaving: Bool = false
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -112,7 +114,7 @@ struct FeedbackSection: View {
                 notes = ""
                 showNotes = false
             } catch {
-                NSLog("[Feedback] Delete failed: %@", String(describing: error))
+                errorMessage = error.localizedDescription
             }
         } else {
             do {
@@ -123,7 +125,7 @@ struct FeedbackSection: View {
                 )
                 currentRating = rating
             } catch {
-                NSLog("[Feedback] Submit failed: %@", String(describing: error))
+                errorMessage = error.localizedDescription
             }
         }
     }
@@ -140,7 +142,7 @@ struct FeedbackSection: View {
                 notes: notes.isEmpty ? nil : notes
             )
         } catch {
-            NSLog("[Feedback] Save notes failed: %@", String(describing: error))
+            Log.ui.error("Save notes failed: \(error, privacy: .public)")
         }
     }
 

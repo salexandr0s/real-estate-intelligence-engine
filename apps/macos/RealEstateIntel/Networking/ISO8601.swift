@@ -1,10 +1,10 @@
 import Foundation
 
-extension ISO8601DateFormatter {
-    /// Shared formatter configured for the backend's date format (with fractional seconds).
-    nonisolated(unsafe) static let shared: ISO8601DateFormatter = {
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fmt
-    }()
+extension Date {
+    /// Parse ISO 8601 string with fractional seconds, falling back to .now.
+    static func fromISO(_ string: String?) -> Date {
+        guard let string else { return .now }
+        let strategy = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        return (try? Date(string, strategy: strategy)) ?? .now
+    }
 }

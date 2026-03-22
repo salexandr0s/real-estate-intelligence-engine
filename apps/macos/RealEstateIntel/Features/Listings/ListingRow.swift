@@ -23,6 +23,10 @@ struct ListingRow: View {
                     Text(PriceFormatter.format(eur: listing.listPriceEur))
                         .font(.caption.monospacedDigit().bold())
 
+                    if let pct = listing.lastPriceChangePct, pct != 0 {
+                        PriceTrendBadge(changePct: pct)
+                    }
+
                     Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -40,6 +44,29 @@ struct ListingRow: View {
         }
         .padding(.vertical, Theme.Spacing.xs)
         .contentShape(Rectangle())
+    }
+}
+
+/// Small badge showing price change direction and percentage.
+struct PriceTrendBadge: View {
+    let changePct: Double
+
+    private var isDecrease: Bool { changePct < 0 }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: isDecrease ? "arrow.down.right" : "arrow.up.right")
+                .font(.system(size: 7, weight: .bold))
+            Text(String(format: "%.1f%%", abs(changePct)))
+                .font(.system(size: 9, weight: .semibold).monospacedDigit())
+        }
+        .foregroundStyle(isDecrease ? .green : .red)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(
+            (isDecrease ? Color.green : Color.red).opacity(0.1),
+            in: RoundedRectangle(cornerRadius: 3)
+        )
     }
 }
 

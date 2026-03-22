@@ -14,22 +14,22 @@ struct ListingAnnotation: View {
                     Circle()
                         .fill(scoreColor)
                         .frame(width: pinSize, height: pinSize)
-                        .overlay(Circle().stroke(.white, lineWidth: 1.5))
+                        .overlay { Circle().stroke(.white, lineWidth: 1.5) }
                         .shadow(color: .black.opacity(0.2), radius: isSelected ? 3 : 1, y: 1)
                 } else {
                     // Dashed ring for estimated/approximate locations
                     Circle()
                         .fill(scoreColor.opacity(0.3))
                         .frame(width: pinSize + 4, height: pinSize + 4)
-                        .overlay(
+                        .overlay {
                             Circle()
                                 .stroke(scoreColor, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                        )
-                        .overlay(
+                        }
+                        .overlay {
                             Circle()
                                 .fill(scoreColor)
                                 .frame(width: 5, height: 5)
-                        )
+                        }
                         .shadow(color: .black.opacity(0.15), radius: isSelected ? 3 : 1, y: 1)
                 }
 
@@ -77,7 +77,7 @@ struct ListingAnnotation: View {
                     .fontWeight(.semibold)
 
                 if let score = listing.currentScore {
-                    Text(String(format: "%.0f", score))
+                    Text(score, format: .number.precision(.fractionLength(0)))
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundStyle(.white)
@@ -96,9 +96,9 @@ struct ListingAnnotation: View {
             if let precision = precisionLabel {
                 HStack(spacing: 3) {
                     Image(systemName: "location.slash")
-                        .font(.system(size: 8))
+                        .font(.caption2)
                     Text(precision)
-                        .font(.system(size: 9))
+                        .font(.caption2)
                 }
                 .foregroundStyle(.orange)
             }

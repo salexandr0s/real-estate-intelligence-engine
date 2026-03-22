@@ -1,5 +1,6 @@
 import CoreLocation
 import MapKit
+import os
 // MARK: - Spatial Grid Index
 
 /// Fixed-resolution grid index for fast spatial POI queries.
@@ -128,7 +129,7 @@ enum ViennaPOIStore {
         }.value
         grid = POIGrid(pois: pois)
         isLoaded = true
-        NSLog("[ViennaPOIStore] POI grid built: %d POIs", grid.totalCount)
+        Log.data.info("POI grid built: \(grid.totalCount) POIs")
     }
 
     /// Parse GeoJSON off the main thread. This function is nonisolated.
@@ -155,13 +156,13 @@ enum ViennaPOIStore {
     private nonisolated static func parsePOIsSync() -> [POI] {
         guard let url = Bundle.main.url(forResource: "vienna-pois", withExtension: "geojson"),
               let data = try? Data(contentsOf: url) else {
-            NSLog("[ViennaPOIStore] Failed to load vienna-pois.geojson")
+            Log.data.error("Failed to load vienna-pois.geojson")
             return []
         }
 
         let decoder = MKGeoJSONDecoder()
         guard let geoObjects = try? decoder.decode(data) else {
-            NSLog("[ViennaPOIStore] Failed to decode POI GeoJSON")
+            Log.data.error("Failed to decode POI GeoJSON")
             return []
         }
 

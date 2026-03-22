@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Actor-based API client for communicating with the Real Estate Intel backend.
 /// Thread-safe by design. Handles auth, request building, and response parsing.
@@ -52,9 +53,9 @@ actor APIClient {
 
     func requestPaginated<T: Codable>(_ endpoint: APIEndpoint) async throws -> PaginatedResponse<T> {
         let urlRequest = try buildRequest(for: endpoint)
-        NSLog("[APIClient] %@ %@", urlRequest.httpMethod ?? "?", urlRequest.url?.absoluteString ?? "?")
+        Log.api.debug("\(urlRequest.httpMethod ?? "?", privacy: .public) \(urlRequest.url?.absoluteString ?? "?", privacy: .public)")
         let (data, response) = try await performRequest(urlRequest)
-        NSLog("[APIClient] Response: %d bytes, status %d", data.count, (response as? HTTPURLResponse)?.statusCode ?? -1)
+        Log.api.debug("Response: \(data.count) bytes, status \((response as? HTTPURLResponse)?.statusCode ?? -1)")
         try validateResponse(response, data: data)
         do {
             return try decoder.decode(PaginatedResponse<T>.self, from: data)
@@ -127,7 +128,7 @@ actor APIClient {
                 p25PpsqmEur: dto.p25PpsqmEur,
                 p75PpsqmEur: dto.p75PpsqmEur,
                 stddevPpsqmEur: dto.stddevPpsqmEur,
-                baselineDate: dto.baselineDate.flatMap { ISO8601DateFormatter.shared.date(from: $0) } ?? .now
+                baselineDate: dto.baselineDate.map { Date.fromISO($0) } ?? .now
             )
         }
     }
@@ -159,7 +160,7 @@ actor APIClient {
                 versionNo: dto.versionNo,
                 versionReason: dto.versionReason,
                 listPriceEurCents: dto.listPriceEurCents,
-                observedAt: ISO8601DateFormatter.shared.date(from: dto.observedAt) ?? .now
+                observedAt: Date.fromISO(dto.observedAt)
             )
         }
     }
@@ -261,7 +262,7 @@ actor APIClient {
                 status: AlertStatus(rawValue: dto.status) ?? .unread,
                 title: dto.title,
                 body: dto.body,
-                matchedAt: ISO8601DateFormatter.shared.date(from: dto.matchedAt) ?? .now,
+                matchedAt: Date.fromISO(dto.matchedAt),
                 filterName: dto.filterName,
                 listingId: dto.listingId
             )
@@ -359,7 +360,7 @@ actor APIClient {
                 name: dto.name,
                 isActive: dto.isActive,
                 healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
-                lastSuccessfulRun: dto.lastSuccessfulRun.flatMap { ISO8601DateFormatter.shared.date(from: $0) },
+                lastSuccessfulRun: dto.lastSuccessfulRun.map { Date.fromISO($0) },
                 crawlIntervalMinutes: dto.crawlIntervalMinutes,
                 lastErrorSummary: dto.lastErrorSummary,
                 totalListingsIngested: dto.totalListingsIngested ?? 0,
@@ -392,8 +393,8 @@ actor APIClient {
                 sortBy: dto.sortBy
             ),
             alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
-            createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
-            updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
+            createdAt: Date.fromISO(dto.createdAt),
+            updatedAt: Date.fromISO(dto.updatedAt),
             matchCount: dto.matchCount
         )
     }

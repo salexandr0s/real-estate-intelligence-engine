@@ -9,18 +9,27 @@ struct PriceVersion: Identifiable {
 }
 
 /// Timeline view showing price changes across listing versions.
+/// Filters out content-only changes to show only price-relevant history.
 struct PriceHistoryView: View {
     let versions: [PriceVersion]
+
+    /// Only show versions with price changes or first listing.
+    private var priceRelevantVersions: [PriceVersion] {
+        versions.filter { v in
+            guard let reason = v.reason else { return true }
+            return reason == "first_seen" || reason == "price_change" || reason.isEmpty
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             Text("Price History")
                 .font(.headline)
 
-            if versions.count <= 1 {
-                SingleVersionContent(version: versions.first)
+            if priceRelevantVersions.count <= 1 {
+                SingleVersionContent(version: priceRelevantVersions.first)
             } else {
-                TimelineContent(versions: versions)
+                TimelineContent(versions: priceRelevantVersions)
             }
         }
     }

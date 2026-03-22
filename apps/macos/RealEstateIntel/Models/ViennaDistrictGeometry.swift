@@ -1,5 +1,6 @@
 import CoreLocation
 import MapKit
+import os
 
 /// A parsed district boundary with polygon coordinates and precomputed bounding box.
 struct DistrictBoundary: Identifiable {
@@ -25,13 +26,13 @@ enum ViennaDistrictStore {
     private static func loadBoundaries() -> [DistrictBoundary] {
         guard let url = Bundle.main.url(forResource: "vienna-districts", withExtension: "geojson"),
               let data = try? Data(contentsOf: url) else {
-            NSLog("[ViennaDistrictStore] Failed to load vienna-districts.geojson")
+            Log.data.error("Failed to load vienna-districts.geojson")
             return []
         }
 
         let decoder = MKGeoJSONDecoder()
         guard let geoObjects = try? decoder.decode(data) else {
-            NSLog("[ViennaDistrictStore] Failed to decode GeoJSON")
+            Log.data.error("Failed to decode GeoJSON")
             return []
         }
 
@@ -69,7 +70,7 @@ enum ViennaDistrictStore {
             ))
         }
 
-        NSLog("[ViennaDistrictStore] Loaded %d district boundaries", results.count)
+        Log.data.info("Loaded \(results.count) district boundaries")
         return results.sorted { $0.id < $1.id }
     }
 
@@ -132,13 +133,13 @@ enum ViennaBoundaryStore {
     private static func loadBoundary() -> [CLLocationCoordinate2D] {
         guard let url = Bundle.main.url(forResource: "vienna-boundary", withExtension: "geojson"),
               let data = try? Data(contentsOf: url) else {
-            NSLog("[ViennaBoundaryStore] Failed to load vienna-boundary.geojson")
+            Log.data.error("Failed to load vienna-boundary.geojson")
             return []
         }
 
         let decoder = MKGeoJSONDecoder()
         guard let geoObjects = try? decoder.decode(data) else {
-            NSLog("[ViennaBoundaryStore] Failed to decode GeoJSON")
+            Log.data.error("Failed to decode GeoJSON")
             return []
         }
 
@@ -152,7 +153,7 @@ enum ViennaBoundaryStore {
             }
         }
 
-        NSLog("[ViennaBoundaryStore] No polygon found in boundary GeoJSON")
+        Log.data.error("No polygon found in boundary GeoJSON")
         return []
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// SSE (Server-Sent Events) client for real-time alert streaming.
 /// Connects to /v1/stream/alerts and emits parsed Alert objects.
@@ -43,13 +44,13 @@ final class AlertStreamService {
                 break
             } catch {
                 isConnected = false
-                NSLog("[AlertStream] Disconnected: %@", String(describing: error))
+                Log.stream.error("Disconnected: \(error, privacy: .public)")
             }
 
             guard !Task.isCancelled else { break }
 
             // Exponential backoff
-            NSLog("[AlertStream] Reconnecting in %.0fs...", backoffSeconds)
+            Log.stream.info("Reconnecting in \(self.backoffSeconds, format: .fixed(precision: 0))s...")
             try? await Task.sleep(for: .seconds(backoffSeconds))
             backoffSeconds = min(backoffSeconds * 2, Self.maxBackoff)
         }
@@ -76,7 +77,7 @@ final class AlertStreamService {
 
         isConnected = true
         backoffSeconds = 1.0 // Reset on successful connection
-        NSLog("[AlertStream] Connected")
+        Log.stream.info("Connected")
 
         var eventType = ""
         var dataBuffer = ""
@@ -117,7 +118,7 @@ final class AlertStreamService {
     private func handleEvent(type: String, data: String) {
         switch type {
         case "connected":
-            NSLog("[AlertStream] Server confirmed connection")
+            Log.stream.info("Server confirmed connection")
 
         case "alert":
             guard let jsonData = data.data(using: .utf8) else { return }
@@ -131,13 +132,13 @@ final class AlertStreamService {
                     status: AlertStatus(rawValue: dto.status) ?? .unread,
                     title: dto.title,
                     body: dto.body,
-                    matchedAt: ISO8601DateFormatter.shared.date(from: dto.matchedAt) ?? .now,
+                    matchedAt: Date.fromISO(dto.matchedAt),
                     filterName: dto.filterName,
                     listingId: dto.listingId
                 )
                 lastEvent = alert
             } catch {
-                NSLog("[AlertStream] Failed to decode alert: %@", String(describing: error))
+                Log.stream.error("Failed to decode alert: \(error, privacy: .public)")
             }
 
         default:

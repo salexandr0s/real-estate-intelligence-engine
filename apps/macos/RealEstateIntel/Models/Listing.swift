@@ -23,6 +23,8 @@ struct Listing: Identifiable, Codable, Hashable {
     let latitude: Double?
     let longitude: Double?
     let geocodePrecision: String?
+    let lastPriceChangePct: Double?
+    let lastPriceChangeAt: Date?
     let firstSeenAt: Date
     let listingStatus: ListingStatus
 
@@ -72,6 +74,8 @@ extension Listing {
             latitude: 48.2167,
             longitude: 16.3958,
             geocodePrecision: "source_exact",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date.now)!,
             listingStatus: .active
         ),
@@ -95,6 +99,8 @@ extension Listing {
             latitude: 48.1986,
             longitude: 16.3948,
             geocodePrecision: "source_approx",
+            lastPriceChangePct: -4.8,
+            lastPriceChangeAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now),
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date.now)!,
             listingStatus: .active
         ),
@@ -118,6 +124,8 @@ extension Listing {
             latitude: 48.1870,
             longitude: 16.3556,
             geocodePrecision: "street",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
             listingStatus: .active
         ),
@@ -141,6 +149,8 @@ extension Listing {
             latitude: 48.2028,
             longitude: 16.3493,
             geocodePrecision: "source_exact",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             listingStatus: .active
         ),
@@ -164,6 +174,8 @@ extension Listing {
             latitude: 48.2263,
             longitude: 16.3560,
             geocodePrecision: "district",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date.now)!,
             listingStatus: .active
         ),
@@ -187,6 +199,8 @@ extension Listing {
             latitude: 48.1625,
             longitude: 16.3827,
             geocodePrecision: "source_approx",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
             listingStatus: .active
         ),
@@ -210,6 +224,8 @@ extension Listing {
             latitude: 48.2564,
             longitude: 16.3988,
             geocodePrecision: "source_exact",
+            lastPriceChangePct: nil,
+            lastPriceChangeAt: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date.now)!,
             listingStatus: .active
         ),
@@ -233,6 +249,8 @@ extension Listing {
             latitude: nil,
             longitude: nil,
             geocodePrecision: nil,
+            lastPriceChangePct: -7.2,
+            lastPriceChangeAt: Calendar.current.date(byAdding: .day, value: -5, to: Date.now),
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date.now)!,
             listingStatus: .active
         ),

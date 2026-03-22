@@ -25,6 +25,6 @@ struct ScrapeRun: Identifiable, Codable, Sendable {
     }
 
     var parsedStartedAt: Date? {
-        startedAt.flatMap { ISO8601DateFormatter.shared.date(from: $0) }
+        startedAt.map { Date.fromISO($0) }
     }
 }

@@ -20,7 +20,7 @@ struct ScoreBar: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            GeometryReader { geo in
+            GeometryReader { geo in // Needed for fractional width; no simpler alternative
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(color.opacity(0.2))

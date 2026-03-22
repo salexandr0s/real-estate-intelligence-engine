@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 /// Detail view for a single listing, shown in the inspector pane.
@@ -120,7 +121,7 @@ struct ListingDetailView: View {
             }
         } catch {
             isSaved = wasSaved // Revert on failure
-            NSLog("[ListingDetail] Save/unsave failed: %@", String(describing: error))
+            Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
         }
     }
 }

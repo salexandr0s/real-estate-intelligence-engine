@@ -169,11 +169,14 @@ private struct FilterRow: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
             // Active toggle
-            Circle()
-                .fill(filter.isActive ? Color.green : Color.gray)
-                .frame(width: 10, height: 10)
-                .onTapGesture(perform: onToggle)
-                .help(filter.isActive ? "Active" : "Inactive")
+            Button(action: onToggle) {
+                Circle()
+                    .fill(filter.isActive ? Color.green : Color.gray)
+                    .frame(width: 10, height: 10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(filter.isActive ? "Active" : "Inactive")
+            .help(filter.isActive ? "Active" : "Inactive")
 
             // Filter info
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -206,11 +209,10 @@ private struct FilterRow: View {
                 ProgressView()
                     .controlSize(.small)
             } else {
-                Button(action: onTest) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
+                Button("Test Filter", systemImage: "magnifyingglass", action: onTest)
+                    .labelStyle(.iconOnly)
+                    .font(.caption)
+                    .buttonStyle(.borderless)
                 .help("Test filter against current listings")
             }
 
@@ -235,6 +237,8 @@ private struct FilterRow: View {
         .padding(.vertical, Theme.Spacing.xs)
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onEdit)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, onEdit)
     }
 }
 
@@ -302,7 +306,7 @@ private struct FilterTestResultsSheet: View {
                                     Circle()
                                         .fill(Theme.scoreColor(for: score))
                                         .frame(width: 8, height: 8)
-                                    Text("\(score, specifier: "%.1f")")
+                                    Text("\(score.formatted(.number.precision(.fractionLength(1))))")
                                         .font(.caption)
                                         .fontWeight(.medium)
                                 }

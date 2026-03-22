@@ -27,6 +27,7 @@
 		15463BF908165A50F1893149 /* PriceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C0FA2AE32101CBD998672F /* PriceFormatter.swift */; };
 		18969093E2B380C1E8A8B509 /* ListingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A387A729B03CDF0F20239977 /* ListingsViewModel.swift */; };
 		1C3DE29179A5B7EA5AE28B67 /* AlertRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42983CB09858366E81BF27B1 /* AlertRow.swift */; };
+		1CF3A1259C7D5CC42462D5EF /* DevelopmentAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78AFA579648506DD1AABED88 /* DevelopmentAnnotation.swift */; };
 		1D5D9306C94F54D05710E179 /* MapSelectionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B531EEAE2C5866BB12B9489B /* MapSelectionOverlay.swift */; };
 		1E4841BE16A6F53760274B0C /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80ABC75736472CB6B8C42F58 /* NotificationManager.swift */; };
 		20671A1A680BA6ECC65B619A /* APIEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35661AE88243CD2A9B3ED53E /* APIEndpoints.swift */; };
@@ -78,6 +79,7 @@
 		855A3D526B6F09BB42801429 /* ListingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E9AE0DC9DCEF91FAEA0AA2 /* ListingStatus.swift */; };
 		8627DB41DEC147395E1C397C /* vienna-districts.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */; };
 		868D74A06288D94D39271765 /* ListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BACA80919296C348976501D /* ListingRow.swift */; };
+		8D922F5155E08B99C4C75FB9 /* POICategoryGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9210FB7BE5465F2C80EB87EC /* POICategoryGroup.swift */; };
 		9194078EE7E9AAF27EFB0A3F /* APIBaselineResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F7D7EE381BD6C5A5172B49 /* APIBaselineResponse.swift */; };
 		9337A53BE28F07A9FAFF3716 /* ListingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F9DC8AA06F15F9271A3DC81 /* ListingsView.swift */; };
 		94353143B8558469CDE9E98C /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3479E0F77578B82138789A50 /* SidebarRow.swift */; };
@@ -91,6 +93,7 @@
 		ABAD42BCCD756B71FF5CD864 /* DashboardHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D00B6C48740072BB50DF60A6 /* DashboardHeader.swift */; };
 		AC5D067E2235DEB639ED6411 /* APISourceResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EDF760969853B229DF6BC5 /* APISourceResponse.swift */; };
 		ACBCE6FD69B678381029B172 /* RealEstateIntelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7B48FC773CBD385E781D80 /* RealEstateIntelApp.swift */; };
+		AD52D9CD2089226D1A320491 /* DashboardStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */; };
 		AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE95FFC3DF5D5037B7C4CF46 /* DashboardViewModel.swift */; };
 		AF64E595A6CAE616BECFCEDA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0B6225CB1B10E9C769B8C7 /* ContentView.swift */; };
 		B012246AE7DE163BD4AD4E43 /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F418C5EE14B80F9ECF134C /* PriceHistoryView.swift */; };
@@ -157,6 +160,7 @@
 		2B1DD318D97B92DEBCB17D13 /* Source.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Source.swift; sourceTree = "<group>"; };
 		2BACA80919296C348976501D /* ListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingRow.swift; sourceTree = "<group>"; };
 		2C68CA156ED9C05D6B98062A /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsView.swift; sourceTree = "<group>"; };
+		2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardStats.swift; sourceTree = "<group>"; };
 		2FC67168F3316F4DB345FFA5 /* AlertType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertType.swift; sourceTree = "<group>"; };
 		31E40700BCF762B3C6CF3725 /* ListingActionsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingActionsSection.swift; sourceTree = "<group>"; };
 		31F781AEF8A2FB7FB01140EF /* ListingMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingMapView.swift; sourceTree = "<group>"; };
@@ -195,6 +199,7 @@
 		6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */ = {isa = PBXFileReference; path = "vienna-districts.geojson"; sourceTree = "<group>"; };
 		70300F90D6EDB8A837EBF773 /* SourceHealthStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthStatus.swift; sourceTree = "<group>"; };
 		71FCE478C964B36CF4F6B450 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		78AFA579648506DD1AABED88 /* DevelopmentAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentAnnotation.swift; sourceTree = "<group>"; };
 		7CA68D9C8A6B847147396B76 /* vienna-developments.geojson */ = {isa = PBXFileReference; path = "vienna-developments.geojson"; sourceTree = "<group>"; };
 		7F182821E8F360F522253E21 /* FeedbackSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackSection.swift; sourceTree = "<group>"; };
 		80ABC75736472CB6B8C42F58 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
@@ -207,6 +212,7 @@
 		8DBADF0B9CFF105BC52EA0D0 /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
 		8FB5D6F2F47AFD990891E209 /* MarketBaseline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketBaseline.swift; sourceTree = "<group>"; };
 		91991EA545780DA6615D9C0F /* ScoreBreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBreakdownView.swift; sourceTree = "<group>"; };
+		9210FB7BE5465F2C80EB87EC /* POICategoryGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POICategoryGroup.swift; sourceTree = "<group>"; };
 		9337ADB045B0DF74AB97F7B4 /* DistrictTrend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictTrend.swift; sourceTree = "<group>"; };
 		934DD2B4DC860FE1DDE5D6DA /* FiltersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersView.swift; sourceTree = "<group>"; };
 		9F8BCFD2F83B6A682FAC262E /* CrossSourceComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossSourceComparisonView.swift; sourceTree = "<group>"; };
@@ -279,6 +285,7 @@
 			children = (
 				347FE4C4C7E22F18CA42A2E8 /* CrossSourceBadge.swift */,
 				9F8BCFD2F83B6A682FAC262E /* CrossSourceComparisonView.swift */,
+				78AFA579648506DD1AABED88 /* DevelopmentAnnotation.swift */,
 				7F182821E8F360F522253E21 /* FeedbackSection.swift */,
 				31E40700BCF762B3C6CF3725 /* ListingActionsSection.swift */,
 				271FB53A668734C9977451B6 /* ListingAnnotation.swift */,
@@ -526,6 +533,7 @@
 				520CF1A8627621B50AA6B2DF /* AlertFrequency.swift */,
 				A0DF2CB64F183CEA895198D0 /* AlertStatus.swift */,
 				2FC67168F3316F4DB345FFA5 /* AlertType.swift */,
+				2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */,
 				9337ADB045B0DF74AB97F7B4 /* DistrictTrend.swift */,
 				3F0D4EFEDD74A4641D80F579 /* Filter.swift */,
 				6661C10D13676B3451BE1AAA /* FilterCriteria.swift */,
@@ -538,6 +546,7 @@
 				8FB5D6F2F47AFD990891E209 /* MarketBaseline.swift */,
 				1BB8F4CCF4091C88106A89B1 /* OperationType.swift */,
 				4EC5A26E37EBE261AADA3F64 /* POI.swift */,
+				9210FB7BE5465F2C80EB87EC /* POICategoryGroup.swift */,
 				F7B1F74C000530D5F166FC18 /* PropertyType.swift */,
 				E5CFDC5C21E39B7C8AD908C4 /* ScoreExplanation.swift */,
 				F56EB795242229A02174F42B /* ScrapeRun.swift */,
@@ -660,10 +669,12 @@
 				386AB82E6D14EC5DFE3645F5 /* CrossSourceComparisonView.swift in Sources */,
 				ABAD42BCCD756B71FF5CD864 /* DashboardHeader.swift in Sources */,
 				59E95B052E006F43C89A7A9E /* DashboardListingRow.swift in Sources */,
+				AD52D9CD2089226D1A320491 /* DashboardStats.swift in Sources */,
 				DF2BF36CFAE1F46DBD1F2E4D /* DashboardView.swift in Sources */,
 				AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */,
 				A958DFF959BF2BE0C0F14428 /* DetailContentView.swift in Sources */,
 				D48D389CF94A777BA531355A /* DetailRow.swift in Sources */,
+				1CF3A1259C7D5CC42462D5EF /* DevelopmentAnnotation.swift in Sources */,
 				F57BB0D7605263374A8FC371 /* DistrictTrend.swift in Sources */,
 				10A11CEE450DFDD9C14727EB /* DistrictTrendChartView.swift in Sources */,
 				649DF8BA6B30A926E5B83404 /* FeedbackSection.swift in Sources */,
@@ -709,6 +720,7 @@
 				C73F2283BA373ADC6B8F76D2 /* OperationType.swift in Sources */,
 				FF4BDBAA5DA2AE0BC4046A36 /* POI.swift in Sources */,
 				B90B5FD1C3ED02634302EDA4 /* POIAnnotation.swift in Sources */,
+				8D922F5155E08B99C4C75FB9 /* POICategoryGroup.swift in Sources */,
 				15463BF908165A50F1893149 /* PriceFormatter.swift in Sources */,
 				D7B8EB03D79B87EC4925CFDC /* PriceHistoryPlaceholder.swift in Sources */,
 				B012246AE7DE163BD4AD4E43 /* PriceHistoryView.swift in Sources */,

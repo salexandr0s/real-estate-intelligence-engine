@@ -73,6 +73,6 @@ struct SavedListingItem: Identifiable, Codable, Sendable {
     }
 
     var parsedSavedAt: Date {
-        ISO8601DateFormatter.shared.date(from: savedAt) ?? .now
+        Date.fromISO(savedAt)
     }
 }

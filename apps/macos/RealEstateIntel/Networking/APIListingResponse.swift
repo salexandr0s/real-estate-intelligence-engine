@@ -22,6 +22,8 @@ struct APIListingResponse: Codable {
     let latitude: Double?
     let longitude: Double?
     let geocodePrecision: String?
+    let lastPriceChangePct: Double?
+    let lastPriceChangeAt: String?
     let firstSeenAt: String
     let listingStatus: String?
 
@@ -31,7 +33,8 @@ struct APIListingResponse: Codable {
             return nil
         }
 
-        let date = ISO8601DateFormatter.shared.date(from: firstSeenAt) ?? .now
+        let date = Date.fromISO(firstSeenAt)
+        let priceChangeDate = lastPriceChangeAt.map { Date.fromISO($0) }
         let status = ListingStatus(rawValue: listingStatus ?? "active") ?? .active
 
         return Listing(
@@ -54,6 +57,8 @@ struct APIListingResponse: Codable {
             latitude: latitude,
             longitude: longitude,
             geocodePrecision: geocodePrecision,
+            lastPriceChangePct: lastPriceChangePct,
+            lastPriceChangeAt: priceChangeDate,
             firstSeenAt: date,
             listingStatus: status
         )

@@ -5,6 +5,7 @@ struct ListingsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = ListingsViewModel()
     @State private var showInspector: Bool = false
+    @State private var exportError: String?
 
     var body: some View {
         HSplitView {
@@ -58,8 +59,8 @@ struct ListingsView: View {
             }
             ToolbarItem(placement: .automatic) {
                 Picker("View", selection: $viewModel.isMapMode) {
-                    Image(systemName: "list.bullet").tag(false)
-                    Image(systemName: "map").tag(true)
+                    Label("List", systemImage: "list.bullet").tag(false)
+                    Label("Map", systemImage: "map").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 80)
@@ -104,6 +105,9 @@ struct ListingsView: View {
                 showInspector = true
             }
         }
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {} message: {
+            if let msg = exportError { Text(msg) }
+        }
     }
 
     private func exportToFile(_ data: Data) {
@@ -116,7 +120,7 @@ struct ListingsView: View {
             do {
                 try data.write(to: url)
             } catch {
-                NSLog("[ListingsView] Export write failed: %@", String(describing: error))
+                exportError = error.localizedDescription
             }
         }
     }

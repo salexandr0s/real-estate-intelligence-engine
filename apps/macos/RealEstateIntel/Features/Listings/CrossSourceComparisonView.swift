@@ -13,7 +13,7 @@ struct CrossSourceComparisonView: View {
                     .font(.caption.bold())
                 if let spread = cluster.priceSpreadPct, spread > 0 {
                     Spacer()
-                    Text("Price spread: \(String(format: "%.1f%%", spread))")
+                    Text("Price spread: \(spread.formatted(.number.precision(.fractionLength(1))))%")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -51,8 +51,9 @@ struct CrossSourceComparisonView: View {
 
                     Spacer()
 
-                    Link(destination: URL(string: member.canonicalUrl) ?? URL(string: "about:blank")!) {
-                        Image(systemName: "arrow.up.right.square")
+                    if let url = URL(string: member.canonicalUrl) {
+                        Link("Open listing", destination: url)
+                            .labelStyle(.iconOnly)
                             .font(.caption)
                     }
                 }

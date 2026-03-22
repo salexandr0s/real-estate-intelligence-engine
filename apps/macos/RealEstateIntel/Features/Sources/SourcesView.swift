@@ -180,17 +180,20 @@ private struct SourceDetailCard: View {
             // Main row
             HStack(spacing: Theme.Spacing.md) {
                 // Source logo with active indicator overlay
-                ZStack(alignment: .bottomTrailing) {
-                    SourceLogo(sourceCode: source.code, size: 28)
-                    Circle()
-                        .fill(source.isActive ? Color.green : Color.gray)
-                        .frame(width: 8, height: 8)
-                        .overlay(
-                            Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
-                        )
-                        .offset(x: 2, y: 2)
+                Button(action: onToggle) {
+                    ZStack(alignment: .bottomTrailing) {
+                        SourceLogo(sourceCode: source.code, size: 28)
+                        Circle()
+                            .fill(source.isActive ? Color.green : Color.gray)
+                            .frame(width: 8, height: 8)
+                            .overlay(
+                                Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
                 }
-                .onTapGesture(perform: onToggle)
+                .buttonStyle(.plain)
+                .accessibilityLabel(source.isActive ? "Pause source" : "Resume source")
                 .help(source.isActive ? "Click to pause" : "Click to resume")
 
                 // Source name
@@ -227,7 +230,7 @@ private struct SourceDetailCard: View {
 
                 // Success rate
                 VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
-                    Text("\(source.successRatePct, specifier: "%.1f")%")
+                    Text("\(source.successRatePct.formatted(.number.precision(.fractionLength(1))))%")
                         .font(.body)
                         .fontWeight(.semibold)
                         .foregroundStyle(successRateColor)
@@ -251,16 +254,15 @@ private struct SourceDetailCard: View {
                 StatusBadge(healthStatus: source.healthStatus)
 
                 // Expand button
-                Button {
+                Button(isExpanded ? "Collapse" : "Expand", systemImage: "chevron.down") {
                     withAnimation(.easeInOut(duration: 0.16)) {
                         isExpanded.toggle()
                     }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
                 }
+                .labelStyle(.iconOnly)
+                .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                .foregroundStyle(.secondary)
+                .font(.caption)
                 .buttonStyle(.plain)
             }
             .padding(Theme.Spacing.md)

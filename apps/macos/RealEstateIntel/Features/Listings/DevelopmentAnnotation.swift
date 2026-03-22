@@ -21,7 +21,7 @@ struct DevelopmentAnnotation: View {
 
     private var marker: some View {
         Image(systemName: "building.2.fill")
-            .font(.system(size: 8))
+            .font(.system(size: 8)) // Fixed size: map marker icon
             .foregroundStyle(.white)
             .frame(width: 16, height: 16)
             .background(development.statusColor, in: RoundedRectangle(cornerRadius: 3))

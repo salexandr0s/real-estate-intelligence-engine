@@ -1,5 +1,6 @@
 import CoreLocation
 import MapKit
+import os
 import SwiftUI
 
 /// A Vienna city development project.
@@ -43,12 +44,12 @@ struct WienDevelopment: Identifiable, Codable, Hashable {
         let stripped = html
             .replacingOccurrences(of: "<br\\s*/?>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacing("&amp;", with: "&")
+            .replacing("&lt;", with: "<")
+            .replacing("&gt;", with: ">")
+            .replacing("&quot;", with: "\"")
+            .replacing("&#39;", with: "'")
+            .replacing("&nbsp;", with: " ")
             .replacingOccurrences(of: "&#\\d+;", with: "", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,13 +70,13 @@ enum ViennaDevelopmentStore {
     private static func loadDevelopments() -> [WienDevelopment] {
         guard let url = Bundle.main.url(forResource: "vienna-developments", withExtension: "geojson"),
               let data = try? Data(contentsOf: url) else {
-            NSLog("[ViennaDevelopmentStore] Failed to load vienna-developments.geojson")
+            Log.data.error("Failed to load vienna-developments.geojson")
             return []
         }
 
         let decoder = MKGeoJSONDecoder()
         guard let geoObjects = try? decoder.decode(data) else {
-            NSLog("[ViennaDevelopmentStore] Failed to decode GeoJSON")
+            Log.data.error("Failed to decode GeoJSON")
             return []
         }
 
@@ -105,7 +106,7 @@ enum ViennaDevelopmentStore {
             ))
         }
 
-        NSLog("[ViennaDevelopmentStore] Loaded %d developments", results.count)
+        Log.data.info("Loaded \(results.count) developments")
         return results
     }
 }
