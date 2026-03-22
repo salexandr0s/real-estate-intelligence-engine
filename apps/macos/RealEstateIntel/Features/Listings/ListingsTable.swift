@@ -7,95 +7,119 @@ struct ListingsTable: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Table(
-                viewModel.filteredListings,
-                selection: $viewModel.selectedListingID,
-                sortOrder: $viewModel.sortOrder
-            ) {
-                TableColumn("Score") { listing in
-                    ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
-                }
-                .width(min: 50, ideal: 56, max: 64)
-
-                TableColumn("Title", value: \.title) { listing in
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: Theme.Spacing.xs) {
-                            Text(listing.title)
-                                .lineLimit(1)
-                            if listing.hasAlertMatch {
-                                Image(systemName: "bell.badge.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.accentColor)
-                                    .help("Matched a filter alert")
-                            }
-                        }
-                        Text(listing.sourceCode)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .onAppear {
-                        // Sentinel: trigger loadMore when last item appears
-                        if listing.id == viewModel.filteredListings.last?.id, viewModel.hasMore {
-                            Task { await viewModel.loadMore(using: appState.apiClient) }
-                        }
-                    }
-                }
-                .width(min: 200, ideal: 300)
-
-                TableColumn("District") { listing in
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(listing.districtName ?? "\u{2014}")
-                        Text(listing.postalCode ?? "")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .width(min: 100, ideal: 130)
-
-                TableColumn("Price", value: \.listPriceEur) { listing in
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(PriceFormatter.format(eur: listing.listPriceEur))
-                            .monospacedDigit()
-                        Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .monospacedDigit()
-                    }
-                }
-                .width(min: 100, ideal: 140)
-
-                TableColumn("Size") { listing in
-                    Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
-                        .monospacedDigit()
-                }
-                .width(min: 70, ideal: 80)
-
-                TableColumn("Rooms") { listing in
-                    Text("\(listing.rooms ?? 0)")
-                        .monospacedDigit()
-                }
-                .width(min: 50, ideal: 60)
-
-                TableColumn("First Seen") { listing in
-                    Text(PriceFormatter.relativeDate(listing.firstSeenAt))
-                        .foregroundStyle(.secondary)
-                }
-                .width(min: 70, ideal: 80)
-            }
-
-            // Loading indicator at the bottom during pagination
+            listingTable
             if viewModel.isLoadingMore {
-                HStack(spacing: Theme.Spacing.sm) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading more listings...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Theme.Spacing.sm)
-                .background(Color(nsColor: .controlBackgroundColor))
+                loadingIndicator
             }
         }
+    }
+
+    private var listingTable: some View {
+        Table(
+            viewModel.filteredListings,
+            selection: $viewModel.selectedListingID,
+            sortOrder: $viewModel.sortOrder
+        ) {
+            TableColumn("Score") { (listing: Listing) in
+                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+            }
+            .width(min: 50, ideal: 56, max: 64)
+
+            TableColumn("Title", value: \.title) { (listing: Listing) in
+                titleCell(listing)
+            }
+            .width(min: 200, ideal: 300)
+
+            TableColumn("District") { (listing: Listing) in
+                districtCell(listing)
+            }
+            .width(min: 100, ideal: 130)
+
+            TableColumn("Price", value: \.listPriceEur) { (listing: Listing) in
+                priceCell(listing)
+            }
+            .width(min: 100, ideal: 140)
+
+            TableColumn("Size") { (listing: Listing) in
+                Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
+                    .monospacedDigit()
+            }
+            .width(min: 70, ideal: 80)
+
+            TableColumn("Rooms") { (listing: Listing) in
+                Text("\(listing.rooms ?? 0)")
+                    .monospacedDigit()
+            }
+            .width(min: 50, ideal: 60)
+
+            TableColumn("First Seen") { (listing: Listing) in
+                Text(PriceFormatter.relativeDate(listing.firstSeenAt))
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 70, ideal: 80)
+        }
+    }
+
+    // MARK: - Cell Views
+
+    @ViewBuilder
+    private func titleCell(_ listing: Listing) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: Theme.Spacing.xs) {
+                Text(listing.title)
+                    .lineLimit(1)
+                if listing.hasAlertMatch {
+                    Image(systemName: "bell.badge.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.accentColor)
+                        .help("Matched a filter alert")
+                }
+            }
+            Text(listing.sourceCode)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .onAppear {
+            if listing.id == viewModel.filteredListings.last?.id, viewModel.hasMore {
+                Task { await viewModel.loadMore(using: appState.apiClient) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func districtCell(_ listing: Listing) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(listing.districtName ?? "\u{2014}")
+            Text(listing.postalCode ?? "")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    @ViewBuilder
+    private func priceCell(_ listing: Listing) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(PriceFormatter.format(eur: listing.listPriceEur))
+                .monospacedDigit()
+            Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+    }
+
+    // MARK: - Loading
+
+    private var loadingIndicator: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            ProgressView()
+                .controlSize(.small)
+            Text("Loading more listings...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 }

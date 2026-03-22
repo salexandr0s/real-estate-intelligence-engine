@@ -3,7 +3,8 @@ import UserNotifications
 
 /// Manages local system notifications for alert events.
 /// Respects the user's notification preferences from AppState/UserDefaults.
-final class NotificationManager {
+@MainActor
+final class NotificationManager: Sendable {
     static let shared = NotificationManager()
 
     private init() {}

@@ -98,14 +98,15 @@ final class FiltersViewModel {
 
     func saveFilter(_ draft: FilterDraft, using client: APIClient) async {
         errorMessage = nil
+        let apiRequest = draft.toAPICreateRequest()
         do {
             if let existing = editingFilter {
-                let updated = try await client.updateFilterFull(id: existing.id, draft: draft)
+                let updated = try await client.updateFilterFull(id: existing.id, apiRequest: apiRequest)
                 if let index = filters.firstIndex(where: { $0.id == existing.id }) {
                     filters[index] = updated
                 }
             } else {
-                let created = try await client.createFilter(draft: draft)
+                let created = try await client.createFilterFromDraft(apiRequest)
                 filters.append(created)
             }
             showingEditor = false

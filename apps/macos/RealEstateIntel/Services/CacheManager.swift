@@ -12,8 +12,8 @@ actor CacheManager {
 
     private let fileManager = FileManager.default
 
-    private var cacheDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    nonisolated private var cacheDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let cacheDir = appSupport
             .appendingPathComponent("RealEstateIntel", isDirectory: true)
             .appendingPathComponent("Cache", isDirectory: true)
@@ -23,7 +23,11 @@ actor CacheManager {
     // MARK: - Init
 
     private init() {
-        ensureCacheDirectoryExists()
+        // Create cache directory synchronously during init
+        let dir = cacheDirectory
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
     }
 
     // MARK: - Public API

@@ -24,6 +24,7 @@ struct RealEstateIntelApp: App {
 
         MenuBarExtra {
             MenuBarContent()
+                .environment(appState)
         } label: {
             MenuBarLabel(unreadAlertCount: appState.unreadAlertCount)
         }

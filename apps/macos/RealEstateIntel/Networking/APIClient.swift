@@ -166,13 +166,12 @@ actor APIClient {
         try await requestVoid(.deleteFilter(id: id))
     }
 
-    func createFilter(draft: FilterDraft) async throws -> Filter {
-        let request = draft.toAPICreateRequest()
-        return try await createFilter(request)
+    func createFilterFromDraft(_ apiRequest: APICreateFilterRequest) async throws -> Filter {
+        return try await createFilter(apiRequest)
     }
 
-    func updateFilterFull(id: Int, draft: FilterDraft) async throws -> Filter {
-        let body = try encoder.encode(draft.toAPICreateRequest())
+    func updateFilterFull(id: Int, apiRequest: APICreateFilterRequest) async throws -> Filter {
+        let body = try encoder.encode(apiRequest)
         let response: APIResponse<APIFilterResponse> = try await request(.updateFilter(id: id, body: body))
         return mapFilterResponse(response.data)
     }
