@@ -40,6 +40,9 @@ export function createGeocodingWorker(): Worker<GeocodingJobData> {
         existingLatitude: listing.latitude != null ? Number(listing.latitude) : null,
         existingLongitude: listing.longitude != null ? Number(listing.longitude) : null,
         existingPrecision: listing.geocodePrecision,
+        title: job.data.title ?? listing.title,
+        description: job.data.description ?? listing.description,
+        addressDisplay: job.data.addressDisplay ?? listing.addressDisplay,
       });
 
       if (!result) {

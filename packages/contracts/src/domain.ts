@@ -46,7 +46,8 @@ export type AlertType =
   | 'price_change'
   | 'score_upgrade'
   | 'status_change'
-  | 'digest';
+  | 'digest'
+  | 'source_degraded';
 
 export type AlertChannel = 'in_app' | 'email' | 'push' | 'webhook';
 

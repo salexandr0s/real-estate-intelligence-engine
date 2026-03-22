@@ -14,6 +14,8 @@ struct DetailContentView: View {
             FiltersView()
         case .alerts:
             AlertsView()
+        case .watchlist:
+            WatchlistView()
         case .sources:
             SourcesView()
         case .analytics:

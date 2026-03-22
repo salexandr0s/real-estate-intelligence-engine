@@ -10,6 +10,7 @@ enum APIEndpoint {
     case getListing(id: Int)
     case getScoreExplanation(listingId: Int)
     case getListingHistory(listingId: Int)
+    case getListingCluster(listingId: Int)
 
     // MARK: - Filters
 
@@ -32,10 +33,21 @@ enum APIEndpoint {
     case updateSource(id: Int, body: Data)
     case pauseAllSources
     case resumeAllSources
+    case listScrapeRuns(limit: Int?)
+
+    // MARK: - Watchlist
+
+    case listSavedListings(limit: Int?, cursor: String?)
+    case saveListing(body: Data)
+    case unsaveListing(listingId: Int)
+    case checkSavedListings(listingIds: [Int])
+    case exportSavedListings
 
     // MARK: - Analytics
 
     case getBaselines
+    case getDistrictTrends(districtNo: Int?, operationType: String?, months: Int?)
+    case getMarketTemperature
 
     // MARK: - Path & Method
 
@@ -45,6 +57,7 @@ enum APIEndpoint {
         case .getListing(let id): "/v1/listings/\(id)"
         case .getScoreExplanation(let id): "/v1/listings/\(id)/score-explanation"
         case .getListingHistory(let id): "/v1/listings/\(id)/history"
+        case .getListingCluster(let id): "/v1/listings/\(id)/cluster"
         case .listFilters: "/v1/filters"
         case .createFilter: "/v1/filters"
         case .getFilter(let id): "/v1/filters/\(id)"
@@ -58,21 +71,30 @@ enum APIEndpoint {
         case .updateSource(let id, _): "/v1/sources/\(id)"
         case .pauseAllSources: "/v1/sources/pause-all"
         case .resumeAllSources: "/v1/sources/resume-all"
+        case .listScrapeRuns: "/v1/scrape-runs"
+        case .listSavedListings: "/v1/saved-listings"
+        case .saveListing: "/v1/saved-listings"
+        case .unsaveListing(let listingId): "/v1/saved-listings/\(listingId)"
+        case .checkSavedListings: "/v1/saved-listings/check"
+        case .exportSavedListings: "/v1/saved-listings/export"
         case .getBaselines: "/v1/analytics/baselines"
+        case .getDistrictTrends: "/v1/analytics/district-trends"
+        case .getMarketTemperature: "/v1/analytics/market-temperature"
         }
     }
 
     var method: String {
         switch self {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
-             .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources,
-             .getBaselines:
+             .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources, .getListingCluster, .listScrapeRuns,
+             .listSavedListings, .checkSavedListings, .exportSavedListings,
+             .getBaselines, .getDistrictTrends, .getMarketTemperature:
             "GET"
-        case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources:
+        case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing:
             "POST"
         case .updateFilter, .updateAlert, .updateSource:
             "PATCH"
-        case .deleteFilter:
+        case .deleteFilter, .unsaveListing:
             "DELETE"
         }
     }
@@ -80,7 +102,8 @@ enum APIEndpoint {
     var body: Data? {
         switch self {
         case .createFilter(let body), .updateFilter(_, let body),
-             .updateAlert(_, let body), .updateSource(_, let body):
+             .updateAlert(_, let body), .updateSource(_, let body),
+             .saveListing(let body):
             return body
         default:
             return nil
@@ -93,6 +116,23 @@ enum APIEndpoint {
             return query.toQueryItems()
         case .listAlerts(let query):
             return query?.toQueryItems()
+        case .listScrapeRuns(let limit):
+            if let l = limit { return [URLQueryItem(name: "limit", value: "\(l)")] }
+            return nil
+        case .listSavedListings(let limit, let cursor):
+            var items: [URLQueryItem] = []
+            if let l = limit { items.append(URLQueryItem(name: "limit", value: "\(l)")) }
+            if let c = cursor { items.append(URLQueryItem(name: "cursor", value: c)) }
+            return items.isEmpty ? nil : items
+        case .checkSavedListings(let listingIds):
+            let ids = listingIds.map(String.init).joined(separator: ",")
+            return [URLQueryItem(name: "listingIds", value: ids)]
+        case .getDistrictTrends(let districtNo, let operationType, let months):
+            var items: [URLQueryItem] = []
+            if let d = districtNo { items.append(URLQueryItem(name: "districtNo", value: "\(d)")) }
+            if let o = operationType { items.append(URLQueryItem(name: "operationType", value: o)) }
+            if let m = months { items.append(URLQueryItem(name: "months", value: "\(m)")) }
+            return items.isEmpty ? nil : items
         default:
             return nil
         }

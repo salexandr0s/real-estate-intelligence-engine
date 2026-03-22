@@ -6,6 +6,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     case listings
     case filters
     case alerts
+    case watchlist
     case sources
     case analytics
     case settings
@@ -18,6 +19,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .listings: "Listings"
         case .filters: "Filters"
         case .alerts: "Alerts"
+        case .watchlist: "Watchlist"
         case .sources: "Sources"
         case .analytics: "Analytics"
         case .settings: "Settings"
@@ -30,6 +32,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .listings: "building.2"
         case .filters: "line.3.horizontal.decrease.circle"
         case .alerts: "bell"
+        case .watchlist: "bookmark"
         case .sources: "antenna.radiowaves.left.and.right"
         case .analytics: "chart.bar.xaxis"
         case .settings: "gearshape"
@@ -43,9 +46,10 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .listings: "2"
         case .filters: "3"
         case .alerts: "4"
-        case .sources: "5"
-        case .analytics: "6"
-        case .settings: "7"
+        case .watchlist: "5"
+        case .sources: "6"
+        case .analytics: "7"
+        case .settings: "8"
         }
     }
 }

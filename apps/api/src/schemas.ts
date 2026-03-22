@@ -184,3 +184,10 @@ export const highScoreQuerySchema = z.object({
   limit: optionalQueryLimit,
   cursor: z.string().optional(),
 });
+
+export const districtTrendQuerySchema = z.object({
+  districtNo: optionalQueryNumber,
+  operationType: z.enum(OPERATION_TYPES).optional(),
+  propertyType: z.enum(PROPERTY_TYPES).optional(),
+  months: z.preprocess(absentToUndefined, z.coerce.number().int().min(1).max(60).optional()),
+});

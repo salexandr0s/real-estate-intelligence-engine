@@ -6,3 +6,21 @@ export {
   postalCodeToDistrictNo,
   type Centroid,
 } from './vienna-centroids.js';
+export {
+  extractStreetsFromText,
+  extractStationFromText,
+  extractDistrictFromText,
+  extractLocationSignals,
+  type StreetExtraction,
+  type StationExtraction,
+  type DistrictExtraction,
+  type LocationSignals,
+  type TextExtractionInput,
+} from './text-extractor.js';
+export {
+  findStation,
+  isAmbiguousStationName,
+  getStationIndex,
+  type StationIndex,
+} from './station-index.js';
+export { VIENNA_UBAHN_STATIONS, type UbahnStation } from './data/ubahn-stations.js';

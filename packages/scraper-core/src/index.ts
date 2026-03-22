@@ -47,5 +47,6 @@ export {
   type ProcessingJobData,
   type BaselineJobData,
   type GeocodingJobData,
+  type RescoreJobData,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';

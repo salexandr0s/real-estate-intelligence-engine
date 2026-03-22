@@ -1,9 +1,16 @@
 import SwiftUI
 
-/// Analytics view showing market baselines, summary cards, and district breakdown.
+/// Analytics view showing market baselines, trends, and temperature data.
 struct AnalyticsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = AnalyticsViewModel()
+    @State private var selectedTab: AnalyticsTab = .overview
+
+    enum AnalyticsTab: String, CaseIterable {
+        case overview = "Overview"
+        case trends = "Trends"
+        case temperature = "Temperature"
+    }
 
     var body: some View {
         ScrollView {
@@ -14,11 +21,22 @@ struct AnalyticsView: View {
                     }
                 }
 
-                if viewModel.baselines.isEmpty && !viewModel.isLoading {
-                    AnalyticsEmptyState()
-                } else {
-                    AnalyticsSummaryBar(viewModel: viewModel)
-                    AnalyticsDistrictTable(districts: viewModel.districtBreakdown)
+                switch selectedTab {
+                case .overview:
+                    if viewModel.baselines.isEmpty && !viewModel.isLoading {
+                        AnalyticsEmptyState()
+                    } else {
+                        AnalyticsSummaryBar(viewModel: viewModel)
+                        AnalyticsDistrictTable(districts: viewModel.districtBreakdown)
+                    }
+
+                case .trends:
+                    DistrictTrendChartView(data: viewModel.trendData) { months in
+                        Task { await viewModel.refreshTrends(using: appState.apiClient, months: months) }
+                    }
+
+                case .temperature:
+                    MarketTemperatureView(data: viewModel.temperatureData)
                 }
             }
             .padding(Theme.Spacing.xl)
@@ -28,6 +46,14 @@ struct AnalyticsView: View {
         .navigationTitle("Analytics")
         .toolbar {
             ToolbarItemGroup {
+                Picker("Tab", selection: $selectedTab) {
+                    ForEach(AnalyticsTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 280)
+
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)

@@ -205,4 +205,70 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       meta: {},
     });
   });
+
+  // GET /v1/dead-letter-queue — List failed jobs across all queues
+  app.get(
+    '/v1/dead-letter-queue',
+    {
+      schema: {
+        tags: ['Reliability'],
+        summary: 'List failed BullMQ jobs',
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { limit: queryLimit } = parseOrThrow(paginationQuerySchema, request.query);
+      const limit = queryLimit ?? 20;
+
+      const connection = getRedisConnection() as ConnectionOptions;
+      const prefix = getQueuePrefix();
+      const queueNames = [
+        QUEUE_NAMES.SCRAPE_DISCOVERY,
+        QUEUE_NAMES.SCRAPE_DETAIL,
+        QUEUE_NAMES.PROCESSING,
+        QUEUE_NAMES.BASELINE,
+        QUEUE_NAMES.GEOCODING,
+        QUEUE_NAMES.RESCORE,
+      ];
+
+      const allFailed: Array<{
+        jobId: string;
+        queue: string;
+        name: string;
+        error: string;
+        failedAt: string | null;
+        attempts: number;
+      }> = [];
+
+      for (const queueName of queueNames) {
+        const q = new Queue(queueName, { connection, prefix });
+        const failed = await q.getFailed(0, limit);
+        for (const job of failed) {
+          allFailed.push({
+            jobId: job.id ?? 'unknown',
+            queue: queueName,
+            name: job.name,
+            error: job.failedReason ?? 'unknown',
+            failedAt: job.finishedOn ? new Date(job.finishedOn).toISOString() : null,
+            attempts: job.attemptsMade,
+          });
+        }
+        await q.close();
+      }
+
+      // Sort by most recent failure first
+      allFailed.sort((a, b) => (b.failedAt ?? '').localeCompare(a.failedAt ?? ''));
+
+      return reply.send({
+        data: allFailed.slice(0, limit),
+        meta: { total: allFailed.length },
+      });
+    },
+  );
 }

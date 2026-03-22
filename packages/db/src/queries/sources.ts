@@ -153,3 +153,76 @@ export async function updateHealthStatus(
   const row = rows[0];
   return row ? toSourceRow(row) : null;
 }
+
+/**
+ * Count consecutive failures since the last successful scrape run for a source.
+ * Used for auto-disable logic.
+ */
+export async function countConsecutiveFailures(sourceId: number): Promise<number> {
+  const rows = await query<{ count: string }>(
+    `SELECT COUNT(*)::int AS count
+     FROM scrape_runs
+     WHERE source_id = $1
+       AND status IN ('failed', 'rate_limited')
+       AND started_at > (
+         SELECT COALESCE(MAX(started_at), '1970-01-01')
+         FROM scrape_runs
+         WHERE source_id = $1
+           AND status IN ('succeeded', 'partial')
+       )`,
+    [sourceId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Disable a source with a reason, setting health_status to 'disabled'.
+ */
+export async function disableWithReason(id: number, reason: string): Promise<SourceRow | null> {
+  const rows = await query<SourceDbRow>(
+    `UPDATE sources
+     SET is_active = false,
+         health_status = 'disabled',
+         config = jsonb_set(COALESCE(config, '{}')::jsonb, '{disabledReason}', $2::jsonb)
+     WHERE id = $1
+     RETURNING *`,
+    [id, JSON.stringify(reason)],
+  );
+  const row = rows[0];
+  return row ? toSourceRow(row) : null;
+}
+
+/**
+ * Check and update source health based on recent scrape run outcomes.
+ * Returns the previous and new health status.
+ */
+export async function checkAndUpdateHealth(sourceId: number): Promise<{
+  previousStatus: SourceHealthStatus;
+  newStatus: SourceHealthStatus;
+  changed: boolean;
+}> {
+  const source = await findById(sourceId);
+  if (!source) {
+    return { previousStatus: 'unknown', newStatus: 'unknown', changed: false };
+  }
+
+  const previousStatus = source.healthStatus;
+  const consecutiveFailures = await countConsecutiveFailures(sourceId);
+
+  let newStatus: SourceHealthStatus;
+  if (consecutiveFailures === 0) {
+    newStatus = 'healthy';
+  } else if (consecutiveFailures <= 2) {
+    newStatus = 'degraded';
+  } else if (consecutiveFailures <= 4) {
+    newStatus = 'blocked';
+  } else {
+    newStatus = 'disabled';
+  }
+
+  if (newStatus !== previousStatus) {
+    await updateHealthStatus(sourceId, newStatus);
+  }
+
+  return { previousStatus, newStatus, changed: newStatus !== previousStatus };
+}

@@ -4,14 +4,6 @@
  * so that future implementation can be type-checked.
  */
 
-/** Geocoding queue job data */
-export interface GeocodingJobData {
-  listingId: number;
-  address: string;
-  postalCode: string | null;
-  city: string;
-}
-
 /** Cross-source duplicate clustering input */
 export interface DuplicateClusterInput {
   crossSourceFingerprint: string;
@@ -52,13 +44,4 @@ export interface WebhookRegistration {
   events: string[];
   secret?: string;
   isActive: boolean;
-}
-
-/** District trend data point */
-export interface DistrictTrendPoint {
-  districtNo: number;
-  date: string;
-  medianPricePerSqm: number;
-  listingCount: number;
-  avgDaysOnMarket: number;
 }

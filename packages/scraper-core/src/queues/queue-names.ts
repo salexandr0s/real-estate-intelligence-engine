@@ -8,6 +8,7 @@ export const QUEUE_NAMES = {
   PROCESSING: 'processing-ingest',
   BASELINE: 'processing-baseline',
   GEOCODING: 'processing-geocoding',
+  RESCORE: 'processing-rescore',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -59,4 +60,17 @@ export interface GeocodingJobData {
   postalCode: string | null;
   city: string;
   districtNo: number | null;
+  /** Listing title for NLP-based location extraction */
+  title: string | null;
+  /** Listing description for NLP-based location extraction */
+  description: string | null;
+  /** Address display string for NLP-based location extraction */
+  addressDisplay: string | null;
+}
+
+/** Job data for batch rescore operation. */
+export interface RescoreJobData {
+  triggeredBy: 'api' | 'manual';
+  sourceCode: string | null;
+  limit: number;
 }

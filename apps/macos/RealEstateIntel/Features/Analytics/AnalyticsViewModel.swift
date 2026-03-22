@@ -7,6 +7,8 @@ final class AnalyticsViewModel {
     // MARK: - State
 
     var baselines: [MarketBaseline] = []
+    var trendData: [DistrictTrendPoint] = []
+    var temperatureData: [MarketTemperaturePoint] = []
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -64,13 +66,34 @@ final class AnalyticsViewModel {
         isLoading = true
         errorMessage = nil
 
+        // Fetch each independently so a single failure doesn't block others
         do {
             baselines = try await client.fetchBaselines()
         } catch {
             errorMessage = error.localizedDescription
         }
 
+        do {
+            trendData = try await client.fetchDistrictTrends()
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
+
+        do {
+            temperatureData = try await client.fetchMarketTemperature()
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
+
         isLoading = false
+    }
+
+    func refreshTrends(using client: APIClient, districtNo: Int? = nil, months: Int? = nil) async {
+        do {
+            trendData = try await client.fetchDistrictTrends(districtNo: districtNo, months: months)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

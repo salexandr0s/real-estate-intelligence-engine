@@ -2,11 +2,15 @@
  * Tiered geocoding strategy for Vienna real estate listings.
  *
  * Priority order:
- * 1. Skip if listing already has coordinates (source_exact / source_approx)
- * 2. Street + postal code → Nominatim (precision: street)
- * 3. Postal code → district centroid (precision: district)
- * 4. District number → district centroid (precision: district)
- * 5. City only → city centroid (precision: city)
+ * 0. Skip if listing already has coordinates (source_exact / source_approx)
+ * 1. Street + postal code → Nominatim (precision: street)
+ * 2. NLP street extraction from text → Nominatim (precision: street)
+ * 3. NLP U-Bahn station match from text → direct coords (precision: street)
+ * 4. Postal code → Nominatim (precision: postal_code)
+ * 5. District centroid from postal code (precision: district)
+ * 6. District centroid from district number (precision: district)
+ * 7. NLP district extraction from text → centroid (precision: district)
+ * 8. City only → city centroid (precision: city)
  */
 
 import type { GeocodePrecision } from '@rei/contracts';
@@ -16,6 +20,7 @@ import {
   VIENNA_DISTRICT_CENTROIDS,
   postalCodeToDistrictNo,
 } from './vienna-centroids.js';
+import { extractLocationSignals, type TextExtractionInput } from './text-extractor.js';
 
 export interface GeocodingInput {
   listingId: number;
@@ -26,13 +31,19 @@ export interface GeocodingInput {
   existingLatitude: number | null;
   existingLongitude: number | null;
   existingPrecision: GeocodePrecision | null;
+  /** Listing title for NLP extraction */
+  title: string | null;
+  /** Listing description for NLP extraction */
+  description: string | null;
+  /** Address display string for NLP extraction */
+  addressDisplay: string | null;
 }
 
 export interface GeocodingOutput {
   latitude: number;
   longitude: number;
   geocodePrecision: GeocodePrecision;
-  source: 'skip' | 'nominatim' | 'centroid';
+  source: 'skip' | 'nominatim' | 'nlp_nominatim' | 'nlp_station' | 'centroid';
 }
 
 /**
@@ -55,7 +66,7 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
     };
   }
 
-  // Tier 1: Nominatim with street address
+  // Tier 1: Nominatim with street address (from structured data)
   if (input.address && input.address.trim().length > 0) {
     const result = await geocodeAddress({
       street: input.address,
@@ -65,7 +76,45 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
     if (result) return nominatimToOutput(result);
   }
 
-  // Tier 2: Nominatim with postal code only (no street)
+  // Extract NLP signals from text (title, addressDisplay, description)
+  const textInput: TextExtractionInput = {
+    title: input.title,
+    description: input.description,
+    addressDisplay: input.addressDisplay,
+  };
+  const signals = extractLocationSignals(textInput);
+
+  // Tier 2: NLP street extraction → Nominatim
+  if (signals.streets.length > 0) {
+    for (const street of signals.streets) {
+      const result = await geocodeAddress({
+        street: street.fullAddress,
+        postalCode: input.postalCode ?? undefined,
+        city: input.city,
+      });
+      if (result) {
+        return {
+          latitude: result.lat,
+          longitude: result.lon,
+          geocodePrecision: result.precision,
+          source: 'nlp_nominatim',
+        };
+      }
+    }
+  }
+
+  // Tier 3: NLP U-Bahn station match (no API call)
+  if (signals.stations.length > 0) {
+    const station = signals.stations[0]!;
+    return {
+      latitude: station.latitude,
+      longitude: station.longitude,
+      geocodePrecision: 'street',
+      source: 'nlp_station',
+    };
+  }
+
+  // Tier 4: Nominatim with postal code only (no street)
   if (input.postalCode) {
     const result = await geocodeAddress({
       postalCode: input.postalCode,
@@ -74,7 +123,7 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
     if (result) return nominatimToOutput(result);
   }
 
-  // Tier 3: District centroid from postal code
+  // Tier 5: District centroid from postal code
   if (input.postalCode) {
     const districtNo = postalCodeToDistrictNo(input.postalCode);
     if (districtNo) {
@@ -90,7 +139,7 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
     }
   }
 
-  // Tier 4: District centroid from district number
+  // Tier 6: District centroid from district number
   if (input.districtNo) {
     const centroid = VIENNA_DISTRICT_CENTROIDS[input.districtNo];
     if (centroid) {
@@ -103,7 +152,22 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
     }
   }
 
-  // Tier 5: City centroid (Vienna center)
+  // Tier 7: NLP district extraction from text → centroid
+  // Only useful if districtNo was null (otherwise Tier 6 already ran)
+  if (!input.districtNo && signals.districts.length > 0) {
+    const district = signals.districts[0]!;
+    const centroid = VIENNA_DISTRICT_CENTROIDS[district.districtNo];
+    if (centroid) {
+      return {
+        latitude: centroid.lat,
+        longitude: centroid.lon,
+        geocodePrecision: 'district',
+        source: 'centroid',
+      };
+    }
+  }
+
+  // Tier 8: City centroid (Vienna center)
   if (input.city.toLowerCase().includes('wien')) {
     return {
       latitude: VIENNA_CENTER.lat,

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@rei/observability';
 import type { ListingSearchFilter } from '@rei/db';
-import { listings, listingScores, listingVersions } from '@rei/db';
+import { listings, listingScores, listingVersions, clusters } from '@rei/db';
 import {
   parseOrThrow,
   listingSearchQuerySchema,
@@ -341,6 +341,51 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           matchedPositiveKeywords: explanation.matchedPositiveKeywords,
           matchedNegativeKeywords: explanation.matchedNegativeKeywords,
           explanation: explanation.explanation,
+        },
+        meta: {},
+      });
+    },
+  );
+
+  // GET /v1/listings/:id/cluster - Get cross-source cluster
+  app.get<{ Params: { id: string } }>(
+    '/v1/listings/:id/cluster',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Get cross-source cluster for a listing',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'integer' } },
+          required: ['id'],
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = parseOrThrow(idParamSchema, request.params);
+
+      const cluster = await clusters.findClusterByListingId(id);
+      if (!cluster || cluster.members.length < 2) {
+        throw new NotFoundError('Cross-source cluster for listing', id);
+      }
+
+      return reply.send({
+        data: {
+          clusterId: cluster.id,
+          fingerprint: cluster.fingerprint,
+          listingCount: cluster.listingCount,
+          priceSpreadPct: cluster.priceSpreadPct,
+          members: cluster.members.map((m) => ({
+            listingId: m.listingId,
+            sourceCode: m.sourceCode,
+            sourceName: m.sourceName,
+            title: m.title,
+            listPriceEur: m.listPriceEurCents != null ? m.listPriceEurCents / 100 : null,
+            pricePerSqmEur: m.pricePerSqmEur,
+            currentScore: m.currentScore,
+            canonicalUrl: m.canonicalUrl,
+            firstSeenAt: m.firstSeenAt.toISOString(),
+          })),
         },
         meta: {},
       });

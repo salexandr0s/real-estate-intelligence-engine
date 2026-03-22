@@ -16,6 +16,8 @@ export * as listingScores from './queries/listing-scores.js';
 export * as marketBaselines from './queries/market-baselines.js';
 export * as pois from './queries/pois.js';
 export * as wienDevelopments from './queries/wien-developments.js';
+export * as savedListings from './queries/saved-listings.js';
+export * as clusters from './queries/clusters.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
 export type { SourceCreateInput } from './queries/sources.js';

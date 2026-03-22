@@ -76,6 +76,13 @@ actor APIClient {
         try validateResponse(response, data: data)
     }
 
+    func requestRawData(_ endpoint: APIEndpoint) async throws -> Data {
+        let urlRequest = try buildRequest(for: endpoint)
+        let (data, response) = try await performRequest(urlRequest)
+        try validateResponse(response, data: data)
+        return data
+    }
+
     // MARK: - Typed Convenience Methods
 
     func fetchListings(query: ListingQuery = ListingQuery()) async throws -> [Listing] {
@@ -123,6 +130,22 @@ actor APIClient {
                 baselineDate: dto.baselineDate.flatMap { ISO8601DateFormatter.shared.date(from: $0) } ?? .now
             )
         }
+    }
+
+    /// Fetch district price trends over time.
+    func fetchDistrictTrends(districtNo: Int? = nil, operationType: String? = nil, months: Int? = nil) async throws -> [DistrictTrendPoint] {
+        let response: PaginatedResponse<DistrictTrendPoint> = try await requestPaginated(
+            .getDistrictTrends(districtNo: districtNo, operationType: operationType, months: months)
+        )
+        return response.data
+    }
+
+    /// Fetch market temperature by district.
+    func fetchMarketTemperature() async throws -> [MarketTemperaturePoint] {
+        let response: PaginatedResponse<MarketTemperaturePoint> = try await requestPaginated(
+            .getMarketTemperature
+        )
+        return response.data
     }
 
     /// Fetch version history for a listing.
