@@ -23,7 +23,7 @@ struct AlertsView: View {
         .navigationTitle("Alerts")
         .inspector(isPresented: $showInspector) {
             AlertInspectorContent(alert: viewModel.selectedAlert)
-                .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
         }
         .toolbar {
             ToolbarItemGroup {
