@@ -5,7 +5,13 @@ import { NotFoundError } from '@rei/observability';
 import { sources, scrapeRuns } from '@rei/db';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
 import type { DiscoveryJobData } from '@rei/scraper-core';
-import { parseOrThrow, paginationQuerySchema, scrapeRunCreateSchema } from '../schemas.js';
+import {
+  parseOrThrow,
+  idParamSchema,
+  paginationQuerySchema,
+  scrapeRunCreateSchema,
+  sourceUpdateSchema,
+} from '../schemas.js';
 
 // Lazily-initialized shared queue for discovery jobs (avoids one Redis connection per request)
 let discoveryQueue: Queue<DiscoveryJobData> | null = null;
@@ -51,6 +57,57 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       data: mappedData,
       meta: {},
     });
+  });
+
+  // PATCH /v1/sources/:id - Update source (toggle is_active)
+  app.patch<{ Params: { id: string } }>('/v1/sources/:id', async (request, reply) => {
+    const { id } = parseOrThrow(idParamSchema, request.params);
+    const { isActive } = parseOrThrow(sourceUpdateSchema, request.body);
+
+    const existing = await sources.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Source', id);
+    }
+
+    const updated = await sources.updateActive(id, isActive);
+    if (!updated) {
+      throw new NotFoundError('Source', id);
+    }
+
+    return reply.send({
+      data: {
+        id: updated.id,
+        code: updated.code,
+        name: updated.name,
+        baseUrl: updated.baseUrl,
+        countryCode: updated.countryCode,
+        scrapeMode: updated.scrapeMode,
+        isActive: updated.isActive,
+        healthStatus: updated.healthStatus,
+        crawlIntervalMinutes: updated.crawlIntervalMinutes,
+        priority: updated.priority,
+        rateLimitRpm: updated.rateLimitRpm,
+        concurrencyLimit: updated.concurrencyLimit,
+        parserVersion: updated.parserVersion,
+        legalStatus: updated.legalStatus,
+        lastSuccessfulRunAt: updated.lastSuccessfulRunAt?.toISOString() ?? null,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      meta: {},
+    });
+  });
+
+  // POST /v1/sources/pause-all - Pause all sources
+  app.post('/v1/sources/pause-all', async (_request, reply) => {
+    const affected = await sources.updateAllActive(false);
+    return reply.send({ data: { affected }, meta: {} });
+  });
+
+  // POST /v1/sources/resume-all - Resume all sources
+  app.post('/v1/sources/resume-all', async (_request, reply) => {
+    const affected = await sources.updateAllActive(true);
+    return reply.send({ data: { affected }, meta: {} });
   });
 
   // GET /v1/scrape-runs - List recent scrape runs

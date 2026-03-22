@@ -30,6 +30,8 @@ enum APIEndpoint {
 
     case listSources
     case updateSource(id: Int, body: Data)
+    case pauseAllSources
+    case resumeAllSources
 
     // MARK: - Analytics
 
@@ -54,6 +56,8 @@ enum APIEndpoint {
         case .getUnreadCount: "/v1/alerts/unread-count"
         case .listSources: "/v1/sources"
         case .updateSource(let id, _): "/v1/sources/\(id)"
+        case .pauseAllSources: "/v1/sources/pause-all"
+        case .resumeAllSources: "/v1/sources/resume-all"
         case .getBaselines: "/v1/analytics/baselines"
         }
     }
@@ -64,7 +68,7 @@ enum APIEndpoint {
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources,
              .getBaselines:
             "GET"
-        case .createFilter, .testFilter:
+        case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources:
             "POST"
         case .updateFilter, .updateAlert, .updateSource:
             "PATCH"

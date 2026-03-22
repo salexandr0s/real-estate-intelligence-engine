@@ -13,7 +13,9 @@ struct SourcesView: View {
                 if viewModel.sources.isEmpty && !viewModel.isLoading {
                     SourcesEmptyState()
                 } else {
-                    SourcesListContent(sources: viewModel.sources)
+                    SourcesListContent(sources: viewModel.sources) { source in
+                        Task { await viewModel.toggleActive(source, using: appState.apiClient) }
+                    }
                 }
             }
             .padding(Theme.Spacing.xl)
@@ -27,6 +29,16 @@ struct SourcesView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+
+                Button {
+                    Task { await viewModel.togglePauseAll(using: appState.apiClient) }
+                } label: {
+                    Label(
+                        viewModel.allPaused ? "Resume All" : "Pause All",
+                        systemImage: viewModel.allPaused ? "play.fill" : "pause.fill"
+                    )
+                }
+                .disabled(viewModel.sources.isEmpty)
 
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
@@ -53,6 +65,13 @@ private struct SourcesSummaryBar: View {
                 value: "\(viewModel.sources.count)",
                 icon: "globe",
                 color: .accentColor
+            )
+
+            SourcesSummaryCard(
+                title: "Active",
+                value: "\(viewModel.activeCount)",
+                icon: "bolt.fill",
+                color: .green
             )
 
             SourcesSummaryCard(
@@ -132,6 +151,7 @@ private struct SourcesEmptyState: View {
 
 private struct SourcesListContent: View {
     let sources: [Source]
+    let onToggle: (Source) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -139,7 +159,7 @@ private struct SourcesListContent: View {
                 .font(.headline)
 
             ForEach(sources) { source in
-                SourceDetailCard(source: source)
+                SourceDetailCard(source: source) { onToggle(source) }
             }
         }
     }
@@ -149,23 +169,38 @@ private struct SourcesListContent: View {
 
 private struct SourceDetailCard: View {
     let source: Source
+    let onToggle: () -> Void
     @State private var isExpanded: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row
             HStack(spacing: Theme.Spacing.md) {
-                // Active indicator
+                // Active indicator (clickable)
                 Circle()
                     .fill(source.isActive ? Color.green : Color.gray)
                     .frame(width: 10, height: 10)
-                    .help(source.isActive ? "Active" : "Disabled")
+                    .onTapGesture(perform: onToggle)
+                    .help(source.isActive ? "Click to pause" : "Click to resume")
 
                 // Source name
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Text(source.name)
-                        .font(.body)
-                        .fontWeight(.medium)
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Text(source.name)
+                            .font(.body)
+                            .fontWeight(.medium)
+
+                        if !source.isActive {
+                            Text("Paused")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
 
                     if let lastRun = source.lastSuccessfulRun {
                         Text("Last run: \(PriceFormatter.relativeDate(lastRun))")
@@ -263,6 +298,7 @@ private struct SourceDetailCard: View {
                 .padding(Theme.Spacing.md)
             }
         }
+        .opacity(source.isActive ? 1.0 : 0.5)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)

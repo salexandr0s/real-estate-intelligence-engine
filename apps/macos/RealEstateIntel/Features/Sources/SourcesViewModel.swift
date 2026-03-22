@@ -32,6 +32,10 @@ final class SourcesViewModel {
         sources.reduce(0) { $0 + $1.totalListingsIngested }
     }
 
+    var allPaused: Bool {
+        !sources.isEmpty && sources.allSatisfy { !$0.isActive }
+    }
+
     // MARK: - Actions
 
     func refresh(using client: APIClient) async {
@@ -45,5 +49,37 @@ final class SourcesViewModel {
         }
 
         isLoading = false
+    }
+
+    func toggleActive(_ source: Source, using client: APIClient) async {
+        guard let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
+        let newActive = !sources[index].isActive
+        sources[index].isActive = newActive
+        do {
+            try await client.updateSource(id: source.id, isActive: newActive)
+        } catch {
+            if let idx = sources.firstIndex(where: { $0.id == source.id }) {
+                sources[idx].isActive = !newActive
+            }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func togglePauseAll(using client: APIClient) async {
+        let shouldPause = !allPaused
+        let backup = sources.map { $0.isActive }
+        for i in sources.indices { sources[i].isActive = !shouldPause }
+        do {
+            if shouldPause {
+                try await client.pauseAllSources()
+            } else {
+                try await client.resumeAllSources()
+            }
+        } catch {
+            for i in sources.indices where i < backup.count {
+                sources[i].isActive = backup[i]
+            }
+            errorMessage = error.localizedDescription
+        }
     }
 }

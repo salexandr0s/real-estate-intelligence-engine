@@ -217,6 +217,19 @@ actor APIClient {
         return response.data.unreadCount
     }
 
+    func updateSource(id: Int, isActive: Bool) async throws {
+        let body = try encoder.encode(["isActive": isActive])
+        try await requestVoid(.updateSource(id: id, body: body))
+    }
+
+    func pauseAllSources() async throws {
+        try await requestVoid(.pauseAllSources)
+    }
+
+    func resumeAllSources() async throws {
+        try await requestVoid(.resumeAllSources)
+    }
+
     func fetchSources() async throws -> [Source] {
         let response: PaginatedResponse<APISourceResponse> = try await requestPaginated(.listSources)
         return response.data.map { dto in
