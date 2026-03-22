@@ -14,7 +14,7 @@ struct APIListingResponse: Codable {
     let postalCode: String?
     let districtNo: Int?
     let districtName: String?
-    let listPriceEur: Int?
+    let listPriceEur: Double?
     let livingAreaSqm: Double?
     let rooms: Int?
     let pricePerSqmEur: Double?
@@ -43,7 +43,7 @@ struct APIListingResponse: Codable {
             postalCode: postalCode,
             districtNo: districtNo,
             districtName: districtName,
-            listPriceEur: listPriceEur ?? 0,
+            listPriceEur: Int(listPriceEur ?? 0),
             livingAreaSqm: livingAreaSqm,
             rooms: rooms,
             pricePerSqmEur: pricePerSqmEur,

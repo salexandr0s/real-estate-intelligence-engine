@@ -640,6 +640,6 @@
 - [x] Canonical listings are queryable by investor criteria (API serving filtered results)
 - [x] Filters support Vienna district/price/size/property type constraints (10 filter predicates + cursor pagination)
 - [x] Scores rank opportunities with explanation (79 rescored against 12 baselines)
-- [ ] Alerts notify on new matching listings
+- [x] Alerts notify on new matching listings (3 alerts created on live crawl matching "Vienna Apartments Under 400k" filter)
 - [x] Swift macOS app feels native and reliable (launches, displays real data)
 - [x] The system is extensible to additional sources without redesign (immoscout24 adapter exists, 7 sources seeded)
