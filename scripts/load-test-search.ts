@@ -64,24 +64,24 @@ function buildRandomQueryParams(): URLSearchParams {
     params.set('propertyTypes', types.join(','));
   }
   if (Math.random() > 0.4) {
-    params.set('priceMin', String(randomInt(50000, 200000)));
-    params.set('priceMax', String(randomInt(300000, 1500000)));
+    params.set('minPriceEur', String(randomInt(50000, 200000)));
+    params.set('maxPriceEur', String(randomInt(300000, 1500000)));
   }
   if (Math.random() > 0.5) {
-    params.set('areaMin', String(randomInt(30, 60)));
-    params.set('areaMax', String(randomInt(80, 200)));
+    params.set('minAreaSqm', String(randomInt(30, 60)));
+    params.set('maxAreaSqm', String(randomInt(80, 200)));
   }
   if (Math.random() > 0.6) {
-    params.set('roomsMin', String(randomInt(1, 2)));
-    params.set('roomsMax', String(randomInt(3, 6)));
+    params.set('minRooms', String(randomInt(1, 2)));
+    params.set('maxRooms', String(randomInt(3, 6)));
   }
   if (Math.random() > 0.7) {
-    params.set('scoreMin', String(randomInt(40, 70)));
+    params.set('minScore', String(randomInt(40, 70)));
   }
 
   const sortOption = SORT_OPTIONS[randomInt(0, SORT_OPTIONS.length - 1)];
   if (sortOption) {
-    params.set('sort', sortOption);
+    params.set('sortBy', sortOption);
   }
 
   params.set('limit', String(randomInt(10, 50)));

@@ -83,6 +83,7 @@ export const alertsCreatedTotal = new Counter({
 export const alertLagSeconds = new Histogram({
   name: 'rei_alert_lag_seconds',
   help: 'Time from listing score to alert creation',
+  labelNames: ['alert_type'] as const,
   buckets: [1, 5, 10, 30, 60, 120, 300],
   registers: [registry],
 });

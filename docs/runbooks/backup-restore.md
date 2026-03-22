@@ -64,5 +64,5 @@ This creates a temporary database, restores the backup, checks table counts, and
 
 1. `SELECT count(*) FROM listings` returns expected row count
 2. Check recent data exists: `SELECT MAX(last_seen_at) FROM listings`
-3. API health endpoint responds: `curl http://localhost:3000/health`
+3. API health endpoint responds: `curl http://localhost:8080/health`
 4. Worker processes are running and processing jobs

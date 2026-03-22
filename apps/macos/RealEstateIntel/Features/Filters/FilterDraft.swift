@@ -41,6 +41,27 @@ final class FilterDraft {
         )
     }
 
+    func toAPICreateRequest() -> APICreateFilterRequest {
+        let criteria = toCriteria()
+        return APICreateFilterRequest(
+            name: name,
+            filterKind: "alert",
+            operationType: criteria.operationType?.rawValue,
+            propertyTypes: criteria.propertyTypes.map(\.rawValue),
+            districts: criteria.districts,
+            minPriceEur: criteria.minPriceEur,
+            maxPriceEur: criteria.maxPriceEur,
+            minAreaSqm: criteria.minAreaSqm,
+            maxAreaSqm: criteria.maxAreaSqm,
+            minRooms: criteria.minRooms,
+            maxRooms: criteria.maxRooms,
+            minScore: criteria.minScore,
+            requiredKeywords: criteria.requiredKeywords,
+            excludedKeywords: criteria.excludedKeywords,
+            alertFrequency: alertFrequency.rawValue
+        )
+    }
+
     static func from(_ filter: Filter) -> FilterDraft {
         let draft = FilterDraft()
         draft.name = filter.name

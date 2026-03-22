@@ -62,7 +62,7 @@ If the release included a destructive migration, apply a compensating migration 
 ## Verification
 
 1. Run the full test suite: `npm run verify`
-2. Check API health: `curl http://localhost:3000/health`
+2. Check API health: `curl http://localhost:8080/health`
 3. Verify recent data is intact: `SELECT MAX(last_seen_at) FROM listings`
 4. Confirm worker processes are healthy and processing jobs
 5. Monitor metrics for 15 minutes to confirm stability

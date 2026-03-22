@@ -94,7 +94,7 @@ private struct FiltersList: View {
                 FilterRow(
                     filter: filter,
                     isTesting: viewModel.isTestingFilter && viewModel.testingFilterId == filter.id,
-                    onToggle: { viewModel.toggleActive(filter) },
+                    onToggle: { Task { await viewModel.toggleActive(filter, using: appState.apiClient) } },
                     onEdit: { viewModel.startEditing(filter) },
                     onTest: {
                         Task { await viewModel.testFilter(filter, using: appState.apiClient) }
@@ -102,7 +102,7 @@ private struct FiltersList: View {
                 )
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
-                        viewModel.deleteFilter(filter)
+                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient) }
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -135,7 +135,7 @@ private struct FiltersList: View {
                     }
 
                     Button {
-                        viewModel.toggleActive(filter)
+                        Task { await viewModel.toggleActive(filter, using: appState.apiClient) }
                     } label: {
                         Label(
                             filter.isActive ? "Deactivate" : "Activate",
@@ -146,7 +146,7 @@ private struct FiltersList: View {
                     Divider()
 
                     Button(role: .destructive) {
-                        viewModel.deleteFilter(filter)
+                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient) }
                     } label: {
                         Label("Delete Filter", systemImage: "trash")
                     }
@@ -504,8 +504,10 @@ private struct FilterEditorSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    viewModel.saveFilter(draft)
-                    dismiss()
+                    Task {
+                        await viewModel.saveFilter(draft, using: appState.apiClient)
+                        dismiss()
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)

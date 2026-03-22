@@ -19,17 +19,18 @@ SELECT code, health_status, is_active, updated_at
 -- Review recent scrape runs for degradation signals
 SELECT id, started_at, status,
        pages_fetched, listings_discovered,
-       http_2xx, http_4xx, http_5xx, parse_failures
+       http_2xx, http_4xx, http_5xx, captcha_count
   FROM scrape_runs
   WHERE source_id = (SELECT id FROM sources WHERE code = '<source_code>')
   ORDER BY started_at DESC
   LIMIT 10;
 
 -- Check completeness trend on recent raw listings
-SELECT DATE(created_at), AVG(completeness_score), COUNT(*)
-  FROM raw_listings
-  WHERE source_id = (SELECT id FROM sources WHERE code = '<source_code>')
-    AND created_at > NOW() - INTERVAL '3 days'
+SELECT DATE(l.created_at), AVG(l.completeness_score), COUNT(*)
+  FROM listings l
+  JOIN raw_listings rl ON l.source_id = rl.source_id AND l.source_listing_key = rl.source_listing_key
+  WHERE l.source_id = (SELECT id FROM sources WHERE code = '<source_code>')
+    AND l.created_at > NOW() - INTERVAL '3 days'
   GROUP BY 1 ORDER BY 1;
 ```
 

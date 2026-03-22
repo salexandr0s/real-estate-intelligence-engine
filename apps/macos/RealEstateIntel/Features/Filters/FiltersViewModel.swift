@@ -30,22 +30,34 @@ final class FiltersViewModel {
             filters = try await client.fetchFilters()
         } catch {
             errorMessage = error.localizedDescription
-            if filters.isEmpty {
-                filters = Filter.samples
-            }
         }
 
         isLoading = false
     }
 
-    func toggleActive(_ filter: Filter) {
-        if let index = filters.firstIndex(where: { $0.id == filter.id }) {
-            filters[index].isActive.toggle()
+    func toggleActive(_ filter: Filter, using client: APIClient) async {
+        guard let index = filters.firstIndex(where: { $0.id == filter.id }) else { return }
+        let newActive = !filters[index].isActive
+        filters[index].isActive = newActive
+        do {
+            try await client.updateFilter(id: filter.id, isActive: newActive)
+        } catch {
+            // Revert optimistic update on failure
+            filters[index].isActive = !newActive
+            errorMessage = error.localizedDescription
         }
     }
 
-    func deleteFilter(_ filter: Filter) {
+    func deleteFilter(_ filter: Filter, using client: APIClient) async {
+        let backup = filters
         filters.removeAll { $0.id == filter.id }
+        do {
+            try await client.deleteFilter(id: filter.id)
+        } catch {
+            // Revert optimistic delete on failure
+            filters = backup
+            errorMessage = error.localizedDescription
+        }
     }
 
     func startNewFilter() {
@@ -82,26 +94,19 @@ final class FiltersViewModel {
     /// Transient draft for the duplicate flow, consumed by the editor sheet on presentation.
     var pendingDraft: FilterDraft?
 
-    func saveFilter(_ draft: FilterDraft) {
-        if let existing = editingFilter,
-           let index = filters.firstIndex(where: { $0.id == existing.id }) {
-            filters[index].name = draft.name
-            filters[index].criteria = draft.toCriteria()
-            filters[index].alertFrequency = draft.alertFrequency
-            filters[index].updatedAt = Date.now
-        } else {
-            let newFilter = Filter(
-                id: (filters.map(\.id).max() ?? 0) + 1,
-                name: draft.name,
-                filterKind: .alert,
-                isActive: true,
-                criteria: draft.toCriteria(),
-                alertFrequency: draft.alertFrequency,
-                createdAt: Date.now,
-                updatedAt: Date.now,
-                matchCount: nil
-            )
-            filters.append(newFilter)
+    func saveFilter(_ draft: FilterDraft, using client: APIClient) async {
+        do {
+            if let existing = editingFilter {
+                let updated = try await client.updateFilterFull(id: existing.id, draft: draft)
+                if let index = filters.firstIndex(where: { $0.id == existing.id }) {
+                    filters[index] = updated
+                }
+            } else {
+                let created = try await client.createFilter(draft: draft)
+                filters.append(created)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
         }
         showingEditor = false
         editingFilter = nil

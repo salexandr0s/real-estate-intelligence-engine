@@ -208,6 +208,26 @@ actor APIClient {
         )
     }
 
+    func updateFilter(id: Int, isActive: Bool) async throws {
+        let body = try encoder.encode(["isActive": isActive])
+        try await requestVoid(.updateFilter(id: id, body: body))
+    }
+
+    func deleteFilter(id: Int) async throws {
+        try await requestVoid(.deleteFilter(id: id))
+    }
+
+    func createFilter(draft: FilterDraft) async throws -> Filter {
+        let request = draft.toAPICreateRequest()
+        return try await createFilter(request)
+    }
+
+    func updateFilterFull(id: Int, draft: FilterDraft) async throws -> Filter {
+        let body = try encoder.encode(draft.toAPICreateRequest())
+        let response: APIResponse<APIFilterResponse> = try await request(.updateFilter(id: id, body: body))
+        return mapFilterResponse(response.data)
+    }
+
     func fetchAlerts(query: AlertQuery? = nil) async throws -> [Alert] {
         let response: PaginatedResponse<APIAlertResponse> = try await requestPaginated(
             .listAlerts(query: query)
@@ -253,6 +273,36 @@ actor APIClient {
                 successRatePct: dto.successRatePct ?? 0.0
             )
         }
+    }
+
+    // MARK: - DTO Mapping Helpers
+
+    private func mapFilterResponse(_ dto: APIFilterResponse) -> Filter {
+        Filter(
+            id: dto.id,
+            name: dto.name,
+            filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
+            isActive: dto.isActive,
+            criteria: FilterCriteria(
+                operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
+                propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
+                districts: dto.districts ?? [],
+                minPriceEur: dto.minPriceEur,
+                maxPriceEur: dto.maxPriceEur,
+                minAreaSqm: dto.minAreaSqm,
+                maxAreaSqm: dto.maxAreaSqm,
+                minRooms: dto.minRooms,
+                maxRooms: dto.maxRooms,
+                minScore: dto.minScore,
+                requiredKeywords: dto.requiredKeywords ?? [],
+                excludedKeywords: dto.excludedKeywords ?? [],
+                sortBy: dto.sortBy
+            ),
+            alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
+            createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
+            updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
+            matchCount: dto.matchCount
+        )
     }
 
     // MARK: - Connection Test

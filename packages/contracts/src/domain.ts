@@ -4,13 +4,27 @@ export type OperationType = 'sale' | 'rent';
 
 export type PropertyType = 'apartment' | 'house' | 'land' | 'commercial' | 'parking' | 'other';
 
-export type ListingStatus = 'active' | 'inactive' | 'sold' | 'rented' | 'withdrawn' | 'expired' | 'unknown';
+export type ListingStatus =
+  | 'active'
+  | 'inactive'
+  | 'sold'
+  | 'rented'
+  | 'withdrawn'
+  | 'expired'
+  | 'unknown';
 
 export type SourceHealthStatus = 'healthy' | 'degraded' | 'blocked' | 'disabled' | 'unknown';
 
 export type ScrapeMode = 'browser' | 'http' | 'api' | 'feed';
 
-export type ScrapeRunStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled' | 'rate_limited';
+export type ScrapeRunStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+  | 'rate_limited';
 
 export type ScrapeRunTriggerType = 'schedule' | 'manual' | 'backfill' | 'retry' | 'recovery';
 
@@ -18,9 +32,21 @@ export type ScrapeRunScope = 'discovery' | 'detail' | 'full';
 
 export type ExtractionStatus = 'captured' | 'parse_failed' | 'blocked' | 'not_found';
 
-export type GeocodePrecision = 'source_exact' | 'source_approx' | 'street' | 'district' | 'city' | 'none';
+export type GeocodePrecision =
+  | 'source_exact'
+  | 'source_approx'
+  | 'street'
+  | 'district'
+  | 'city'
+  | 'none';
 
-export type AlertType = 'new_match' | 'price_drop' | 'score_upgrade' | 'status_change' | 'digest';
+export type AlertType =
+  | 'new_match'
+  | 'price_drop'
+  | 'price_change'
+  | 'score_upgrade'
+  | 'status_change'
+  | 'digest';
 
 export type AlertChannel = 'in_app' | 'email' | 'push' | 'webhook';
 
@@ -34,7 +60,13 @@ export type SortBy = 'score_desc' | 'newest' | 'price_asc' | 'price_desc' | 'sqm
 
 export type LegalStatus = 'approved' | 'review_required' | 'disabled';
 
-export type VersionReason = 'first_seen' | 'price_change' | 'content_change' | 'status_change' | 'relist_detected' | 'backfill';
+export type VersionReason =
+  | 'first_seen'
+  | 'price_change'
+  | 'content_change'
+  | 'status_change'
+  | 'relist_detected'
+  | 'backfill';
 
 // ── Vienna District Data ────────────────────────────────────────────────────
 
@@ -60,7 +92,12 @@ export const VIENNA_DISTRICTS: readonly ViennaDistrict[] = [
   { districtNo: 12, name: 'Meidling', postalCode: '1120', aliases: ['12. bezirk'] },
   { districtNo: 13, name: 'Hietzing', postalCode: '1130', aliases: ['13. bezirk'] },
   { districtNo: 14, name: 'Penzing', postalCode: '1140', aliases: ['14. bezirk'] },
-  { districtNo: 15, name: 'Rudolfsheim-Fünfhaus', postalCode: '1150', aliases: ['rudolfsheim fuenfhaus', 'rudolfsheim-funfhaus', '15. bezirk'] },
+  {
+    districtNo: 15,
+    name: 'Rudolfsheim-Fünfhaus',
+    postalCode: '1150',
+    aliases: ['rudolfsheim fuenfhaus', 'rudolfsheim-funfhaus', '15. bezirk'],
+  },
   { districtNo: 16, name: 'Ottakring', postalCode: '1160', aliases: ['16. bezirk'] },
   { districtNo: 17, name: 'Hernals', postalCode: '1170', aliases: ['17. bezirk'] },
   { districtNo: 18, name: 'Währing', postalCode: '1180', aliases: ['waehring', '18. bezirk'] },

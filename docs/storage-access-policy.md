@@ -19,13 +19,13 @@
 
 | Artifact Type | Bucket Prefix     | Purpose                        | Access Level       |
 | ------------- | ----------------- | ------------------------------ | ------------------ |
-| HTML snapshots | `html/`          | Raw page HTML for debugging    | Internal only      |
+| HTML snapshots | `raw-html/`      | Raw page HTML for debugging    | Internal only      |
 | Screenshots   | `screenshots/`    | Visual captures on parse failure | Internal only    |
 | HAR files     | `har/`            | Network request traces         | Internal only      |
 
 ### Security Rules
 
 1. Screenshots and HTML snapshots are **internal debugging tools** — they must never be exposed to app users.
-2. Service account credentials are stored in environment variables (`MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`) and loaded via `@rei/config`.
+2. Service account credentials are stored in environment variables (`S3_ACCESS_KEY`, `S3_SECRET_KEY`) and loaded via `@rei/config`.
 3. Credentials must never appear in logs — the observability package redacts secret-like keys automatically.
 4. Bucket lifecycle policies handle automatic cleanup of old artifacts (see `infrastructure/storage/lifecycle-policy.json`).

@@ -2,7 +2,7 @@ import Foundation
 
 /// In-memory TTL cache for API responses.
 /// Avoids redundant network calls within the configured time-to-live window.
-@Observable
+@MainActor @Observable
 final class LocalCache {
     private var store: [String: CacheEntry] = [:]
     private let ttl: TimeInterval

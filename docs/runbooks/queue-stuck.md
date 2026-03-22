@@ -12,15 +12,16 @@ When BullMQ processing queues stop making progress.
 ## Detection
 
 ```bash
-# Check Redis queue depth
-redis-cli LLEN rei:scrape-detail
-redis-cli LLEN rei:scrape-discovery
-redis-cli LLEN rei:processing
+# Check Redis queue depth (BullMQ key format: bull:{prefix}:{queue}:wait)
+redis-cli LLEN bull:rei:scrape-detail:wait
+redis-cli LLEN bull:rei:scrape-discovery:wait
+redis-cli LLEN bull:rei:processing-ingest:wait
+redis-cli LLEN bull:rei:processing-baseline:wait
 
 # Check for active/waiting/delayed jobs
-redis-cli SCARD rei:scrape-detail:active
-redis-cli ZCARD rei:scrape-detail:delayed
-redis-cli ZCARD rei:scrape-detail:waiting
+redis-cli SCARD bull:rei:scrape-detail:active
+redis-cli ZCARD bull:rei:scrape-detail:delayed
+redis-cli ZCARD bull:rei:scrape-detail:waiting
 
 # Check worker process status
 ps aux | grep worker
@@ -52,13 +53,13 @@ SELECT id, started_at, finished_at, status
 
 3. **Check for dead-letter jobs**: Inspect failed jobs that exhausted retries:
    ```bash
-   redis-cli LRANGE rei:scrape-detail:failed 0 5
+   redis-cli LRANGE bull:rei:scrape-detail:failed 0 5
    ```
 
 4. **Clear stuck jobs if needed**: If jobs are stuck in active state with no worker processing them:
    ```bash
    # Move stale active jobs back to waiting (use with caution)
-   redis-cli DEL rei:scrape-detail:active
+   redis-cli DEL bull:rei:scrape-detail:active
    ```
 
 5. **Check for resource exhaustion**: Verify the system has sufficient memory and file descriptors for Playwright browser instances.

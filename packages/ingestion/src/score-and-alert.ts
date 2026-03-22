@@ -1,5 +1,6 @@
 import type {
   AlertCreate,
+  AlertType,
   BaselineLookup,
   ScoreInput,
   ScoreResult,
@@ -181,7 +182,11 @@ export class ScoreAndAlert {
     // 5. Create alerts
     let alertsCreated = 0;
     const scoreImproved = listing.currentScore != null && score.overallScore > listing.currentScore;
-    const alertType = this.determineAlertType(versionReason, scoreImproved);
+    const priceDecreased =
+      previousPrice != null &&
+      listing.listPriceEurCents != null &&
+      listing.listPriceEurCents < previousPrice;
+    const alertType = this.determineAlertType(versionReason, scoreImproved, priceDecreased);
 
     for (const match of matched) {
       const dedupeKey = buildAlertDedupeKey({
@@ -245,12 +250,13 @@ export class ScoreAndAlert {
   private determineAlertType(
     versionReason: VersionReason,
     scoreImproved: boolean,
-  ): 'new_match' | 'price_drop' | 'score_upgrade' | 'status_change' {
+    priceDecreased: boolean,
+  ): AlertType {
     switch (versionReason) {
       case 'first_seen':
         return 'new_match';
       case 'price_change':
-        return 'price_drop';
+        return priceDecreased ? 'price_drop' : 'price_change';
       case 'content_change':
         return scoreImproved ? 'score_upgrade' : 'status_change';
       case 'status_change':
@@ -263,7 +269,8 @@ export class ScoreAndAlert {
   private buildAlertTitle(alertType: string, listingTitle: string): string {
     const prefix: Record<string, string> = {
       new_match: 'Neues Inserat',
-      price_drop: 'Preisänderung',
+      price_drop: 'Preissenkung',
+      price_change: 'Preisänderung',
       score_upgrade: 'Score-Upgrade',
       status_change: 'Statusänderung',
     };

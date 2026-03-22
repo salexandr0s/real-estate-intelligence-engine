@@ -579,7 +579,7 @@ CREATE TABLE IF NOT EXISTS alerts (
   listing_id                BIGINT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
   listing_version_id        BIGINT REFERENCES listing_versions(id) ON DELETE SET NULL,
   alert_type                TEXT NOT NULL
-                              CHECK (alert_type IN ('new_match', 'price_drop', 'score_upgrade', 'status_change', 'digest')),
+                              CHECK (alert_type IN ('new_match', 'price_drop', 'price_change', 'score_upgrade', 'status_change', 'digest')),
   channel                   TEXT NOT NULL
                               CHECK (channel IN ('in_app', 'email', 'push', 'webhook')),
   status                    TEXT NOT NULL DEFAULT 'queued'

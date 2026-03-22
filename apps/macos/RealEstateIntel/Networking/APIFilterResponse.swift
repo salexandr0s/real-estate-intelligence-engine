@@ -32,8 +32,12 @@ struct APICreateFilterRequest: Codable {
     let operationType: String?
     let propertyTypes: [String]
     let districts: [Int]
+    let minPriceEur: Int?
     let maxPriceEur: Int?
     let minAreaSqm: Double?
+    let maxAreaSqm: Double?
+    let minRooms: Int?
+    let maxRooms: Int?
     let minScore: Double?
     let requiredKeywords: [String]
     let excludedKeywords: [String]

@@ -54,6 +54,6 @@ SELECT id, title_raw, price_raw, living_area_raw, rooms_raw, extraction_status
 ## Verification
 
 1. All parser tests pass with the new fixtures
-2. Run a canary crawl and confirm `extraction_status = 'ok'` on new raw listings
+2. Run a canary crawl and confirm `extraction_status = 'captured'` on new raw listings
 3. Confirm no null fields in critical columns (title, price, area)
 4. Run `npm run report:quality` to verify data quality is restored

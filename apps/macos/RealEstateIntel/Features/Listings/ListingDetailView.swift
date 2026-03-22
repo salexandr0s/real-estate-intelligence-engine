@@ -4,7 +4,7 @@ import SwiftUI
 struct ListingDetailView: View {
     let listing: Listing
     @Environment(AppState.self) private var appState
-    @State private var explanation: ScoreExplanation? = Listing.sampleExplanation
+    @State private var explanation: ScoreExplanation?
     @State private var priceVersions: [PriceVersion] = []
 
     var body: some View {
@@ -30,6 +30,15 @@ struct ListingDetailView: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .task(id: listing.id) {
             await loadVersions()
+            await loadExplanation()
+        }
+    }
+
+    private func loadExplanation() async {
+        do {
+            explanation = try await appState.apiClient.fetchScoreExplanation(listingId: listing.id)
+        } catch {
+            explanation = nil
         }
     }
 

@@ -2,7 +2,10 @@ import { createLogger } from '@rei/observability';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
+
+const gzipAsync = promisify(gzip);
 
 const logger = createLogger('artifact-writer');
 
@@ -54,7 +57,7 @@ export class ArtifactWriter implements ArtifactWriterPort {
 
     await mkdir(dirname(fullPath), { recursive: true });
 
-    const compressed = gzipSync(Buffer.from(html, 'utf-8'));
+    const compressed = await gzipAsync(Buffer.from(html, 'utf-8'));
     await writeFile(fullPath, compressed);
 
     logger.debug('Wrote HTML artifact', {
