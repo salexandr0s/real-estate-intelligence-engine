@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Small map annotation for POIs, differentiated by category color and icon.
@@ -7,11 +6,11 @@ struct POIAnnotation: View {
 
     var body: some View {
         Image(systemName: poi.category.systemImage)
-            .font(.system(size: 8))
+            .font(.system(size: 8)) // Fixed size: map marker icon
             .foregroundStyle(.white)
             .frame(width: 16, height: 16)
             .background(poi.category.tintColor, in: Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 0.5))
+            .overlay { Circle().stroke(.white, lineWidth: 0.5) }
     }
 }
 
@@ -36,11 +35,11 @@ struct DevelopmentAnnotation: View {
 
     private var marker: some View {
         Image(systemName: "building.2.fill")
-            .font(.system(size: 8))
+            .font(.system(size: 8)) // Fixed size: map marker icon
             .foregroundStyle(.white)
             .frame(width: 16, height: 16)
             .background(development.statusColor, in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(.white, lineWidth: 0.5))
+            .overlay { RoundedRectangle(cornerRadius: 3).stroke(.white, lineWidth: 0.5) }
     }
 }
 
@@ -53,14 +52,14 @@ struct DevelopmentPopover: View {
             // Header: name + status
             HStack(alignment: .top, spacing: 8) {
                 Text(development.name)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.bold())
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 4)
 
                 Text(development.statusDisplay)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -70,7 +69,7 @@ struct DevelopmentPopover: View {
             // Category
             if let category = development.category {
                 Text(category)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -79,10 +78,10 @@ struct DevelopmentPopover: View {
             if let duration = development.duration {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                     Text(duration)
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -90,7 +89,7 @@ struct DevelopmentPopover: View {
             // Description
             if let desc = development.plainDescription {
                 Text(desc)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(4)
             }
@@ -104,9 +103,9 @@ struct DevelopmentPopover: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 10))
+                                .font(.caption2)
                             Text("Open")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.caption2)
                         }
                         .foregroundStyle(.blue)
                     }

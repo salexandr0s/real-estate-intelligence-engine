@@ -58,7 +58,7 @@ struct ProximityMetricsView: View {
                     )
                 }
 
-                let hospitalCount = nearbyPOIs.filter { $0.poi.category == .hospital && $0.distanceM <= 2000 }.count
+                let hospitalCount = nearbyPOIs.count(where: { $0.poi.category == .hospital && $0.distanceM <= 2000 })
                 if hospitalCount > 0 {
                     proximityRow(
                         icon: "cross.case.fill",
@@ -91,8 +91,8 @@ struct ProximityMetricsView: View {
                 }
 
                 // Safety
-                let policeCount = nearbyPOIs.filter { $0.poi.category == .police && $0.distanceM <= 1000 }.count
-                let fireCount = nearbyPOIs.filter { $0.poi.category == .fireStation && $0.distanceM <= 1000 }.count
+                let policeCount = nearbyPOIs.count(where: { $0.poi.category == .police && $0.distanceM <= 1000 })
+                let fireCount = nearbyPOIs.count(where: { $0.poi.category == .fireStation && $0.distanceM <= 1000 })
                 if policeCount > 0 || fireCount > 0 {
                     let parts = [
                         policeCount > 0 ? "\(policeCount) police" : nil,
@@ -114,7 +114,7 @@ struct ProximityMetricsView: View {
     }
 
     private func count(for category: POICategory) -> Int {
-        nearbyPOIs.filter { $0.poi.category == category && $0.distanceM <= 500 }.count
+        nearbyPOIs.count(where: { $0.poi.category == category && $0.distanceM <= 500 })
     }
 
     private func walkTimeText(_ entry: (poi: POI, distanceM: Double), label: String) -> String {

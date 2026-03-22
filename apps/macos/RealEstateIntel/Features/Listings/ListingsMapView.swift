@@ -75,9 +75,6 @@ struct ListingsMapView: View {
                                     listing: listing,
                                     isSelected: listing.id == viewModel.selectedListingID
                                 )
-                                .onTapGesture {
-                                    viewModel.selectedListingID = listing.id
-                                }
                             }
                             .tag(listing.id)
                             .annotationTitles(.hidden)
@@ -264,27 +261,25 @@ struct ListingsMapView: View {
         tint: Color = .accentColor,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(isActive ? tint : .primary)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(tooltip)
+        Button(tooltip, systemImage: icon, action: action)
+            .labelStyle(.iconOnly)
+            .font(.system(size: 16, weight: .medium)) // Fixed size: map control
+            .foregroundStyle(isActive ? tint : .primary)
+            .frame(width: 36, height: 36)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(tooltip)
     }
 
     private var mapStyleMenu: some View {
-        Menu {
+        Menu("Map Style", systemImage: "map") {
             Button("Standard") { mapStyle = .standard }
             Button("Satellite") { mapStyle = .imagery }
             Button("Hybrid") { mapStyle = .hybrid }
-        } label: {
-            Image(systemName: "map")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.primary)
         }
+        .labelStyle(.iconOnly)
+        .font(.system(size: 16, weight: .medium)) // Fixed size: map control
+        .foregroundStyle(.primary)
         .menuStyle(.borderlessButton)
         .frame(width: 36, height: 36)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
@@ -293,15 +288,14 @@ struct ListingsMapView: View {
     }
 
     private var poiLayerMenu: some View {
-        Button {
+        Button("Points of Interest", systemImage: showPOIs ? "signpost.right.and.left.fill" : "signpost.right.and.left") {
             showPOIPicker.toggle()
-        } label: {
-            Image(systemName: showPOIs ? "signpost.right.and.left.fill" : "signpost.right.and.left")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(showPOIs ? .blue : .primary)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
         }
+        .labelStyle(.iconOnly)
+        .font(.system(size: 16, weight: .medium)) // Fixed size: map control
+        .foregroundStyle(showPOIs ? .blue : .primary)
+        .frame(width: 36, height: 36)
+        .contentShape(Rectangle())
         .buttonStyle(.plain)
         .help("Points of Interest")
         .popover(isPresented: $showPOIPicker, arrowEdge: .leading) {
@@ -312,17 +306,31 @@ struct ListingsMapView: View {
                     }
 
                     Text(group.displayName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.bold())
                         .foregroundStyle(.tertiary)
                         .textCase(.uppercase)
 
                     ForEach(group.categories, id: \.self) { category in
-                        Toggle(isOn: poiCategoryBinding(for: category)) {
-                            Label(category.displayName, systemImage: category.systemImage)
-                                .font(.system(size: 12))
+                        Button {
+                            if activePOICategories.contains(category) {
+                                activePOICategories.remove(category)
+                            } else {
+                                activePOICategories.insert(category)
+                            }
+                            updateVisiblePOIs()
+                        } label: {
+                            HStack {
+                                Label(category.displayName, systemImage: category.systemImage)
+                                    .font(.caption)
+                                Spacer()
+                                if activePOICategories.contains(category) {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.accentColor)
+                                }
+                            }
                         }
-                        .toggleStyle(.switch)
-                        .controlSize(.mini)
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -336,27 +344,13 @@ struct ListingsMapView: View {
                     }
                     updateVisiblePOIs()
                 }
-                .font(.system(size: 11))
+                .font(.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
             .padding(12)
             .fixedSize()
         }
-    }
-
-    private func poiCategoryBinding(for category: POICategory) -> Binding<Bool> {
-        Binding(
-            get: { activePOICategories.contains(category) },
-            set: { isOn in
-                if isOn {
-                    activePOICategories.insert(category)
-                } else {
-                    activePOICategories.remove(category)
-                }
-                updateVisiblePOIs()
-            }
-        )
     }
 
     private func updateVisiblePOIs() {
@@ -403,12 +397,11 @@ struct ListingsMapView: View {
                     Text("Area selected")
                         .font(.caption)
                         .foregroundStyle(Color.accentColor)
-                    Button {
+                    Button("Clear Selection", systemImage: "xmark.circle.fill") {
                         viewModel.selectionRegion = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
                     .buttonStyle(.borderless)
                     .controlSize(.mini)
                 }
@@ -427,13 +420,15 @@ struct ListingsMapView: View {
 
         let lats = coords.map(\.latitude)
         let lons = coords.map(\.longitude)
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLon = lons.min(), let maxLon = lons.max() else { return }
         let center = CLLocationCoordinate2D(
-            latitude: (lats.min()! + lats.max()!) / 2,
-            longitude: (lons.min()! + lons.max()!) / 2
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
         )
         let span = MKCoordinateSpan(
-            latitudeDelta: max((lats.max()! - lats.min()!) * 1.3, 0.01),
-            longitudeDelta: max((lons.max()! - lons.min()!) * 1.3, 0.01)
+            latitudeDelta: max((maxLat - minLat) * 1.3, 0.01),
+            longitudeDelta: max((maxLon - minLon) * 1.3, 0.01)
         )
 
         withAnimation(.easeInOut(duration: 0.5)) {
