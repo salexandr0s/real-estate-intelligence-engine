@@ -30,14 +30,24 @@ struct ListingsView: View {
                     .background(Color.red.opacity(0.1))
                     Divider()
                 }
-                ListingsTable(viewModel: viewModel)
+                if viewModel.isMapMode {
+                    ListingsMapView(viewModel: viewModel)
+                } else {
+                    ListingsTable(viewModel: viewModel)
+                }
             }
             .frame(minWidth: 400)
 
             if showInspector {
-                ListingsInspectorContent(listing: viewModel.selectedListing)
-                    .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
-                    .background(.regularMaterial)
+                ListingsInspectorContent(listing: viewModel.selectedListing) {
+                    if let listing = viewModel.selectedListing, let coord = listing.coordinate {
+                        viewModel.focusedMapCoordinate = coord
+                        viewModel.mapFocusTrigger += 1
+                        viewModel.isMapMode = true
+                    }
+                }
+                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
+                .background(.regularMaterial)
             }
         }
         .navigationTitle("Listings")
@@ -45,6 +55,15 @@ struct ListingsView: View {
             ToolbarItem(placement: .principal) {
                 ToolbarSearchField(text: $viewModel.searchText, prompt: "Search by title, district, postal code...")
                     .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
+            }
+            ToolbarItem(placement: .automatic) {
+                Picker("View", selection: $viewModel.isMapMode) {
+                    Image(systemName: "list.bullet").tag(false)
+                    Image(systemName: "map").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 80)
+                .help("Toggle between list and map view")
             }
             ToolbarItem(placement: .automatic) {
                 Button {

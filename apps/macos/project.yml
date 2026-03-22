@@ -31,6 +31,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "Real Estate Intel"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         PRODUCT_NAME: "Real Estate Intel"
+    dependencies:
+      - sdk: MapKit.framework
     entitlements:
       path: RealEstateIntel/RealEstateIntel.entitlements
       properties:

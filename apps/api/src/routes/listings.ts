@@ -97,6 +97,9 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         currentScore: listing.currentScore,
         firstSeenAt: listing.firstSeenAt.toISOString(),
         listingStatus: listing.listingStatus,
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+        geocodePrecision: listing.geocodePrecision,
       }));
 
       return reply.send({
@@ -158,6 +161,9 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         currentScore: listing.currentScore,
         firstSeenAt: listing.firstSeenAt.toISOString(),
         listingStatus: listing.listingStatus,
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+        geocodePrecision: listing.geocodePrecision,
       }));
 
       return reply.send({

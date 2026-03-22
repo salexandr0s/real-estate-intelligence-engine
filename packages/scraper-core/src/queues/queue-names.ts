@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   SCRAPE_DETAIL: 'scrape-detail',
   PROCESSING: 'processing-ingest',
   BASELINE: 'processing-baseline',
+  GEOCODING: 'processing-geocoding',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -49,4 +50,13 @@ export interface ProcessingJobData {
 /** Job data for baseline recomputation. */
 export interface BaselineJobData {
   triggeredBy: 'scheduler' | 'manual';
+}
+
+/** Job data for geocoding a listing. */
+export interface GeocodingJobData {
+  listingId: number;
+  address: string | null;
+  postalCode: string | null;
+  city: string;
+  districtNo: number | null;
 }

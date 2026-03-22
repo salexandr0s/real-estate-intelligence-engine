@@ -3,6 +3,7 @@ import SwiftUI
 /// Detail view for a single listing, shown in the inspector pane.
 struct ListingDetailView: View {
     let listing: Listing
+    var onExpandMap: (() -> Void)?
     @Environment(AppState.self) private var appState
     @State private var explanation: ScoreExplanation?
     @State private var priceVersions: [PriceVersion] = []
@@ -20,7 +21,7 @@ struct ListingDetailView: View {
                 Divider()
                 PriceHistoryView(versions: priceVersions)
                 Divider()
-                MapPlaceholder()
+                ListingMapView(listing: listing, onExpandToFullMap: onExpandMap)
                 Divider()
                 ListingActionsSection(canonicalUrl: listing.canonicalUrl)
             }

@@ -107,6 +107,9 @@ export interface ListingSearchResult {
   currentScore: number | null;
   firstSeenAt: Date;
   listingStatus: string;
+  latitude: number | null;
+  longitude: number | null;
+  geocodePrecision: string | null;
 }
 
 export interface PaginatedResult<T> {

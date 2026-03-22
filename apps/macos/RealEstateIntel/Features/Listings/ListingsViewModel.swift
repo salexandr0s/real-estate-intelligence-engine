@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// View model for the listings table with sorting, filtering, and search.
@@ -27,6 +28,12 @@ final class ListingsViewModel {
 
     /// Set of listing IDs that have matching alerts (fetched once on refresh).
     var alertedListingIds: Set<Int> = []
+
+    // MARK: - Map
+
+    var isMapMode: Bool = false
+    var focusedMapCoordinate: CLLocationCoordinate2D?
+    var mapFocusTrigger: Int = 0
 
     // MARK: - Sorting
 

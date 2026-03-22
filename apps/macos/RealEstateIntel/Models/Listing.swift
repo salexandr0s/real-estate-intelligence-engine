@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Canonical listing model used throughout the app.
@@ -19,11 +20,25 @@ struct Listing: Identifiable, Codable, Hashable {
     let rooms: Double?
     let pricePerSqmEur: Double?
     let currentScore: Double?
+    let latitude: Double?
+    let longitude: Double?
+    let geocodePrecision: String?
     let firstSeenAt: Date
     let listingStatus: ListingStatus
 
     /// Non-optional score for sorting (0 when nil).
     var sortableScore: Double { currentScore ?? 0 }
+
+    /// Map coordinate derived from latitude/longitude, nil if unavailable.
+    var coordinate: CLLocationCoordinate2D? {
+        guard let lat = latitude, let lon = longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    /// Whether the geocoded location is exact enough for a precise pin.
+    var hasExactLocation: Bool {
+        geocodePrecision == "source_exact" || geocodePrecision == "street"
+    }
 
     /// Transient flag set client-side when this listing has matching alerts.
     var hasAlertMatch: Bool = false
@@ -50,6 +65,9 @@ extension Listing {
             rooms: 3.0,
             pricePerSqmEur: 4124.14,
             currentScore: 87.3,
+            latitude: 48.2167,
+            longitude: 16.3958,
+            geocodePrecision: "source_exact",
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date.now)!,
             listingStatus: .active
         ),
@@ -70,6 +88,9 @@ extension Listing {
             rooms: 2.0,
             pricePerSqmEur: 4224.14,
             currentScore: 82.1,
+            latitude: 48.1986,
+            longitude: 16.3948,
+            geocodePrecision: "source_approx",
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date.now)!,
             listingStatus: .active
         ),
@@ -90,6 +111,9 @@ extension Listing {
             rooms: 4.0,
             pricePerSqmEur: 4094.74,
             currentScore: 78.5,
+            latitude: 48.1870,
+            longitude: 16.3556,
+            geocodePrecision: "street",
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
             listingStatus: .active
         ),
@@ -110,6 +134,9 @@ extension Listing {
             rooms: 2.0,
             pricePerSqmEur: 4534.16,
             currentScore: 71.2,
+            latitude: 48.2028,
+            longitude: 16.3493,
+            geocodePrecision: "source_exact",
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             listingStatus: .active
         ),
@@ -130,6 +157,9 @@ extension Listing {
             rooms: 4.0,
             pricePerSqmEur: 4727.27,
             currentScore: 65.8,
+            latitude: 48.2263,
+            longitude: 16.3560,
+            geocodePrecision: "district",
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date.now)!,
             listingStatus: .active
         ),
@@ -150,6 +180,9 @@ extension Listing {
             rooms: 1.0,
             pricePerSqmEur: 4031.25,
             currentScore: 55.4,
+            latitude: 48.1625,
+            longitude: 16.3827,
+            geocodePrecision: "source_approx",
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
             listingStatus: .active
         ),
@@ -170,6 +203,9 @@ extension Listing {
             rooms: 3.0,
             pricePerSqmEur: 2846.15,
             currentScore: 42.1,
+            latitude: 48.2564,
+            longitude: 16.3988,
+            geocodePrecision: "source_exact",
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date.now)!,
             listingStatus: .active
         ),
@@ -190,6 +226,9 @@ extension Listing {
             rooms: 3.0,
             pricePerSqmEur: 4294.87,
             currentScore: 25.6,
+            latitude: nil,
+            longitude: nil,
+            geocodePrecision: nil,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date.now)!,
             listingStatus: .active
         ),

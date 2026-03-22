@@ -19,6 +19,9 @@ struct APIListingResponse: Codable {
     let rooms: Double?
     let pricePerSqmEur: Double?
     let currentScore: Double?
+    let latitude: Double?
+    let longitude: Double?
+    let geocodePrecision: String?
     let firstSeenAt: String
     let listingStatus: String?
 
@@ -48,6 +51,9 @@ struct APIListingResponse: Codable {
             rooms: rooms,
             pricePerSqmEur: pricePerSqmEur,
             currentScore: currentScore,
+            latitude: latitude,
+            longitude: longitude,
+            geocodePrecision: geocodePrecision,
             firstSeenAt: date,
             listingStatus: status
         )

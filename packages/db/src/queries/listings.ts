@@ -173,6 +173,9 @@ interface ListingSearchDbRow {
   current_score: string | null;
   first_seen_at: Date;
   listing_status: string;
+  latitude: string | null;
+  longitude: string | null;
+  geocode_precision: string | null;
 }
 
 function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
@@ -195,6 +198,9 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
     currentScore: row.current_score != null ? Number(row.current_score) : null,
     firstSeenAt: row.first_seen_at,
     listingStatus: row.listing_status,
+    latitude: row.latitude != null ? Number(row.latitude) : null,
+    longitude: row.longitude != null ? Number(row.longitude) : null,
+    geocodePrecision: row.geocode_precision,
   };
 }
 
@@ -429,7 +435,8 @@ export async function searchListings(
       l.city, l.postal_code, l.district_no, l.district_name,
       l.list_price_eur_cents, l.living_area_sqm, l.rooms,
       l.price_per_sqm_eur, l.current_score,
-      l.first_seen_at, l.listing_status
+      l.first_seen_at, l.listing_status,
+      l.latitude, l.longitude, l.geocode_precision
     FROM listings l
     JOIN sources s ON s.id = l.source_id
     WHERE l.listing_status = 'active'
@@ -501,6 +508,34 @@ export async function updateScore(
   );
   const row = rows[0];
   return row ? toListingRow(row) : null;
+}
+
+// ── Geocoding ───────────────────────────────────────────────────────────────
+
+export async function updateCoordinates(
+  id: number,
+  latitude: number,
+  longitude: number,
+  geocodePrecision: GeocodePrecision,
+): Promise<void> {
+  await query(
+    `UPDATE listings
+     SET latitude = $2, longitude = $3, geocode_precision = $4
+     WHERE id = $1`,
+    [id, latitude, longitude, geocodePrecision],
+  );
+}
+
+export async function findListingsNeedingGeocoding(limit = 100): Promise<ListingRow[]> {
+  const rows = await query<ListingDbRow>(
+    `SELECT * FROM listings
+     WHERE latitude IS NULL
+     AND listing_status = 'active'
+     ORDER BY first_seen_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows.map(toListingRow);
 }
 
 // ── Cursor helpers ──────────────────────────────────────────────────────────
