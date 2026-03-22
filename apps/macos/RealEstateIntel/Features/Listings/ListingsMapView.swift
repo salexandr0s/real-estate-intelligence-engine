@@ -31,6 +31,29 @@ struct ListingsMapView: View {
         viewModel.filteredListings.filter { $0.coordinate != nil }
     }
 
+    /// Zoom threshold: show individual pins when the span is small enough to see a single district.
+    private var isZoomedIn: Bool {
+        guard let region = visibleRegion else { return false }
+        return region.span.latitudeDelta < 0.04
+    }
+
+    /// Group listings by district for cluster bubbles.
+    private var listingClusters: [DistrictCluster] {
+        let byDistrict = Dictionary(grouping: mappableListings.filter { $0.districtNo != nil }) { $0.districtNo! }
+        return byDistrict.map { districtNo, listings in
+            let avgLat = listings.compactMap(\.latitude).reduce(0, +) / Double(listings.count)
+            let avgLon = listings.compactMap(\.longitude).reduce(0, +) / Double(listings.count)
+            let avgScore = listings.compactMap(\.currentScore).reduce(0, +) / max(1, Double(listings.compactMap(\.currentScore).count))
+            return DistrictCluster(
+                districtNo: districtNo,
+                districtName: listings.first?.districtName,
+                count: listings.count,
+                center: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
+                avgScore: avgScore
+            )
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -65,20 +88,37 @@ struct ListingsMapView: View {
                                 .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                         }
 
-                        // Listing pins
-                        ForEach(mappableListings) { listing in
-                            Annotation(
-                                listing.title,
-                                coordinate: listing.coordinate ?? Self.viennaCenter,
-                                anchor: .bottom
-                            ) {
-                                ListingAnnotation(
-                                    listing: listing,
-                                    isSelected: listing.id == viewModel.selectedListingID
-                                )
+                        // Listing pins — show clusters when zoomed out, individual pins when zoomed in
+                        if isZoomedIn {
+                            ForEach(mappableListings) { listing in
+                                Annotation(
+                                    listing.title,
+                                    coordinate: listing.coordinate ?? Self.viennaCenter,
+                                    anchor: .bottom
+                                ) {
+                                    ListingAnnotation(
+                                        listing: listing,
+                                        isSelected: listing.id == viewModel.selectedListingID
+                                    )
+                                }
+                                .tag(listing.id)
+                                .annotationTitles(.hidden)
                             }
-                            .tag(listing.id)
-                            .annotationTitles(.hidden)
+                        } else {
+                            ForEach(listingClusters, id: \.districtNo) { cluster in
+                                Annotation(
+                                    "\(cluster.count) listings",
+                                    coordinate: cluster.center,
+                                    anchor: .center
+                                ) {
+                                    ListingClusterBubble(
+                                        count: cluster.count,
+                                        avgScore: cluster.avgScore,
+                                        districtName: cluster.districtName
+                                    )
+                                }
+                                .annotationTitles(.hidden)
+                            }
                         }
 
                         // POI pins

@@ -160,13 +160,23 @@ final class ListingsViewModel {
         }
 
         do {
-            let response = try await client.fetchListingsPaginated(query: ListingQuery())
-            listings = response.listings
-            nextCursor = response.nextCursor
+            // Load all listings by paginating through all pages (map needs everything)
+            var all: [Listing] = []
+            var cursor: String? = nil
+            repeat {
+                var query = ListingQuery()
+                query.limit = 200
+                query.cursor = cursor
+                let response = try await client.fetchListingsPaginated(query: query)
+                all.append(contentsOf: response.listings)
+                cursor = response.nextCursor
+            } while cursor != nil
+
+            listings = all
+            nextCursor = nil
             cache?.set(Self.listingsCacheKey, value: listings)
-            Log.ui.info("Fetched \(response.listings.count) listings, cursor: \(response.nextCursor ?? "nil", privacy: .public)")
+            Log.ui.info("Fetched all \(all.count) listings")
         } catch {
-            // Show detailed decode error, not just localized description
             errorMessage = String(describing: error)
             Log.ui.error("Fetch error: \(error, privacy: .public)")
         }
