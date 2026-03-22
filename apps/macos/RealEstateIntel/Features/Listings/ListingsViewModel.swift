@@ -139,10 +139,6 @@ final class ListingsViewModel {
             cache?.set(Self.listingsCacheKey, value: listings)
         } catch {
             errorMessage = error.localizedDescription
-            // Fall back to mock data if API unavailable
-            if listings.isEmpty {
-                listings = Listing.samples
-            }
         }
 
         // Fetch alerts to cross-reference listing IDs for badge display

@@ -68,9 +68,6 @@ final class AnalyticsViewModel {
             baselines = try await client.fetchBaselines()
         } catch {
             errorMessage = error.localizedDescription
-            if baselines.isEmpty {
-                baselines = MarketBaseline.samples
-            }
         }
 
         isLoading = false

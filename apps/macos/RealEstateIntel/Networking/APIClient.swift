@@ -148,64 +148,13 @@ actor APIClient {
 
     func fetchFilters() async throws -> [Filter] {
         let response: PaginatedResponse<APIFilterResponse> = try await requestPaginated(.listFilters)
-        return response.data.map { dto in
-            Filter(
-                id: dto.id,
-                name: dto.name,
-                filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
-                isActive: dto.isActive,
-                criteria: FilterCriteria(
-                    operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
-                    propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
-                    districts: dto.districts ?? [],
-                    minPriceEur: dto.minPriceEur,
-                    maxPriceEur: dto.maxPriceEur,
-                    minAreaSqm: dto.minAreaSqm,
-                    maxAreaSqm: dto.maxAreaSqm,
-                    minRooms: dto.minRooms,
-                    maxRooms: dto.maxRooms,
-                    minScore: dto.minScore,
-                    requiredKeywords: dto.requiredKeywords ?? [],
-                    excludedKeywords: dto.excludedKeywords ?? [],
-                    sortBy: dto.sortBy
-                ),
-                alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
-                createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
-                updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
-                matchCount: dto.matchCount
-            )
-        }
+        return response.data.map { mapFilterResponse($0) }
     }
 
     func createFilter(_ filter: APICreateFilterRequest) async throws -> Filter {
         let body = try encoder.encode(filter)
         let response: APIResponse<APIFilterResponse> = try await request(.createFilter(body: body))
-        let dto = response.data
-        return Filter(
-            id: dto.id,
-            name: dto.name,
-            filterKind: FilterKind(rawValue: dto.filterKind) ?? .saved,
-            isActive: dto.isActive,
-            criteria: FilterCriteria(
-                operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
-                propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
-                districts: dto.districts ?? [],
-                minPriceEur: dto.minPriceEur,
-                maxPriceEur: dto.maxPriceEur,
-                minAreaSqm: dto.minAreaSqm,
-                maxAreaSqm: dto.maxAreaSqm,
-                minRooms: dto.minRooms,
-                maxRooms: dto.maxRooms,
-                minScore: dto.minScore,
-                requiredKeywords: dto.requiredKeywords ?? [],
-                excludedKeywords: dto.excludedKeywords ?? [],
-                sortBy: dto.sortBy
-            ),
-            alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
-            createdAt: ISO8601DateFormatter.shared.date(from: dto.createdAt) ?? .now,
-            updatedAt: ISO8601DateFormatter.shared.date(from: dto.updatedAt) ?? .now,
-            matchCount: dto.matchCount
-        )
+        return mapFilterResponse(response.data)
     }
 
     func updateFilter(id: Int, isActive: Bool) async throws {
@@ -241,8 +190,7 @@ actor APIClient {
                 body: dto.body,
                 matchedAt: ISO8601DateFormatter.shared.date(from: dto.matchedAt) ?? .now,
                 filterName: dto.filterName,
-                listingId: dto.listingId,
-                listing: dto.listing?.toDomain(decoder: decoder)
+                listingId: dto.listingId
             )
         }
     }

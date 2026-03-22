@@ -11,7 +11,6 @@ struct APIAlertResponse: Codable {
     let matchedAt: String
     let filterName: String?
     let listingId: Int?
-    let listing: APIListingResponse?
 }
 
 struct APIAlertUpdateRequest: Codable {

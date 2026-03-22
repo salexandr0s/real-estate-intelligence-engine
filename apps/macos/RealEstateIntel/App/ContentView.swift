@@ -1,12 +1,9 @@
 import SwiftUI
-import Combine
 
 /// Root view with NavigationSplitView sidebar and detail content.
 struct ContentView: View {
     @Environment(AppState.self) private var appState
-
-    /// 5-minute background refresh timer.
-    private let refreshTimer = Timer.publish(every: 300, on: .main, in: .common).autoconnect()
+    @State private var refreshTask: Task<Void, Never>?
 
     var body: some View {
         NavigationSplitView {
@@ -16,8 +13,20 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1000, minHeight: 600)
-        .onReceive(refreshTimer) { _ in
-            Task {
+        .onAppear { startRefreshLoop() }
+        .onDisappear { refreshTask?.cancel() }
+        .onChange(of: appState.refreshIntervalSeconds) { _, _ in
+            startRefreshLoop()
+        }
+    }
+
+    private func startRefreshLoop() {
+        refreshTask?.cancel()
+        let interval = appState.refreshIntervalSeconds
+        refreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled else { break }
                 await appState.refreshConnection()
             }
         }

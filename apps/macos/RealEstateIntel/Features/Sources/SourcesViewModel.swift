@@ -42,9 +42,6 @@ final class SourcesViewModel {
             sources = try await client.fetchSources()
         } catch {
             errorMessage = error.localizedDescription
-            if sources.isEmpty {
-                sources = Source.samples
-            }
         }
 
         isLoading = false

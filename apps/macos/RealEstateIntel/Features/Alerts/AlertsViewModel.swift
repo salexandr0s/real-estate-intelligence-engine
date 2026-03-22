@@ -38,9 +38,6 @@ final class AlertsViewModel {
             alerts = try await client.fetchAlerts(query: AlertQuery())
         } catch {
             errorMessage = error.localizedDescription
-            if alerts.isEmpty {
-                alerts = Alert.samples
-            }
         }
 
         isLoading = false
@@ -50,17 +47,7 @@ final class AlertsViewModel {
         do {
             try await client.markAlertRead(id: alert.id)
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
-                alerts[idx] = Alert(
-                    id: alert.id,
-                    alertType: alert.alertType,
-                    status: .opened,
-                    title: alert.title,
-                    body: alert.body,
-                    matchedAt: alert.matchedAt,
-                    filterName: alert.filterName,
-                    listingId: alert.listingId,
-                    listing: alert.listing
-                )
+                alerts[idx].status = .opened
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -79,17 +66,7 @@ final class AlertsViewModel {
         do {
             try await client.requestVoid(.updateAlert(id: alert.id, body: body))
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
-                alerts[idx] = Alert(
-                    id: alert.id,
-                    alertType: alert.alertType,
-                    status: .dismissed,
-                    title: alert.title,
-                    body: alert.body,
-                    matchedAt: alert.matchedAt,
-                    filterName: alert.filterName,
-                    listingId: alert.listingId,
-                    listing: alert.listing
-                )
+                alerts[idx].status = .dismissed
             }
         } catch {
             errorMessage = error.localizedDescription

@@ -22,6 +22,7 @@ interface AlertDbRow {
   error_message: string | null;
   created_at: Date;
   updated_at: Date;
+  filter_name?: string | null;
 }
 
 function toAlertRow(row: AlertDbRow): AlertRow {
@@ -44,6 +45,7 @@ function toAlertRow(row: AlertDbRow): AlertRow {
     errorMessage: row.error_message,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    filterName: row.filter_name ?? null,
   };
 }
 
@@ -92,11 +94,13 @@ export async function findByUser(
   const cursorId = cursor ? Number(Buffer.from(cursor, 'base64url').toString('utf8')) : null;
 
   const rows = await query<AlertDbRow>(
-    `SELECT * FROM alerts
-     WHERE user_id = $1
-       AND ($2::text IS NULL OR status = $2)
-       AND ($3::bigint IS NULL OR id < $3)
-     ORDER BY id DESC
+    `SELECT a.*, uf.name AS filter_name
+     FROM alerts a
+     LEFT JOIN user_filters uf ON a.user_filter_id = uf.id
+     WHERE a.user_id = $1
+       AND ($2::text IS NULL OR a.status = $2)
+       AND ($3::bigint IS NULL OR a.id < $3)
+     ORDER BY a.id DESC
      LIMIT $4`,
     [userId, status, cursorId, limit + 1],
   );

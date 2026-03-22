@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@rei/observability';
 import type { ListingSearchFilter } from '@rei/db';
-import { listings, listingScores } from '@rei/db';
+import { listings, listingScores, listingVersions } from '@rei/db';
 import {
   parseOrThrow,
   listingSearchQuerySchema,
@@ -247,6 +247,59 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           lastStatusChangeAt: listing.lastStatusChangeAt?.toISOString() ?? null,
           lastScoredAt: listing.lastScoredAt?.toISOString() ?? null,
         },
+        meta: {},
+      });
+    },
+  );
+
+  // GET /v1/listings/:id/history - Get listing version history
+  app.get<{ Params: { id: string } }>(
+    '/v1/listings/:id/history',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Get version history for a listing',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'integer' } },
+          required: ['id'],
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 200,
+              description: 'Max versions to return',
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = parseOrThrow(idParamSchema, request.params);
+      const queryLimit = (request.query as { limit?: number }).limit ?? 50;
+
+      const listing = await listings.findById(id);
+      if (!listing) {
+        throw new NotFoundError('Listing', id);
+      }
+
+      const versions = await listingVersions.findByListingId(id, queryLimit);
+
+      return reply.send({
+        data: versions.map((v) => ({
+          id: v.id,
+          versionNo: v.versionNo,
+          versionReason: v.versionReason,
+          listingStatus: v.listingStatus,
+          listPriceEurCents: v.listPriceEurCents,
+          livingAreaSqm: v.livingAreaSqm,
+          pricePerSqmEur: v.pricePerSqmEur,
+          observedAt: v.observedAt.toISOString(),
+        })),
         meta: {},
       });
     },

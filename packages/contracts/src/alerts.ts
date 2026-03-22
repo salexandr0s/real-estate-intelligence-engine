@@ -37,6 +37,7 @@ export interface AlertRow {
   errorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
+  filterName: string | null;
 }
 
 // ── Dedupe Key Builder ──────────────────────────────────────────────────────

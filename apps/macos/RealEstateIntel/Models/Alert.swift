@@ -11,7 +11,6 @@ struct Alert: Identifiable, Codable, Hashable {
     let matchedAt: Date
     let filterName: String?
     let listingId: Int?
-    let listing: Listing?
 }
 
 // MARK: - Mock Data
@@ -27,7 +26,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .hour, value: -1, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 1,
-            listing: Listing.samples[0]
         ),
         Alert(
             id: 2,
@@ -38,7 +36,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 8,
-            listing: Listing.samples[7]
         ),
         Alert(
             id: 3,
@@ -49,7 +46,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .hour, value: -4, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 2,
-            listing: Listing.samples[1]
         ),
         Alert(
             id: 4,
@@ -60,7 +56,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .hour, value: -8, to: Date.now)!,
             filterName: "Large Family Apartments",
             listingId: 3,
-            listing: Listing.samples[2]
         ),
         Alert(
             id: 5,
@@ -71,7 +66,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
             filterName: "Vienna Value Apartments",
             listingId: 4,
-            listing: Listing.samples[3]
         ),
         Alert(
             id: 6,
@@ -82,7 +76,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
             filterName: nil,
             listingId: 5,
-            listing: Listing.samples[4]
         ),
         Alert(
             id: 7,
@@ -93,7 +86,6 @@ extension Alert {
             matchedAt: Calendar.current.date(byAdding: .day, value: -3, to: Date.now)!,
             filterName: "Sub-4000 EUR/sqm Deals",
             listingId: 6,
-            listing: Listing.samples[5]
         ),
     ]
 }

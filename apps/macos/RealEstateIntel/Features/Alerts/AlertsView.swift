@@ -257,66 +257,13 @@ private struct AlertInspectorContent: View {
                         }
                     }
 
-                    // Linked listing summary
-                    if let listing = alert.listing {
+                    // Linked listing hint
+                    if alert.listingId != nil {
                         Divider()
 
-                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            Text("Linked Listing")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.secondary)
-
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text(listing.title)
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .lineLimit(2)
-
-                                HStack(spacing: Theme.Spacing.md) {
-                                    Text(PriceFormatter.format(eur: listing.listPriceEur))
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-
-                                    if let area = listing.livingAreaSqm {
-                                        Text(PriceFormatter.formatArea(area))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    if let rooms = listing.rooms {
-                                        Text("\(rooms) rooms")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-
-                                if let score = listing.currentScore {
-                                    HStack(spacing: Theme.Spacing.xs) {
-                                        Circle()
-                                            .fill(Theme.scoreColor(for: score))
-                                            .frame(width: 8, height: 8)
-                                        Text("Score: \(score, specifier: "%.1f")")
-                                            .font(.caption)
-                                            .fontWeight(.medium)
-                                    }
-                                }
-
-                                if let url = URL(string: listing.canonicalUrl) {
-                                    Button {
-                                        NSWorkspace.shared.open(url)
-                                    } label: {
-                                        Label("Open in Browser", systemImage: "safari")
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .controlSize(.small)
-                                    .padding(.top, Theme.Spacing.xs)
-                                }
-                            }
-                            .padding(Theme.Spacing.md)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-                        }
+                        Text("Listing #\(alert.listingId!) — view in Listings tab")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(Theme.Spacing.lg)

@@ -46,6 +46,7 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
         matchedAt: alert.matchedAt.toISOString(),
         sentAt: alert.sentAt?.toISOString() ?? null,
         createdAt: alert.createdAt.toISOString(),
+        filterName: alert.filterName,
       }));
 
       return reply.send({
