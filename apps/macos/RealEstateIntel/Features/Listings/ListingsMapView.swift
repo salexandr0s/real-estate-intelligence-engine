@@ -22,6 +22,7 @@ struct ListingsMapView: View {
     @State private var visiblePOIs: [POI] = []
     @State private var showDevelopments: Bool = false
     @State private var visibleDevelopments: [WienDevelopment] = []
+    @State private var showPOIPicker: Bool = false
 
     private var showPOIs: Bool { !activePOICategories.isEmpty }
 
@@ -31,7 +32,7 @@ struct ListingsMapView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 MapReader { proxy in
                     Map(
                         position: $position,
@@ -44,7 +45,7 @@ struct ListingsMapView: View {
                     ) {
                         // Boundary mask — darkens everything outside Vienna
                         MapPolygon(ViennaBoundaryStore.maskPolygon)
-                            .foregroundStyle(Color.black.opacity(0.25))
+                            .foregroundStyle(Color.black.opacity(0.40))
                         // District boundary overlays (render before pins so pins are on top)
                         if showDistrictBoundaries {
                             ForEach(districtBoundaries) { district in
@@ -117,7 +118,25 @@ struct ListingsMapView: View {
                     }
                 }
 
-                mapControls
+                // Map style — top left
+                VStack {
+                    HStack {
+                        mapStyleMenu
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(12)
+
+                // Layer & tool controls — top right
+                VStack {
+                    HStack {
+                        Spacer()
+                        mapControls
+                    }
+                    Spacer()
+                }
+                .padding(12)
             }
 
             statusBar
@@ -181,24 +200,38 @@ struct ListingsMapView: View {
     // MARK: - Map Controls Overlay
 
     private var mapControls: some View {
-        VStack(spacing: 6) {
-            // Map style picker
-            mapStyleMenu
+        VStack(spacing: 8) {
+            // Tools
+            controlGroup {
+                mapIconButton(
+                    "Fit All Listings",
+                    icon: "arrow.up.left.and.down.right.magnifyingglass",
+                    isActive: false
+                ) {
+                    fitToListings()
+                }
 
-            // Layers group
-            VStack(spacing: 0) {
-                mapControlButton(
-                    title: "Districts",
+                mapIconButton(
+                    "Draw Selection",
+                    icon: viewModel.isDrawingSelection ? "pencil.slash" : "pencil.and.outline",
+                    isActive: viewModel.isDrawingSelection
+                ) {
+                    viewModel.isDrawingSelection.toggle()
+                }
+            }
+
+            // Layers
+            controlGroup {
+                mapIconButton(
+                    "District Boundaries",
                     icon: showDistrictBoundaries ? "square.on.square.dashed" : "square.dashed",
                     isActive: showDistrictBoundaries
                 ) {
                     showDistrictBoundaries.toggle()
                 }
 
-                Divider().padding(.horizontal, 6)
-
-                mapControlButton(
-                    title: "Projects",
+                mapIconButton(
+                    "Development Projects",
                     icon: showDevelopments ? "building.2.fill" : "building.2",
                     isActive: showDevelopments,
                     tint: .purple
@@ -211,40 +244,21 @@ struct ListingsMapView: View {
                     }
                 }
 
-                Divider().padding(.horizontal, 6)
-
                 poiLayerMenu
             }
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-
-            // Tools group
-            VStack(spacing: 0) {
-                mapControlButton(
-                    title: "Fit All",
-                    icon: "arrow.up.left.and.down.right.magnifyingglass",
-                    isActive: false
-                ) {
-                    fitToListings()
-                }
-
-                Divider().padding(.horizontal, 6)
-
-                mapControlButton(
-                    title: "Draw",
-                    icon: viewModel.isDrawingSelection ? "pencil.slash" : "pencil.and.outline",
-                    isActive: viewModel.isDrawingSelection
-                ) {
-                    viewModel.isDrawingSelection.toggle()
-                }
-            }
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
-        .fixedSize()
-        .padding(10)
     }
 
-    private func mapControlButton(
-        title: String,
+    private func controlGroup<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+    }
+
+    private func mapIconButton(
+        _ tooltip: String,
         icon: String,
         isActive: Bool,
         tint: Color = .accentColor,
@@ -252,13 +266,13 @@ struct ListingsMapView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(isActive ? tint : .primary)
-                .frame(width: 32, height: 28)
+                .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(title)
+        .help(tooltip)
     }
 
     private var mapStyleMenu: some View {
@@ -268,43 +282,57 @@ struct ListingsMapView: View {
             Button("Hybrid") { mapStyle = .hybrid }
         } label: {
             Image(systemName: "map")
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.primary)
-                .frame(width: 32, height: 28)
+                .frame(width: 36, height: 36)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
         .help("Map Style")
     }
 
     private var poiLayerMenu: some View {
-        Menu {
-            ForEach(POICategory.allCases, id: \.self) { category in
-                Toggle(isOn: poiCategoryBinding(for: category)) {
-                    Label(category.displayName, systemImage: category.systemImage)
-                }
-            }
-
-            Divider()
-
-            Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
-                if activePOICategories.count == POICategory.allCases.count {
-                    activePOICategories.removeAll()
-                } else {
-                    activePOICategories = Set(POICategory.allCases)
-                }
-                updateVisiblePOIs()
-            }
+        Button {
+            showPOIPicker.toggle()
         } label: {
-            Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
-                .font(.system(size: 15, weight: .medium))
+            Image(systemName: showPOIs ? "signpost.right.and.left.fill" : "signpost.right.and.left")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(showPOIs ? .blue : .primary)
-                .frame(width: 32, height: 28)
+                .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .help("Points of Interest")
+        .popover(isPresented: $showPOIPicker, arrowEdge: .leading) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(POICategory.allCases, id: \.self) { category in
+                    Toggle(isOn: poiCategoryBinding(for: category)) {
+                        Label(category.displayName, systemImage: category.systemImage)
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                }
+
+                Divider()
+
+                Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
+                    if activePOICategories.count == POICategory.allCases.count {
+                        activePOICategories.removeAll()
+                    } else {
+                        activePOICategories = Set(POICategory.allCases)
+                    }
+                    updateVisiblePOIs()
+                }
+                .font(.system(size: 11))
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .fixedSize()
+        }
     }
 
     private func poiCategoryBinding(for category: POICategory) -> Binding<Bool> {

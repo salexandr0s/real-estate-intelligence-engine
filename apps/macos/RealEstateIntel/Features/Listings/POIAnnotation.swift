@@ -21,17 +21,16 @@ struct DevelopmentAnnotation: View {
     @State private var isHovered = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            marker
-                .onHover { isHovered = $0 }
-
+        VStack(spacing: 2) {
             if isHovered {
                 DevelopmentPopover(development: development)
-                    .offset(y: -24)
                     .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottom)))
                     .zIndex(100)
             }
+
+            marker
         }
+        .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
