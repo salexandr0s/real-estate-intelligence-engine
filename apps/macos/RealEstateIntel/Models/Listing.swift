@@ -36,8 +36,12 @@ struct Listing: Identifiable, Codable, Hashable {
     }
 
     /// Whether the geocoded location is exact enough for a precise pin.
+    /// Source-provided coordinates and street-level geocoding get solid pins.
+    /// Estimated (triangulated), district, and city precision get dashed rings.
     var hasExactLocation: Bool {
-        geocodePrecision == "source_exact" || geocodePrecision == "street"
+        geocodePrecision == "source_exact"
+            || geocodePrecision == "source_approx"
+            || geocodePrecision == "street"
     }
 
     /// Transient flag set client-side when this listing has matching alerts.

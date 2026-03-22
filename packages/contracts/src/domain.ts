@@ -36,6 +36,7 @@ export type GeocodePrecision =
   | 'source_exact'
   | 'source_approx'
   | 'street'
+  | 'estimated'
   | 'district'
   | 'city'
   | 'none';

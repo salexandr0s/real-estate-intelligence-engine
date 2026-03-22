@@ -85,31 +85,58 @@ export async function geocodeListing(input: GeocodingInput): Promise<GeocodingOu
   const signals = extractLocationSignals(textInput);
 
   // Tier 2: NLP street extraction → Nominatim
+  // If multiple streets found, geocode all and triangulate (centroid)
   if (signals.streets.length > 0) {
-    for (const street of signals.streets) {
+    const geocodedPoints: Array<{ lat: number; lon: number }> = [];
+    for (const street of signals.streets.slice(0, 5)) {
       const result = await geocodeAddress({
         street: street.fullAddress,
         postalCode: input.postalCode ?? undefined,
         city: input.city,
       });
       if (result) {
-        return {
-          latitude: result.lat,
-          longitude: result.lon,
-          geocodePrecision: result.precision,
-          source: 'nlp_nominatim',
-        };
+        geocodedPoints.push({ lat: result.lat, lon: result.lon });
       }
+    }
+
+    if (geocodedPoints.length === 1) {
+      return {
+        latitude: geocodedPoints[0]!.lat,
+        longitude: geocodedPoints[0]!.lon,
+        geocodePrecision: 'street',
+        source: 'nlp_nominatim',
+      };
+    }
+    if (geocodedPoints.length >= 2) {
+      const centroid = computeCentroid(geocodedPoints);
+      return {
+        latitude: centroid.lat,
+        longitude: centroid.lon,
+        geocodePrecision: 'estimated',
+        source: 'nlp_nominatim',
+      };
     }
   }
 
   // Tier 3: NLP U-Bahn station match (no API call)
+  // If multiple stations found, triangulate
   if (signals.stations.length > 0) {
-    const station = signals.stations[0]!;
+    if (signals.stations.length === 1) {
+      const station = signals.stations[0]!;
+      return {
+        latitude: station.latitude,
+        longitude: station.longitude,
+        geocodePrecision: 'street',
+        source: 'nlp_station',
+      };
+    }
+    const centroid = computeCentroid(
+      signals.stations.map((s) => ({ lat: s.latitude, lon: s.longitude })),
+    );
     return {
-      latitude: station.latitude,
-      longitude: station.longitude,
-      geocodePrecision: 'street',
+      latitude: centroid.lat,
+      longitude: centroid.lon,
+      geocodePrecision: 'estimated',
       source: 'nlp_station',
     };
   }
@@ -186,5 +213,23 @@ function nominatimToOutput(result: GeocodingResult): GeocodingOutput {
     longitude: result.lon,
     geocodePrecision: result.precision,
     source: 'nominatim',
+  };
+}
+
+/**
+ * Compute the geographic centroid of multiple points.
+ * Used for triangulation when multiple streets or stations are mentioned.
+ */
+function computeCentroid(points: Array<{ lat: number; lon: number }>): {
+  lat: number;
+  lon: number;
+} {
+  const sum = points.reduce((acc, p) => ({ lat: acc.lat + p.lat, lon: acc.lon + p.lon }), {
+    lat: 0,
+    lon: 0,
+  });
+  return {
+    lat: sum.lat / points.length,
+    lon: sum.lon / points.length,
   };
 }
