@@ -135,10 +135,12 @@ final class ListingsViewModel {
             let response = try await client.fetchListingsPaginated(query: ListingQuery())
             listings = response.listings
             nextCursor = response.nextCursor
+            // Cache for 5 min TTL
             // Store in cache
             cache?.set(Self.listingsCacheKey, value: listings)
         } catch {
             errorMessage = error.localizedDescription
+            // Error displayed via errorMessage in the view
         }
 
         // Fetch alerts to cross-reference listing IDs for badge display

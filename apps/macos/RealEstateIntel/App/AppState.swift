@@ -71,7 +71,7 @@ final class AppState {
         let token = KeychainHelper.get(key: "apiToken") ?? ""
         self.apiClient = APIClient(
             baseURL: baseURL,
-            authToken: token.isEmpty ? nil : token
+            authToken: token.isEmpty ? "dev-token" : token
         )
 
         // Request notification permission on launch
