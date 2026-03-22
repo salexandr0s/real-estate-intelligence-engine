@@ -52,9 +52,22 @@ actor APIClient {
 
     func requestPaginated<T: Codable>(_ endpoint: APIEndpoint) async throws -> PaginatedResponse<T> {
         let urlRequest = try buildRequest(for: endpoint)
+        NSLog("[APIClient] %@ %@", urlRequest.httpMethod ?? "?", urlRequest.url?.absoluteString ?? "?")
         let (data, response) = try await performRequest(urlRequest)
+        NSLog("[APIClient] Response: %d bytes, status %d", data.count, (response as? HTTPURLResponse)?.statusCode ?? -1)
         try validateResponse(response, data: data)
-        return try decoder.decode(PaginatedResponse<T>.self, from: data)
+        do {
+            return try decoder.decode(PaginatedResponse<T>.self, from: data)
+        } catch {
+            let preview = String(data: data.prefix(800), encoding: .utf8) ?? "<binary>"
+            let msg = """
+            [APIClient] Decode FAILED for \(T.self)
+            Error: \(error)
+            Response (\(data.count) bytes): \(preview)
+            """
+            try? msg.write(toFile: "/tmp/rei-decode-error.txt", atomically: true, encoding: .utf8)
+            throw error
+        }
     }
 
     func requestVoid(_ endpoint: APIEndpoint) async throws {

@@ -10,8 +10,8 @@ struct ContentView: View {
         } detail: {
             DetailContentView()
         }
-        .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1000, minHeight: 600)
+        .navigationSplitViewStyle(.prominentDetail)
+        .frame(minWidth: 1100, minHeight: 600)
         .task(id: appState.refreshIntervalSeconds) {
             let interval = appState.refreshIntervalSeconds
             while !Task.isCancelled {

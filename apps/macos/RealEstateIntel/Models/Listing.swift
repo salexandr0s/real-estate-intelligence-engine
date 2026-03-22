@@ -16,7 +16,7 @@ struct Listing: Identifiable, Codable, Hashable {
     let districtName: String?
     let listPriceEur: Int
     let livingAreaSqm: Double?
-    let rooms: Int?
+    let rooms: Double?
     let pricePerSqmEur: Double?
     let currentScore: Double?
     let firstSeenAt: Date
@@ -47,7 +47,7 @@ extension Listing {
             districtName: "Leopoldstadt",
             listPriceEur: 299_000,
             livingAreaSqm: 72.5,
-            rooms: 3,
+            rooms: 3.0,
             pricePerSqmEur: 4124.14,
             currentScore: 87.3,
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date.now)!,
@@ -67,7 +67,7 @@ extension Listing {
             districtName: "Landstrasse",
             listPriceEur: 245_000,
             livingAreaSqm: 58.0,
-            rooms: 2,
+            rooms: 2.0,
             pricePerSqmEur: 4224.14,
             currentScore: 82.1,
             firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date.now)!,
@@ -87,7 +87,7 @@ extension Listing {
             districtName: "Margareten",
             listPriceEur: 389_000,
             livingAreaSqm: 95.0,
-            rooms: 4,
+            rooms: 4.0,
             pricePerSqmEur: 4094.74,
             currentScore: 78.5,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
@@ -107,7 +107,7 @@ extension Listing {
             districtName: "Neubau",
             listPriceEur: 219_000,
             livingAreaSqm: 48.3,
-            rooms: 2,
+            rooms: 2.0,
             pricePerSqmEur: 4534.16,
             currentScore: 71.2,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
@@ -127,7 +127,7 @@ extension Listing {
             districtName: "Alsergrund",
             listPriceEur: 520_000,
             livingAreaSqm: 110.0,
-            rooms: 4,
+            rooms: 4.0,
             pricePerSqmEur: 4727.27,
             currentScore: 65.8,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date.now)!,
@@ -147,7 +147,7 @@ extension Listing {
             districtName: "Favoriten",
             listPriceEur: 129_000,
             livingAreaSqm: 32.0,
-            rooms: 1,
+            rooms: 1.0,
             pricePerSqmEur: 4031.25,
             currentScore: 55.4,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
@@ -167,7 +167,7 @@ extension Listing {
             districtName: "Floridsdorf",
             listPriceEur: 185_000,
             livingAreaSqm: 65.0,
-            rooms: 3,
+            rooms: 3.0,
             pricePerSqmEur: 2846.15,
             currentScore: 42.1,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date.now)!,
@@ -187,7 +187,7 @@ extension Listing {
             districtName: "Mariahilf",
             listPriceEur: 335_000,
             livingAreaSqm: 78.0,
-            rooms: 3,
+            rooms: 3.0,
             pricePerSqmEur: 4294.87,
             currentScore: 25.6,
             firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date.now)!,

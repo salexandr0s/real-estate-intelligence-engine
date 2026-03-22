@@ -27,7 +27,7 @@ struct ListingRow: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
 
-                    Text("\(listing.rooms ?? 0)R")
+                    Text("\(PriceFormatter.formatRooms(listing.rooms))R")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

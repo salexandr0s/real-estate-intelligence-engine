@@ -10,12 +10,30 @@ struct ListingsView: View {
         VStack(spacing: 0) {
             ListingsFilterBar(viewModel: viewModel)
             Divider()
+            if let error = viewModel.errorMessage {
+                HStack(spacing: Theme.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text(error)
+                        .font(.callout)
+                    Spacer()
+                    Button("Retry") {
+                        Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.vertical, Theme.Spacing.sm)
+                .background(Color.red.opacity(0.1))
+                Divider()
+            }
             ListingsTable(viewModel: viewModel)
         }
         .navigationTitle("Listings")
         .inspector(isPresented: $showInspector) {
             ListingsInspectorContent(listing: viewModel.selectedListing)
-                .inspectorColumnWidth(min: 320, ideal: 380, max: 500)
+                .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {

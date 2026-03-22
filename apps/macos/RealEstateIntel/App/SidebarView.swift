@@ -26,6 +26,6 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom) {
             ConnectionStatusBar()
         }
-        .frame(minWidth: 200)
+        .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 240)
     }
 }

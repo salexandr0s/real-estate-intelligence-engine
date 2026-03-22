@@ -286,7 +286,7 @@ private struct FilterTestResultsSheet: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 if let rooms = listing.rooms {
-                                    Text("^[\(rooms) room](inflect: true)")
+                                    Text("\(PriceFormatter.formatRooms(rooms)) rooms")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }

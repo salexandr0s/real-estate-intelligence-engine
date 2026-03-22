@@ -75,6 +75,19 @@ enum PriceFormatter {
         percentFormatter.string(from: NSNumber(value: value)) ?? "\(value * 100)%"
     }
 
+    /// Format room count: "3" or "3,5" for half-rooms
+    static func formatRooms(_ rooms: Double?) -> String {
+        guard let rooms else { return "0" }
+        if rooms == rooms.rounded() {
+            return "\(Int(rooms))"
+        }
+        return rooms.formatted(
+            .number
+            .precision(.fractionLength(1))
+            .locale(Locale(identifier: "de_AT"))
+        )
+    }
+
     /// Short relative date: "3h ago", "2d ago"
     static func relativeDate(_ date: Date) -> String {
         let interval = Date.now.timeIntervalSince(date)

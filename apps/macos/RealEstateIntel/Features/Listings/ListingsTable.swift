@@ -28,12 +28,12 @@ struct ListingsTable: View {
             TableColumn("Title", value: \.title) { (listing: Listing) in
                 titleCell(listing)
             }
-            .width(min: 200, ideal: 300)
+            .width(min: 160, ideal: 300)
 
             TableColumn("District") { (listing: Listing) in
                 districtCell(listing)
             }
-            .width(min: 100, ideal: 130)
+            .width(min: 80, ideal: 130)
 
             TableColumn("Size") { (listing: Listing) in
                 Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
@@ -45,17 +45,17 @@ struct ListingsTable: View {
                 Text(PriceFormatter.format(eur: listing.listPriceEur))
                     .monospacedDigit()
             }
-            .width(min: 100, ideal: 130)
+            .width(min: 90, ideal: 130)
 
             TableColumn("Price/m\u{00B2}") { (listing: Listing) in
                 Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            .width(min: 80, ideal: 100)
+            .width(min: 70, ideal: 100)
 
             TableColumn("Rooms") { (listing: Listing) in
-                Text("\(listing.rooms ?? 0)")
+                Text(PriceFormatter.formatRooms(listing.rooms))
                     .monospacedDigit()
             }
             .width(min: 50, ideal: 60)

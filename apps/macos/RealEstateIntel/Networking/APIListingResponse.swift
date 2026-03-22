@@ -16,7 +16,7 @@ struct APIListingResponse: Codable {
     let districtName: String?
     let listPriceEur: Double?
     let livingAreaSqm: Double?
-    let rooms: Int?
+    let rooms: Double?
     let pricePerSqmEur: Double?
     let currentScore: Double?
     let firstSeenAt: String
