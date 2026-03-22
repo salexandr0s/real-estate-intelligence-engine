@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Recent high-score listings card with empty state handling.
+/// Recent high-score listings card with internal scrolling.
 struct RecentListingsSection: View {
     let listings: [Listing]
 
@@ -21,19 +21,23 @@ struct RecentListingsSection: View {
                 } description: {
                     Text("Listings with score 60+ will appear here")
                 }
+                .frame(maxHeight: .infinity)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(listings) { listing in
-                        DashboardListingRow(listing: listing)
-                        if listing.id != listings.last?.id {
-                            Divider()
-                                .padding(.leading, 52)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(listings) { listing in
+                            DashboardListingRow(listing: listing)
+                            if listing.id != listings.last?.id {
+                                Divider()
+                                    .padding(.leading, 52)
+                            }
                         }
                     }
                 }
+                .scrollIndicators(.automatic)
             }
         }
         .cardStyle()
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

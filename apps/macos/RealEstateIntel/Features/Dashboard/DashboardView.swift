@@ -1,29 +1,30 @@
 import SwiftUI
 
 /// Dashboard overview with summary cards, recent high-score listings, and source health.
+/// Uses a fixed single-page layout where cards fill available space and scroll internally.
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                DashboardHeader(isLoading: viewModel.isLoading) {
-                    Task { await viewModel.refresh(using: appState.apiClient) }
-                }
-                SummaryGridView(cards: viewModel.summaryCards)
-                HStack(alignment: .top, spacing: Theme.Spacing.xl) {
-                    RecentListingsSection(listings: viewModel.recentHighScoreListings)
-                    SourceHealthSection(
-                        sources: viewModel.sources,
-                        healthyCount: viewModel.healthySources,
-                        activeCount: viewModel.activeSources
-                    )
-                }
+        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+            DashboardHeader(isLoading: viewModel.isLoading) {
+                Task { await viewModel.refresh(using: appState.apiClient) }
             }
-            .padding(Theme.Spacing.xl)
+            SummaryGridView(cards: viewModel.summaryCards)
+            HStack(alignment: .top, spacing: Theme.Spacing.xl) {
+                RecentListingsSection(listings: viewModel.recentHighScoreListings)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                SourceHealthSection(
+                    sources: viewModel.sources,
+                    healthyCount: viewModel.healthySources,
+                    activeCount: viewModel.activeSources
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(Theme.Spacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Dashboard")
         .task {

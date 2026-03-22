@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Source health overview card with per-source status rows.
+/// Source health overview card with internal scrolling.
 struct SourceHealthSection: View {
     let sources: [Source]
     let healthyCount: Int
@@ -17,16 +17,19 @@ struct SourceHealthSection: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 0) {
-                ForEach(sources, id: \.id) { source in
-                    SourceHealthRow(source: source)
-                    if source.id != sources.last?.id {
-                        Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sources, id: \.id) { source in
+                        SourceHealthRow(source: source)
+                        if source.id != sources.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
+            .scrollIndicators(.automatic)
         }
         .cardStyle()
-        .frame(minWidth: 300, maxWidth: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
