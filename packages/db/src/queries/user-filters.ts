@@ -251,7 +251,7 @@ export async function findById(id: number): Promise<UserFilterRow | null> {
 export async function findByUserId(userId: number): Promise<UserFilterRow[]> {
   const rows = await query<UserFilterDbRow>(
     `SELECT * FROM user_filters
-     WHERE user_id = $1
+     WHERE user_id = $1 AND is_active = TRUE
      ORDER BY updated_at DESC`,
     [userId],
   );

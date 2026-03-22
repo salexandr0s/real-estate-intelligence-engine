@@ -50,17 +50,12 @@ function toSourceRow(row: SourceDbRow): SourceRow {
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 export async function findAll(): Promise<SourceRow[]> {
-  const rows = await query<SourceDbRow>(
-    'SELECT * FROM sources ORDER BY priority ASC, code ASC',
-  );
+  const rows = await query<SourceDbRow>('SELECT * FROM sources ORDER BY priority ASC, code ASC');
   return rows.map(toSourceRow);
 }
 
 export async function findByCode(code: string): Promise<SourceRow | null> {
-  const rows = await query<SourceDbRow>(
-    'SELECT * FROM sources WHERE code = $1',
-    [code],
-  );
+  const rows = await query<SourceDbRow>('SELECT * FROM sources WHERE code = $1', [code]);
   const row = rows[0];
   return row ? toSourceRow(row) : null;
 }
@@ -111,6 +106,35 @@ export async function create(input: SourceCreateInput): Promise<SourceRow> {
     ],
   );
   return toSourceRow(rows[0]!);
+}
+
+export async function findById(id: number): Promise<SourceRow | null> {
+  const rows = await query<SourceDbRow>('SELECT * FROM sources WHERE id = $1', [id]);
+  const row = rows[0];
+  return row ? toSourceRow(row) : null;
+}
+
+export async function updateActive(id: number, isActive: boolean): Promise<SourceRow | null> {
+  const rows = await query<SourceDbRow>(
+    `UPDATE sources
+     SET is_active = $2
+     WHERE id = $1
+     RETURNING *`,
+    [id, isActive],
+  );
+  const row = rows[0];
+  return row ? toSourceRow(row) : null;
+}
+
+export async function updateAllActive(isActive: boolean): Promise<number> {
+  const rows = await query<{ count: string }>(
+    `WITH updated AS (
+       UPDATE sources SET is_active = $1 RETURNING 1
+     )
+     SELECT count(*)::text AS count FROM updated`,
+    [isActive],
+  );
+  return Number(rows[0]?.count ?? 0);
 }
 
 export async function updateHealthStatus(

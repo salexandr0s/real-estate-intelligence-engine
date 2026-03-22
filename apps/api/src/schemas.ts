@@ -171,6 +171,10 @@ export const alertUpdateSchema = z.object({
   status: z.enum(ALERT_STATUSES),
 });
 
+export const sourceUpdateSchema = z.object({
+  isActive: z.boolean(),
+});
+
 export const scrapeRunCreateSchema = z.object({
   sourceCode: z.string().trim().min(1, 'sourceCode is required'),
 });
