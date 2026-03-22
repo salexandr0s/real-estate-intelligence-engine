@@ -102,6 +102,15 @@ export async function upsertCluster(
 
     const cluster = toClusterRow(clusterRows[0]!);
 
+    // Remove stale members no longer in the current set
+    const currentListingIds = members.map((m) => m.listingId);
+    await queryWithClient(
+      client,
+      `DELETE FROM listing_cluster_members
+       WHERE cluster_id = $1 AND listing_id != ALL($2::bigint[])`,
+      [cluster.id, currentListingIds],
+    );
+
     for (const member of members) {
       await queryWithClient(
         client,

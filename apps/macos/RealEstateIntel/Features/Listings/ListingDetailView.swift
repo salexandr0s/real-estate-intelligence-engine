@@ -9,6 +9,7 @@ struct ListingDetailView: View {
     @State private var priceVersions: [PriceVersion] = []
     @State private var cluster: ListingCluster?
     @State private var isSaved: Bool = false
+    @State private var isSaving: Bool = false
 
     var body: some View {
         ScrollView {
@@ -104,15 +105,21 @@ struct ListingDetailView: View {
     }
 
     private func toggleSave() async {
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        let wasaved = isSaved
+        isSaved.toggle() // Optimistic update
+
         do {
-            if isSaved {
+            if wasaved {
                 try await appState.apiClient.unsaveListing(listingId: listing.id)
-                isSaved = false
             } else {
                 try await appState.apiClient.saveListing(listingId: listing.id)
-                isSaved = true
             }
         } catch {
+            isSaved = wasaved // Revert on failure
             NSLog("[ListingDetail] Save/unsave failed: %@", String(describing: error))
         }
     }
