@@ -116,7 +116,7 @@ enum ViennaBoundaryStore {
     static let boundaryCoordinates: [CLLocationCoordinate2D] = loadBoundary()
 
     /// A large polygon with Vienna cut out as a hole — used to darken areas outside the city.
-    static let maskPolygon: MKPolygon = buildMaskPolygon()
+    nonisolated(unsafe) static let maskPolygon: MKPolygon = buildMaskPolygon()
 
     /// Bounding region for camera bounds — restricts map panning to Vienna area.
     static let cameraBounds: MKCoordinateRegion = {
