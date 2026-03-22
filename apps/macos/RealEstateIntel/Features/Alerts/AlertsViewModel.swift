@@ -56,7 +56,7 @@ final class AlertsViewModel {
 
     func markAllRead(using client: APIClient) async {
         do {
-            _ = try await client.bulkUpdateAlerts(action: "opened")
+            _ = try await client.bulkUpdateAlerts(filterStatus: "sent", action: "opened")
             for i in alerts.indices {
                 if alerts[i].status == .unread {
                     alerts[i].status = .opened
@@ -69,9 +69,11 @@ final class AlertsViewModel {
 
     func dismissAll(using client: APIClient) async {
         do {
-            _ = try await client.bulkUpdateAlerts(action: "dismissed")
+            _ = try await client.bulkUpdateAlerts(filterStatus: "sent", action: "dismissed")
             for i in alerts.indices {
-                alerts[i].status = .dismissed
+                if alerts[i].status != .dismissed {
+                    alerts[i].status = .dismissed
+                }
             }
         } catch {
             errorMessage = error.localizedDescription

@@ -276,7 +276,7 @@ actor APIClient {
         let payload = BulkBody(
             action: action,
             ids: ids,
-            filter: filterStatus != nil ? BulkBody.FilterBody(status: filterStatus) : BulkBody.FilterBody(status: nil)
+            filter: filterStatus.map { BulkBody.FilterBody(status: $0) }
         )
         let body = try encoder.encode(payload)
 

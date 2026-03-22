@@ -542,8 +542,12 @@ export async function findListingsNeedingGeocoding(limit = 100): Promise<Listing
 
 import { csvSafe } from '../util/csv.js';
 
-export async function exportListingsCsv(filter: ListingSearchFilter): Promise<string> {
-  const result = await searchListings(filter, null, 10000);
+export async function exportListingsCsv(
+  filter: ListingSearchFilter,
+): Promise<{ csv: string; truncated: boolean }> {
+  const exportLimit = 10000;
+  const result = await searchListings(filter, null, exportLimit);
+  const truncated = result.data.length >= exportLimit;
 
   const header =
     'id,title,source,operation,property_type,district,district_name,price_eur,area_sqm,rooms,price_per_sqm,score,url,first_seen,status';
@@ -554,10 +558,16 @@ export async function exportListingsCsv(filter: ListingSearchFilter): Promise<st
     const rooms = l.rooms?.toFixed(1) ?? '';
     const score = l.currentScore?.toFixed(1) ?? '';
     const title = csvSafe(l.title);
-    return `${l.id},"${title}",${l.sourceCode ?? ''},${l.operationType},${l.propertyType},${l.districtNo ?? ''},${l.districtName ?? ''},${price},${area},${rooms},${l.pricePerSqmEur?.toFixed(0) ?? ''},${score},"${l.canonicalUrl}",${l.firstSeenAt.toISOString()},${l.listingStatus}`;
+    const districtName = csvSafe(l.districtName ?? '');
+    const url = csvSafe(l.canonicalUrl);
+    return `${l.id},"${title}","${l.sourceCode ?? ''}","${l.operationType}","${l.propertyType}",${l.districtNo ?? ''},"${districtName}",${price},${area},${rooms},${l.pricePerSqmEur?.toFixed(0) ?? ''},${score},"${url}",${l.firstSeenAt.toISOString()},${l.listingStatus}`;
   });
 
-  return [header, ...rows].join('\n');
+  const lines = [header, ...rows];
+  if (truncated) {
+    lines.push(`# Export truncated at ${exportLimit} rows. Apply filters to narrow results.`);
+  }
+  return { csv: lines.join('\n'), truncated };
 }
 
 // ── Cursor helpers ──────────────────────────────────────────────────────────

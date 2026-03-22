@@ -113,7 +113,11 @@ struct ListingsView: View {
         panel.title = "Export Listings"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+            do {
+                try data.write(to: url)
+            } catch {
+                NSLog("[ListingsView] Export write failed: %@", String(describing: error))
+            }
         }
     }
 }

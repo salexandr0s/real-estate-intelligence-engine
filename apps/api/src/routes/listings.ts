@@ -138,7 +138,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
 
-      const csv = await listings.exportListingsCsv({
+      const { csv, truncated } = await listings.exportListingsCsv({
         operationType: parsed.operationType as ListingSearchFilter['operationType'],
         propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
         districts: parsed.districts,
@@ -152,10 +152,13 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         sortBy: parsed.sortBy,
       });
 
-      return reply
+      let disposition = reply
         .header('Content-Type', 'text/csv; charset=utf-8')
-        .header('Content-Disposition', 'attachment; filename="listings.csv"')
-        .send(csv);
+        .header('Content-Disposition', 'attachment; filename="listings.csv"');
+      if (truncated) {
+        disposition = disposition.header('X-Truncated', 'true');
+      }
+      return disposition.send(csv);
     },
   );
 

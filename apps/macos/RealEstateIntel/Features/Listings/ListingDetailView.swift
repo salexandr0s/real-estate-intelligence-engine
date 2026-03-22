@@ -109,17 +109,17 @@ struct ListingDetailView: View {
         isSaving = true
         defer { isSaving = false }
 
-        let wasaved = isSaved
+        let wasSaved = isSaved
         isSaved.toggle() // Optimistic update
 
         do {
-            if wasaved {
+            if wasSaved {
                 try await appState.apiClient.unsaveListing(listingId: listing.id)
             } else {
                 try await appState.apiClient.saveListing(listingId: listing.id)
             }
         } catch {
-            isSaved = wasaved // Revert on failure
+            isSaved = wasSaved // Revert on failure
             NSLog("[ListingDetail] Save/unsave failed: %@", String(describing: error))
         }
     }

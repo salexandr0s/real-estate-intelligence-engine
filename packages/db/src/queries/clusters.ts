@@ -91,6 +91,7 @@ export async function upsertCluster(
       `INSERT INTO listing_clusters (fingerprint, canonical_listing_id, listing_count, min_price_eur_cents, max_price_eur_cents, price_spread_pct)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (fingerprint) DO UPDATE SET
+         canonical_listing_id = EXCLUDED.canonical_listing_id,
          listing_count = EXCLUDED.listing_count,
          min_price_eur_cents = EXCLUDED.min_price_eur_cents,
          max_price_eur_cents = EXCLUDED.max_price_eur_cents,

@@ -55,7 +55,7 @@ struct ListingsMapView: View {
                         ForEach(mappableListings) { listing in
                             Annotation(
                                 listing.title,
-                                coordinate: listing.coordinate!,
+                                coordinate: listing.coordinate ?? Self.viennaCenter,
                                 anchor: .bottom
                             ) {
                                 ListingAnnotation(
