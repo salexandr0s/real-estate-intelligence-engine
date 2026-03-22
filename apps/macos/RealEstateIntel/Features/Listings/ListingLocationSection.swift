@@ -29,6 +29,7 @@ struct ListingLocationSection: View {
             }
         }
         .task(id: listing.id) {
+            await ViennaPOIStore.loadIfNeeded()
             if let coord = listing.coordinate {
                 nearbyPOIs = ViennaPOIStore.nearby(
                     coordinate: coord,

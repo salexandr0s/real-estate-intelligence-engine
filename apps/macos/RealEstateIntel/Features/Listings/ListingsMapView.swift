@@ -20,6 +20,7 @@ struct ListingsMapView: View {
     @State private var showDistrictBoundaries: Bool = true
     @State private var activePOICategories: Set<POICategory> = []
     @State private var visiblePOIs: [POI] = []
+    @State private var visibleRegion: MKCoordinateRegion?
     @State private var showDevelopments: Bool = false
     @State private var visibleDevelopments: [WienDevelopment] = []
     @State private var showPOIPicker: Bool = false
@@ -103,6 +104,10 @@ struct ListingsMapView: View {
                         }
                     }
                     .mapStyle(mapStyle)
+                    .onMapCameraChange(frequency: .onEnd) { context in
+                        visibleRegion = context.region
+                        refreshVisiblePOIs()
+                    }
                     .overlay {
                         if viewModel.isDrawingSelection {
                             MapSelectionOverlay(proxy: proxy) { region in
@@ -140,6 +145,7 @@ struct ListingsMapView: View {
         }
         .task {
             districtBoundaries = ViennaDistrictStore.boundaries
+            await ViennaPOIStore.loadIfNeeded()
             // If a district filter is already active, zoom to it
             if let districtNo = viewModel.selectedDistrict,
                let boundary = ViennaDistrictStore.boundary(for: districtNo) {
@@ -299,77 +305,138 @@ struct ListingsMapView: View {
         .buttonStyle(.plain)
         .help("Points of Interest")
         .popover(isPresented: $showPOIPicker, arrowEdge: .leading) {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(POICategoryGroup.allCases, id: \.self) { group in
-                    if group != POICategoryGroup.allCases.first {
-                        Divider().padding(.vertical, 2)
-                    }
-
-                    Text(group.displayName)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.tertiary)
-                        .textCase(.uppercase)
-
-                    ForEach(group.categories, id: \.self) { category in
-                        Button {
-                            if activePOICategories.contains(category) {
-                                activePOICategories.remove(category)
-                            } else {
-                                activePOICategories.insert(category)
-                            }
-                            updateVisiblePOIs()
-                        } label: {
-                            HStack {
-                                Label(category.displayName, systemImage: category.systemImage)
-                                    .font(.caption)
-                                Spacer()
-                                if activePOICategories.contains(category) {
-                                    Image(systemName: "checkmark")
-                                        .font(.caption)
-                                        .foregroundStyle(.accentColor)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Divider().padding(.vertical, 2)
-
-                Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
-                    if activePOICategories.count == POICategory.allCases.count {
-                        activePOICategories.removeAll()
-                    } else {
-                        activePOICategories = Set(POICategory.allCases)
-                    }
-                    updateVisiblePOIs()
-                }
-                .font(.caption)
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .fixedSize()
+            poiPickerContent
         }
     }
 
+    private var poiPickerContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(POICategoryGroup.allCases.enumerated()), id: \.element) { index, group in
+                if index > 0 {
+                    Divider().padding(.vertical, 2)
+                }
+                poiGroupSection(group)
+            }
+
+            Divider().padding(.vertical, 2)
+
+            Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
+                if activePOICategories.count == POICategory.allCases.count {
+                    activePOICategories.removeAll()
+                } else {
+                    activePOICategories = Set(POICategory.allCases)
+                }
+                updateVisiblePOIs()
+            }
+            .font(.caption)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private func poiGroupSection(_ group: POICategoryGroup) -> some View {
+        Text(group.displayName)
+            .font(.caption2.bold())
+            .foregroundStyle(.tertiary)
+            .textCase(.uppercase)
+
+        let cats: [POICategory] = group.categories
+        ForEach(cats, id: \.self) { category in
+            poiCategoryButton(category)
+        }
+    }
+
+    private func poiCategoryButton(_ category: POICategory) -> some View {
+        Button {
+            if activePOICategories.contains(category) {
+                activePOICategories.remove(category)
+            } else {
+                activePOICategories.insert(category)
+            }
+            updateVisiblePOIs()
+        } label: {
+            HStack {
+                Label(category.displayName, systemImage: category.systemImage)
+                    .font(.caption)
+                Spacer()
+                if activePOICategories.contains(category) {
+                    Image(systemName: "checkmark")
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Maximum annotations to render simultaneously for smooth performance.
+    private static let maxAnnotations = 500
+
+    /// Categories that should never be thinned (low count, high value).
+    private static let alwaysShowCategories: Set<POICategory> = [
+        .ubahn, .hospital, .fireStation, .police,
+    ]
+
     private func updateVisiblePOIs() {
+        refreshVisiblePOIs()
+    }
+
+    /// Recompute visible POIs based on actual viewport and active categories.
+    /// Applies density limiting when annotation count would exceed the cap.
+    private func refreshVisiblePOIs() {
         guard !activePOICategories.isEmpty else {
             visiblePOIs = []
             return
         }
-        // Show POIs within the current visible area
-        // Use a default Vienna-wide region as fallback
-        let region = currentRegion
-        visiblePOIs = ViennaPOIStore.inRegion(region, categories: activePOICategories)
-    }
 
-    /// Approximate current visible region for viewport culling.
-    private var currentRegion: MKCoordinateRegion {
-        MKCoordinateRegion(
+        let region = visibleRegion ?? MKCoordinateRegion(
             center: Self.viennaCenter,
-            span: MKCoordinateSpan(latitudeDelta: 0.20, longitudeDelta: 0.20)
+            span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
         )
+
+        let allInView = ViennaPOIStore.inRegion(region, categories: activePOICategories)
+
+        if allInView.count <= Self.maxAnnotations {
+            visiblePOIs = allInView
+            return
+        }
+
+        // Density limiting: keep all high-value categories, thin dense ones
+        var kept: [POI] = []
+        var dense: [POI] = []
+
+        for poi in allInView {
+            if Self.alwaysShowCategories.contains(poi.category) {
+                kept.append(poi)
+            } else {
+                dense.append(poi)
+            }
+        }
+
+        let remaining = Self.maxAnnotations - kept.count
+        if remaining > 0, !dense.isEmpty {
+            // Spatial thinning: keep at most one POI per sub-grid cell
+            // Cell size adapts to how many we need to drop
+            let thinFactor = max(1, Int(sqrt(Double(dense.count) / Double(remaining))))
+            let cellLat = region.span.latitudeDelta / Double(max(1, 20 / thinFactor))
+            let cellLon = region.span.longitudeDelta / Double(max(1, 20 / thinFactor))
+
+            var seen = Set<Int>()
+            for poi in dense {
+                let row = Int((poi.latitude - region.center.latitude + region.span.latitudeDelta / 2) / cellLat)
+                let col = Int((poi.longitude - region.center.longitude + region.span.longitudeDelta / 2) / cellLon)
+                let key = row * 10_000 + col
+                if seen.insert(key).inserted {
+                    kept.append(poi)
+                    if kept.count >= Self.maxAnnotations { break }
+                }
+            }
+        }
+
+        visiblePOIs = kept
     }
 
     // MARK: - Status Bar

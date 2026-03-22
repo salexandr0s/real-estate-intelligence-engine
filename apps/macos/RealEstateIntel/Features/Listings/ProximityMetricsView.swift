@@ -13,7 +13,7 @@ struct ProximityMetricsView: View {
             } else {
                 // Transit — show nearest of each type
                 if let ubahn = nearest(for: .ubahn) {
-                    proximityRow(
+                    ProximityRow(
                         icon: "tram.fill",
                         color: .blue,
                         text: walkTimeText(ubahn, label: "U-Bahn"),
@@ -21,7 +21,7 @@ struct ProximityMetricsView: View {
                     )
                 }
                 if let tram = nearest(for: .tram) {
-                    proximityRow(
+                    ProximityRow(
                         icon: "cablecar.fill",
                         color: .cyan,
                         text: walkTimeText(tram, label: "tram"),
@@ -29,7 +29,7 @@ struct ProximityMetricsView: View {
                     )
                 }
                 if let bus = nearest(for: .bus) {
-                    proximityRow(
+                    ProximityRow(
                         icon: "bus.fill",
                         color: .indigo,
                         text: walkTimeText(bus, label: "bus"),
@@ -40,7 +40,7 @@ struct ProximityMetricsView: View {
                 // Daily life
                 let marketCount = count(for: .supermarket)
                 if marketCount > 0 {
-                    proximityRow(
+                    ProximityRow(
                         icon: "cart.fill",
                         color: .mint,
                         text: "\(marketCount) supermarket\(marketCount == 1 ? "" : "s") within 500m",
@@ -50,7 +50,7 @@ struct ProximityMetricsView: View {
 
                 let docCount = count(for: .doctor)
                 if docCount > 0 {
-                    proximityRow(
+                    ProximityRow(
                         icon: "stethoscope",
                         color: .purple,
                         text: "\(docCount) doctor\(docCount == 1 ? "" : "s") within 500m",
@@ -60,7 +60,7 @@ struct ProximityMetricsView: View {
 
                 let hospitalCount = nearbyPOIs.count(where: { $0.poi.category == .hospital && $0.distanceM <= 2000 })
                 if hospitalCount > 0 {
-                    proximityRow(
+                    ProximityRow(
                         icon: "cross.case.fill",
                         color: .pink,
                         text: "Hospital within 2km",
@@ -71,7 +71,7 @@ struct ProximityMetricsView: View {
                 // Parks
                 let parkCount = count(for: .park)
                 if parkCount > 0 {
-                    proximityRow(
+                    ProximityRow(
                         icon: "leaf.fill",
                         color: .green,
                         text: "\(parkCount) park\(parkCount == 1 ? "" : "s") within 500m",
@@ -82,7 +82,7 @@ struct ProximityMetricsView: View {
                 // Education
                 let eduCount = count(for: .school)
                 if eduCount > 0 {
-                    proximityRow(
+                    ProximityRow(
                         icon: "book.fill",
                         color: .orange,
                         text: "\(eduCount) school\(eduCount == 1 ? "" : "s") within 500m",
@@ -98,7 +98,7 @@ struct ProximityMetricsView: View {
                         policeCount > 0 ? "\(policeCount) police" : nil,
                         fireCount > 0 ? "\(fireCount) fire" : nil,
                     ].compactMap { $0 }.joined(separator: " + ")
-                    proximityRow(
+                    ProximityRow(
                         icon: "shield.fill",
                         color: .gray,
                         text: "\(parts) within 1km",
@@ -121,8 +121,16 @@ struct ProximityMetricsView: View {
         let minutes = max(1, Int(entry.distanceM / 80)) // ~80m per minute walking
         return "\(minutes) min walk to \(label)"
     }
+}
 
-    private func proximityRow(icon: String, color: Color, text: String, detail: String?) -> some View {
+/// A single row in the proximity metrics showing an icon, description, and optional detail.
+struct ProximityRow: View {
+    let icon: String
+    let color: Color
+    let text: String
+    let detail: String?
+
+    var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: icon)
                 .font(.caption2)
