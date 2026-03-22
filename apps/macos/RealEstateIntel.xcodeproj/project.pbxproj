@@ -43,7 +43,6 @@
 		4C94021BDAC749D3DD65127E /* FilterCriteria.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6661C10D13676B3451BE1AAA /* FilterCriteria.swift */; };
 		4D99DC37641FA71C53279378 /* Filter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F0D4EFEDD74A4641D80F579 /* Filter.swift */; };
 		4E40BC90EAD7A73EC237731F /* Listing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E7DA452144C9058CA5FBE1 /* Listing.swift */; };
-		54AAE7911E0BF57BD7E7F083 /* ListingsToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD3454460201AE9F115C6CB /* ListingsToolbar.swift */; };
 		54DA3A172816D1A4BA9BBB69 /* Source.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1DD318D97B92DEBCB17D13 /* Source.swift */; };
 		555976C0799A8BA8FD0983A8 /* PropertyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B1F74C000530D5F166FC18 /* PropertyType.swift */; };
 		59E95B052E006F43C89A7A9E /* DashboardListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCFB35EB4F8124FC29BECDB /* DashboardListingRow.swift */; };
@@ -173,7 +172,6 @@
 		C289FCD074A3A964C4C98A3F /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		C5A7B3A87C4DCA501C4D2FF4 /* SourceHealthSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthSection.swift; sourceTree = "<group>"; };
 		C6FD0F993F20CA5DF23DE907 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		CAD3454460201AE9F115C6CB /* ListingsToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsToolbar.swift; sourceTree = "<group>"; };
 		D00B6C48740072BB50DF60A6 /* DashboardHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardHeader.swift; sourceTree = "<group>"; };
 		D2935C92AC4DA5E19FFB224C /* AlertQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertQuery.swift; sourceTree = "<group>"; };
 		DA46508A4E3EAC7C9467F910 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -206,7 +204,6 @@
 				18C096223AC15CFCCFCA451A /* ListingsFilterBar.swift */,
 				41A25C25BC73D2F4C34DFC90 /* ListingsInspectorContent.swift */,
 				4A52FDDD09441E42D72D58FB /* ListingsTable.swift */,
-				CAD3454460201AE9F115C6CB /* ListingsToolbar.swift */,
 				9F9DC8AA06F15F9271A3DC81 /* ListingsView.swift */,
 				A387A729B03CDF0F20239977 /* ListingsViewModel.swift */,
 				2AA0C595280E8F925BAA3BD3 /* MapPlaceholder.swift */,
@@ -522,7 +519,6 @@
 				41F0C3A890685D3AB728A38B /* ListingsFilterBar.swift in Sources */,
 				75D93D06BCEE87CBA8DD595D /* ListingsInspectorContent.swift in Sources */,
 				C64D1EE71B17DFCCE57921F8 /* ListingsTable.swift in Sources */,
-				54AAE7911E0BF57BD7E7F083 /* ListingsToolbar.swift in Sources */,
 				9337A53BE28F07A9FAFF3716 /* ListingsView.swift in Sources */,
 				18969093E2B380C1E8A8B509 /* ListingsViewModel.swift in Sources */,
 				9A60AC6F1CE28454B3FCF5FB /* LocalCache.swift in Sources */,

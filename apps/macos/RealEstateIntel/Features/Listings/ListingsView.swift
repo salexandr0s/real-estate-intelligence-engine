@@ -13,19 +13,31 @@ struct ListingsView: View {
             ListingsTable(viewModel: viewModel)
         }
         .navigationTitle("Listings")
-        .searchable(text: $viewModel.searchText, prompt: "Search by title, district, postal code...")
         .inspector(isPresented: $showInspector) {
             ListingsInspectorContent(listing: viewModel.selectedListing)
                 .inspectorColumnWidth(min: 320, ideal: 380, max: 500)
         }
         .toolbar {
-            ToolbarItemGroup {
-                ListingsToolbar(
-                    showInspector: $showInspector,
-                    isLoading: viewModel.isLoading
-                ) {
+            ToolbarItem(placement: .principal) {
+                ToolbarSearchField(text: $viewModel.searchText, prompt: "Search by title, district, postal code...")
+                    .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
                     Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
+                .disabled(viewModel.isLoading)
+                .help("Refresh listings")
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    showInspector.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.trailing")
+                }
+                .help("Toggle listing detail inspector")
             }
         }
         .task {
@@ -35,6 +47,46 @@ struct ListingsView: View {
             if newValue != nil {
                 showInspector = true
             }
+        }
+    }
+}
+
+// MARK: - Native macOS Search Field
+
+/// Wraps NSSearchField for a proper native macOS look in the toolbar.
+private struct ToolbarSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.delegate = context.coordinator
+        field.sendsSearchStringImmediately = true
+        field.sendsWholeSearchString = false
+        return field
+    }
+
+    func updateNSView(_ nsView: NSSearchField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        @Binding var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSSearchField else { return }
+            text = field.stringValue
         }
     }
 }

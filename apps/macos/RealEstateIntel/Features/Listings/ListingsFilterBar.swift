@@ -13,7 +13,7 @@ struct ListingsFilterBar: View {
                     Text(type.rawValue.capitalized).tag(type as OperationType?)
                 }
             }
-            .frame(width: 120)
+            .frame(width: 160)
 
             // Property type
             Picker("Property", selection: $viewModel.selectedPropertyType) {
@@ -22,7 +22,7 @@ struct ListingsFilterBar: View {
                     Text(type.displayName).tag(type as PropertyType?)
                 }
             }
-            .frame(width: 140)
+            .frame(width: 180)
 
             // District
             Picker("District", selection: $viewModel.selectedDistrict) {

@@ -35,16 +35,24 @@ struct ListingsTable: View {
             }
             .width(min: 100, ideal: 130)
 
-            TableColumn("Price", value: \.listPriceEur) { (listing: Listing) in
-                priceCell(listing)
-            }
-            .width(min: 100, ideal: 140)
-
             TableColumn("Size") { (listing: Listing) in
                 Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
                     .monospacedDigit()
             }
             .width(min: 70, ideal: 80)
+
+            TableColumn("Price", value: \.listPriceEur) { (listing: Listing) in
+                Text(PriceFormatter.format(eur: listing.listPriceEur))
+                    .monospacedDigit()
+            }
+            .width(min: 100, ideal: 130)
+
+            TableColumn("Price/m\u{00B2}") { (listing: Listing) in
+                Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 80, ideal: 100)
 
             TableColumn("Rooms") { (listing: Listing) in
                 Text("\(listing.rooms ?? 0)")
@@ -93,18 +101,6 @@ struct ListingsTable: View {
             Text(listing.postalCode ?? "")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-        }
-    }
-
-    @ViewBuilder
-    private func priceCell(_ listing: Listing) -> some View {
-        VStack(alignment: .trailing, spacing: 1) {
-            Text(PriceFormatter.format(eur: listing.listPriceEur))
-                .monospacedDigit()
-            Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .monospacedDigit()
         }
     }
 
