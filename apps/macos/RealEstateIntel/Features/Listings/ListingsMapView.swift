@@ -251,17 +251,11 @@ struct ListingsMapView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 16)
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundStyle(isActive ? tint : .primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(isActive ? tint : .primary)
+                .frame(width: 32, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(title)
@@ -273,23 +267,15 @@ struct ListingsMapView: View {
             Button("Satellite") { mapStyle = .imagery }
             Button("Hybrid") { mapStyle = .hybrid }
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "map")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 16)
-                Text("Map Style")
-                    .font(.system(size: 11, weight: .medium))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.tertiary)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            Image(systemName: "map")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 32, height: 28)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .help("Map Style")
     }
 
     private var poiLayerMenu: some View {
@@ -311,22 +297,14 @@ struct ListingsMapView: View {
                 updateVisiblePOIs()
             }
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 16)
-                Text(showPOIs ? "POIs (\(activePOICategories.count))" : "POIs")
-                    .font(.system(size: 11, weight: .medium))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.tertiary)
-            }
-            .foregroundStyle(showPOIs ? .blue : .primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
+            Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(showPOIs ? .blue : .primary)
+                .frame(width: 32, height: 28)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
+        .help("Points of Interest")
     }
 
     private func poiCategoryBinding(for category: POICategory) -> Binding<Bool> {
