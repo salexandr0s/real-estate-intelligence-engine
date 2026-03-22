@@ -248,8 +248,8 @@ CREATE TABLE IF NOT EXISTS listings (
   district_no                      SMALLINT
                                      CHECK (district_no IS NULL OR district_no BETWEEN 1 AND 23),
   district_name                    TEXT,
-  postal_code                      VARCHAR(4)
-                                     CHECK (postal_code IS NULL OR postal_code ~ '^[0-9]{4}$'),
+  postal_code                      VARCHAR(10)
+                                     CHECK (postal_code IS NULL OR postal_code ~ '^[A-Za-z0-9 -]{2,10}$'),
   city                             TEXT NOT NULL,
   federal_state                    TEXT,
   street                           TEXT,

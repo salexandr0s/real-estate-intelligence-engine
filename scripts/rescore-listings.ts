@@ -6,7 +6,15 @@
 
 import { loadConfig } from '@rei/config';
 import { createLogger } from '@rei/observability';
-import { query, sources, listings, listingScores, marketBaselines, closePool } from '@rei/db';
+import {
+  query,
+  sources,
+  listings,
+  listingScores,
+  listingVersions,
+  marketBaselines,
+  closePool,
+} from '@rei/db';
 import { scoreListing, SCORE_VERSION } from '@rei/scoring';
 import { getAreaBucket, getRoomBucket } from '@rei/contracts';
 import type { ScoreInput, BaselineLookup } from '@rei/contracts';
@@ -55,8 +63,8 @@ interface ListingRow {
   usable_area_sqm: string | null;
   rooms: string | null;
   completeness_score: string;
-  first_seen_at: string;
-  last_price_change_at: string | null;
+  first_seen_at: Date;
+  last_price_change_at: Date | null;
   current_score: string | null;
 }
 
@@ -139,14 +147,23 @@ async function main(): Promise<void> {
       };
 
       const input: ScoreInput = {
+        listingId: row.id,
+        listingVersionId: 0,
         pricePerSqmEur,
+        districtNo: row.district_no,
+        operationType: row.operation_type,
+        propertyType: row.property_type,
+        livingAreaSqm: livingArea,
+        rooms,
+        city: row.city,
         title: row.title,
         description: row.description,
-        daysOnMarket: Math.floor((Date.now() - new Date(row.first_seen_at).getTime()) / 86_400_000),
+        firstSeenAt: row.first_seen_at,
+        lastPriceChangeAt: row.last_price_change_at,
         recentPriceDropPct: 0,
         relistDetected: false,
         completenessScore: Number(row.completeness_score),
-        sourceReliability: 90,
+        sourceHealthScore: 90,
         locationConfidence: 75,
       };
 
@@ -159,7 +176,12 @@ async function main(): Promise<void> {
       }
 
       if (!dryRun) {
-        await listingScores.insertScore(row.id, null, score);
+        // Get latest version ID for this listing
+        const versions = await listingVersions.findByListingId(row.id, 1);
+        const latestVersionId = versions[0]?.id ?? 0;
+        if (latestVersionId > 0) {
+          await listingScores.insertScore(row.id, latestVersionId, score);
+        }
         await listings.updateScore(row.id, score.overallScore, new Date());
       }
 

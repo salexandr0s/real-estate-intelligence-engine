@@ -33,10 +33,14 @@ function toScoreResult(row: ListingScoreDbRow): ScoreResult {
     keywordSignalScore: Number(row.keyword_signal_score),
     timeOnMarketScore: Number(row.time_on_market_score),
     confidenceScore: Number(row.confidence_score),
-    districtBaselinePpsqmEur: row.district_baseline_ppsqm_eur != null ? Number(row.district_baseline_ppsqm_eur) : null,
-    bucketBaselinePpsqmEur: row.bucket_baseline_ppsqm_eur != null ? Number(row.bucket_baseline_ppsqm_eur) : null,
-    discountToDistrictPct: row.discount_to_district_pct != null ? Number(row.discount_to_district_pct) : null,
-    discountToBucketPct: row.discount_to_bucket_pct != null ? Number(row.discount_to_bucket_pct) : null,
+    districtBaselinePpsqmEur:
+      row.district_baseline_ppsqm_eur != null ? Number(row.district_baseline_ppsqm_eur) : null,
+    bucketBaselinePpsqmEur:
+      row.bucket_baseline_ppsqm_eur != null ? Number(row.bucket_baseline_ppsqm_eur) : null,
+    discountToDistrictPct:
+      row.discount_to_district_pct != null ? Number(row.discount_to_district_pct) : null,
+    discountToBucketPct:
+      row.discount_to_bucket_pct != null ? Number(row.discount_to_bucket_pct) : null,
     matchedPositiveKeywords: row.matched_positive_keywords,
     matchedNegativeKeywords: row.matched_negative_keywords,
     explanation: row.explanation,
@@ -62,7 +66,15 @@ export async function insertScore(
        explanation, scored_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
-     )`,
+     )
+     ON CONFLICT (listing_version_id, score_version) DO UPDATE SET
+       overall_score = EXCLUDED.overall_score,
+       district_price_score = EXCLUDED.district_price_score,
+       undervaluation_score = EXCLUDED.undervaluation_score,
+       keyword_signal_score = EXCLUDED.keyword_signal_score,
+       time_on_market_score = EXCLUDED.time_on_market_score,
+       confidence_score = EXCLUDED.confidence_score,
+       scored_at = NOW()`,
     [
       listingId,
       listingVersionId,
