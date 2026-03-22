@@ -42,11 +42,16 @@ final class AnalyticsViewModel {
                 guard let p25 = b.p25PpsqmEur else { return nil }
                 return p25 * Double(b.sampleSize)
             }.reduce(0.0, +) / max(Double(totalSamples), 1)
+            let weightedP75 = items.compactMap { b -> Double? in
+                guard let p75 = b.p75PpsqmEur else { return nil }
+                return p75 * Double(b.sampleSize)
+            }.reduce(0.0, +) / max(Double(totalSamples), 1)
 
             return DistrictSummary(
                 districtNo: districtNo,
                 medianPpsqmEur: weightedMedian,
                 p25PpsqmEur: weightedP25,
+                p75PpsqmEur: weightedP75,
                 sampleCount: totalSamples
             )
         }
@@ -78,6 +83,7 @@ struct DistrictSummary: Identifiable {
     let districtNo: Int
     let medianPpsqmEur: Double
     let p25PpsqmEur: Double
+    let p75PpsqmEur: Double
     let sampleCount: Int
 
     var id: Int { districtNo }

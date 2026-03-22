@@ -54,7 +54,7 @@
 - [x] Define environment variable contract
 - [x] Configure secret storage strategy
 - [x] Set up local `.env` loading
-- [ ] Set up production secrets loading
+- [x] Set up production secrets loading
 
 ### Observability
 - [x] Add structured logging
@@ -106,7 +106,7 @@
 ### Migration quality
 - [x] Test migrations from empty database
 - [x] Test rolling forward on seeded database
-- [ ] Test rollback plan or compensating migration strategy
+- [x] Test rollback plan or compensating migration strategy (`tests/integration/migration-rollback.test.ts`)
 - [x] Document destructive migration rules
 
 ---
@@ -152,7 +152,7 @@
 ### Diagnostics
 - [x] Capture screenshot on parse failure (detail worker catch block)
 - [x] Capture HTML on parse failure (detail worker catch block)
-- [ ] Capture HAR when configured (deferred to Phase 9)
+- [x] Capture HAR when configured (`PLAYWRIGHT_CAPTURE_HAR_ON_FAILURE` in detail-worker + artifact-writer)
 - [x] Log source/job correlation IDs (in all workers)
 - [x] Expose scrape metrics (`ScrapeRunContext.getMetrics()`)
 
@@ -179,15 +179,16 @@
 - [x] Tune concurrency for source (1 concurrent)
 - [x] Save representative fixtures (3: discovery, detail, sold)
 - [x] Add parser tests from fixtures (9 tests passing)
-- [ ] Add canary crawl for source
+- [x] Add canary crawl for source (`scripts/canary-crawl.ts`)
 - [x] Write source runbook
 
-### Second source
-- [ ] Repeat source template flow
-- [ ] Verify no schema rewrite needed
-- [ ] Verify shared normalization abstractions are sufficient
-- [ ] Compare field coverage vs first source
-- [ ] Tune anti-bot policy separately
+### Second source (immoscout24)
+- [x] Repeat source template flow
+- [x] Verify no schema rewrite needed
+- [x] Verify shared normalization abstractions are sufficient
+- [x] Compare field coverage vs first source
+- [x] Tune anti-bot policy separately (8 RPM vs willhaben 10 RPM)
+- [x] Verify scoring uses canonical fields only
 
 ---
 
@@ -202,7 +203,7 @@
 - [x] Preserve full raw payload JSON (`rawPayload` JSONB column)
 - [x] Preserve HTML artifact pointer (`bodyStorageKey` / `htmlStorageKey`)
 - [x] Preserve screenshot artifact pointer (`screenshotStorageKey`)
-- [ ] Preserve HAR artifact pointer (deferred to Phase 9)
+- [x] Preserve HAR artifact pointer (`harStorageKey` in ProcessingJobData + ArtifactWriter.writeHar())
 - [x] Compute raw content checksum (`computeContentHash()` → `contentSha256`)
 - [x] Verify re-observation updates `last_seen_at` (ON CONFLICT clause)
 - [x] Verify identical raw snapshot does not duplicate row (unique constraint)
@@ -315,14 +316,14 @@
 - [x] Store matched negative keywords (`listing-scores.ts:81`)
 - [x] Add score versioning (`SCORE_VERSION = 1` in `score-engine.ts`)
 - [x] Add rescore command (`scripts/rescore-listings.ts`)
-- [ ] Add score regression fixture tests
+- [x] Add score regression fixture tests
 
 ### UI/analytics support
 - [x] Expose score explanation via API (`GET /v1/listings/:id/score-explanation`)
 - [x] Expose district baselines via API (`GET /v1/analytics/baselines`)
-- [ ] Add high-score listing view
-- [ ] Add score distribution analytics
-- [ ] Add district comparison analytics
+- [x] Add high-score listing view (`GET /v1/listings/high-score`)
+- [x] Add score distribution analytics (`GET /v1/analytics/score-distribution`)
+- [x] Add district comparison analytics (`GET /v1/analytics/district-comparison`)
 
 ---
 
@@ -358,15 +359,15 @@
 - [x] Support excluded keywords (NOT EXISTS predicate in search query)
 - [x] Support sort by score/newest/price/sqm (`getSortConfig()` — 5 modes)
 - [x] Implement cursor pagination (encoded cursor with overflow detection)
-- [ ] Add query plan/index review
+- [x] Add query plan/index review (`docs/query-plan-review.md`)
 
 ### Reverse-match path
 - [x] Implement candidate filter SQL
 - [x] Implement keyword post-filtering (TypeScript post-filter in `findMatchingFilters()`)
-- [ ] Implement match logging
+- [x] Implement match logging
 - [x] Update `last_evaluated_at` (`updateEvaluatedAt()` in user-filters)
 - [x] Update `last_match_at` (`updateMatchedAt()` in user-filters)
-- [ ] Add reverse-match tests
+- [x] Add reverse-match tests
 
 ### UX
 - [x] Add filter editor in macOS app (`FiltersView.swift` with FilterDraft sheet)
@@ -387,14 +388,14 @@
 - [x] Create alert row on price drop (`score-and-alert.ts:220`)
 - [x] Suppress duplicate alerts for same event (ON CONFLICT DO NOTHING on dedupe_key)
 - [x] Implement alert status transitions (`alerts.ts:132-149`)
-- [ ] Implement alert retry policy for delivery
+- [x] Implement alert retry policy for delivery
 
 ### Delivery
 - [x] In-app alerts feed (`GET /v1/alerts`)
-- [ ] SSE or WebSocket updates
-- [ ] Local macOS notifications
-- [ ] Optional email delivery
-- [ ] Optional webhook delivery
+- [x] SSE or WebSocket updates (`GET /v1/stream/alerts` — Server-Sent Events)
+- [x] Local macOS notifications (`NotificationManager.swift` + UNUserNotificationCenter)
+- [ ] Optional email delivery (stub in `packages/alerts/src/delivery/email.ts`)
+- [x] Optional webhook delivery (`packages/alerts/src/delivery/webhook.ts` — fetch-based)
 - [x] Alert open/read/dismiss actions (`PATCH /v1/alerts/:id`)
 
 ### Persistence and UI
@@ -450,8 +451,8 @@
 - [x] Add navigation split view
 - [x] Add API client integration
 - [x] Add Keychain token storage (`KeychainHelper.swift`)
-- [ ] Add local cache layer
-- [ ] Add background refresh behavior
+- [x] Add local cache layer (`LocalCache.swift` — in-memory with TTL)
+- [x] Add background refresh behavior (5-min timer in ContentView refreshes connection + unread count)
 
 ### Screens
 - [x] Dashboard (`DashboardView.swift`)
@@ -460,34 +461,34 @@
 - [x] Saved filters (`FiltersView.swift` + `FiltersViewModel.swift`)
 - [x] Alerts (`AlertsView.swift` + `AlertsViewModel.swift`)
 - [x] Sources health (`SourcesView.swift` + `SourcesViewModel.swift`)
-- [ ] Analytics
+- [x] Analytics (`AnalyticsView.swift` + `AnalyticsViewModel.swift` — district baselines table)
 - [x] Settings (`SettingsView.swift`)
 
 ### Listings UX
 - [x] Search field (`.searchable()` in ListingsView)
 - [x] Table columns for price/size/district/score (`ListingsTable.swift`)
 - [x] Sort controls (`sortOrder` with `KeyPathComparator`)
-- [ ] Cursor pagination / infinite load
+- [x] Cursor pagination / infinite load (`nextCursor` + `loadMore()` + sentinel scroll)
 - [x] Open source URL action (`ListingActionsSection.swift`)
 - [x] Score explanation pane (`ListingScoreSection.swift` + `ScoreBreakdownView.swift`)
-- [ ] Price history view (placeholder)
-- [ ] Alert match badges
+- [x] Price history view (`PriceHistoryView.swift` — timeline with color-coded changes)
+- [x] Alert match badges (`bell.badge.fill` in ListingsTable + `alertedListingIds` in ViewModel)
 
 ### Filters UX
 - [x] Create filter flow (FiltersView new filter sheet)
 - [x] Edit filter flow (FiltersView edit sheet via FilterDraft)
-- [ ] Test filter flow
+- [x] Test filter flow (`testFilter()` in FiltersViewModel + test results sheet)
 - [x] Enable/disable filter (active toggle in FiltersView)
-- [ ] Duplicate filter
+- [x] Duplicate filter (context menu + copy FilterDraft with "Copy of" prefix)
 - [x] Delete filter (swipe-to-delete in FiltersView)
 
 ### Alerts UX
 - [x] Alert list (AlertsView with status filter)
 - [x] Unread indicator (blue dot badge in AlertsView)
 - [x] Mark read/opened (context menu in AlertsView)
-- [ ] Open linked listing
+- [x] Open linked listing (Open in Browser via `NSWorkspace` in AlertsView)
 - [x] MenuBarExtra summary (`MenuBarContent.swift`)
-- [ ] System notification action
+- [x] System notification action (`NotificationManager.swift` + `UNUserNotificationCenter`)
 
 ### Native polish
 - [x] Keyboard shortcuts (Cmd+1–6, Cmd+R)
@@ -496,7 +497,7 @@
 - [x] Inspector/sidebar behavior (`NavigationSplitView` + `.inspector()`)
 - [x] Native table selection behavior (`Table` with selection binding)
 - [x] Dark mode support (system colors throughout)
-- [ ] Empty/error states
+- [x] Empty/error states (`ContentUnavailableView` in 9 locations across all views)
 
 ---
 
@@ -522,19 +523,19 @@
 - [x] Large artifact references instead of inline dumps (truncation at 500 chars in `redactLogContext()`)
 
 ### Dashboards
-- [ ] Source health dashboard
-- [ ] Queue depth dashboard
-- [ ] API performance dashboard
-- [ ] Alert delivery dashboard
-- [ ] Baseline/scoring dashboard
+- [x] Source health dashboard (`infrastructure/dashboards/source-health.json`)
+- [x] Queue depth dashboard (`infrastructure/dashboards/queue-depth.json`)
+- [x] API performance dashboard (`infrastructure/dashboards/api-performance.json`)
+- [x] Alert delivery dashboard (`infrastructure/dashboards/alert-delivery.json`)
+- [x] Baseline/scoring dashboard (`infrastructure/dashboards/baseline-scoring.json`)
 
 ### Runbooks
-- [ ] Source degraded runbook
-- [ ] Source blocked runbook
-- [ ] Parser breakage runbook
-- [ ] Queue stuck runbook
-- [ ] Backup restore runbook
-- [ ] Release rollback runbook
+- [x] Source degraded runbook
+- [x] Source blocked runbook
+- [x] Parser breakage runbook
+- [x] Queue stuck runbook
+- [x] Backup restore runbook
+- [x] Release rollback runbook
 
 ---
 
@@ -542,12 +543,12 @@
 
 - [x] Secrets removed from source control (`.env` in `.gitignore`, 4 rules)
 - [x] Environment secret loading verified (`@rei/config` envStr/envBool/envInt)
-- [ ] Object storage access policy restricted
+- [x] Object storage access policy restricted (`docs/storage-access-policy.md`)
 - [x] Keychain storage for app secrets (`KeychainHelper.swift`)
 - [x] Auth token rotation path defined (`docs/secrets-strategy.md`)
 - [x] No raw HTML in standard logs (`redactUrl()` + `logArtifactRef()` in observability)
 - [x] Legal review recorded for enabled sources (`docs/phase0/risk-feasibility.md`)
-- [ ] Public/private artifact access policy documented
+- [x] Public/private artifact access policy documented (`docs/storage-access-policy.md`)
 
 ---
 
@@ -559,8 +560,8 @@
 - [ ] Verify reverse matching cost on changed listing path
 - [ ] Verify raw tables do not affect hot query paths
 - [x] Define archival/retention policy for artifacts (`infrastructure/storage/lifecycle-policy.json`)
-- [ ] Define partitioning strategy if data volume grows
-- [ ] Add load test for listing search endpoint
+- [x] Define partitioning strategy if data volume grows (`docs/partitioning-strategy.md`)
+- [x] Add load test for listing search endpoint (`scripts/load-test-search.ts`)
 - [x] Add crawl concurrency tuning doc
 
 ---
@@ -581,47 +582,47 @@
 ## 18. Multi-source expansion
 
 - [ ] Confirm source 1 stable before source 2 rollout
-- [ ] Add source 2 package
-- [ ] Add source 2 tests and fixtures
-- [ ] Compare source 1 and source 2 canonical coverage
+- [x] Add source 2 package (`packages/source-immoscout24/`)
+- [x] Add source 2 tests and fixtures (27 tests, 3 fixtures)
+- [x] Compare source 1 and source 2 canonical coverage (`docs/source2-verification.md`)
 - [ ] Verify filters behave identically across sources
-- [ ] Verify scoring uses canonical fields only
-- [ ] Add source-level quality dashboard
-- [ ] Document onboarding checklist for source 3+
+- [x] Verify scoring uses canonical fields only (`docs/source2-verification.md` section 7)
+- [x] Add source-level quality dashboard (`infrastructure/dashboards/source-health.json`)
+- [x] Document onboarding checklist for source 3+ (`docs/source-onboarding-checklist.md`)
 
 ---
 
 ## 19. Future hooks
 
-- [ ] Geocoding queue placeholder
-- [ ] Cross-source duplicate clustering placeholder
-- [ ] Investor feedback capture placeholder
-- [ ] ML feature export placeholder
-- [ ] CSV/XLSX export placeholder
-- [ ] Webhook integration placeholder
-- [ ] District trend analytics placeholder
+- [x] Geocoding queue placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] Cross-source duplicate clustering placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] Investor feedback capture placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] ML feature export placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] CSV/XLSX export placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] Webhook integration placeholder (`packages/contracts/src/future-hooks.ts`)
+- [x] District trend analytics placeholder (`packages/contracts/src/future-hooks.ts`)
 
 ---
 
 ## 20. Release gates
 
 ### Before first production source
-- [ ] Schema stable
-- [ ] Raw persistence stable
-- [ ] Failure artifacts working
-- [ ] Runbooks drafted
+- [x] Schema stable (10 tables, all constraints/indexes, migration tests pass)
+- [x] Raw persistence stable (idempotent upsert, content hashing, artifact storage)
+- [x] Failure artifacts working (HTML + screenshot capture on parse failure)
+- [x] Runbooks drafted (7 runbooks in `docs/runbooks/`)
 
 ### Before public/internal app usage
-- [ ] Listing search stable
-- [ ] Filters save/load stable
-- [ ] Alerts dedupe stable
-- [ ] Source health visible
+- [x] Listing search stable (parameterized SQL, 10 filter predicates, cursor pagination, 5 sort modes)
+- [x] Filters save/load stable (full CRUD API + Zod validation + macOS editor)
+- [x] Alerts dedupe stable (ON CONFLICT dedupe_key, integration test)
+- [x] Source health visible (SourcesView + API + dashboard section)
 
 ### Before trusting score in decisions
-- [ ] Baselines populated
-- [ ] Score explanation visible
-- [ ] Regression tests passing
-- [ ] Confidence score implemented
+- [ ] Baselines populated (requires live data)
+- [x] Score explanation visible (API endpoint + macOS ScoreBreakdownView)
+- [x] Regression tests passing (3 fixture scenarios + 428 total tests)
+- [x] Confidence score implemented (4-factor formula in confidence.ts)
 - [ ] Investor reviewed examples manually
 
 ### Before adding source 2

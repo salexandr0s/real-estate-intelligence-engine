@@ -145,6 +145,14 @@ private struct AnalyticsDistrictTable: View {
                 }
                 .width(min: 120, ideal: 160)
 
+                TableColumn("P75 Price/m\u{00B2}") { district in
+                    Text(PriceFormatter.formatPerSqm(district.p75PpsqmEur))
+                        .font(.body)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 120, ideal: 160)
+
                 TableColumn("Sample Count") { district in
                     Text(PriceFormatter.formatCompact(district.sampleCount))
                         .font(.body)

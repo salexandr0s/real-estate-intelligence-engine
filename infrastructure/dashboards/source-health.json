@@ -1,0 +1,174 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rei-source-health",
+    "title": "REI - Source Health",
+    "description": "Source-level scraping health: success rates, parse rates, block detection, and circuit breaker state.",
+    "tags": ["rei", "scraping", "sources"],
+    "timezone": "Europe/Vienna",
+    "editable": true,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "source",
+          "type": "query",
+          "query": "label_values(rei_scrape_runs_total, source)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Scrape Success Rate by Source",
+        "description": "Percentage of scrape runs that succeeded per source over the last 5 minutes.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_runs_total{source=~\"$source\", status=\"succeeded\"}[5m]) / (rate(rei_scrape_runs_total{source=~\"$source\"}[5m]) > 0) * 100",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "yellow", "value": 80 },
+                { "color": "green", "value": 95 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 2,
+        "title": "Parse Success Rate by Source",
+        "description": "Ratio of scrape runs without parse errors, derived from scrape error counters with error_class='parse_failure'.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "1 - (rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"parse_failure\"}[5m]) / (rate(rei_scrape_runs_total{source=~\"$source\"}[5m]) > 0)) * 100",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 3,
+        "title": "Block / Captcha Rate by Source",
+        "description": "Rate of scrape errors classified as soft_anti_bot (captcha/block detection).",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"soft_anti_bot\"}[5m])",
+            "legendFormat": "{{source}} blocks/s"
+          },
+          {
+            "expr": "rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"hard_anti_bot\"}[5m])",
+            "legendFormat": "{{source}} hard blocks/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Source Health Gauge",
+        "description": "Current source health status: 1 = healthy, 0.5 = degraded, 0 = blocked/disabled.",
+        "type": "gauge",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rei_source_health{source=~\"$source\"}",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "yellow", "value": 0.5 },
+                { "color": "green", "value": 0.9 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Listings Discovered by Source",
+        "description": "Rate of new listings discovered during scrape runs.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_listings_discovered_total{source=~\"$source\"}[5m])",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 }
+      },
+      {
+        "id": 6,
+        "title": "Pages Fetched by Source",
+        "description": "Rate of pages fetched per source during crawl runs.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_pages_total{source=~\"$source\"}[5m])",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 }
+      }
+    ]
+  },
+  "overwrite": true
+}

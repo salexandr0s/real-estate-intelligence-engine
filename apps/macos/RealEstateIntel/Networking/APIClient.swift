@@ -112,6 +112,22 @@ actor APIClient {
         }
     }
 
+    /// Fetch version history for a listing.
+    func fetchListingVersions(id: Int) async throws -> [ListingVersion] {
+        let response: PaginatedResponse<APIListingVersionResponse> = try await requestPaginated(
+            .getListingHistory(listingId: id)
+        )
+        return response.data.map { dto in
+            ListingVersion(
+                id: dto.id,
+                versionNo: dto.versionNo,
+                versionReason: dto.versionReason,
+                listPriceEurCents: dto.listPriceEurCents,
+                observedAt: ISO8601DateFormatter.shared.date(from: dto.observedAt) ?? .now
+            )
+        }
+    }
+
     func fetchListing(id: Int) async throws -> Listing {
         let response: APIResponse<APIListingResponse> = try await request(.getListing(id: id))
         guard let listing = response.data.toDomain(decoder: decoder) else {

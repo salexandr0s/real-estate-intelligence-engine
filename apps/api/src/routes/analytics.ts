@@ -50,4 +50,68 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       meta: { count: rows.length },
     });
   });
+
+  // GET /v1/analytics/score-distribution - Score distribution buckets
+  app.get('/v1/analytics/score-distribution', async (_request, reply) => {
+    const rows = await query<{ bucket: string; count: string }>(
+      `SELECT
+        CASE
+          WHEN current_score IS NULL THEN 'unscored'
+          WHEN current_score < 20 THEN '0-19'
+          WHEN current_score < 40 THEN '20-39'
+          WHEN current_score < 60 THEN '40-59'
+          WHEN current_score < 80 THEN '60-79'
+          ELSE '80-100'
+        END AS bucket,
+        count(*) AS count
+      FROM listings
+      WHERE listing_status = 'active'
+      GROUP BY 1
+      ORDER BY 1`,
+      [],
+    );
+    return reply.send({
+      data: rows.map((r) => ({
+        bucket: r.bucket,
+        count: Number(r.count),
+      })),
+    });
+  });
+
+  // GET /v1/analytics/district-comparison - District-level stats
+  app.get('/v1/analytics/district-comparison', async (_request, reply) => {
+    const rows = await query<{
+      district_no: number;
+      listing_count: string;
+      avg_price_per_sqm: string;
+      min_price_per_sqm: string;
+      max_price_per_sqm: string;
+      avg_score: string | null;
+    }>(
+      `SELECT
+        district_no,
+        count(*) AS listing_count,
+        ROUND(AVG(price_per_sqm_eur)::numeric, 2) AS avg_price_per_sqm,
+        ROUND(MIN(price_per_sqm_eur)::numeric, 2) AS min_price_per_sqm,
+        ROUND(MAX(price_per_sqm_eur)::numeric, 2) AS max_price_per_sqm,
+        ROUND(AVG(current_score)::numeric, 1) AS avg_score
+      FROM listings
+      WHERE listing_status = 'active'
+        AND district_no IS NOT NULL
+        AND price_per_sqm_eur IS NOT NULL
+      GROUP BY district_no
+      ORDER BY district_no`,
+      [],
+    );
+    return reply.send({
+      data: rows.map((r) => ({
+        districtNo: r.district_no,
+        listingCount: Number(r.listing_count),
+        avgPricePerSqm: Number(r.avg_price_per_sqm),
+        minPricePerSqm: Number(r.min_price_per_sqm),
+        maxPricePerSqm: Number(r.max_price_per_sqm),
+        avgScore: r.avg_score != null ? Number(r.avg_score) : null,
+      })),
+    });
+  });
 }

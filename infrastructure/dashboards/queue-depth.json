@@ -1,0 +1,137 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rei-queue-depth",
+    "title": "REI - Queue Depth",
+    "description": "BullMQ job queue monitoring: depth, processing rate, and failure counts.",
+    "tags": ["rei", "queues", "bullmq"],
+    "timezone": "Europe/Vienna",
+    "editable": true,
+    "refresh": "15s",
+    "time": {
+      "from": "now-3h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "queue",
+          "type": "query",
+          "query": "label_values(rei_queue_depth, queue)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Queue Depth by Queue",
+        "description": "Current number of jobs waiting in each BullMQ queue.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rei_queue_depth{queue=~\"$queue\"}",
+            "legendFormat": "{{queue}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 50 },
+                { "color": "red", "value": 200 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 2,
+        "title": "Current Queue Depth (Gauge)",
+        "description": "Instantaneous queue depth per queue displayed as gauges.",
+        "type": "gauge",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rei_queue_depth{queue=~\"$queue\"}",
+            "legendFormat": "{{queue}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "max": 500,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 50 },
+                { "color": "orange", "value": 100 },
+                { "color": "red", "value": 200 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 3,
+        "title": "Job Processing Rate (Scrape Runs)",
+        "description": "Rate of completed scrape runs as a proxy for job throughput.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_runs_total{status=\"succeeded\"}[5m])",
+            "legendFormat": "{{source}} succeeded/s"
+          },
+          {
+            "expr": "rate(rei_scrape_runs_total{status=\"failed\"}[5m])",
+            "legendFormat": "{{source}} failed/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Failed Jobs by Source and Error Class",
+        "description": "Rate of scrape errors broken down by source and error classification.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_scrape_errors_total[5m])",
+            "legendFormat": "{{source}} - {{error_class}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "drawStyle": "bars"
+            }
+          }
+        },
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      }
+    ]
+  },
+  "overwrite": true
+}

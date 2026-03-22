@@ -3,7 +3,9 @@ import SwiftUI
 /// Detail view for a single listing, shown in the inspector pane.
 struct ListingDetailView: View {
     let listing: Listing
+    @Environment(AppState.self) private var appState
     @State private var explanation: ScoreExplanation? = Listing.sampleExplanation
+    @State private var priceVersions: [PriceVersion] = []
 
     var body: some View {
         ScrollView {
@@ -16,13 +18,7 @@ struct ListingDetailView: View {
                 Divider()
                 ListingLocationSection(listing: listing)
                 Divider()
-                PriceHistoryView(versions: [
-                    PriceVersion(
-                        date: listing.firstSeenAt,
-                        priceEur: listing.listPriceEur,
-                        reason: "Current price"
-                    )
-                ])
+                PriceHistoryView(versions: priceVersions)
                 Divider()
                 MapPlaceholder()
                 Divider()
@@ -32,6 +28,32 @@ struct ListingDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .controlBackgroundColor))
+        .task(id: listing.id) {
+            await loadVersions()
+        }
+    }
+
+    private func loadVersions() async {
+        do {
+            let versions = try await appState.apiClient.fetchListingVersions(id: listing.id)
+            priceVersions = versions.compactMap { v -> PriceVersion? in
+                guard let priceEurCents = v.listPriceEurCents else { return nil }
+                return PriceVersion(
+                    date: v.observedAt,
+                    priceEur: priceEurCents / 100,
+                    reason: v.versionReason
+                )
+            }
+        } catch {
+            // Fallback: show current price as only version
+            priceVersions = [
+                PriceVersion(
+                    date: listing.firstSeenAt,
+                    priceEur: listing.listPriceEur,
+                    reason: "Current price"
+                )
+            ]
+        }
     }
 }
 

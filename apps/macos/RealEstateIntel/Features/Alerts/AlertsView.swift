@@ -301,6 +301,17 @@ private struct AlertInspectorContent: View {
                                             .fontWeight(.medium)
                                     }
                                 }
+
+                                if let url = URL(string: listing.canonicalUrl) {
+                                    Button {
+                                        NSWorkspace.shared.open(url)
+                                    } label: {
+                                        Label("Open in Browser", systemImage: "safari")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                    .padding(.top, Theme.Spacing.xs)
+                                }
                             }
                             .padding(Theme.Spacing.md)
                             .background(Color(nsColor: .controlBackgroundColor))

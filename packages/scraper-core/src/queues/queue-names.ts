@@ -42,6 +42,8 @@ export interface ProcessingJobData {
   htmlStorageKey?: string;
   /** Storage key for the failure screenshot artifact, if saved. */
   screenshotStorageKey?: string;
+  /** Storage key for the captured HAR artifact, if saved. */
+  harStorageKey?: string;
 }
 
 /** Job data for baseline recomputation. */

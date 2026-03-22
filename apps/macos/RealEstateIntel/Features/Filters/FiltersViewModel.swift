@@ -12,6 +12,14 @@ final class FiltersViewModel {
     var showingEditor: Bool = false
     var editingFilter: Filter?
 
+    // MARK: - Test Filter State
+
+    var showingTestResults: Bool = false
+    var testingFilterId: Int?
+    var testResultListings: [Listing] = []
+    var isTestingFilter: Bool = false
+    var testErrorMessage: String?
+
     // MARK: - Actions
 
     func refresh(using client: APIClient) async {
@@ -50,6 +58,30 @@ final class FiltersViewModel {
         showingEditor = true
     }
 
+    func testFilter(_ filter: Filter, using client: APIClient) async {
+        isTestingFilter = true
+        testingFilterId = filter.id
+        testErrorMessage = nil
+        defer { isTestingFilter = false }
+        do {
+            testResultListings = try await client.testFilter(id: filter.id)
+            showingTestResults = true
+        } catch {
+            testErrorMessage = error.localizedDescription
+        }
+    }
+
+    func duplicateFilter(_ filter: Filter) {
+        let draft = FilterDraft.from(filter)
+        draft.name = "Copy of \(filter.name)"
+        pendingDraft = draft
+        editingFilter = nil
+        showingEditor = true
+    }
+
+    /// Transient draft for the duplicate flow, consumed by the editor sheet on presentation.
+    var pendingDraft: FilterDraft?
+
     func saveFilter(_ draft: FilterDraft) {
         if let existing = editingFilter,
            let index = filters.firstIndex(where: { $0.id == existing.id }) {
@@ -73,5 +105,6 @@ final class FiltersViewModel {
         }
         showingEditor = false
         editingFilter = nil
+        pendingDraft = nil
     }
 }

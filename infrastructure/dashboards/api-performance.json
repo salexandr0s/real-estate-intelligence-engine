@@ -1,0 +1,159 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rei-api-performance",
+    "title": "REI - API Performance",
+    "description": "Fastify API request latency, throughput, and error rates by route.",
+    "tags": ["rei", "api", "performance"],
+    "timezone": "Europe/Vienna",
+    "editable": true,
+    "refresh": "15s",
+    "time": {
+      "from": "now-3h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "route",
+          "type": "query",
+          "query": "label_values(rei_api_request_duration_seconds_count, route)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        },
+        {
+          "name": "method",
+          "type": "query",
+          "query": "label_values(rei_api_request_duration_seconds_count, method)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Duration Percentiles by Route",
+        "description": "P50, P90, and P99 API request latency per route.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "legendFormat": "{{route}} p50"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "legendFormat": "{{route}} p90"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "legendFormat": "{{route}} p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0
+          }
+        },
+        "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate by Route and Status Code",
+        "description": "Requests per second grouped by route and HTTP status code.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\", method=~\"$method\"}[5m])) by (route, status_code)",
+            "legendFormat": "{{route}} [{{status_code}}]"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 3,
+        "title": "Client Error Rate (4xx)",
+        "description": "Rate of 4xx responses across all routes.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\", status_code=~\"4..\"}[5m])) by (route, status_code)",
+            "legendFormat": "{{route}} [{{status_code}}]"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {
+              "fillOpacity": 20
+            }
+          }
+        },
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Server Error Rate (5xx)",
+        "description": "Rate of 5xx responses across all routes. Should be near zero.",
+        "type": "stat",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(rei_api_request_duration_seconds_count{status_code=~\"5..\"}[5m])) by (route)",
+            "legendFormat": "{{route}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "red", "value": 0.01 }
+              ]
+            }
+          }
+        },
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 6 }
+      },
+      {
+        "id": 5,
+        "title": "Total Request Throughput",
+        "description": "Aggregate request rate across all routes.",
+        "type": "stat",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\"}[5m]))",
+            "legendFormat": "Total req/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 6 }
+      }
+    ]
+  },
+  "overwrite": true
+}

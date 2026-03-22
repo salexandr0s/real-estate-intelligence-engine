@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Saved search filters management with list, toggle, edit, and delete.
+/// Saved search filters management with list, toggle, edit, test, duplicate, and delete.
 struct FiltersView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = FiltersViewModel()
@@ -18,7 +18,7 @@ struct FiltersView: View {
         .navigationTitle("Filters")
         .toolbar {
             ToolbarItemGroup {
-                if viewModel.isLoading {
+                if viewModel.isLoading || viewModel.isTestingFilter {
                     ProgressView()
                         .controlSize(.small)
                 }
@@ -39,11 +39,28 @@ struct FiltersView: View {
         .sheet(isPresented: $viewModel.showingEditor) {
             FilterEditorSheet(
                 viewModel: viewModel,
-                editingFilter: viewModel.editingFilter
+                editingFilter: viewModel.editingFilter,
+                pendingDraft: viewModel.pendingDraft
             )
+        }
+        .sheet(isPresented: $viewModel.showingTestResults) {
+            FilterTestResultsSheet(viewModel: viewModel)
         }
         .task {
             await viewModel.refresh(using: appState.apiClient)
+        }
+        .alert(
+            "Test Failed",
+            isPresented: Binding(
+                get: { viewModel.testErrorMessage != nil },
+                set: { if !$0 { viewModel.testErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let msg = viewModel.testErrorMessage {
+                Text(msg)
+            }
         }
     }
 }
@@ -76,8 +93,12 @@ private struct FiltersList: View {
             ForEach(viewModel.filters) { filter in
                 FilterRow(
                     filter: filter,
+                    isTesting: viewModel.isTestingFilter && viewModel.testingFilterId == filter.id,
                     onToggle: { viewModel.toggleActive(filter) },
-                    onEdit: { viewModel.startEditing(filter) }
+                    onEdit: { viewModel.startEditing(filter) },
+                    onTest: {
+                        Task { await viewModel.testFilter(filter, using: appState.apiClient) }
+                    }
                 )
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
@@ -99,6 +120,18 @@ private struct FiltersList: View {
                         viewModel.startEditing(filter)
                     } label: {
                         Label("Edit Filter", systemImage: "pencil")
+                    }
+
+                    Button {
+                        Task { await viewModel.testFilter(filter, using: appState.apiClient) }
+                    } label: {
+                        Label("Test Filter", systemImage: "magnifyingglass")
+                    }
+
+                    Button {
+                        viewModel.duplicateFilter(filter)
+                    } label: {
+                        Label("Duplicate Filter", systemImage: "doc.on.doc")
                     }
 
                     Button {
@@ -128,8 +161,10 @@ private struct FiltersList: View {
 
 private struct FilterRow: View {
     let filter: Filter
+    let isTesting: Bool
     let onToggle: () -> Void
     let onEdit: () -> Void
+    let onTest: () -> Void
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
@@ -166,6 +201,19 @@ private struct FilterRow: View {
 
             Spacer()
 
+            // Test button
+            if isTesting {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button(action: onTest) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help("Test filter against current listings")
+            }
+
             // Match count badge
             if let matchCount = filter.matchCount, matchCount > 0 {
                 Text("\(matchCount)")
@@ -190,6 +238,86 @@ private struct FilterRow: View {
     }
 }
 
+// MARK: - Filter Test Results Sheet
+
+private struct FilterTestResultsSheet: View {
+    let viewModel: FiltersViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Test Results")
+                    .font(.headline)
+                Spacer()
+                Text("^[\(viewModel.testResultListings.count) match](inflect: true)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(Theme.Spacing.lg)
+
+            Divider()
+
+            if viewModel.testResultListings.isEmpty {
+                ContentUnavailableView(
+                    "No Matches",
+                    systemImage: "magnifyingglass",
+                    description: Text("This filter did not match any current listings.")
+                )
+            } else {
+                List(viewModel.testResultListings) { listing in
+                    HStack(spacing: Theme.Spacing.md) {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                            Text(listing.title)
+                                .font(.body)
+                                .lineLimit(2)
+                            HStack(spacing: Theme.Spacing.sm) {
+                                if let district = listing.districtName {
+                                    Text(district)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if let area = listing.livingAreaSqm {
+                                    Text(PriceFormatter.formatArea(area))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if let rooms = listing.rooms {
+                                    Text("^[\(rooms) room](inflect: true)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
+                            Text(PriceFormatter.format(eur: listing.listPriceEur))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            if let score = listing.currentScore {
+                                HStack(spacing: Theme.Spacing.xs) {
+                                    Circle()
+                                        .fill(Theme.scoreColor(for: score))
+                                        .frame(width: 8, height: 8)
+                                    Text("\(score, specifier: "%.1f")")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, Theme.Spacing.xxs)
+                }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
+            }
+        }
+        .frame(width: 560, height: 480)
+    }
+}
+
 // MARK: - Filter Editor Sheet
 
 private struct FilterEditorSheet: View {
@@ -198,10 +326,12 @@ private struct FilterEditorSheet: View {
     @State private var draft: FilterDraft
     @Environment(\.dismiss) private var dismiss
 
-    init(viewModel: FiltersViewModel, editingFilter: Filter?) {
+    init(viewModel: FiltersViewModel, editingFilter: Filter?, pendingDraft: FilterDraft? = nil) {
         self.viewModel = viewModel
         self.editingFilter = editingFilter
-        if let existing = editingFilter {
+        if let pending = pendingDraft {
+            self._draft = State(initialValue: pending)
+        } else if let existing = editingFilter {
             self._draft = State(initialValue: FilterDraft.from(existing))
         } else {
             self._draft = State(initialValue: FilterDraft())

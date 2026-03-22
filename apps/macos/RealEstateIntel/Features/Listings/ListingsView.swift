@@ -24,12 +24,12 @@ struct ListingsView: View {
                     showInspector: $showInspector,
                     isLoading: viewModel.isLoading
                 ) {
-                    Task { await viewModel.refresh(using: appState.apiClient) }
+                    Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
                 }
             }
         }
         .task {
-            await viewModel.refresh(using: appState.apiClient)
+            await viewModel.refresh(using: appState.apiClient, cache: appState.localCache)
         }
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {

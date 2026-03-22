@@ -203,8 +203,30 @@ export class ScoreAndAlert {
         body: this.buildAlertBody(alertType, listing),
       };
 
-      const created = await this.deps.createAlert(alertInput);
-      if (created) {
+      let alertResult: { id: number } | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          alertResult = await this.deps.createAlert(alertInput);
+          break;
+        } catch (err) {
+          if (attempt === 3) {
+            log.error('Alert creation failed after 3 attempts', {
+              filterId: match.filterId,
+              listingId,
+              alertType,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          } else {
+            log.warn(`Alert creation attempt ${attempt} failed, retrying`, {
+              filterId: match.filterId,
+              listingId,
+            });
+            await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+          }
+        }
+      }
+      if (alertResult) {
+        log.info('Alert created', { filterId: match.filterId, listingId, alertType, dedupeKey });
         alertsCreated++;
       }
     }

@@ -5,6 +5,10 @@
 
 import { Worker, Queue } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
+import { randomUUID } from 'node:crypto';
+import { readFile, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createLogger } from '@rei/observability';
 import {
   QUEUE_NAMES,
@@ -65,11 +69,19 @@ export function createDetailWorker(): Worker<DetailJobData> {
 
       await ensureRateLimit(sourceCode);
 
-      const context = await createScrapeContext();
+      // When HAR capture is enabled, record to a temp file so we can save
+      // the HAR on failure. On success, the temp file is cleaned up.
+      const harEnabled = config.playwright.captureHarOnFailure;
+      const harTempPath = harEnabled ? join(tmpdir(), `rei-har-${randomUUID()}.har`) : undefined;
+
+      const context = await createScrapeContext(
+        harTempPath ? { recordHarPath: harTempPath } : undefined,
+      );
       await setupRequestInterception(context);
 
       let htmlStorageKey: string | undefined;
       let screenshotStorageKey: string | undefined;
+      let harStorageKey: string | undefined;
 
       try {
         const page = await context.newPage();
@@ -116,6 +128,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = discoveryUrl;
         detailCapture.htmlStorageKey = htmlStorageKey ?? null;
+        detailCapture.harStorageKey = harStorageKey ?? null;
 
         await processingQueue.add(`process:${sourceCode}`, {
           sourceCode,
@@ -125,6 +138,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
           discoveryUrl,
           captureJson: JSON.stringify(detailCapture),
           htmlStorageKey,
+          harStorageKey,
         });
 
         circuitBreaker.recordSuccess(sourceCode);
@@ -161,16 +175,37 @@ export function createDetailWorker(): Worker<DetailJobData> {
           }
         }
 
+        // Capture HAR on failure — close context first to flush the HAR file
+        if (harEnabled && harTempPath) {
+          try {
+            await context.close();
+            const harBuffer = await readFile(harTempPath);
+            harStorageKey = await artifactWriter.writeHar(
+              sourceCode,
+              String(scrapeRunId),
+              detailUrl,
+              harBuffer,
+            );
+          } catch (_harErr) {
+            log.warn('Failed to capture HAR artifact');
+          }
+        }
+
         log.error('Detail extraction failed', {
           detailUrl,
           errorClass,
           htmlStorageKey,
           screenshotStorageKey,
+          harStorageKey,
           error: err instanceof Error ? err.message : String(err),
         });
         throw err;
       } finally {
         await context.close().catch(() => {});
+        // Clean up HAR temp file regardless of outcome
+        if (harTempPath) {
+          await unlink(harTempPath).catch(() => {});
+        }
       }
     },
     {

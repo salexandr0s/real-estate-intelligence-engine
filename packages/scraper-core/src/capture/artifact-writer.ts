@@ -7,23 +7,20 @@ import { gzipSync } from 'node:zlib';
 const logger = createLogger('artifact-writer');
 
 /**
- * Interface for writing scraper artifacts (HTML snapshots, screenshots) to storage.
+ * Interface for writing scraper artifacts (HTML snapshots, screenshots, HARs) to storage.
  * Implementations may target local filesystem, S3, or other backends.
  */
 export interface ArtifactWriterPort {
   writeHtml(sourceCode: string, runId: string, key: string, html: string): Promise<string>;
   writeScreenshot(sourceCode: string, runId: string, key: string, buffer: Buffer): Promise<string>;
+  writeHar(sourceCode: string, runId: string, key: string, buffer: Buffer): Promise<string>;
 }
 
 /**
  * Generate a storage key following the pattern:
  *   {prefix}/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.{ext}
  */
-function generateStorageKey(
-  prefix: string,
-  sourceCode: string,
-  extension: string,
-): string {
+function generateStorageKey(prefix: string, sourceCode: string, extension: string): string {
   const now = new Date();
   const yyyy = now.getUTCFullYear().toString();
   const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -51,12 +48,7 @@ export class ArtifactWriter implements ArtifactWriterPort {
    *
    * @returns The storage key (relative path) of the written file
    */
-  async writeHtml(
-    sourceCode: string,
-    runId: string,
-    _key: string,
-    html: string,
-  ): Promise<string> {
+  async writeHtml(sourceCode: string, runId: string, _key: string, html: string): Promise<string> {
     const storageKey = generateStorageKey('raw-html', sourceCode, 'html.gz');
     const fullPath = join(this.baseDir, storageKey);
 
@@ -94,6 +86,31 @@ export class ArtifactWriter implements ArtifactWriterPort {
     await writeFile(fullPath, buffer);
 
     logger.debug('Wrote screenshot artifact', {
+      sourceCode,
+      scrapeRunId: parseInt(runId, 10) || undefined,
+      storageKey,
+      bytes: buffer.length,
+    });
+
+    return storageKey;
+  }
+
+  /**
+   * Write a HAR (HTTP Archive) file to storage.
+   *
+   * HAR files are saved as-is (JSON format). They capture all network
+   * requests and responses during a browser session.
+   *
+   * @returns The storage key (relative path) of the written file
+   */
+  async writeHar(sourceCode: string, runId: string, _key: string, buffer: Buffer): Promise<string> {
+    const storageKey = generateStorageKey('har', sourceCode, 'har');
+    const fullPath = join(this.baseDir, storageKey);
+
+    await mkdir(dirname(fullPath), { recursive: true });
+    await writeFile(fullPath, buffer);
+
+    logger.debug('Wrote HAR artifact', {
       sourceCode,
       scrapeRunId: parseInt(runId, 10) || undefined,
       storageKey,

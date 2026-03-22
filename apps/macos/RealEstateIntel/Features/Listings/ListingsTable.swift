@@ -23,10 +23,10 @@ struct ListingsTable: View {
                             Text(listing.title)
                                 .lineLimit(1)
                             if listing.hasAlertMatch {
-                                Circle()
-                                    .fill(Color.accentColor)
-                                    .frame(width: 6, height: 6)
-                                    .help("Matched a filter")
+                                Image(systemName: "bell.badge.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.accentColor)
+                                    .help("Matched a filter alert")
                             }
                         }
                         Text(listing.sourceCode)

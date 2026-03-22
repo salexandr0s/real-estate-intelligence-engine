@@ -25,7 +25,12 @@ export async function getBrowser(): Promise<Browser> {
   return _browser;
 }
 
-export async function createScrapeContext(): Promise<BrowserContext> {
+export interface ScrapeContextOptions {
+  /** If set, Playwright will record a HAR file at this path. */
+  recordHarPath?: string;
+}
+
+export async function createScrapeContext(options?: ScrapeContextOptions): Promise<BrowserContext> {
   const browser = await getBrowser();
   const viewport = pickRandomViewport();
   const userAgent = pickRandomUserAgent();
@@ -36,6 +41,9 @@ export async function createScrapeContext(): Promise<BrowserContext> {
     timezoneId: DEFAULT_BROWSER_CONTEXT_CONFIG.timezoneId,
     userAgent,
     javaScriptEnabled: DEFAULT_BROWSER_CONTEXT_CONFIG.javaScriptEnabled,
+    recordHar: options?.recordHarPath
+      ? { path: options.recordHarPath, mode: 'minimal' }
+      : undefined,
   });
 }
 

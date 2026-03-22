@@ -174,3 +174,9 @@ export const alertUpdateSchema = z.object({
 export const scrapeRunCreateSchema = z.object({
   sourceCode: z.string().trim().min(1, 'sourceCode is required'),
 });
+
+export const highScoreQuerySchema = z.object({
+  minScore: z.preprocess(absentToUndefined, z.coerce.number().min(0).max(100).optional()),
+  limit: optionalQueryLimit,
+  cursor: z.string().optional(),
+});

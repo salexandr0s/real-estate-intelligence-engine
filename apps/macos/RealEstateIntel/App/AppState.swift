@@ -60,6 +60,10 @@ final class AppState {
 
     let apiClient: APIClient
 
+    // MARK: - Cache
+
+    let localCache = LocalCache()
+
     // MARK: - Init
 
     init() {
@@ -69,6 +73,11 @@ final class AppState {
             baseURL: baseURL,
             authToken: token.isEmpty ? nil : token
         )
+
+        // Request notification permission on launch
+        if UserDefaults.standard.bool(forKey: "notificationsEnabled") {
+            NotificationManager.shared.requestPermission()
+        }
     }
 
     // MARK: - Actions

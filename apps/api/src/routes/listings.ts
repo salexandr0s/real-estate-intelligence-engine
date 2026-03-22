@@ -2,7 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@rei/observability';
 import type { ListingSearchFilter } from '@rei/db';
 import { listings, listingScores } from '@rei/db';
-import { parseOrThrow, listingSearchQuerySchema, idParamSchema } from '../schemas.js';
+import {
+  parseOrThrow,
+  listingSearchQuerySchema,
+  highScoreQuerySchema,
+  idParamSchema,
+} from '../schemas.js';
 
 function eurToCents(eur: number | undefined): number | undefined {
   if (eur == null) return undefined;
@@ -71,6 +76,67 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
       );
 
       // Map cents to EUR for the API response
+      const mappedData = result.data.map((listing) => ({
+        id: listing.id,
+        listingUid: listing.listingUid,
+        sourceCode: listing.sourceCode,
+        title: listing.title,
+        canonicalUrl: listing.canonicalUrl,
+        operationType: listing.operationType,
+        propertyType: listing.propertyType,
+        city: listing.city,
+        postalCode: listing.postalCode,
+        districtNo: listing.districtNo,
+        districtName: listing.districtName,
+        listPriceEur: centsToEur(listing.listPriceEurCents),
+        listPriceEurCents: listing.listPriceEurCents,
+        livingAreaSqm: listing.livingAreaSqm,
+        rooms: listing.rooms,
+        pricePerSqmEur: listing.pricePerSqmEur,
+        currentScore: listing.currentScore,
+        firstSeenAt: listing.firstSeenAt.toISOString(),
+        listingStatus: listing.listingStatus,
+      }));
+
+      return reply.send({
+        data: mappedData,
+        meta: result.meta,
+      });
+    },
+  );
+
+  // GET /v1/listings/high-score - High-scoring listings
+  app.get(
+    '/v1/listings/high-score',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Get high-scoring listings sorted by score descending',
+        querystring: {
+          type: 'object',
+          properties: {
+            minScore: { type: 'number', description: 'Minimum score threshold (default 70)' },
+            limit: { type: 'integer', minimum: 1, maximum: 200 },
+            cursor: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const parsed = parseOrThrow(highScoreQuerySchema, request.query);
+      const minScore = parsed.minScore ?? 70;
+      const limit = parsed.limit ?? 20;
+
+      const result = await listings.searchListings(
+        {
+          minScore,
+          sortBy: 'score_desc',
+        },
+        parsed.cursor ?? null,
+        limit,
+      );
+
       const mappedData = result.data.map((listing) => ({
         id: listing.id,
         listingUid: listing.listingUid,

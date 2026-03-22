@@ -13,7 +13,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@rei/contracts": "*"
+    "@rei/contracts": "*",
+    "@rei/observability": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.0"

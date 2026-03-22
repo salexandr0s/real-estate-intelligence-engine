@@ -23,6 +23,11 @@ final class ListingsViewModel {
     var maxPrice: String = ""
     var minScore: String = ""
 
+    // MARK: - Alert Match Tracking
+
+    /// Set of listing IDs that have matching alerts (fetched once on refresh).
+    var alertedListingIds: Set<Int> = []
+
     // MARK: - Sorting
 
     var sortOrder: [KeyPathComparator<Listing>] = [
@@ -106,17 +111,32 @@ final class ListingsViewModel {
         || !minScore.isEmpty
     }
 
+    // MARK: - Cache Key
+
+    private static let listingsCacheKey = "listings_page_1"
+
     // MARK: - Actions
 
-    func refresh(using client: APIClient) async {
+    func refresh(using client: APIClient, cache: LocalCache? = nil) async {
         isLoading = true
         errorMessage = nil
         nextCursor = nil
+
+        // Check cache first
+        if let cache, let cached = cache.get(Self.listingsCacheKey, as: [Listing].self) {
+            listings = cached
+            isLoading = false
+            // Still refresh alert badges
+            await refreshAlertBadges(using: client)
+            return
+        }
 
         do {
             let response = try await client.fetchListingsPaginated(query: ListingQuery())
             listings = response.listings
             nextCursor = response.nextCursor
+            // Store in cache
+            cache?.set(Self.listingsCacheKey, value: listings)
         } catch {
             errorMessage = error.localizedDescription
             // Fall back to mock data if API unavailable
@@ -125,7 +145,23 @@ final class ListingsViewModel {
             }
         }
 
+        // Fetch alerts to cross-reference listing IDs for badge display
+        await refreshAlertBadges(using: client)
+
         isLoading = false
+    }
+
+    /// Fetches alert listing IDs and marks matching listings with alert badges.
+    private func refreshAlertBadges(using client: APIClient) async {
+        do {
+            let alerts = try await client.fetchAlerts(query: AlertQuery())
+            alertedListingIds = Set(alerts.compactMap(\.listingId))
+            for index in listings.indices {
+                listings[index].hasAlertMatch = alertedListingIds.contains(listings[index].id)
+            }
+        } catch {
+            // Non-critical: badges simply won't show
+        }
     }
 
     func loadMore(using client: APIClient) async {

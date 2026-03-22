@@ -1,0 +1,120 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rei-alert-delivery",
+    "title": "REI - Alert Delivery",
+    "description": "Alert creation, delivery lag, and unread alert monitoring.",
+    "tags": ["rei", "alerts"],
+    "timezone": "Europe/Vienna",
+    "editable": true,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "alert_type",
+          "type": "query",
+          "query": "label_values(rei_alerts_created_total, alert_type)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Alerts Created by Type",
+        "description": "Rate of new alerts created, broken down by alert type (new_match, price_drop, score_upgrade).",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_alerts_created_total{alert_type=~\"$alert_type\"}[5m])",
+            "legendFormat": "{{alert_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 2,
+        "title": "Total Alerts Created",
+        "description": "Cumulative alert count by type.",
+        "type": "stat",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rei_alerts_created_total) by (alert_type)",
+            "legendFormat": "{{alert_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        },
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 3,
+        "title": "Alert Delivery Lag (P50 / P90 / P99)",
+        "description": "Time from listing score computation to alert creation. Histogram percentiles from rei_alert_lag_seconds.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p90"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0
+          }
+        },
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Alert Lag by Type",
+        "description": "P90 alert lag broken down by alert type to identify slow delivery paths.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le, alert_type))",
+            "legendFormat": "{{alert_type}} p90"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0
+          }
+        },
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      }
+    ]
+  },
+  "overwrite": true
+}

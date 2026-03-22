@@ -1,0 +1,156 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rei-baseline-scoring",
+    "title": "REI - Baseline & Scoring",
+    "description": "Scoring pipeline performance: duration, normalization throughput, version creation, and raw snapshot rates.",
+    "tags": ["rei", "scoring", "normalization"],
+    "timezone": "Europe/Vienna",
+    "editable": true,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "source",
+          "type": "query",
+          "query": "label_values(rei_normalization_total, source)",
+          "multi": true,
+          "includeAll": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Scoring Duration (P50 / P90 / P99)",
+        "description": "Time to score a listing. Histogram percentiles from rei_scoring_duration_seconds.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(rei_scoring_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(rei_scoring_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p90"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(rei_scoring_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0
+          }
+        },
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 2,
+        "title": "Normalization Rate by Source and Outcome",
+        "description": "Rate of normalization operations broken down by source and outcome (created, updated, unchanged, failed).",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_normalization_total{source=~\"$source\"}[5m])",
+            "legendFormat": "{{source}} - {{outcome}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      },
+      {
+        "id": 3,
+        "title": "Version Creation Rate",
+        "description": "Rate of listing version rows created, broken down by source and reason (first_seen, price_change, content_change, etc.).",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_versions_created_total{source=~\"$source\"}[5m])",
+            "legendFormat": "{{source}} - {{reason}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Raw Snapshot Rate",
+        "description": "Rate of new raw snapshots being created per source.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(rei_raw_snapshots_total{source=~\"$source\"}[5m])",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        },
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Normalization Outcomes (Stacked)",
+        "description": "Cumulative normalization operations showing created vs updated vs unchanged vs failed proportions.",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(rei_normalization_total{source=~\"$source\", outcome=\"created\"}[5m]))",
+            "legendFormat": "created"
+          },
+          {
+            "expr": "sum(rate(rei_normalization_total{source=~\"$source\", outcome=\"updated\"}[5m]))",
+            "legendFormat": "updated"
+          },
+          {
+            "expr": "sum(rate(rei_normalization_total{source=~\"$source\", outcome=\"unchanged\"}[5m]))",
+            "legendFormat": "unchanged"
+          },
+          {
+            "expr": "sum(rate(rei_normalization_total{source=~\"$source\", outcome=\"failed\"}[5m]))",
+            "legendFormat": "failed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "stacking": {
+                "mode": "normal"
+              },
+              "fillOpacity": 30
+            }
+          }
+        },
+        "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 }
+      }
+    ]
+  },
+  "overwrite": true
+}
