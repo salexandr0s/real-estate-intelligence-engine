@@ -1,0 +1,155 @@
+import SwiftUI
+
+/// Investor feedback rating buttons for a listing detail view.
+struct FeedbackSection: View {
+    let listingId: Int
+    @Environment(AppState.self) private var appState
+    @State private var currentRating: FeedbackRating?
+    @State private var notes: String = ""
+    @State private var showNotes: Bool = false
+    @State private var isSaving: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Text("Your Feedback")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: Theme.Spacing.md) {
+                ForEach(FeedbackRating.allCases, id: \.rawValue) { rating in
+                    Button {
+                        Task { await toggleRating(rating) }
+                    } label: {
+                        VStack(spacing: Theme.Spacing.xxs) {
+                            Image(systemName: currentRating == rating ? rating.filledIcon : rating.icon)
+                                .font(.title3)
+                                .foregroundStyle(currentRating == rating ? ratingColor(rating) : .secondary)
+
+                            Text(rating.displayName)
+                                .font(.caption2)
+                                .foregroundStyle(currentRating == rating ? .primary : .tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Theme.Spacing.xs)
+                        .background(
+                            currentRating == rating
+                                ? ratingColor(rating).opacity(0.1)
+                                : Color.clear
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSaving)
+                }
+            }
+
+            if currentRating != nil {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        showNotes.toggle()
+                    }
+                } label: {
+                    HStack(spacing: Theme.Spacing.xxs) {
+                        Image(systemName: "note.text")
+                            .font(.caption2)
+                        Text(showNotes ? "Hide Notes" : "Add Notes")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                if showNotes {
+                    TextEditor(text: $notes)
+                        .font(.caption)
+                        .frame(height: 60)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                        )
+
+                    Button("Save Notes") {
+                        Task { await saveNotes() }
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isSaving)
+                }
+            }
+        }
+        .task(id: listingId) {
+            await loadFeedback()
+        }
+    }
+
+    private func loadFeedback() async {
+        do {
+            if let fb = try await appState.apiClient.fetchFeedback(listingId: listingId) {
+                currentRating = FeedbackRating(rawValue: fb.rating)
+                notes = fb.notes ?? ""
+                showNotes = !(fb.notes ?? "").isEmpty
+            } else {
+                currentRating = nil
+                notes = ""
+                showNotes = false
+            }
+        } catch {
+            // No feedback exists or fetch failed
+            currentRating = nil
+        }
+    }
+
+    private func toggleRating(_ rating: FeedbackRating) async {
+        isSaving = true
+        defer { isSaving = false }
+
+        if currentRating == rating {
+            do {
+                try await appState.apiClient.deleteFeedback(listingId: listingId)
+                currentRating = nil
+                notes = ""
+                showNotes = false
+            } catch {
+                NSLog("[Feedback] Delete failed: %@", String(describing: error))
+            }
+        } else {
+            do {
+                _ = try await appState.apiClient.submitFeedback(
+                    listingId: listingId,
+                    rating: rating.rawValue,
+                    notes: notes.isEmpty ? nil : notes
+                )
+                currentRating = rating
+            } catch {
+                NSLog("[Feedback] Submit failed: %@", String(describing: error))
+            }
+        }
+    }
+
+    private func saveNotes() async {
+        guard let rating = currentRating else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            _ = try await appState.apiClient.submitFeedback(
+                listingId: listingId,
+                rating: rating.rawValue,
+                notes: notes.isEmpty ? nil : notes
+            )
+        } catch {
+            NSLog("[Feedback] Save notes failed: %@", String(describing: error))
+        }
+    }
+
+    private func ratingColor(_ rating: FeedbackRating) -> Color {
+        switch rating {
+        case .interested: .green
+        case .notInterested: .red
+        case .bookmarked: .orange
+        case .contacted: .blue
+        }
+    }
+}

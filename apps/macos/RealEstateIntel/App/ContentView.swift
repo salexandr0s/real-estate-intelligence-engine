@@ -20,6 +20,11 @@ struct ContentView: View {
                 await appState.refreshConnection()
             }
         }
+        .onChange(of: appState.alertStream.lastEvent?.id) { _, _ in
+            if let alert = appState.alertStream.lastEvent {
+                appState.handleStreamAlert(alert)
+            }
+        }
     }
 }
 

@@ -224,4 +224,21 @@ final class ListingsViewModel {
     func selectListing(_ listing: Listing) {
         selectedListingID = listing.id
     }
+
+    func exportCSV(using client: APIClient) async -> Data? {
+        var query = ListingQuery()
+        if let d = selectedDistrict { query.districts = [d] }
+        if let p = selectedPropertyType { query.propertyTypes = [p.rawValue] }
+        if let o = selectedOperationType { query.operationType = o.rawValue }
+        if let min = Int(minPrice) { query.minPriceEur = min }
+        if let max = Int(maxPrice) { query.maxPriceEur = max }
+        if let score = Double(minScore) { query.minScore = score }
+
+        do {
+            return try await client.exportListingsCSV(query: query)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
 }

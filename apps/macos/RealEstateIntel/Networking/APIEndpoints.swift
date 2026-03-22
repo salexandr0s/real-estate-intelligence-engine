@@ -25,6 +25,7 @@ enum APIEndpoint {
 
     case listAlerts(query: AlertQuery?)
     case updateAlert(id: Int, body: Data)
+    case bulkUpdateAlerts(body: Data)
     case getUnreadCount
 
     // MARK: - Sources
@@ -42,6 +43,16 @@ enum APIEndpoint {
     case unsaveListing(listingId: Int)
     case checkSavedListings(listingIds: [Int])
     case exportSavedListings
+
+    // MARK: - Listings Export
+
+    case exportListings(query: ListingQuery)
+
+    // MARK: - Feedback
+
+    case submitFeedback(body: Data)
+    case getFeedback(listingId: Int)
+    case deleteFeedback(listingId: Int)
 
     // MARK: - Analytics
 
@@ -66,6 +77,7 @@ enum APIEndpoint {
         case .testFilter(let id): "/v1/filters/\(id)/test"
         case .listAlerts: "/v1/alerts"
         case .updateAlert(let id, _): "/v1/alerts/\(id)"
+        case .bulkUpdateAlerts: "/v1/alerts/bulk"
         case .getUnreadCount: "/v1/alerts/unread-count"
         case .listSources: "/v1/sources"
         case .updateSource(let id, _): "/v1/sources/\(id)"
@@ -77,6 +89,10 @@ enum APIEndpoint {
         case .unsaveListing(let listingId): "/v1/saved-listings/\(listingId)"
         case .checkSavedListings: "/v1/saved-listings/check"
         case .exportSavedListings: "/v1/saved-listings/export"
+        case .exportListings: "/v1/listings/export"
+        case .submitFeedback: "/v1/feedback"
+        case .getFeedback(let listingId): "/v1/feedback/\(listingId)"
+        case .deleteFeedback(let listingId): "/v1/feedback/\(listingId)"
         case .getBaselines: "/v1/analytics/baselines"
         case .getDistrictTrends: "/v1/analytics/district-trends"
         case .getMarketTemperature: "/v1/analytics/market-temperature"
@@ -87,14 +103,16 @@ enum APIEndpoint {
         switch self {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources, .getListingCluster, .listScrapeRuns,
-             .listSavedListings, .checkSavedListings, .exportSavedListings,
-             .getBaselines, .getDistrictTrends, .getMarketTemperature:
+             .listSavedListings, .checkSavedListings, .exportSavedListings, .exportListings,
+             .getBaselines, .getDistrictTrends, .getMarketTemperature,
+             .getFeedback:
             "GET"
-        case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing:
+        case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing,
+             .submitFeedback:
             "POST"
-        case .updateFilter, .updateAlert, .updateSource:
+        case .updateFilter, .updateAlert, .bulkUpdateAlerts, .updateSource:
             "PATCH"
-        case .deleteFilter, .unsaveListing:
+        case .deleteFilter, .unsaveListing, .deleteFeedback:
             "DELETE"
         }
     }
@@ -102,8 +120,9 @@ enum APIEndpoint {
     var body: Data? {
         switch self {
         case .createFilter(let body), .updateFilter(_, let body),
-             .updateAlert(_, let body), .updateSource(_, let body),
-             .saveListing(let body):
+             .updateAlert(_, let body), .bulkUpdateAlerts(let body),
+             .updateSource(_, let body),
+             .saveListing(let body), .submitFeedback(let body):
             return body
         default:
             return nil
@@ -112,7 +131,7 @@ enum APIEndpoint {
 
     var queryItems: [URLQueryItem]? {
         switch self {
-        case .listListings(let query):
+        case .listListings(let query), .exportListings(let query):
             return query.toQueryItems()
         case .listAlerts(let query):
             return query?.toQueryItems()

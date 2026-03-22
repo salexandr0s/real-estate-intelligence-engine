@@ -109,6 +109,56 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // GET /v1/listings/export - Export listings as CSV
+  app.get(
+    '/v1/listings/export',
+    {
+      schema: {
+        tags: ['Listings'],
+        summary: 'Export filtered listings as CSV',
+        querystring: {
+          type: 'object',
+          properties: {
+            operationType: { type: 'string' },
+            propertyTypes: { type: 'string' },
+            districts: { type: 'string' },
+            minPriceEur: { type: 'number' },
+            maxPriceEur: { type: 'number' },
+            minAreaSqm: { type: 'number' },
+            maxAreaSqm: { type: 'number' },
+            minRooms: { type: 'number' },
+            maxRooms: { type: 'number' },
+            minScore: { type: 'number' },
+            sortBy: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
+
+      const csv = await listings.exportListingsCsv({
+        operationType: parsed.operationType as ListingSearchFilter['operationType'],
+        propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
+        districts: parsed.districts,
+        minPriceEurCents: eurToCents(parsed.minPriceEur),
+        maxPriceEurCents: eurToCents(parsed.maxPriceEur),
+        minAreaSqm: parsed.minAreaSqm,
+        maxAreaSqm: parsed.maxAreaSqm,
+        minRooms: parsed.minRooms,
+        maxRooms: parsed.maxRooms,
+        minScore: parsed.minScore,
+        sortBy: parsed.sortBy,
+      });
+
+      return reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', 'attachment; filename="listings.csv"')
+        .send(csv);
+    },
+  );
+
   // GET /v1/listings/high-score - High-scoring listings
   app.get(
     '/v1/listings/high-score',

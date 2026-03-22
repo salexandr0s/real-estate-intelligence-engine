@@ -538,6 +538,28 @@ export async function findListingsNeedingGeocoding(limit = 100): Promise<Listing
   return rows.map(toListingRow);
 }
 
+// ── CSV Export ─────────────────────────────────────────────────────────────
+
+import { csvSafe } from '../util/csv.js';
+
+export async function exportListingsCsv(filter: ListingSearchFilter): Promise<string> {
+  const result = await searchListings(filter, null, 10000);
+
+  const header =
+    'id,title,source,operation,property_type,district,district_name,price_eur,area_sqm,rooms,price_per_sqm,score,url,first_seen,status';
+
+  const rows = result.data.map((l) => {
+    const price = l.listPriceEurCents != null ? (l.listPriceEurCents / 100).toFixed(0) : '';
+    const area = l.livingAreaSqm?.toFixed(1) ?? '';
+    const rooms = l.rooms?.toFixed(1) ?? '';
+    const score = l.currentScore?.toFixed(1) ?? '';
+    const title = csvSafe(l.title);
+    return `${l.id},"${title}",${l.sourceCode ?? ''},${l.operationType},${l.propertyType},${l.districtNo ?? ''},${l.districtName ?? ''},${price},${area},${rooms},${l.pricePerSqmEur?.toFixed(0) ?? ''},${score},"${l.canonicalUrl}",${l.firstSeenAt.toISOString()},${l.listingStatus}`;
+  });
+
+  return [header, ...rows].join('\n');
+}
+
 // ── Cursor helpers ──────────────────────────────────────────────────────────
 
 interface CursorData {

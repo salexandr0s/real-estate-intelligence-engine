@@ -6,6 +6,7 @@ import {
   parseOrThrow,
   idParamSchema,
   alertUpdateSchema,
+  alertBulkUpdateSchema,
   paginationQuerySchema,
 } from '../schemas.js';
 
@@ -58,6 +59,25 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
       });
     },
   );
+
+  // PATCH /v1/alerts/bulk - Bulk update alert status
+  app.patch('/v1/alerts/bulk', async (request, reply) => {
+    const { action, ids, filter } = parseOrThrow(alertBulkUpdateSchema, request.body);
+    const userId = request.userId;
+
+    let updatedCount: number;
+    if (ids) {
+      updatedCount = await alerts.bulkUpdateStatus(ids, action as AlertStatus, userId);
+    } else {
+      const currentStatus = (filter?.status as AlertStatus) ?? null;
+      updatedCount = await alerts.bulkUpdateByFilter(userId, currentStatus, action as AlertStatus);
+    }
+
+    return reply.send({
+      data: { updatedCount },
+      meta: {},
+    });
+  });
 
   // PATCH /v1/alerts/:id - Update alert status
   app.patch<{ Params: { id: string } }>('/v1/alerts/:id', async (request, reply) => {

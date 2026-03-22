@@ -185,6 +185,28 @@ export const highScoreQuerySchema = z.object({
   cursor: z.string().optional(),
 });
 
+const FEEDBACK_RATINGS = ['interested', 'not_interested', 'bookmarked', 'contacted'] as const;
+
+export const feedbackCreateSchema = z.object({
+  listingId: z.number().int(),
+  rating: z.enum(FEEDBACK_RATINGS),
+  notes: z.string().max(2000).optional(),
+});
+
+export const alertBulkUpdateSchema = z
+  .object({
+    action: z.enum(['opened', 'dismissed']),
+    ids: z.array(z.number().int()).min(1).max(500).optional(),
+    filter: z
+      .object({
+        status: z.enum(ALERT_STATUSES).optional(),
+      })
+      .optional(),
+  })
+  .refine((d) => d.ids != null || d.filter != null, {
+    message: 'Either ids or filter must be provided',
+  });
+
 export const districtTrendQuerySchema = z.object({
   districtNo: optionalQueryNumber,
   operationType: z.enum(OPERATION_TYPES).optional(),

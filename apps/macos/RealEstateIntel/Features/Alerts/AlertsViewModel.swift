@@ -54,6 +54,36 @@ final class AlertsViewModel {
         }
     }
 
+    func markAllRead(using client: APIClient) async {
+        do {
+            _ = try await client.bulkUpdateAlerts(action: "opened")
+            for i in alerts.indices {
+                if alerts[i].status == .unread {
+                    alerts[i].status = .opened
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func dismissAll(using client: APIClient) async {
+        do {
+            _ = try await client.bulkUpdateAlerts(action: "dismissed")
+            for i in alerts.indices {
+                alerts[i].status = .dismissed
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Insert a streamed alert if not already present (deduplicated by ID).
+    func insertStreamAlert(_ alert: Alert) {
+        guard !alerts.contains(where: { $0.id == alert.id }) else { return }
+        alerts.insert(alert, at: 0)
+    }
+
     func dismiss(_ alert: Alert, using client: APIClient) async {
         let body: Data
         do {

@@ -262,6 +262,65 @@ actor APIClient {
         }
     }
 
+    /// Bulk update alert statuses. Returns the number of updated alerts.
+    func bulkUpdateAlerts(ids: [Int]? = nil, filterStatus: String? = nil, action: String) async throws -> Int {
+        struct BulkBody: Encodable {
+            let action: String
+            let ids: [Int]?
+            let filter: FilterBody?
+
+            struct FilterBody: Encodable {
+                let status: String?
+            }
+        }
+        let payload = BulkBody(
+            action: action,
+            ids: ids,
+            filter: filterStatus != nil ? BulkBody.FilterBody(status: filterStatus) : BulkBody.FilterBody(status: nil)
+        )
+        let body = try encoder.encode(payload)
+
+        struct BulkResponse: Codable, Sendable {
+            let updatedCount: Int
+        }
+        let response: APIResponse<BulkResponse> = try await request(.bulkUpdateAlerts(body: body))
+        return response.data.updatedCount
+    }
+
+    /// Export listings as CSV data.
+    func exportListingsCSV(query: ListingQuery) async throws -> Data {
+        return try await requestRawData(.exportListings(query: query))
+    }
+
+    /// Submit or update investor feedback for a listing.
+    func submitFeedback(listingId: Int, rating: String, notes: String?) async throws -> InvestorFeedback {
+        struct FeedbackBody: Encodable {
+            let listingId: Int
+            let rating: String
+            let notes: String?
+        }
+        let body = try encoder.encode(FeedbackBody(listingId: listingId, rating: rating, notes: notes))
+        let response: APIResponse<InvestorFeedback> = try await request(.submitFeedback(body: body))
+        return response.data
+    }
+
+    /// Fetch investor feedback for a listing. Returns nil if none exists.
+    func fetchFeedback(listingId: Int) async throws -> InvestorFeedback? {
+        struct NullableResponse: Codable, Sendable {
+            let data: InvestorFeedback?
+        }
+        let urlRequest = try buildRequest(for: .getFeedback(listingId: listingId))
+        let (data, response) = try await performRequest(urlRequest)
+        try validateResponse(response, data: data)
+        let parsed = try decoder.decode(NullableResponse.self, from: data)
+        return parsed.data
+    }
+
+    /// Remove investor feedback for a listing.
+    func deleteFeedback(listingId: Int) async throws {
+        try await requestVoid(.deleteFeedback(listingId: listingId))
+    }
+
     func markAlertRead(id: Int) async throws {
         let body = try encoder.encode(APIAlertUpdateRequest(status: "opened"))
         try await requestVoid(.updateAlert(id: id, body: body))

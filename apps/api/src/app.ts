@@ -20,6 +20,7 @@ import { metricsRoutes } from './routes/metrics.js';
 import { streamRoutes } from './routes/stream.js';
 import { poiRoutes } from './routes/pois.js';
 import { savedListingRoutes } from './routes/saved-listings.js';
+import { feedbackRoutes } from './routes/feedback.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
@@ -101,6 +102,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(streamRoutes);
   await app.register(poiRoutes);
   await app.register(savedListingRoutes);
+  await app.register(feedbackRoutes);
 
   // API request duration metrics
   app.addHook('onResponse', (_request, reply, done) => {

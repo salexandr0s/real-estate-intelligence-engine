@@ -1,4 +1,5 @@
 import { query } from '../client.js';
+import { csvSafe } from '../util/csv.js';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 
@@ -178,20 +179,6 @@ export async function findByUser(
     hasNext && data.length > 0 ? data[data.length - 1]!.savedAt.toISOString() : null;
 
   return { data, nextCursor };
-}
-
-/**
- * Sanitize a string for safe CSV inclusion:
- * - Escape double quotes
- * - Strip newlines (would break row structure)
- * - Prefix formula-trigger characters to prevent CSV injection in spreadsheets
- */
-function csvSafe(value: string): string {
-  let sanitized = value.replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
-  if (/^[=+\-@\t\r]/.test(sanitized)) {
-    sanitized = `'${sanitized}`;
-  }
-  return sanitized;
 }
 
 /** Generate CSV export of saved listings. */

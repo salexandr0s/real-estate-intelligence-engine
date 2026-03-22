@@ -18,6 +18,7 @@ export * as pois from './queries/pois.js';
 export * as wienDevelopments from './queries/wien-developments.js';
 export * as savedListings from './queries/saved-listings.js';
 export * as clusters from './queries/clusters.js';
+export * as feedback from './queries/feedback.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
 export type { SourceCreateInput } from './queries/sources.js';

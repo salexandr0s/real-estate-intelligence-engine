@@ -5,6 +5,7 @@ struct AlertsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = AlertsViewModel()
     @State private var showInspector: Bool = false
+    @State private var showDismissConfirmation: Bool = false
 
     var body: some View {
         HSplitView {
@@ -44,6 +45,20 @@ struct AlertsView: View {
                 }
 
                 Button {
+                    Task { await viewModel.markAllRead(using: appState.apiClient) }
+                } label: {
+                    Label("Mark All Read", systemImage: "envelope.open")
+                }
+                .disabled(viewModel.unreadCount == 0)
+
+                Button {
+                    showDismissConfirmation = true
+                } label: {
+                    Label("Dismiss All", systemImage: "xmark.circle")
+                }
+                .disabled(viewModel.alerts.isEmpty)
+
+                Button {
                     showInspector.toggle()
                 } label: {
                     Label("Inspector", systemImage: "sidebar.right")
@@ -63,6 +78,18 @@ struct AlertsView: View {
             if newValue != nil {
                 showInspector = true
             }
+        }
+        .onChange(of: appState.alertStream.lastEvent?.id) { _, _ in
+            if let alert = appState.alertStream.lastEvent {
+                viewModel.insertStreamAlert(alert)
+            }
+        }
+        .confirmationDialog("Dismiss All Alerts", isPresented: $showDismissConfirmation) {
+            Button("Dismiss All", role: .destructive) {
+                Task { await viewModel.dismissAll(using: appState.apiClient) }
+            }
+        } message: {
+            Text("This will dismiss all alerts. This action cannot be undone.")
         }
     }
 }

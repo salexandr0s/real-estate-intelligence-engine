@@ -166,6 +166,44 @@ export async function countUnread(userId: number): Promise<number> {
 }
 
 /**
+ * Bulk-update alert status for specific IDs owned by a user.
+ */
+export async function bulkUpdateStatus(
+  ids: number[],
+  status: AlertStatus,
+  userId: number,
+): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `UPDATE alerts
+     SET status = $1, updated_at = NOW()
+     WHERE id = ANY($2::bigint[])
+       AND user_id = $3
+     RETURNING id`,
+    [status, ids, userId],
+  );
+  return rows.length;
+}
+
+/**
+ * Bulk-update alert status for all alerts matching a user + optional current status filter.
+ */
+export async function bulkUpdateByFilter(
+  userId: number,
+  currentStatus: AlertStatus | null,
+  newStatus: AlertStatus,
+): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `UPDATE alerts
+     SET status = $3, updated_at = NOW()
+     WHERE user_id = $1
+       AND ($2::text IS NULL OR status = $2)
+     RETURNING id`,
+    [userId, currentStatus, newStatus],
+  );
+  return rows.length;
+}
+
+/**
  * Find alerts for a user matched since a given timestamp.
  * Used by the SSE stream endpoint to poll for new alerts.
  */

@@ -23,6 +23,8 @@ struct ListingDetailView: View {
                     CrossSourceBadge(cluster: cluster, currentListingId: listing.id)
                 }
 
+                FeedbackSection(listingId: listing.id)
+
                 Divider()
                 ListingScoreSection(listing: listing, explanation: explanation)
 

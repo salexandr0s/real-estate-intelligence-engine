@@ -67,6 +67,19 @@ struct ListingsView: View {
             }
             ToolbarItem(placement: .automatic) {
                 Button {
+                    Task {
+                        if let data = await viewModel.exportCSV(using: appState.apiClient) {
+                            exportToFile(data)
+                        }
+                    }
+                } label: {
+                    Label("Export CSV", systemImage: "square.and.arrow.up")
+                }
+                .disabled(viewModel.filteredListings.isEmpty)
+                .help("Export filtered listings as CSV")
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
                     Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
@@ -90,6 +103,17 @@ struct ListingsView: View {
             if newValue != nil {
                 showInspector = true
             }
+        }
+    }
+
+    private func exportToFile(_ data: Data) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "listings.csv"
+        panel.title = "Export Listings"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
         }
     }
 }

@@ -60,6 +60,10 @@ final class AppState {
 
     let apiClient: APIClient
 
+    // MARK: - Streaming
+
+    let alertStream = AlertStreamService()
+
     // MARK: - Cache
 
     let localCache = LocalCache()
@@ -93,6 +97,34 @@ final class AppState {
 
         if connected {
             await refreshUnreadCount()
+            if !alertStream.isConnected {
+                alertStream.connect(baseURL: apiBaseURL, token: apiToken.isEmpty ? "dev-token" : apiToken)
+            }
+        }
+    }
+
+    func handleStreamAlert(_ alert: Alert) {
+        unreadAlertCount += 1
+
+        guard notificationsEnabled else { return }
+
+        let shouldNotify: Bool
+        switch alert.alertType {
+        case .newMatch:
+            shouldNotify = notifyOnNewMatch
+        case .priceDrop:
+            shouldNotify = notifyOnPriceDrop
+        case .scoreUpgrade, .scoreDowngrade:
+            shouldNotify = notifyOnScoreChange
+        case .statusChange:
+            shouldNotify = notifyOnNewMatch
+        }
+
+        if shouldNotify {
+            NotificationManager.shared.postAlertNotification(
+                title: alert.title,
+                body: alert.body
+            )
         }
     }
 
