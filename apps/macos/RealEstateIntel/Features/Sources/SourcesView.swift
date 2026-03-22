@@ -170,7 +170,10 @@ private struct SourcesListContent: View {
 private struct SourceDetailCard: View {
     let source: Source
     let onToggle: () -> Void
+    @Environment(AppState.self) private var appState
     @State private var isExpanded: Bool = false
+    @State private var scrapeRuns: [ScrapeRun] = []
+    @State private var isLoadingRuns: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -301,8 +304,27 @@ private struct SourceDetailCard: View {
                                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
                         }
                     }
+
+                    if isLoadingRuns {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if !scrapeRuns.isEmpty {
+                        Divider()
+                        ScrapeRunsView(runs: scrapeRuns)
+                    }
                 }
                 .padding(Theme.Spacing.md)
+                .task {
+                    guard scrapeRuns.isEmpty else { return }
+                    isLoadingRuns = true
+                    do {
+                        let allRuns = try await appState.apiClient.fetchScrapeRuns(limit: 200)
+                        scrapeRuns = allRuns.filter { $0.sourceCode == source.code }.prefix(10).map { $0 }
+                    } catch {
+                        scrapeRuns = []
+                    }
+                    isLoadingRuns = false
+                }
             }
         }
         .opacity(source.isActive ? 1.0 : 0.5)

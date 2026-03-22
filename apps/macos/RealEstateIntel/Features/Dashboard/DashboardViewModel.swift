@@ -12,6 +12,7 @@ final class DashboardViewModel {
     var activeFilterCount: Int = 0
     var recentHighScoreListings: [Listing] = []
     var sources: [Source] = []
+    var temperatureData: [MarketTemperaturePoint] = []
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -50,6 +51,12 @@ final class DashboardViewModel {
             activeFilterCount = filters.count(where: { $0.isActive })
 
             sources = try await client.fetchSources()
+
+            do {
+                temperatureData = try await client.fetchMarketTemperature()
+            } catch {
+                temperatureData = []
+            }
         } catch {
             errorMessage = error.localizedDescription
             // Fall back to mock data if API unavailable

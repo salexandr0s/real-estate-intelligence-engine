@@ -15,6 +15,8 @@ struct DashboardView: View {
             HStack(alignment: .top, spacing: Theme.Spacing.xl) {
                 RecentListingsSection(listings: viewModel.recentHighScoreListings)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                MarketTemperatureCard(data: viewModel.temperatureData)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 SourceHealthSection(
                     sources: viewModel.sources,
                     healthyCount: viewModel.healthySources,

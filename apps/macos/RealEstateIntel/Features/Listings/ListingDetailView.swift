@@ -7,13 +7,30 @@ struct ListingDetailView: View {
     @Environment(AppState.self) private var appState
     @State private var explanation: ScoreExplanation?
     @State private var priceVersions: [PriceVersion] = []
+    @State private var cluster: ListingCluster?
+    @State private var isSaved: Bool = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                ListingHeaderSection(listing: listing)
+                ListingHeaderSection(
+                    listing: listing,
+                    isSaved: isSaved,
+                    onToggleSave: { Task { await toggleSave() } }
+                )
+
+                if let cluster {
+                    CrossSourceBadge(cluster: cluster, currentListingId: listing.id)
+                }
+
                 Divider()
                 ListingScoreSection(listing: listing, explanation: explanation)
+
+                if let cluster, cluster.members.count >= 2 {
+                    Divider()
+                    CrossSourceComparisonView(cluster: cluster)
+                }
+
                 Divider()
                 ListingDetailsSection(listing: listing)
                 Divider()
@@ -29,8 +46,11 @@ struct ListingDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: listing.id) {
-            await loadVersions()
-            await loadExplanation()
+            async let v: Void = loadVersions()
+            async let e: Void = loadExplanation()
+            async let c: Void = loadCluster()
+            async let s: Void = checkIfSaved()
+            _ = await (v, e, c, s)
         }
     }
 
@@ -39,7 +59,6 @@ struct ListingDetailView: View {
             explanation = try await appState.apiClient.fetchScoreExplanation(listingId: listing.id)
         } catch {
             explanation = nil
-            NSLog("[ListingDetail] Score explanation unavailable: %@", String(describing: error))
         }
     }
 
@@ -55,7 +74,6 @@ struct ListingDetailView: View {
                 )
             }
         } catch {
-            // Fallback: show current price as only version
             priceVersions = [
                 PriceVersion(
                     date: listing.firstSeenAt,
@@ -63,6 +81,37 @@ struct ListingDetailView: View {
                     reason: "Current price"
                 )
             ]
+        }
+    }
+
+    private func loadCluster() async {
+        do {
+            cluster = try await appState.apiClient.fetchListingCluster(listingId: listing.id)
+        } catch {
+            cluster = nil // 404 = no cluster, expected for single-source listings
+        }
+    }
+
+    private func checkIfSaved() async {
+        do {
+            let savedIds = try await appState.apiClient.checkSavedListings(ids: [listing.id])
+            isSaved = savedIds.contains(listing.id)
+        } catch {
+            isSaved = false
+        }
+    }
+
+    private func toggleSave() async {
+        do {
+            if isSaved {
+                try await appState.apiClient.unsaveListing(listingId: listing.id)
+                isSaved = false
+            } else {
+                try await appState.apiClient.saveListing(listingId: listing.id)
+                isSaved = true
+            }
+        } catch {
+            NSLog("[ListingDetail] Save/unsave failed: %@", String(describing: error))
         }
     }
 }

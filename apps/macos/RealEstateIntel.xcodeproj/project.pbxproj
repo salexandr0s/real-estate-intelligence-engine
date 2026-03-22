@@ -93,6 +93,7 @@
 		AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE95FFC3DF5D5037B7C4CF46 /* DashboardViewModel.swift */; };
 		AF64E595A6CAE616BECFCEDA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0B6225CB1B10E9C769B8C7 /* ContentView.swift */; };
 		B012246AE7DE163BD4AD4E43 /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F418C5EE14B80F9ECF134C /* PriceHistoryView.swift */; };
+		B227B9582EBD1B4F6FEC045B /* MarketTemperatureCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDCEED8D48E1C9DC00FD28F0 /* MarketTemperatureCard.swift */; };
 		B90B5FD1C3ED02634302EDA4 /* POIAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B160FD783B9C93202135675 /* POIAnnotation.swift */; };
 		BC3310AF7D92AFAD42E6D404 /* RecentListingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E51B33E12A58C199C0AD47 /* RecentListingsSection.swift */; };
 		BD0E56328BE92928373C890C /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4E9E9013CA6D2F8CF1511B /* APIError.swift */; };
@@ -242,6 +243,7 @@
 		E7EDF760969853B229DF6BC5 /* APISourceResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISourceResponse.swift; sourceTree = "<group>"; };
 		E9E7DA452144C9058CA5FBE1 /* Listing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listing.swift; sourceTree = "<group>"; };
 		EC52E69C8BBE6F1E40E74836 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		EDCEED8D48E1C9DC00FD28F0 /* MarketTemperatureCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketTemperatureCard.swift; sourceTree = "<group>"; };
 		EEB6D9C2CF87776E903E47C3 /* SummaryCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryCardView.swift; sourceTree = "<group>"; };
 		F2E53B187919C34D20662950 /* ViennaPOIStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViennaPOIStore.swift; sourceTree = "<group>"; };
 		F56EB795242229A02174F42B /* ScrapeRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRun.swift; sourceTree = "<group>"; };
@@ -470,6 +472,7 @@
 				1DCFB35EB4F8124FC29BECDB /* DashboardListingRow.swift */,
 				71FCE478C964B36CF4F6B450 /* DashboardView.swift */,
 				AE95FFC3DF5D5037B7C4CF46 /* DashboardViewModel.swift */,
+				EDCEED8D48E1C9DC00FD28F0 /* MarketTemperatureCard.swift */,
 				34E51B33E12A58C199C0AD47 /* RecentListingsSection.swift */,
 				88AEEC9CD1E5B54B167D8D43 /* SourceHealthRow.swift */,
 				C5A7B3A87C4DCA501C4D2FF4 /* SourceHealthSection.swift */,
@@ -681,6 +684,7 @@
 				7ADBC4487BC5C3E06B7F2188 /* LocalCache.swift in Sources */,
 				1D5D9306C94F54D05710E179 /* MapSelectionOverlay.swift in Sources */,
 				CE4DBF36309D06A76168793D /* MarketBaseline.swift in Sources */,
+				B227B9582EBD1B4F6FEC045B /* MarketTemperatureCard.swift in Sources */,
 				61CC36A09696C23753DD73E5 /* MarketTemperatureView.swift in Sources */,
 				47F60408DDFF0C65A8F92367 /* MenuBarContent.swift in Sources */,
 				37E52F66948374CB34BE2A99 /* MenuBarLabel.swift in Sources */,

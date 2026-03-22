@@ -175,6 +175,38 @@ actor APIClient {
         return listing
     }
 
+    /// Fetch cross-source cluster for a listing. Returns nil if no cluster exists.
+    func fetchListingCluster(listingId: Int) async throws -> ListingCluster {
+        let response: APIResponse<ListingCluster> = try await request(.getListingCluster(listingId: listingId))
+        return response.data
+    }
+
+    /// Save a listing to the watchlist.
+    func saveListing(listingId: Int) async throws {
+        let body = try encoder.encode(["listingId": listingId])
+        try await requestVoid(.saveListing(body: body))
+    }
+
+    /// Remove a listing from the watchlist.
+    func unsaveListing(listingId: Int) async throws {
+        try await requestVoid(.unsaveListing(listingId: listingId))
+    }
+
+    /// Check which listing IDs are saved in the watchlist.
+    func checkSavedListings(ids: [Int]) async throws -> Set<Int> {
+        struct CheckResponse: Codable, Sendable {
+            let savedIds: [Int]
+        }
+        let response: APIResponse<CheckResponse> = try await request(.checkSavedListings(listingIds: ids))
+        return Set(response.data.savedIds)
+    }
+
+    /// Fetch recent scrape runs, optionally filtered by source code.
+    func fetchScrapeRuns(limit: Int? = 20) async throws -> [ScrapeRun] {
+        let response: PaginatedResponse<ScrapeRun> = try await requestPaginated(.listScrapeRuns(limit: limit))
+        return response.data
+    }
+
     func fetchScoreExplanation(listingId: Int) async throws -> ScoreExplanation {
         let response: APIResponse<ScoreExplanation> = try await request(
             .getScoreExplanation(listingId: listingId)
