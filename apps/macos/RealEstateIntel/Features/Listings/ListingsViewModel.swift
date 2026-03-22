@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import MapKit
 
 /// View model for the listings table with sorting, filtering, and search.
 @MainActor @Observable
@@ -34,6 +35,11 @@ final class ListingsViewModel {
     var isMapMode: Bool = false
     var focusedMapCoordinate: CLLocationCoordinate2D?
     var mapFocusTrigger: Int = 0
+
+    // MARK: - Spatial Selection
+
+    var isDrawingSelection: Bool = false
+    var selectionRegion: MKCoordinateRegion?
 
     // MARK: - Sorting
 
@@ -86,6 +92,19 @@ final class ListingsViewModel {
             result = result.filter { ($0.currentScore ?? 0) >= score }
         }
 
+        // Spatial selection (draw-to-search)
+        if let region = selectionRegion {
+            let latMin = region.center.latitude - region.span.latitudeDelta / 2
+            let latMax = region.center.latitude + region.span.latitudeDelta / 2
+            let lonMin = region.center.longitude - region.span.longitudeDelta / 2
+            let lonMax = region.center.longitude + region.span.longitudeDelta / 2
+            result = result.filter { listing in
+                guard let c = listing.coordinate else { return false }
+                return c.latitude >= latMin && c.latitude <= latMax
+                    && c.longitude >= lonMin && c.longitude <= lonMax
+            }
+        }
+
         // Apply sort
         result.sort(using: sortOrder)
 
@@ -116,6 +135,7 @@ final class ListingsViewModel {
         || !minPrice.isEmpty
         || !maxPrice.isEmpty
         || !minScore.isEmpty
+        || selectionRegion != nil
     }
 
     // MARK: - Cache Key
@@ -197,6 +217,8 @@ final class ListingsViewModel {
         minPrice = ""
         maxPrice = ""
         minScore = ""
+        selectionRegion = nil
+        isDrawingSelection = false
     }
 
     func selectListing(_ listing: Listing) {

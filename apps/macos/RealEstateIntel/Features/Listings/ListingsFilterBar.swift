@@ -61,6 +61,26 @@ struct ListingsFilterBar: View {
                     .frame(width: 60)
             }
 
+            if viewModel.selectionRegion != nil {
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: "selection.pin.in.out")
+                        .foregroundStyle(Color.accentColor)
+                    Text("Area")
+                        .font(.caption)
+                    Button {
+                        viewModel.selectionRegion = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, Theme.Spacing.xxs)
+                .background(Color.accentColor.opacity(0.1))
+                .clipShape(Capsule())
+            }
+
             Spacer()
 
             if viewModel.hasActiveFilters {
