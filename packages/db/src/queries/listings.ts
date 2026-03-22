@@ -176,6 +176,8 @@ interface ListingSearchDbRow {
   latitude: string | null;
   longitude: string | null;
   geocode_precision: string | null;
+  last_price_change_pct: string | null;
+  last_price_change_at: Date | null;
 }
 
 function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
@@ -201,6 +203,9 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
     geocodePrecision: row.geocode_precision,
+    lastPriceChangePct:
+      row.last_price_change_pct != null ? Number(row.last_price_change_pct) : null,
+    lastPriceChangeAt: row.last_price_change_at,
   };
 }
 
@@ -436,9 +441,37 @@ export async function searchListings(
       l.list_price_eur_cents, l.living_area_sqm, l.rooms,
       l.price_per_sqm_eur, l.current_score,
       l.first_seen_at, l.listing_status,
-      l.latitude, l.longitude, l.geocode_precision
+      l.latitude, l.longitude, l.geocode_precision,
+      pc.price_change_pct AS last_price_change_pct,
+      pc.observed_at AS last_price_change_at
     FROM listings l
     JOIN sources s ON s.id = l.source_id
+    LEFT JOIN LATERAL (
+      SELECT
+        v.observed_at,
+        CASE
+          WHEN prev.list_price_eur_cents IS NOT NULL AND prev.list_price_eur_cents > 0
+          THEN ROUND(
+            ((v.list_price_eur_cents - prev.list_price_eur_cents)::numeric
+             / prev.list_price_eur_cents) * 100, 2
+          )
+          ELSE NULL
+        END AS price_change_pct
+      FROM listing_versions v
+      LEFT JOIN LATERAL (
+        SELECT pv.list_price_eur_cents
+        FROM listing_versions pv
+        WHERE pv.listing_id = l.id
+          AND pv.version_no < v.version_no
+          AND pv.list_price_eur_cents IS NOT NULL
+        ORDER BY pv.version_no DESC
+        LIMIT 1
+      ) prev ON true
+      WHERE v.listing_id = l.id
+        AND v.version_reason = 'price_change'
+      ORDER BY v.version_no DESC
+      LIMIT 1
+    ) pc ON true
     WHERE l.listing_status = 'active'
       AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)

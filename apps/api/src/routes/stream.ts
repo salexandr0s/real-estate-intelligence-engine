@@ -38,7 +38,8 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
             res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
           }
           if (newAlerts.length > 0) {
-            lastChecked = newAlerts[newAlerts.length - 1]!.matchedAt;
+            // Advance cursor 1ms past the last alert to avoid re-delivery
+            lastChecked = new Date(newAlerts[newAlerts.length - 1]!.matchedAt.getTime() + 1);
           }
         } catch (err) {
           if (!res.destroyed) {

@@ -1,0 +1,58 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build and push API
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and push worker-scraper
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker-scraper/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/worker-scraper:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build and push worker-processing
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker-processing/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/worker-processing:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

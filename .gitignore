@@ -14,3 +14,7 @@ DerivedData/
 *.xcuserstate
 *.xcuserdatad/
 *.xcworkspace/xcuserdata/
+
+# Scraper artifacts and local data
+real-estate-intel/
+assets/

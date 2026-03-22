@@ -110,6 +110,8 @@ export interface ListingSearchResult {
   latitude: number | null;
   longitude: number | null;
   geocodePrecision: string | null;
+  lastPriceChangePct: number | null;
+  lastPriceChangeAt: Date | null;
 }
 
 export interface PaginatedResult<T> {

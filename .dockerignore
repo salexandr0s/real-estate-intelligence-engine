@@ -1,0 +1,7 @@
+node_modules
+.git
+*.md
+apps/macos
+assets
+real-estate-intel
+.env*

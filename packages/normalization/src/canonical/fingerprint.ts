@@ -5,7 +5,7 @@ import type { CanonicalListingInput } from '@rei/contracts';
 
 /**
  * Fields used to identify the same property across different sources.
- * Uses normalized address + area + price (rounded to nearest 1000 EUR).
+ * Uses normalized address + area (rounded to 2 sqm) + price (rounded to nearest 1000 EUR).
  */
 interface CrossSourceFields {
   addressNormalized: string | null;
@@ -34,12 +34,43 @@ export function computeCrossSourceFingerprint(
 
   const fields: CrossSourceFields = {
     addressNormalized: address,
-    livingAreaSqmRounded: area != null ? Math.round(area) : null,
+    livingAreaSqmRounded: area != null ? Math.round(area / 2) * 2 : null,
     priceRoundedEur: priceCents != null ? Math.round(priceCents / 100 / 1000) * 1000 : null,
   };
 
   const json = JSON.stringify(fields, Object.keys(fields).sort());
   return createHash('sha256').update(json, 'utf8').digest('hex');
+}
+
+/**
+ * Normalizes German street-name suffixes to canonical forms.
+ *
+ * Handles common abbreviations and variant spellings:
+ * - Straße / Strasse / Str. → strasse
+ * - Gasse / G.             → gasse
+ * - Platz                  → platz
+ * - Weg                    → weg
+ *
+ * Also lowercases, trims, and collapses multiple spaces.
+ */
+function normalizeGermanStreet(raw: string): string {
+  let s = raw.toLowerCase().trim();
+
+  // Collapse multiple spaces to single
+  s = s.replace(/\s{2,}/g, ' ');
+
+  // Normalize street suffixes (order matters: longer patterns first)
+  // straße / strasse / str. → strasse
+  s = s.replace(/stra(?:ß|ss)e\b/g, 'strasse');
+  s = s.replace(/str\.\s*/g, 'strasse');
+
+  // gasse / g. → gasse (word-boundary anchored to avoid matching "ing.", "mag.", etc.)
+  s = s.replace(/\bg\.\s*/g, 'gasse');
+
+  // platz and weg are already lowercase after the initial toLowerCase()
+  // No variant forms needed — they are consistent in German
+
+  return s;
 }
 
 /**
@@ -50,7 +81,7 @@ function buildNormalizedAddress(listing: Partial<CanonicalListingInput>): string
   const parts: string[] = [];
 
   if (listing.street) {
-    parts.push(listing.street.toLowerCase().trim());
+    parts.push(normalizeGermanStreet(listing.street));
   }
   if (listing.houseNumber) {
     parts.push(listing.houseNumber.toLowerCase().trim());

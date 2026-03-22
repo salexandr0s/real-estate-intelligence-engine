@@ -9,6 +9,8 @@ export const QUEUE_NAMES = {
   BASELINE: 'processing-baseline',
   GEOCODING: 'processing-geocoding',
   RESCORE: 'processing-rescore',
+  CLUSTER: 'processing-cluster',
+  GEOCODE_ENQUEUE: 'processing-geocode-enqueue',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -72,5 +74,16 @@ export interface GeocodingJobData {
 export interface RescoreJobData {
   triggeredBy: 'api' | 'manual';
   sourceCode: string | null;
+  limit: number;
+}
+
+/** Job data for cluster rebuild operation. */
+export interface ClusterJobData {
+  triggeredBy: 'scheduler' | 'manual';
+}
+
+/** Job data for geocoding enqueue operation. */
+export interface GeocodeEnqueueJobData {
+  triggeredBy: 'scheduler' | 'manual';
   limit: number;
 }

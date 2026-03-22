@@ -12,6 +12,8 @@ import { closePool } from '@rei/db';
 import { createIngestionWorker } from './workers/ingestion-worker.js';
 import { createBaselineWorker } from './workers/baseline-worker.js';
 import { createGeocodingWorker } from './workers/geocoding-worker.js';
+import { createClusterWorker } from './workers/cluster-worker.js';
+import { createGeocodingEnqueuer } from './workers/geocoding-enqueuer.js';
 
 const logger = createLogger('worker-processing');
 
@@ -27,11 +29,13 @@ async function main(): Promise<void> {
 
   const ingestionWorker = createIngestionWorker();
   const baselineWorker = createBaselineWorker();
+  const clusterWorker = createClusterWorker();
+  const geocodingEnqueuer = createGeocodingEnqueuer();
 
   // Geocoding worker — gated on feature flag
   const geocodingWorker = config.features.geocodingEnabled ? createGeocodingWorker() : null;
 
-  const workerNames = ['ingestion', 'baseline'];
+  const workerNames = ['ingestion', 'baseline', 'cluster', 'geocode-enqueue'];
   if (geocodingWorker) workerNames.push('geocoding');
   logger.info(`Workers ready: ${workerNames.join(', ')}`);
 
@@ -40,6 +44,8 @@ async function main(): Promise<void> {
     logger.info(`Received ${signal}, shutting down processing worker`);
     await ingestionWorker.close();
     await baselineWorker.close();
+    await clusterWorker.close();
+    await geocodingEnqueuer.close();
     if (geocodingWorker) await geocodingWorker.close();
     await shutdownTracing();
     await closeRedisConnection();

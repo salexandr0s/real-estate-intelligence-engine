@@ -6,12 +6,13 @@ import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import { createLogger } from '@rei/observability';
 import { loadConfig } from '@rei/config';
-import {
-  QUEUE_NAMES,
-  getRedisConnection,
-  getQueuePrefix,
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
+import type {
+  DiscoveryJobData,
+  BaselineJobData,
+  ClusterJobData,
+  GeocodeEnqueueJobData,
 } from '@rei/scraper-core';
-import type { DiscoveryJobData, BaselineJobData } from '@rei/scraper-core';
 import { sources, scrapeRuns } from '@rei/db';
 
 const log = createLogger('scheduler');
@@ -36,6 +37,16 @@ export async function startScheduler(): Promise<void> {
     prefix,
   });
 
+  const clusterQueue = new Queue<ClusterJobData>(QUEUE_NAMES.CLUSTER, {
+    connection,
+    prefix,
+  });
+
+  const geocodeEnqueueQueue = new Queue<GeocodeEnqueueJobData>(QUEUE_NAMES.GEOCODE_ENQUEUE, {
+    connection,
+    prefix,
+  });
+
   // Schedule baseline recomputation every hour
   await baselineQueue.upsertJobScheduler(
     'baseline-hourly',
@@ -46,6 +57,28 @@ export async function startScheduler(): Promise<void> {
     },
   );
   log.info('Baseline scheduler registered (hourly)');
+
+  // Schedule cluster rebuild daily at 03:00
+  await clusterQueue.upsertJobScheduler(
+    'cluster-daily',
+    { pattern: '0 3 * * *' },
+    {
+      name: 'cluster:rebuild',
+      data: { triggeredBy: 'scheduler' },
+    },
+  );
+  log.info('Cluster scheduler registered (daily 03:00)');
+
+  // Schedule geocoding enqueue every 30 minutes
+  await geocodeEnqueueQueue.upsertJobScheduler(
+    'geocode-enqueue-periodic',
+    { pattern: '*/30 * * * *' },
+    {
+      name: 'geocode:enqueue',
+      data: { triggeredBy: 'scheduler', limit: 50 },
+    },
+  );
+  log.info('Geocode enqueue scheduler registered (every 30 min)');
 
   // Periodic scrape scheduling loop
   const intervalMs = config.scheduler.loopIntervalMs;
