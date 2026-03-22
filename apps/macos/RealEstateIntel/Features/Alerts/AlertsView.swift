@@ -1,30 +1,35 @@
 import SwiftUI
 
-/// Alerts view with status filtering, list, detail inspector, and context menu actions.
+/// Alerts view with status filtering, list, and HSplitView inspector.
 struct AlertsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = AlertsViewModel()
     @State private var showInspector: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            AlertsFilterBar(viewModel: viewModel)
-            Divider()
+        HSplitView {
+            VStack(spacing: 0) {
+                AlertsFilterBar(viewModel: viewModel)
+                Divider()
 
-            if viewModel.filteredAlerts.isEmpty && !viewModel.isLoading {
-                AlertsEmptyState(hasFilter: viewModel.filterStatus != nil)
-            } else {
-                AlertsList(
-                    viewModel: viewModel,
-                    appState: appState
-                )
+                if viewModel.filteredAlerts.isEmpty && !viewModel.isLoading {
+                    AlertsEmptyState(hasFilter: viewModel.filterStatus != nil)
+                } else {
+                    AlertsList(
+                        viewModel: viewModel,
+                        appState: appState
+                    )
+                }
+            }
+            .frame(minWidth: 400)
+
+            if showInspector {
+                AlertInspectorContent(alert: viewModel.selectedAlert)
+                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 460)
+                    .background(.regularMaterial)
             }
         }
         .navigationTitle("Alerts")
-        .inspector(isPresented: $showInspector) {
-            AlertInspectorContent(alert: viewModel.selectedAlert)
-                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
-        }
         .toolbar {
             ToolbarItemGroup {
                 if viewModel.isLoading {
@@ -196,103 +201,6 @@ private struct AlertRow: View {
         }
         .padding(.vertical, Theme.Spacing.xs)
         .opacity(alert.status == .dismissed ? 0.6 : 1.0)
-    }
-}
-
-// MARK: - Alert Inspector
-
-private struct AlertInspectorContent: View {
-    let alert: Alert?
-
-    var body: some View {
-        if let alert {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                    // Header
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        HStack(spacing: Theme.Spacing.sm) {
-                            Image(systemName: alert.alertType.iconName)
-                                .foregroundStyle(Theme.alertColor(for: alert.alertType))
-                                .font(.title2)
-
-                            Text(alert.alertType.displayName)
-                                .font(.headline)
-                                .foregroundStyle(Theme.alertColor(for: alert.alertType))
-                        }
-
-                        Text(alert.title)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                    }
-
-                    Divider()
-
-                    // Body
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Details")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-
-                        Text(alert.body)
-                            .font(.body)
-                    }
-
-                    // Metadata
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        Text("Info")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-
-                        InspectorDetailRow(label: "Status", value: alert.status.displayName)
-                        InspectorDetailRow(label: "Matched", value: PriceFormatter.formatDateTime(alert.matchedAt))
-
-                        if let filterName = alert.filterName {
-                            InspectorDetailRow(label: "Filter", value: filterName)
-                        }
-
-                        if alert.listingId != nil {
-                            InspectorDetailRow(label: "Listing ID", value: "#\(alert.listingId!)")
-                        }
-                    }
-
-                    // Linked listing hint
-                    if alert.listingId != nil {
-                        Divider()
-
-                        Text("Listing #\(alert.listingId!) — view in Listings tab")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(Theme.Spacing.lg)
-            }
-        } else {
-            ContentUnavailableView(
-                "No Alert Selected",
-                systemImage: "bell",
-                description: Text("Select an alert to view its details.")
-            )
-        }
-    }
-}
-
-// MARK: - Inspector Detail Row
-
-private struct InspectorDetailRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
-            Text(value)
-                .font(.caption)
-        }
     }
 }
 

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+2F1E0D9C8B7A6F5E4D3C2B1A /* AlertInspectorContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* AlertInspectorContent.swift */; };
 		13917A7ED500F2BFA229EB5C /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FBAF1CE840FE58E3022833 /* PriceHistoryView.swift */; };
 		1F26D500E137572AF9E366C4 /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F55CAE9FB1873009D248F8E /* AnalyticsView.swift */; };
 		038D5DF89769E7942C7C2A72 /* AlertQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2935C92AC4DA5E19FFB224C /* AlertQuery.swift */; };
@@ -101,6 +102,7 @@
 		03E9AE0DC9DCEF91FAEA0AA2 /* ListingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingStatus.swift; sourceTree = "<group>"; };
 		45C5485BEF4AF7A0DCDB643B /* APIBaselineResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIBaselineResponse.swift; sourceTree = "<group>"; };
 		05FF57CEC072B491886C7AAE /* FiltersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersViewModel.swift; sourceTree = "<group>"; };
+1A2B3C4D5E6F7A8B9C0D1E2F /* AlertInspectorContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertInspectorContent.swift; sourceTree = "<group>"; };
 		09355E534C6D344F7B221DC7 /* ListingLocationSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingLocationSection.swift; sourceTree = "<group>"; };
 		0D0B6225CB1B10E9C769B8C7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		10B1950836110B0FC2FA3416 /* ListingDetailsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingDetailsSection.swift; sourceTree = "<group>"; };
@@ -249,6 +251,7 @@
 		30A3FC75ED3F2E46CBB07344 /* Alerts */ = {
 			isa = PBXGroup;
 			children = (
+				1A2B3C4D5E6F7A8B9C0D1E2F /* AlertInspectorContent.swift */,
 				536DAB878CB84E20AA22C7DC /* AlertsView.swift */,
 				856E0F598CF28920C595883A /* AlertsViewModel.swift */,
 			);
@@ -291,7 +294,7 @@
 				45F3E6EDAA9BA0FA555BBF8F /* ConnectionStatusBar.swift */,
 				0D0B6225CB1B10E9C769B8C7 /* ContentView.swift */,
 				530714BEECFAB0781EDAC206 /* DetailContentView.swift */,
-				250A36FF070D1C544C8DCA43 /* MenuBarContent.swift */,
+250A36FF070D1C544C8DCA43 /* MenuBarContent.swift */,
 				84CF08562470FC1B57721744 /* MenuBarLabel.swift */,
 				1A6FA32610A564684AEC3551 /* NavigationItem.swift */,
 				4B7B48FC773CBD385E781D80 /* RealEstateIntelApp.swift */,
@@ -482,6 +485,7 @@
 				038D5DF89769E7942C7C2A72 /* AlertQuery.swift in Sources */,
 				319A6157074293135DD4D7BB /* AlertStatus.swift in Sources */,
 				F3CA8C6362238B9A0B8BD9BC /* AlertType.swift in Sources */,
+				2F1E0D9C8B7A6F5E4D3C2B1A /* AlertInspectorContent.swift in Sources */,
 				6B8BF5C78CDC669343988192 /* AlertsView.swift in Sources */,
 				D757CE68FC5742A63134FB65 /* AlertsViewModel.swift in Sources */,
 				14D87C355D327834194EAF77 /* AppState.swift in Sources */,
@@ -490,7 +494,7 @@
 				5CB2FE5C276CFBB7E7960344 /* ConnectionStatus.swift in Sources */,
 				4166550517ED818ADA9B75AF /* ConnectionStatusBar.swift in Sources */,
 				AF64E595A6CAE616BECFCEDA /* ContentView.swift in Sources */,
-				ABAD42BCCD756B71FF5CD864 /* DashboardHeader.swift in Sources */,
+ABAD42BCCD756B71FF5CD864 /* DashboardHeader.swift in Sources */,
 				59E95B052E006F43C89A7A9E /* DashboardListingRow.swift in Sources */,
 				DF2BF36CFAE1F46DBD1F2E4D /* DashboardView.swift in Sources */,
 				AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */,

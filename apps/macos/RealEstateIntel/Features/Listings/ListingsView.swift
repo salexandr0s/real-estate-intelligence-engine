@@ -1,40 +1,45 @@
 import SwiftUI
 
-/// Main listings view with native Table, sortable columns, filters, and detail inspector.
+/// Main listings view with native Table, sortable columns, filters, and HSplitView inspector.
 struct ListingsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = ListingsViewModel()
     @State private var showInspector: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            ListingsFilterBar(viewModel: viewModel)
-            Divider()
-            if let error = viewModel.errorMessage {
-                HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text(error)
-                        .font(.callout)
-                    Spacer()
-                    Button("Retry") {
-                        Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.vertical, Theme.Spacing.sm)
-                .background(Color.red.opacity(0.1))
+        HSplitView {
+            VStack(spacing: 0) {
+                ListingsFilterBar(viewModel: viewModel)
                 Divider()
+                if let error = viewModel.errorMessage {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text(error)
+                            .font(.callout)
+                        Spacer()
+                        Button("Retry") {
+                            Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.horizontal, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .background(Color.red.opacity(0.1))
+                    Divider()
+                }
+                ListingsTable(viewModel: viewModel)
             }
-            ListingsTable(viewModel: viewModel)
+            .frame(minWidth: 400)
+
+            if showInspector {
+                ListingsInspectorContent(listing: viewModel.selectedListing)
+                    .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
+                    .background(.regularMaterial)
+            }
         }
         .navigationTitle("Listings")
-        .inspector(isPresented: $showInspector) {
-            ListingsInspectorContent(listing: viewModel.selectedListing)
-                .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
-        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ToolbarSearchField(text: $viewModel.searchText, prompt: "Search by title, district, postal code...")

@@ -27,7 +27,6 @@ struct ListingDetailView: View {
             .padding(Theme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .controlBackgroundColor))
         .task(id: listing.id) {
             await loadVersions()
             await loadExplanation()
