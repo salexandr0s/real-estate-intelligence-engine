@@ -18,11 +18,12 @@ struct ListingsMapView: View {
     )
     @State private var districtBoundaries: [DistrictBoundary] = []
     @State private var showDistrictBoundaries: Bool = true
-    @State private var showPOIs: Bool = false
-    @State private var activePOICategories: Set<POICategory> = Set(POICategory.allCases)
+    @State private var activePOICategories: Set<POICategory> = []
     @State private var visiblePOIs: [POI] = []
     @State private var showDevelopments: Bool = false
     @State private var visibleDevelopments: [WienDevelopment] = []
+
+    private var showPOIs: Bool { !activePOICategories.isEmpty }
 
     private var mappableListings: [Listing] {
         viewModel.filteredListings.filter { $0.coordinate != nil }
@@ -32,7 +33,18 @@ struct ListingsMapView: View {
         VStack(spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 MapReader { proxy in
-                    Map(position: $position, selection: $viewModel.selectedListingID) {
+                    Map(
+                        position: $position,
+                        bounds: MapCameraBounds(
+                            centerCoordinateBounds: ViennaBoundaryStore.cameraBounds,
+                            minimumDistance: 500,
+                            maximumDistance: 40_000
+                        ),
+                        selection: $viewModel.selectedListingID
+                    ) {
+                        // Boundary mask — darkens everything outside Vienna
+                        MapPolygon(ViennaBoundaryStore.maskPolygon)
+                            .foregroundStyle(Color.black.opacity(0.25))
                         // District boundary overlays (render before pins so pins are on top)
                         if showDistrictBoundaries {
                             ForEach(districtBoundaries) { district in
@@ -87,7 +99,7 @@ struct ListingsMapView: View {
                                     Annotation(dev.name, coordinate: coord, anchor: .center) {
                                         DevelopmentAnnotation(development: dev)
                                     }
-                                    .annotationTitles(.automatic)
+                                    .annotationTitles(.hidden)
                                 }
                             }
                         }
@@ -169,61 +181,90 @@ struct ListingsMapView: View {
     // MARK: - Map Controls Overlay
 
     private var mapControls: some View {
-        VStack(spacing: Theme.Spacing.xs) {
+        VStack(spacing: Theme.Spacing.sm) {
+            // Map style picker
             mapStyleMenu
 
-            Button {
-                showDistrictBoundaries.toggle()
-            } label: {
-                Image(systemName: showDistrictBoundaries ? "square.on.square.dashed" : "square.dashed")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(showDistrictBoundaries ? "Hide district boundaries" : "Show district boundaries")
-
-            Button {
-                fitToListings()
-            } label: {
-                Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help("Fit map to all visible listings")
-
-            Divider()
-                .frame(width: 20)
-
-            poiLayerMenu
-
-            Button {
-                showDevelopments.toggle()
-                if showDevelopments {
-                    visibleDevelopments = ViennaDevelopmentStore.allDevelopments
-                } else {
-                    visibleDevelopments = []
+            // Layers group
+            VStack(spacing: 0) {
+                mapControlButton(
+                    title: "Districts",
+                    icon: showDistrictBoundaries ? "square.on.square.dashed" : "square.dashed",
+                    isActive: showDistrictBoundaries
+                ) {
+                    showDistrictBoundaries.toggle()
                 }
-            } label: {
-                Image(systemName: showDevelopments ? "building.2.fill" : "building.2")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(showDevelopments ? .purple : nil)
-            .help(showDevelopments ? "Hide developments" : "Show Wien developments")
 
-            Divider()
-                .frame(width: 20)
+                Divider().padding(.horizontal, 8)
 
-            Button {
-                viewModel.isDrawingSelection.toggle()
-            } label: {
-                Image(systemName: viewModel.isDrawingSelection ? "pencil.slash" : "pencil.and.outline")
+                mapControlButton(
+                    title: "Projects",
+                    icon: showDevelopments ? "building.2.fill" : "building.2",
+                    isActive: showDevelopments,
+                    tint: .purple
+                ) {
+                    showDevelopments.toggle()
+                    if showDevelopments {
+                        visibleDevelopments = ViennaDevelopmentStore.allDevelopments
+                    } else {
+                        visibleDevelopments = []
+                    }
+                }
+
+                Divider().padding(.horizontal, 8)
+
+                poiLayerMenu
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(viewModel.isDrawingSelection ? .accentColor : nil)
-            .help(viewModel.isDrawingSelection ? "Cancel drawing" : "Draw to search")
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+
+            // Tools group
+            VStack(spacing: 0) {
+                mapControlButton(
+                    title: "Fit All",
+                    icon: "arrow.up.left.and.down.right.magnifyingglass",
+                    isActive: false
+                ) {
+                    fitToListings()
+                }
+
+                Divider().padding(.horizontal, 8)
+
+                mapControlButton(
+                    title: "Draw",
+                    icon: viewModel.isDrawingSelection ? "pencil.slash" : "pencil.and.outline",
+                    isActive: viewModel.isDrawingSelection
+                ) {
+                    viewModel.isDrawingSelection.toggle()
+                }
+            }
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
-        .padding(Theme.Spacing.sm)
+        .padding(Theme.Spacing.md)
+    }
+
+    private func mapControlButton(
+        title: String,
+        icon: String,
+        isActive: Bool,
+        tint: Color = .accentColor,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18)
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(isActive ? tint : .primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(title)
     }
 
     private var mapStyleMenu: some View {
@@ -232,60 +273,81 @@ struct ListingsMapView: View {
             Button("Satellite") { mapStyle = .imagery }
             Button("Hybrid") { mapStyle = .hybrid }
         } label: {
-            Image(systemName: "map")
+            HStack(spacing: 6) {
+                Image(systemName: "map")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18)
+                Text("Map Style")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
         }
         .menuStyle(.borderlessButton)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .frame(width: 32)
-        .help("Change map style")
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .frame(width: 140)
     }
 
     private var poiLayerMenu: some View {
         Menu {
-            Button {
-                showPOIs.toggle()
-                updateVisiblePOIs()
-            } label: {
-                Label(showPOIs ? "Hide All POIs" : "Show All POIs",
-                      systemImage: showPOIs ? "mappin.slash" : "mappin.circle")
-            }
-
-            if showPOIs {
-                Divider()
-                ForEach(POICategory.allCases, id: \.self) { category in
-                    Button {
-                        if activePOICategories.contains(category) {
-                            activePOICategories.remove(category)
-                        } else {
-                            activePOICategories.insert(category)
-                        }
-                        updateVisiblePOIs()
-                    } label: {
-                        HStack {
-                            Image(systemName: category.systemImage)
-                            Text(category.displayName)
-                            if activePOICategories.contains(category) {
-                                Spacer()
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
+            ForEach(POICategory.allCases, id: \.self) { category in
+                Toggle(isOn: poiCategoryBinding(for: category)) {
+                    Label(category.displayName, systemImage: category.systemImage)
                 }
             }
+
+            Divider()
+
+            Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
+                if activePOICategories.count == POICategory.allCases.count {
+                    activePOICategories.removeAll()
+                } else {
+                    activePOICategories = Set(POICategory.allCases)
+                }
+                updateVisiblePOIs()
+            }
         } label: {
-            Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
+            HStack(spacing: 6) {
+                Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18)
+                Text(showPOIs ? "POIs (\(activePOICategories.count))" : "POIs")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(showPOIs ? .blue : .primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .frame(width: 32)
-        .tint(showPOIs ? .blue : nil)
-        .help("Points of interest")
+    }
+
+    private func poiCategoryBinding(for category: POICategory) -> Binding<Bool> {
+        Binding(
+            get: { activePOICategories.contains(category) },
+            set: { isOn in
+                if isOn {
+                    activePOICategories.insert(category)
+                } else {
+                    activePOICategories.remove(category)
+                }
+                updateVisiblePOIs()
+            }
+        )
     }
 
     private func updateVisiblePOIs() {
-        guard showPOIs else {
+        guard !activePOICategories.isEmpty else {
             visiblePOIs = []
             return
         }

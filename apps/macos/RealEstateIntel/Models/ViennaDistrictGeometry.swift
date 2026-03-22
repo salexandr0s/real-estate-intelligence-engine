@@ -105,3 +105,86 @@ enum ViennaDistrictStore {
         return MKCoordinateRegion(center: center, span: span)
     }
 }
+
+// MARK: - Vienna City Boundary
+
+/// Loads the pre-computed Vienna outer boundary and creates a mask polygon
+/// for darkening areas outside the city limits on the map.
+enum ViennaBoundaryStore {
+
+    /// The Vienna outer boundary as coordinates.
+    static let boundaryCoordinates: [CLLocationCoordinate2D] = loadBoundary()
+
+    /// A large polygon with Vienna cut out as a hole — used to darken areas outside the city.
+    static let maskPolygon: MKPolygon = buildMaskPolygon()
+
+    /// Bounding region for camera bounds — restricts map panning to Vienna area.
+    static let cameraBounds: MKCoordinateRegion = {
+        let center = CLLocationCoordinate2D(latitude: 48.2082, longitude: 16.3738)
+        return MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(latitudeDelta: 0.25, longitudeDelta: 0.40)
+        )
+    }()
+
+    // MARK: - Loading
+
+    private static func loadBoundary() -> [CLLocationCoordinate2D] {
+        guard let url = Bundle.main.url(forResource: "vienna-boundary", withExtension: "geojson"),
+              let data = try? Data(contentsOf: url) else {
+            NSLog("[ViennaBoundaryStore] Failed to load vienna-boundary.geojson")
+            return []
+        }
+
+        let decoder = MKGeoJSONDecoder()
+        guard let geoObjects = try? decoder.decode(data) else {
+            NSLog("[ViennaBoundaryStore] Failed to decode GeoJSON")
+            return []
+        }
+
+        // Extract the exterior ring (first polygon's outer ring)
+        for object in geoObjects {
+            guard let feature = object as? MKGeoJSONFeature else { continue }
+            for geometry in feature.geometry {
+                if let polygon = geometry as? MKPolygon {
+                    return extractCoordinates(from: polygon)
+                }
+            }
+        }
+
+        NSLog("[ViennaBoundaryStore] No polygon found in boundary GeoJSON")
+        return []
+    }
+
+    private static func extractCoordinates(from polygon: MKPolygon) -> [CLLocationCoordinate2D] {
+        let count = polygon.pointCount
+        var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(), count: count)
+        polygon.getCoordinates(&coords, range: NSRange(location: 0, length: count))
+        return coords
+    }
+
+    private static func buildMaskPolygon() -> MKPolygon {
+        let boundary = boundaryCoordinates
+        guard !boundary.isEmpty else {
+            return MKPolygon()
+        }
+
+        // Large outer rectangle covering Central Europe
+        var outerCoords: [CLLocationCoordinate2D] = [
+            CLLocationCoordinate2D(latitude: 46.0, longitude: 14.0),
+            CLLocationCoordinate2D(latitude: 46.0, longitude: 18.0),
+            CLLocationCoordinate2D(latitude: 50.0, longitude: 18.0),
+            CLLocationCoordinate2D(latitude: 50.0, longitude: 14.0),
+            CLLocationCoordinate2D(latitude: 46.0, longitude: 14.0),
+        ]
+
+        // Vienna boundary as the interior hole
+        let interiorPolygon = MKPolygon(coordinates: boundary, count: boundary.count)
+
+        return MKPolygon(
+            coordinates: &outerCoords,
+            count: outerCoords.count,
+            interiorPolygons: [interiorPolygon]
+        )
+    }
+}

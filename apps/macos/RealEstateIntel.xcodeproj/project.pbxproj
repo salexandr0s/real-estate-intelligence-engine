@@ -36,6 +36,7 @@
 		2B7E47D9807D4851BD6B4F90 /* ViennaDistricts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFF289EA6E7F917733FC167 /* ViennaDistricts.swift */; };
 		2D165385FF4885B707E491CF /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D88D32212DD16B6BDB4F082 /* SidebarView.swift */; };
 		2DD32768CD2F379BD15BE14D /* vienna-developments.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 7CA68D9C8A6B847147396B76 /* vienna-developments.geojson */; };
+		3A1F8B72E4C9D05A91B7E3C0 /* vienna-boundary.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */; };
 		30E5F041FAC96ED9EA6F161C /* ListingHeaderSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D50A6B47FE17EE6A92C32D0 /* ListingHeaderSection.swift */; };
 		319A6157074293135DD4D7BB /* AlertStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DF2CB64F183CEA895198D0 /* AlertStatus.swift */; };
 		3251ADC11B1225E7A8C4E240 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C289FCD074A3A964C4C98A3F /* KeychainHelper.swift */; };
@@ -191,6 +192,7 @@
 		67C0FA2AE32101CBD998672F /* PriceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceFormatter.swift; sourceTree = "<group>"; };
 		6D50A6B47FE17EE6A92C32D0 /* ListingHeaderSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingHeaderSection.swift; sourceTree = "<group>"; };
 		6D88D32212DD16B6BDB4F082 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */ = {isa = PBXFileReference; path = "vienna-boundary.geojson"; sourceTree = "<group>"; };
 		6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */ = {isa = PBXFileReference; path = "vienna-districts.geojson"; sourceTree = "<group>"; };
 		70300F90D6EDB8A837EBF773 /* SourceHealthStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthStatus.swift; sourceTree = "<group>"; };
 		71FCE478C964B36CF4F6B450 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -493,6 +495,7 @@
 		D76AABBEBD01CA3D98BEBD75 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				5E4A2D83F7B160C8A3E9F412 /* vienna-boundary.geojson */,
 				7CA68D9C8A6B847147396B76 /* vienna-developments.geojson */,
 				6E1139A8855B3F81D10AA6B0 /* vienna-districts.geojson */,
 				17364EC32F3ACB9390D9271F /* vienna-pois.geojson */,
@@ -609,6 +612,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0F0B204E6FFF1237B4A6F63B /* Assets.xcassets in Resources */,
+				3A1F8B72E4C9D05A91B7E3C0 /* vienna-boundary.geojson in Resources */,
 				2DD32768CD2F379BD15BE14D /* vienna-developments.geojson in Resources */,
 				8627DB41DEC147395E1C397C /* vienna-districts.geojson in Resources */,
 				42EAEE61677AE5433261789F /* vienna-pois.geojson in Resources */,
