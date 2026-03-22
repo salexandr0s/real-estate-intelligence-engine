@@ -20,7 +20,7 @@ export function matchListingToFilters(
   alertType: AlertType,
   scoreVersion: number,
 ): AlertCreate[] {
-  return matchingFilters.map(match => {
+  return matchingFilters.map((match) => {
     const dedupeKey = buildAlertDedupeKey({
       filterId: match.filterId,
       listingId: listing.listingId,
@@ -35,7 +35,8 @@ export function matchListingToFilters(
 
     const titlePrefix: Record<string, string> = {
       new_match: 'Neues Inserat',
-      price_drop: 'Preisänderung',
+      price_drop: 'Preissenkung',
+      price_change: 'Preisänderung',
       score_upgrade: 'Score-Upgrade',
       status_change: 'Statusänderung',
       digest: 'Zusammenfassung',

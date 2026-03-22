@@ -7,6 +7,7 @@ import {
   listingSearchQuerySchema,
   highScoreQuerySchema,
   idParamSchema,
+  paginationQuerySchema,
 } from '../schemas.js';
 
 function eurToCents(eur: number | undefined): number | undefined {
@@ -280,14 +281,9 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
-      const queryLimit = (request.query as { limit?: number }).limit ?? 50;
+      const { limit: queryLimit } = parseOrThrow(paginationQuerySchema, request.query);
 
-      const listing = await listings.findById(id);
-      if (!listing) {
-        throw new NotFoundError('Listing', id);
-      }
-
-      const versions = await listingVersions.findByListingId(id, queryLimit);
+      const versions = await listingVersions.findByListingId(id, queryLimit ?? 50);
 
       return reply.send({
         data: versions.map((v) => ({

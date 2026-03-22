@@ -325,6 +325,7 @@ private struct FilterEditorSheet: View {
     let editingFilter: Filter?
     @State private var draft: FilterDraft
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
 
     init(viewModel: FiltersViewModel, editingFilter: Filter?, pendingDraft: FilterDraft? = nil) {
         self.viewModel = viewModel
@@ -506,7 +507,9 @@ private struct FilterEditorSheet: View {
                 Button("Save") {
                     Task {
                         await viewModel.saveFilter(draft, using: appState.apiClient)
-                        dismiss()
+                        if viewModel.errorMessage == nil {
+                            dismiss()
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)

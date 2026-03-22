@@ -42,8 +42,10 @@ final class FiltersViewModel {
         do {
             try await client.updateFilter(id: filter.id, isActive: newActive)
         } catch {
-            // Revert optimistic update on failure
-            filters[index].isActive = !newActive
+            // Re-lookup by ID after await — array may have changed
+            if let idx = filters.firstIndex(where: { $0.id == filter.id }) {
+                filters[idx].isActive = !newActive
+            }
             errorMessage = error.localizedDescription
         }
     }
@@ -95,6 +97,7 @@ final class FiltersViewModel {
     var pendingDraft: FilterDraft?
 
     func saveFilter(_ draft: FilterDraft, using client: APIClient) async {
+        errorMessage = nil
         do {
             if let existing = editingFilter {
                 let updated = try await client.updateFilterFull(id: existing.id, draft: draft)
@@ -105,11 +108,11 @@ final class FiltersViewModel {
                 let created = try await client.createFilter(draft: draft)
                 filters.append(created)
             }
+            showingEditor = false
+            editingFilter = nil
+            pendingDraft = nil
         } catch {
             errorMessage = error.localizedDescription
         }
-        showingEditor = false
-        editingFilter = nil
-        pendingDraft = nil
     }
 }

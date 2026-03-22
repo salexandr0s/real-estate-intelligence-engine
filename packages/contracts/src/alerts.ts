@@ -37,7 +37,8 @@ export interface AlertRow {
   errorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
-  filterName: string | null;
+  /** Present only when query JOINs user_filters (e.g. findByUser). */
+  filterName?: string | null;
 }
 
 // ── Dedupe Key Builder ──────────────────────────────────────────────────────

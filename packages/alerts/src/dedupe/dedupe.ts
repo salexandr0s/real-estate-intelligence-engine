@@ -25,6 +25,12 @@ export function shouldCreateAlert(params: {
       return params.newPriceCents < params.previousPriceCents;
     }
 
+    case 'price_change': {
+      // Price increased — still notify, but only if both prices are known
+      if (params.previousPriceCents == null || params.newPriceCents == null) return false;
+      return params.newPriceCents !== params.previousPriceCents;
+    }
+
     case 'score_upgrade': {
       if (params.previousScore == null || params.newScore == null) return false;
       // Only alert if score improved by at least 5 points

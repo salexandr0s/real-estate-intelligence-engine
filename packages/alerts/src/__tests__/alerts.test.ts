@@ -24,66 +24,80 @@ describe('shouldCreateAlert', () => {
   });
 
   it('creates alert for price_drop when price decreased', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'price_drop',
-      previousPriceCents: 30000000,
-      newPriceCents: 28000000,
-    })).toBe(true);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'price_drop',
+        previousPriceCents: 30000000,
+        newPriceCents: 28000000,
+      }),
+    ).toBe(true);
   });
 
   it('does not create price_drop when price increased', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'price_drop',
-      previousPriceCents: 28000000,
-      newPriceCents: 30000000,
-    })).toBe(false);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'price_drop',
+        previousPriceCents: 28000000,
+        newPriceCents: 30000000,
+      }),
+    ).toBe(false);
   });
 
   it('does not create price_drop when price unchanged', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'price_drop',
-      previousPriceCents: 30000000,
-      newPriceCents: 30000000,
-    })).toBe(false);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'price_drop',
+        previousPriceCents: 30000000,
+        newPriceCents: 30000000,
+      }),
+    ).toBe(false);
   });
 
   it('does not create price_drop when previous price is null', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'price_drop',
-      previousPriceCents: null,
-      newPriceCents: 28000000,
-    })).toBe(false);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'price_drop',
+        previousPriceCents: null,
+        newPriceCents: 28000000,
+      }),
+    ).toBe(false);
   });
 
   it('creates alert for score_upgrade with 5+ point gain', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'score_upgrade',
-      previousScore: 70,
-      newScore: 75,
-    })).toBe(true);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'score_upgrade',
+        previousScore: 70,
+        newScore: 75,
+      }),
+    ).toBe(true);
   });
 
   it('does not create score_upgrade with <5 point gain', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'score_upgrade',
-      previousScore: 70,
-      newScore: 74,
-    })).toBe(false);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'score_upgrade',
+        previousScore: 70,
+        newScore: 74,
+      }),
+    ).toBe(false);
   });
 
   it('does not create score_upgrade when score decreased', () => {
-    expect(shouldCreateAlert({
-      ...base,
-      alertType: 'score_upgrade',
-      previousScore: 80,
-      newScore: 75,
-    })).toBe(false);
+    expect(
+      shouldCreateAlert({
+        ...base,
+        alertType: 'score_upgrade',
+        previousScore: 80,
+        newScore: 75,
+      }),
+    ).toBe(false);
   });
 
   it('always creates alert for status_change', () => {
@@ -120,42 +134,22 @@ describe('matchListingToFilters', () => {
   });
 
   it('produces correct dedupe key format', () => {
-    const alerts = matchListingToFilters(
-      listing,
-      [{ filterId: 5, userId: 1 }],
-      'new_match',
-      1,
-    );
+    const alerts = matchListingToFilters(listing, [{ filterId: 5, userId: 1 }], 'new_match', 1);
     expect(alerts[0]!.dedupeKey).toBe('filter:5:listing:42:type:new_match:sv:1');
   });
 
   it('generates German title for new_match', () => {
-    const alerts = matchListingToFilters(
-      listing,
-      [{ filterId: 1, userId: 1 }],
-      'new_match',
-      1,
-    );
+    const alerts = matchListingToFilters(listing, [{ filterId: 1, userId: 1 }], 'new_match', 1);
     expect(alerts[0]!.title).toContain('Neues Inserat');
   });
 
   it('generates German title for price_drop', () => {
-    const alerts = matchListingToFilters(
-      listing,
-      [{ filterId: 1, userId: 1 }],
-      'price_drop',
-      1,
-    );
-    expect(alerts[0]!.title).toContain('Preisänderung');
+    const alerts = matchListingToFilters(listing, [{ filterId: 1, userId: 1 }], 'price_drop', 1);
+    expect(alerts[0]!.title).toContain('Preissenkung');
   });
 
   it('includes price and area in body', () => {
-    const alerts = matchListingToFilters(
-      listing,
-      [{ filterId: 1, userId: 1 }],
-      'new_match',
-      1,
-    );
+    const alerts = matchListingToFilters(listing, [{ filterId: 1, userId: 1 }], 'new_match', 1);
     expect(alerts[0]!.body).toContain('58.4 m²');
     expect(alerts[0]!.body).toContain('Wien');
   });
@@ -166,12 +160,7 @@ describe('matchListingToFilters', () => {
   });
 
   it('sets channel to in_app', () => {
-    const alerts = matchListingToFilters(
-      listing,
-      [{ filterId: 1, userId: 1 }],
-      'new_match',
-      1,
-    );
+    const alerts = matchListingToFilters(listing, [{ filterId: 1, userId: 1 }], 'new_match', 1);
     expect(alerts[0]!.channel).toBe('in_app');
   });
 });
