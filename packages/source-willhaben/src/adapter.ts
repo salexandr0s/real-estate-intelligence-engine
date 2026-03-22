@@ -14,11 +14,9 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.willhaben.at';
-const SEARCH_PATH = '/iad/immobilien/eigentumswohnung/eigentumswohnung-angebote';
+const BASE_SEARCH_PATH = '/iad/immobilien/eigentumswohnung';
 
-export class WillhabenAdapter
-  implements SourceAdapter<WillhabenDiscoveryItem, WillhabenDetailDTO>
-{
+export class WillhabenAdapter implements SourceAdapter<WillhabenDiscoveryItem, WillhabenDetailDTO> {
   readonly sourceCode = 'willhaben';
   readonly sourceName = 'willhaben.at';
   readonly parserVersion = 1;
@@ -27,12 +25,14 @@ export class WillhabenAdapter
     const maxPages = profile.maxPages ?? 5;
     const plans: RequestPlan[] = [];
 
+    const regionSlug = profile.regions?.[0] ?? 'wien';
+    const searchPath = `${BASE_SEARCH_PATH}/${regionSlug}/eigentumswohnung-angebote`;
+
     for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(SEARCH_PATH, BASE_URL);
+      const url = new URL(searchPath, BASE_URL);
       url.searchParams.set('page', String(page));
       url.searchParams.set('rows', '25');
       url.searchParams.set('sort', '1');
-      if (profile.regions?.length) url.searchParams.set('areaId', profile.regions[0]!);
 
       plans.push({
         url: url.toString(),
@@ -63,17 +63,13 @@ export class WillhabenAdapter
     item: DiscoveryItem<WillhabenDiscoveryItem>,
   ): Promise<RequestPlan | null> {
     return {
-      url: item.detailUrl.startsWith('http')
-        ? item.detailUrl
-        : `${BASE_URL}${item.detailUrl}`,
+      url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
       waitForSelector: '#__NEXT_DATA__',
       waitForTimeout: 5000,
     };
   }
 
-  async extractDetailPage(
-    ctx: DetailContext,
-  ): Promise<DetailCapture<WillhabenDetailDTO>> {
+  async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<WillhabenDetailDTO>> {
     const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.html as string | undefined;
     if (html) {
       return parseDetailPage(html, ctx.requestPlan.url, ctx.sourceCode, this.parserVersion);
@@ -82,9 +78,7 @@ export class WillhabenAdapter
     throw new Error('Live Playwright extraction not implemented — use fixtures for testing');
   }
 
-  deriveSourceListingKey(
-    detail: DetailCapture<WillhabenDetailDTO>,
-  ): string {
+  deriveSourceListingKey(detail: DetailCapture<WillhabenDetailDTO>): string {
     const id = detail.payload.willhabenId || detail.externalId || '';
     return `willhaben:${id}`;
   }

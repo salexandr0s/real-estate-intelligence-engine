@@ -109,8 +109,12 @@ function toListingRow(row: ListingDbRow): ListingRow {
     geocodePrecision: row.geocode_precision,
     crossSourceFingerprint: row.cross_source_fingerprint,
     listPriceEurCents: row.list_price_eur_cents != null ? Number(row.list_price_eur_cents) : null,
-    monthlyOperatingCostEurCents: row.monthly_operating_cost_eur_cents != null ? Number(row.monthly_operating_cost_eur_cents) : null,
-    reserveFundEurCents: row.reserve_fund_eur_cents != null ? Number(row.reserve_fund_eur_cents) : null,
+    monthlyOperatingCostEurCents:
+      row.monthly_operating_cost_eur_cents != null
+        ? Number(row.monthly_operating_cost_eur_cents)
+        : null,
+    reserveFundEurCents:
+      row.reserve_fund_eur_cents != null ? Number(row.reserve_fund_eur_cents) : null,
     commissionEurCents: row.commission_eur_cents != null ? Number(row.commission_eur_cents) : null,
     livingAreaSqm: row.living_area_sqm != null ? Number(row.living_area_sqm) : null,
     usableAreaSqm: row.usable_area_sqm != null ? Number(row.usable_area_sqm) : null,
@@ -356,19 +360,13 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
 export async function findById(id: number): Promise<ListingRow | null> {
-  const rows = await query<ListingDbRow>(
-    'SELECT * FROM listings WHERE id = $1',
-    [id],
-  );
+  const rows = await query<ListingDbRow>('SELECT * FROM listings WHERE id = $1', [id]);
   const row = rows[0];
   return row ? toListingRow(row) : null;
 }
 
 export async function findByUid(uid: string): Promise<ListingRow | null> {
-  const rows = await query<ListingDbRow>(
-    'SELECT * FROM listings WHERE listing_uid = $1',
-    [uid],
-  );
+  const rows = await query<ListingDbRow>('SELECT * FROM listings WHERE listing_uid = $1', [uid]);
   const row = rows[0];
   return row ? toListingRow(row) : null;
 }
@@ -435,6 +433,7 @@ export async function searchListings(
     FROM listings l
     JOIN sources s ON s.id = l.source_id
     WHERE l.listing_status = 'active'
+      AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)
       AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR l.property_type = ANY($2))
       AND (COALESCE(array_length($3::smallint[], 1), 0) = 0 OR l.district_no = ANY($3))
@@ -536,8 +535,10 @@ function decodeCursor(cursor: string): CursorData | null {
   try {
     const parsed: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
     if (
-      typeof parsed !== 'object' || parsed === null ||
-      !('sortValue' in parsed) || !('id' in parsed)
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('sortValue' in parsed) ||
+      !('id' in parsed)
     ) {
       return null;
     }
@@ -564,9 +565,7 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
         cursorClause: parsed
           ? '(l.current_score < $1::numeric OR (l.current_score = $1::numeric AND l.id < $2::bigint))'
           : null,
-        cursorParams: parsed
-          ? [parsed.sortValue, parsed.id]
-          : [],
+        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
       };
     case 'newest':
       return {

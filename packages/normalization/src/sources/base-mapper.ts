@@ -24,7 +24,7 @@ import {
   computeContentFingerprint,
   computeCrossSourceFingerprint,
 } from '../canonical/fingerprint.js';
-import { resolveDistrict } from '../district/lookup.js';
+import { resolveDistrict, postalCodeToDistrict } from '../district/lookup.js';
 import { normalizePropertyType, normalizeOperationType } from '../canonical/property-type.js';
 
 const logger = createLogger('normalization');
@@ -218,6 +218,30 @@ export class BaseSourceMapper implements SourceNormalizer {
         districtResolution.districtNo != null
           ? `inferred (confidence: ${districtResolution.confidence})`
           : 'not_resolved';
+
+      // ── Step 4b: Vienna gate — reject non-Vienna listings ──
+      const postalRaw = rawPayload.postalCodeRaw?.trim() ?? null;
+      const cityRaw = rawPayload.cityRaw?.trim() ?? null;
+      const isViennaPostal = postalRaw != null && postalCodeToDistrict(postalRaw) != null;
+      const isViennaByCity = cityRaw != null && ['wien', 'vienna'].includes(cityRaw.toLowerCase());
+
+      if (postalRaw != null && !isViennaPostal && !isViennaByCity) {
+        logger.debug('Skipping non-Vienna listing', { postalCode: postalRaw, city: cityRaw });
+        return {
+          success: false,
+          listing: null,
+          warnings: [
+            {
+              field: 'location',
+              code: 'non_vienna_listing',
+              message: `Skipped: postal code ${postalRaw} is not in Vienna (1010-1230)`,
+            },
+          ],
+          errors: [],
+          provenance,
+          versionReason: null,
+        };
+      }
 
       // ── Step 5: Location fields ──
       const city = normalizeWhitespace(rawPayload.cityRaw) ?? 'Wien';
