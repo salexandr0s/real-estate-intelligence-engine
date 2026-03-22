@@ -38,6 +38,7 @@ struct ListingDetailView: View {
             explanation = try await appState.apiClient.fetchScoreExplanation(listingId: listing.id)
         } catch {
             explanation = nil
+            NSLog("[ListingDetail] Score explanation unavailable: %@", String(describing: error))
         }
     }
 

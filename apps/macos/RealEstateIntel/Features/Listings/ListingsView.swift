@@ -15,6 +15,7 @@ struct ListingsView: View {
                     HStack(spacing: Theme.Spacing.sm) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.yellow)
+                            .accessibilityHidden(true)
                         Text(error)
                             .font(.callout)
                         Spacer()

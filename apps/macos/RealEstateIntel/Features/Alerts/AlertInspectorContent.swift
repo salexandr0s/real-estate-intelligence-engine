@@ -14,6 +14,7 @@ struct AlertInspectorContent: View {
                             Image(systemName: alert.alertType.iconName)
                                 .foregroundStyle(Theme.alertColor(for: alert.alertType))
                                 .font(.title2)
+                                .accessibilityHidden(true)
 
                             Text(alert.alertType.displayName)
                                 .font(.headline)
@@ -52,16 +53,16 @@ struct AlertInspectorContent: View {
                             InspectorDetailRow(label: "Filter", value: filterName)
                         }
 
-                        if alert.listingId != nil {
-                            InspectorDetailRow(label: "Listing ID", value: "#\(alert.listingId!)")
+                        if let listingId = alert.listingId {
+                            InspectorDetailRow(label: "Listing ID", value: "#\(listingId)")
                         }
                     }
 
                     // Linked listing hint
-                    if alert.listingId != nil {
+                    if let listingId = alert.listingId {
                         Divider()
 
-                        Text("Listing #\(alert.listingId!) — view in Listings tab")
+                        Text("Listing #\(listingId) — view in Listings tab")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -80,7 +81,7 @@ struct AlertInspectorContent: View {
 
 // MARK: - Inspector Detail Row
 
-struct InspectorDetailRow: View {
+private struct InspectorDetailRow: View {
     let label: String
     let value: String
 
