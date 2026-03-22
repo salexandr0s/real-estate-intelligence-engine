@@ -181,7 +181,7 @@ struct ListingsMapView: View {
     // MARK: - Map Controls Overlay
 
     private var mapControls: some View {
-        VStack(spacing: Theme.Spacing.sm) {
+        VStack(spacing: 6) {
             // Map style picker
             mapStyleMenu
 
@@ -195,7 +195,7 @@ struct ListingsMapView: View {
                     showDistrictBoundaries.toggle()
                 }
 
-                Divider().padding(.horizontal, 8)
+                Divider().padding(.horizontal, 6)
 
                 mapControlButton(
                     title: "Projects",
@@ -211,7 +211,7 @@ struct ListingsMapView: View {
                     }
                 }
 
-                Divider().padding(.horizontal, 8)
+                Divider().padding(.horizontal, 6)
 
                 poiLayerMenu
             }
@@ -227,7 +227,7 @@ struct ListingsMapView: View {
                     fitToListings()
                 }
 
-                Divider().padding(.horizontal, 8)
+                Divider().padding(.horizontal, 6)
 
                 mapControlButton(
                     title: "Draw",
@@ -239,7 +239,8 @@ struct ListingsMapView: View {
             }
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
-        .padding(Theme.Spacing.md)
+        .fixedSize()
+        .padding(10)
     }
 
     private func mapControlButton(
@@ -250,17 +251,16 @@ struct ListingsMapView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                Text(title)
                     .font(.system(size: 12, weight: .medium))
+                    .frame(width: 16)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(isActive ? tint : .primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -273,24 +273,23 @@ struct ListingsMapView: View {
             Button("Satellite") { mapStyle = .imagery }
             Button("Hybrid") { mapStyle = .hybrid }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: "map")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                Text("Map Style")
                     .font(.system(size: 12, weight: .medium))
-                Spacer()
+                    .frame(width: 16)
+                Text("Map Style")
+                    .font(.system(size: 11, weight: .medium))
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9))
+                    .font(.system(size: 8))
                     .foregroundStyle(.tertiary)
             }
             .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
         }
         .menuStyle(.borderlessButton)
+        .fixedSize()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .frame(width: 140)
     }
 
     private var poiLayerMenu: some View {
@@ -312,21 +311,19 @@ struct ListingsMapView: View {
                 updateVisiblePOIs()
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: showPOIs ? "mappin.circle.fill" : "mappin.circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                Text(showPOIs ? "POIs (\(activePOICategories.count))" : "POIs")
                     .font(.system(size: 12, weight: .medium))
-                Spacer()
+                    .frame(width: 16)
+                Text(showPOIs ? "POIs (\(activePOICategories.count))" : "POIs")
+                    .font(.system(size: 11, weight: .medium))
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9))
+                    .font(.system(size: 8))
                     .foregroundStyle(.tertiary)
             }
             .foregroundStyle(showPOIs ? .blue : .primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
