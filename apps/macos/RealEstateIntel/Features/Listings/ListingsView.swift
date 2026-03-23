@@ -9,7 +9,7 @@ struct ListingsView: View {
     @State private var showExportError: Bool = false
 
     var body: some View {
-        HStack(spacing: 0) {
+        HSplitView {
             VStack(spacing: 0) {
                 ListingsFilterBar(viewModel: viewModel)
                 Divider()
@@ -70,10 +70,9 @@ struct ListingsView: View {
                     ListingsTable(viewModel: viewModel)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 400, maxHeight: .infinity)
 
             if showInspector {
-                Divider()
                 ListingsInspectorContent(listing: viewModel.selectedListing) {
                     if let listing = viewModel.selectedListing, let coord = listing.coordinate {
                         viewModel.focusedMapCoordinate = coord
@@ -81,17 +80,12 @@ struct ListingsView: View {
                         viewModel.isMapMode = true
                     }
                 }
-                .frame(width: 360)
+                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
                 .background(.regularMaterial)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: showInspector)
         .navigationTitle("Listings")
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                ToolbarSearchField(text: $viewModel.searchText, prompt: "Search by title, district, postal code...")
-                    .frame(minWidth: 200, idealWidth: 320, maxWidth: 400)
-            }
             ToolbarItem(placement: .automatic) {
                 Picker("View", selection: $viewModel.isMapMode) {
                     Label("List", systemImage: "list.bullet").tag(false)
