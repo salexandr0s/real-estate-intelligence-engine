@@ -88,17 +88,17 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PATCH /v1/sources/:id - Update source (toggle is_active)
+  // PATCH /v1/sources/:id - Update source settings (isActive, crawlIntervalMinutes)
   app.patch<{ Params: { id: string } }>('/v1/sources/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
-    const { isActive } = parseOrThrow(sourceUpdateSchema, request.body);
+    const { isActive, crawlIntervalMinutes } = parseOrThrow(sourceUpdateSchema, request.body);
 
     const existing = await sources.findById(id);
     if (!existing) {
       throw new NotFoundError('Source', id);
     }
 
-    const updated = await sources.updateActive(id, isActive);
+    const updated = await sources.updateSettings(id, { isActive, crawlIntervalMinutes });
     if (!updated) {
       throw new NotFoundError('Source', id);
     }

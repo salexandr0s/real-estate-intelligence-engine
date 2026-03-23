@@ -10,6 +10,9 @@ final class SourcesViewModel {
     var isLoading: Bool = false
     var errorMessage: String?
 
+    /// Tracks which source IDs currently have a manual scrape in progress.
+    var runningSourceIDs: Set<Int> = []
+
     // MARK: - Computed
 
     var healthyCount: Int {
@@ -81,5 +84,30 @@ final class SourcesViewModel {
             }
             errorMessage = error.localizedDescription
         }
+    }
+
+    func updateInterval(_ source: Source, minutes: Int, using client: APIClient) async {
+        guard let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
+        let previous = sources[index].crawlIntervalMinutes
+        sources[index].crawlIntervalMinutes = minutes
+        do {
+            try await client.updateSource(id: source.id, crawlIntervalMinutes: minutes)
+        } catch {
+            if let idx = sources.firstIndex(where: { $0.id == source.id }) {
+                sources[idx].crawlIntervalMinutes = previous
+            }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func triggerRun(_ source: Source, using client: APIClient) async {
+        guard !runningSourceIDs.contains(source.id) else { return }
+        runningSourceIDs.insert(source.id)
+        do {
+            try await client.triggerScrapeRun(sourceCode: source.code)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        runningSourceIDs.remove(source.id)
     }
 }

@@ -354,9 +354,18 @@ actor APIClient {
         return response.data.unreadCount
     }
 
-    func updateSource(id: Int, isActive: Bool) async throws {
-        let body = try encoder.encode(["isActive": isActive])
+    func updateSource(id: Int, isActive: Bool? = nil, crawlIntervalMinutes: Int? = nil) async throws {
+        var payload: [String: Any] = [:]
+        if let isActive { payload["isActive"] = isActive }
+        if let crawlIntervalMinutes { payload["crawlIntervalMinutes"] = crawlIntervalMinutes }
+        let body = try JSONSerialization.data(withJSONObject: payload)
         try await requestVoid(.updateSource(id: id, body: body))
+    }
+
+    /// Trigger a manual scrape run for the given source code.
+    func triggerScrapeRun(sourceCode: String) async throws {
+        let body = try encoder.encode(["sourceCode": sourceCode])
+        try await requestVoid(.createScrapeRun(body: body))
     }
 
     func pauseAllSources() async throws {

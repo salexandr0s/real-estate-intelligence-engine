@@ -13,9 +13,7 @@ struct SourcesView: View {
                 if viewModel.sources.isEmpty && !viewModel.isLoading {
                     SourcesEmptyState()
                 } else {
-                    SourcesListContent(sources: viewModel.sources) { source in
-                        Task { await viewModel.toggleActive(source, using: appState.apiClient) }
-                    }
+                    SourcesListContent(viewModel: viewModel)
                 }
             }
             .padding(Theme.Spacing.xl)
@@ -150,16 +148,15 @@ private struct SourcesEmptyState: View {
 // MARK: - Sources List
 
 private struct SourcesListContent: View {
-    let sources: [Source]
-    let onToggle: (Source) -> Void
+    let viewModel: SourcesViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("Sources")
                 .font(.headline)
 
-            ForEach(sources) { source in
-                SourceDetailCard(source: source) { onToggle(source) }
+            ForEach(viewModel.sources) { source in
+                SourceDetailCard(source: source, viewModel: viewModel)
             }
         }
     }
@@ -169,32 +166,31 @@ private struct SourcesListContent: View {
 
 private struct SourceDetailCard: View {
     let source: Source
-    let onToggle: () -> Void
+    let viewModel: SourcesViewModel
     @Environment(AppState.self) private var appState
     @State private var isExpanded: Bool = false
     @State private var scrapeRuns: [ScrapeRun] = []
     @State private var isLoadingRuns: Bool = false
+    @State private var selectedInterval: Int = 0
+
+    /// Preset crawl interval options in minutes.
+    private static let intervalPresets = [15, 30, 60, 120]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row
             HStack(spacing: Theme.Spacing.md) {
                 // Source logo with active indicator overlay
-                Button(action: onToggle) {
-                    ZStack(alignment: .bottomTrailing) {
-                        SourceLogo(sourceCode: source.code, size: 28)
-                        Circle()
-                            .fill(source.isActive ? Color.green : Color.gray)
-                            .frame(width: 8, height: 8)
-                            .overlay(
-                                Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
-                            )
-                            .offset(x: 2, y: 2)
-                    }
+                ZStack(alignment: .bottomTrailing) {
+                    SourceLogo(sourceCode: source.code, size: 28)
+                    Circle()
+                        .fill(source.isActive ? Color.green : Color.gray)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
+                        )
+                        .offset(x: 2, y: 2)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(source.isActive ? "Pause source" : "Resume source")
-                .help(source.isActive ? "Click to pause" : "Click to resume")
 
                 // Source name
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -239,17 +235,6 @@ private struct SourceDetailCard: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Crawl interval
-                VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
-                    Text("\(source.crawlIntervalMinutes)m")
-                        .font(.body)
-                        .fontWeight(.medium)
-                    Text("interval")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 60)
-
                 // Health badge
                 StatusBadge(healthStatus: source.healthStatus)
 
@@ -266,6 +251,77 @@ private struct SourceDetailCard: View {
                 .buttonStyle(.plain)
             }
             .padding(Theme.Spacing.md)
+
+            // Controls row
+            Divider()
+                .padding(.horizontal, Theme.Spacing.md)
+
+            HStack(spacing: Theme.Spacing.lg) {
+                // Active toggle
+                Toggle(isOn: Binding(
+                    get: { source.isActive },
+                    set: { _ in
+                        Task { await viewModel.toggleActive(source, using: appState.apiClient) }
+                    }
+                )) {
+                    Text("Active")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+                Divider()
+                    .frame(height: 16)
+
+                // Crawl interval picker
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text("Interval")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: $selectedInterval) {
+                        ForEach(Self.intervalPresets, id: \.self) { minutes in
+                            Text(formatInterval(minutes)).tag(minutes)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .frame(width: 72)
+                    .onChange(of: selectedInterval) { _, newValue in
+                        guard newValue != source.crawlIntervalMinutes else { return }
+                        Task { await viewModel.updateInterval(source, minutes: newValue, using: appState.apiClient) }
+                    }
+                }
+
+                Divider()
+                    .frame(height: 16)
+
+                // Run Now button
+                Button {
+                    Task { await viewModel.triggerRun(source, using: appState.apiClient) }
+                } label: {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        if viewModel.runningSourceIDs.contains(source.id) {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "play.fill")
+                                .font(.caption2)
+                        }
+                        Text("Run Now")
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.runningSourceIDs.contains(source.id) || !source.isActive)
+                .help(source.isActive ? "Trigger a manual scrape run" : "Enable source to run")
+
+                Spacer()
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
 
             // Expanded detail
             if isExpanded {
@@ -329,10 +385,11 @@ private struct SourceDetailCard: View {
                 }
             }
         }
-        .opacity(source.isActive ? 1.0 : 0.5)
+        .opacity(source.isActive ? 1.0 : 0.7)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .onAppear { selectedInterval = source.crawlIntervalMinutes }
     }
 
     private var successRateColor: Color {
@@ -340,6 +397,15 @@ private struct SourceDetailCard: View {
         case 90...: .sourceHealthy
         case 70..<90: .sourceDegraded
         default: .sourceFailing
+        }
+    }
+
+    private func formatInterval(_ minutes: Int) -> String {
+        if minutes < 60 {
+            return "\(minutes)m"
+        } else {
+            let hours = minutes / 60
+            return "\(hours)h"
         }
     }
 }

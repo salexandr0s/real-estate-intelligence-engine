@@ -35,6 +35,7 @@ enum APIEndpoint {
     case pauseAllSources
     case resumeAllSources
     case listScrapeRuns(limit: Int?)
+    case createScrapeRun(body: Data)
 
     // MARK: - Watchlist
 
@@ -100,6 +101,7 @@ enum APIEndpoint {
         case .pauseAllSources: "/v1/sources/pause-all"
         case .resumeAllSources: "/v1/sources/resume-all"
         case .listScrapeRuns: "/v1/scrape-runs"
+        case .createScrapeRun: "/v1/scrape-runs"
         case .listSavedListings: "/v1/saved-listings"
         case .saveListing: "/v1/saved-listings"
         case .unsaveListing(let listingId): "/v1/saved-listings/\(listingId)"
@@ -127,7 +129,7 @@ enum APIEndpoint {
              .getFeedback:
             "GET"
         case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing,
-             .submitFeedback:
+             .submitFeedback, .createScrapeRun:
             "POST"
         case .updateFilter, .updateAlert, .bulkUpdateAlerts, .updateSource:
             "PATCH"
@@ -141,7 +143,8 @@ enum APIEndpoint {
         case .createFilter(let body), .updateFilter(_, let body),
              .updateAlert(_, let body), .bulkUpdateAlerts(let body),
              .updateSource(_, let body),
-             .saveListing(let body), .submitFeedback(let body):
+             .saveListing(let body), .submitFeedback(let body),
+             .createScrapeRun(let body):
             return body
         default:
             return nil

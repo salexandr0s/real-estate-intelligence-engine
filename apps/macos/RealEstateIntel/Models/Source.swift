@@ -9,7 +9,7 @@ struct Source: Identifiable, Codable, Hashable {
     var isActive: Bool
     let healthStatus: SourceHealthStatus
     let lastSuccessfulRun: Date?
-    let crawlIntervalMinutes: Int
+    var crawlIntervalMinutes: Int
     let lastErrorSummary: String?
     let totalListingsIngested: Int
     let successRatePct: Double

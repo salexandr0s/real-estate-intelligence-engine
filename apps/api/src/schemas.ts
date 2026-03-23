@@ -171,9 +171,14 @@ export const alertUpdateSchema = z.object({
   status: z.enum(ALERT_STATUSES),
 });
 
-export const sourceUpdateSchema = z.object({
-  isActive: z.boolean(),
-});
+export const sourceUpdateSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    crawlIntervalMinutes: z.number().int().min(5).max(1440).optional(),
+  })
+  .refine((data) => data.isActive !== undefined || data.crawlIntervalMinutes !== undefined, {
+    message: 'At least one field must be provided',
+  });
 
 export const scrapeRunCreateSchema = z.object({
   sourceCode: z.string().trim().min(1, 'sourceCode is required'),

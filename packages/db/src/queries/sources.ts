@@ -114,6 +114,39 @@ export async function findById(id: number): Promise<SourceRow | null> {
   return row ? toSourceRow(row) : null;
 }
 
+export async function updateSettings(
+  id: number,
+  settings: { isActive?: boolean; crawlIntervalMinutes?: number },
+): Promise<SourceRow | null> {
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  let paramIdx = 1;
+
+  // $1 is always the row id
+  values.push(id);
+  paramIdx++;
+
+  if (settings.isActive !== undefined) {
+    setClauses.push(`is_active = $${paramIdx}`);
+    values.push(settings.isActive);
+    paramIdx++;
+  }
+  if (settings.crawlIntervalMinutes !== undefined) {
+    setClauses.push(`crawl_interval_minutes = $${paramIdx}`);
+    values.push(settings.crawlIntervalMinutes);
+    paramIdx++;
+  }
+
+  if (setClauses.length === 0) return findById(id);
+
+  const rows = await query<SourceDbRow>(
+    `UPDATE sources SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    values,
+  );
+  const row = rows[0];
+  return row ? toSourceRow(row) : null;
+}
+
 export async function updateActive(id: number, isActive: boolean): Promise<SourceRow | null> {
   const rows = await query<SourceDbRow>(
     `UPDATE sources
