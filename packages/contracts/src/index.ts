@@ -7,3 +7,4 @@ export * from './alerts.js';
 export * from './api.js';
 export * from './analytics.js';
 export * from './future-hooks.js';
+export * from './copilot.js';

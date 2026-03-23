@@ -33,6 +33,83 @@ struct SettingsView: View {
                 }
             }
 
+            Section("AI Provider") {
+                Picker("Provider", selection: $state.copilotProvider) {
+                    ForEach(CopilotProvider.allCases) { provider in
+                        Text(provider.displayName)
+                            .tag(provider)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+
+                if appState.copilotProvider == .anthropic {
+                    SecureField("Anthropic API Key", text: $state.anthropicApiKey)
+                        .textFieldStyle(.roundedBorder)
+                    if appState.anthropicApiKey.isEmpty {
+                        Label("Get your API key from console.anthropic.com", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if appState.copilotProvider == .openai {
+                    SecureField("OpenAI API Key", text: $state.openaiApiKey)
+                        .textFieldStyle(.roundedBorder)
+                    if appState.openaiApiKey.isEmpty {
+                        Label("Get your API key from platform.openai.com", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if appState.copilotProvider == .claudeSubscription {
+                    if appState.claudeSubscriptionAvailable {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Claude subscription detected")
+                                    .font(.callout)
+                                if let subType = appState.claudeSubscriptionType {
+                                    Text("Plan: \(subType.capitalized)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Button("Refresh") {
+                                appState.refreshClaudeSubscription()
+                            }
+                            .controlSize(.small)
+                        }
+                    } else {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("No Claude subscription found")
+                                    .font(.callout)
+                                Text("Run 'claude login' in Terminal to authenticate")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Refresh") {
+                                appState.refreshClaudeSubscription()
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
+                // Optional model override
+                TextField("Model override (optional)", text: $state.copilotModel)
+                    .textFieldStyle(.roundedBorder)
+                Text("Leave empty for default (\(appState.copilotProvider == .openai ? "gpt-4o" : appState.copilotProvider == .claudeSubscription ? "claude-haiku-4-5" : "claude-sonnet-4"))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Refresh") {
                 Stepper(
                     "Interval: \(appState.refreshIntervalSeconds)s",

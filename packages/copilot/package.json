@@ -1,0 +1,23 @@
+{
+  "name": "@rei/copilot",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.73.0",
+    "@rei/config": "*",
+    "@rei/contracts": "*",
+    "@rei/db": "*",
+    "@rei/observability": "*"
+  }
+}

@@ -7,7 +7,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: Bindable(appState).selectedNavItem) {
             Section("Workspace") {
-                ForEach([NavigationItem.dashboard, .listings, .filters]) { item in
+                ForEach([NavigationItem.dashboard, .listings, .filters, .copilot]) { item in
                     SidebarRow(item: item, unreadAlertCount: appState.unreadAlertCount)
                 }
             }

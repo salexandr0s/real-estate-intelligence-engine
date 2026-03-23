@@ -27,7 +27,7 @@ struct CopilotView: View {
         }
     }
 
-    // MARK: - Empty State (centered input + suggestions)
+    // MARK: - Empty State (bottom-pinned input + suggestions)
 
     private var emptyState: some View {
         VStack(spacing: 0) {
@@ -37,12 +37,11 @@ struct CopilotView: View {
                 viewModel.inputText = query
                 Task { await viewModel.send(using: appState) }
             }
+            .padding(.horizontal, Theme.Spacing.xxl)
             .padding(.bottom, Theme.Spacing.lg)
 
             inputBar
-
-            Spacer()
-                .frame(maxHeight: 140)
+                .padding(.bottom, Theme.Spacing.xl)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -60,7 +59,8 @@ struct CopilotView: View {
             }
 
             inputBar
-                .padding(.vertical, Theme.Spacing.sm)
+                .padding(.top, Theme.Spacing.md)
+                .padding(.bottom, Theme.Spacing.lg)
         }
     }
 
@@ -73,7 +73,7 @@ struct CopilotView: View {
             onSend: { Task { await viewModel.send(using: appState) } },
             onStop: { viewModel.stop() }
         )
-        .frame(maxWidth: 680)
+        .frame(maxWidth: 768)
         .padding(.horizontal, Theme.Spacing.xxl)
     }
 }

@@ -10,9 +10,10 @@ struct CopilotInputBar: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: Theme.Spacing.sm) {
+        HStack(alignment: .bottom, spacing: Theme.Spacing.md) {
             TextField("Ask anything", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
+                .font(.body)
                 .lineLimit(1...5)
                 .focused($isFocused)
                 .onSubmit {
@@ -23,16 +24,17 @@ struct CopilotInputBar: View {
 
             actionButton
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            .thickMaterial,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.xl)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: Theme.Radius.xl)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         .onAppear { isFocused = true }
     }
 
@@ -41,7 +43,7 @@ struct CopilotInputBar: View {
         if isStreaming {
             Button(action: onStop) {
                 Image(systemName: "stop.circle.fill")
-                    .font(.title2)
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(.red)
             }
             .buttonStyle(.plain)
@@ -49,7 +51,7 @@ struct CopilotInputBar: View {
         } else {
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(
                         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? Color.secondary.opacity(0.4) : Color.accentColor

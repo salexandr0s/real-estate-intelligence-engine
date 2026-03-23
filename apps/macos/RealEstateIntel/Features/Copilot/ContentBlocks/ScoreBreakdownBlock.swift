@@ -1,0 +1,77 @@
+import SwiftUI
+
+/// Renders a score breakdown with overall indicator and component bars.
+struct ScoreBreakdownBlock: View {
+    let data: ScoreBreakdownData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            // Overall score
+            HStack(spacing: Theme.Spacing.md) {
+                ScoreIndicator(score: data.overall, size: .regular)
+
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    Text("Score: \(Theme.scoreLabel(for: data.overall))")
+                        .font(.subheadline.bold())
+
+                    if let discount = data.discountToDistrictPct {
+                        Text(String(format: "%.1f%% vs district avg", discount))
+                            .font(.caption)
+                            .foregroundStyle(discount < 0 ? .green : .secondary)
+                    }
+                }
+            }
+
+            // Component bars
+            VStack(spacing: Theme.Spacing.sm) {
+                ForEach(data.components, id: \.name) { component in
+                    HStack(spacing: Theme.Spacing.sm) {
+                        Text(component.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 100, alignment: .trailing)
+
+                        ScoreBar(score: component.score)
+                    }
+                }
+            }
+
+            // Keywords
+            keywordsSection
+        }
+        .padding(Theme.Spacing.md)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+    }
+
+    @ViewBuilder
+    private var keywordsSection: some View {
+        let positive = data.positiveKeywords ?? []
+        let negative = data.negativeKeywords ?? []
+
+        if !positive.isEmpty || !negative.isEmpty {
+            Divider()
+
+            HStack(spacing: Theme.Spacing.lg) {
+                if !positive.isEmpty {
+                    keywordGroup(keywords: positive, color: .green, icon: "plus.circle.fill")
+                }
+                if !negative.isEmpty {
+                    keywordGroup(keywords: negative, color: .red, icon: "minus.circle.fill")
+                }
+            }
+        }
+    }
+
+    private func keywordGroup(keywords: [String], color: Color, icon: String) -> some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(color)
+
+            Text(keywords.joined(separator: ", "))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}

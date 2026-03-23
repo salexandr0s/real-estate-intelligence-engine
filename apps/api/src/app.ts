@@ -22,6 +22,7 @@ import { poiRoutes } from './routes/pois.js';
 import { savedListingRoutes } from './routes/saved-listings.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { copilotRoutes } from './routes/copilot.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
@@ -105,6 +106,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(savedListingRoutes);
   await app.register(feedbackRoutes);
   await app.register(dashboardRoutes);
+  await app.register(copilotRoutes);
 
   // API request duration metrics
   app.addHook('onResponse', (_request, reply, done) => {

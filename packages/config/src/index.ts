@@ -27,7 +27,11 @@ function envBool(key: string, fallback?: boolean): boolean {
 
 function envStringList(key: string, fallback: string[]): string[] {
   const raw = process.env[key];
-  if (raw !== undefined) return raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (raw !== undefined)
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   return fallback;
 }
 
@@ -94,6 +98,13 @@ export interface AppConfig {
     geocodingEnabled: boolean;
     crossSourceClusteringEnabled: boolean;
   };
+  copilot: {
+    anthropicApiKey: string;
+    openaiApiKey: string;
+    defaultProvider: 'anthropic' | 'openai';
+    model: string;
+    maxTokens: number;
+  };
 }
 
 let _config: AppConfig | null = null;
@@ -111,9 +122,10 @@ export function loadConfig(): AppConfig {
       port: envInt('API_PORT', 8080),
       baseUrl: envStr('API_BASE_URL', 'http://localhost:8080'),
       authMode: envStr('API_AUTH_MODE', 'single_user_token'),
-      bearerToken: nodeEnv === 'production'
-        ? envStr('API_BEARER_TOKEN')
-        : envStr('API_BEARER_TOKEN', 'dev-token'),
+      bearerToken:
+        nodeEnv === 'production'
+          ? envStr('API_BEARER_TOKEN')
+          : envStr('API_BEARER_TOKEN', 'dev-token'),
       corsOrigins: envStringList('API_CORS_ORIGINS', ['http://localhost:8080']),
       rateLimitMax: envInt('API_RATE_LIMIT_MAX', 100),
       rateLimitWindowMs: envInt('API_RATE_LIMIT_WINDOW_MS', 60000),
@@ -173,6 +185,17 @@ export function loadConfig(): AppConfig {
     features: {
       geocodingEnabled: envBool('FEATURE_GEOCODING_ENABLED', false),
       crossSourceClusteringEnabled: envBool('FEATURE_CROSS_SOURCE_CLUSTERING_ENABLED', false),
+    },
+    copilot: {
+      anthropicApiKey: envStr('ANTHROPIC_API_KEY', ''),
+      openaiApiKey: envStr('OPENAI_API_KEY', ''),
+      defaultProvider: (() => {
+        const raw = envStr('COPILOT_DEFAULT_PROVIDER', 'anthropic');
+        if (raw === 'anthropic' || raw === 'openai') return raw;
+        return 'anthropic';
+      })(),
+      model: envStr('COPILOT_MODEL', ''),
+      maxTokens: envInt('COPILOT_MAX_TOKENS', 4096),
     },
   };
 

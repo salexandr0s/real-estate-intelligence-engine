@@ -1,5 +1,30 @@
 import SwiftUI
 
+// MARK: - Copilot Provider
+
+enum CopilotProvider: String, CaseIterable, Identifiable {
+    case anthropic
+    case openai
+    case claudeSubscription
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .anthropic: "Anthropic API Key"
+        case .openai: "OpenAI"
+        case .claudeSubscription: "Claude Subscription"
+        }
+    }
+
+    var apiProvider: String {
+        switch self {
+        case .anthropic, .claudeSubscription: "anthropic"
+        case .openai: "openai"
+        }
+    }
+}
+
 // MARK: - App State
 
 /// Central observable state for the application.
@@ -10,6 +35,9 @@ final class AppState {
     // MARK: - Navigation
 
     var selectedNavItem: NavigationItem = .dashboard
+
+    /// Listing ID for cross-feature deep linking (e.g. copilot chat -> listing detail).
+    var deepLinkListingId: Int?
 
     // MARK: - Connection
 
@@ -56,6 +84,50 @@ final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "notifyOnScoreChange") }
     }
 
+    // MARK: - Copilot Provider
+    // These are stored properties so @Observable tracks changes correctly.
+    // They sync to UserDefaults/Keychain in didSet.
+
+    var copilotProvider: CopilotProvider = {
+        let raw = UserDefaults.standard.string(forKey: "copilotProvider") ?? "anthropic"
+        return CopilotProvider(rawValue: raw) ?? .anthropic
+    }() {
+        didSet { UserDefaults.standard.set(copilotProvider.rawValue, forKey: "copilotProvider") }
+    }
+
+    var anthropicApiKey: String = KeychainHelper.get(key: "anthropicApiKey") ?? "" {
+        didSet { try? KeychainHelper.set(key: "anthropicApiKey", value: anthropicApiKey) }
+    }
+
+    var openaiApiKey: String = KeychainHelper.get(key: "openaiApiKey") ?? "" {
+        didSet { try? KeychainHelper.set(key: "openaiApiKey", value: openaiApiKey) }
+    }
+
+    var copilotModel: String = UserDefaults.standard.string(forKey: "copilotModel") ?? "" {
+        didSet { UserDefaults.standard.set(copilotModel, forKey: "copilotModel") }
+    }
+
+    /// Cached Claude subscription status (checked once at init, refreshable).
+    var claudeSubscriptionAvailable: Bool = false
+    var claudeSubscriptionType: String?
+
+    /// The active API key for the current provider, resolving Claude subscription OAuth.
+    var activeCopilotApiKey: String {
+        switch copilotProvider {
+        case .anthropic:
+            return anthropicApiKey
+        case .openai:
+            return openaiApiKey
+        case .claudeSubscription:
+            return ClaudeAuthHelper.loadOAuthToken() ?? ""
+        }
+    }
+
+    func refreshClaudeSubscription() {
+        claudeSubscriptionAvailable = ClaudeAuthHelper.isAvailable
+        claudeSubscriptionType = ClaudeAuthHelper.subscriptionType
+    }
+
     // MARK: - API Client
 
     let apiClient: APIClient
@@ -82,6 +154,9 @@ final class AppState {
         if UserDefaults.standard.bool(forKey: "notificationsEnabled") {
             NotificationManager.shared.requestPermission()
         }
+
+        // Check for Claude subscription
+        refreshClaudeSubscription()
     }
 
     // MARK: - Actions
