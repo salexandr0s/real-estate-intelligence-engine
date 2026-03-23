@@ -113,3 +113,15 @@ export async function removeStale(olderThan: Date): Promise<number> {
   );
   return rows.length;
 }
+
+/**
+ * Count all active device tokens across all users.
+ * Used to populate the pushTokensActive gauge.
+ */
+export async function countAll(): Promise<number> {
+  interface CountResult {
+    count: string;
+  }
+  const rows = await query<CountResult>('SELECT COUNT(*) AS count FROM device_tokens', []);
+  return Number(rows[0]?.count ?? 0);
+}

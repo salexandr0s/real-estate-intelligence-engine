@@ -7,7 +7,7 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@rei/observability';
-import { alertDeliveryTotal, alertDeliveryDuration } from '@rei/observability';
+import { alertDeliveryTotal, alertDeliveryDuration, pushTokensActive } from '@rei/observability';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
 import type { AlertDeliveryJobData } from '@rei/scraper-core';
 import { alerts, deadLetter, deviceTokens, appUsers } from '@rei/db';
@@ -80,6 +80,19 @@ export function createDeliveryWorker(): Worker<AlertDeliveryJobData> {
           for (const invalidToken of result.invalidTokens) {
             await deviceTokens.removeByToken(invalidToken);
             log.info('Removed invalid APNs token', { token: invalidToken.slice(0, 8) + '...' });
+          }
+
+          // Refresh active token gauge after delivery + cleanup
+          const activeCount = await deviceTokens.countAll();
+          pushTokensActive.set(activeCount);
+
+          if (result.failed > 0) {
+            log.warn('Some push tokens failed', {
+              alertId,
+              sent: result.sent,
+              failed: result.failed,
+              invalidTokens: result.invalidTokens.length,
+            });
           }
 
           delivered = result.sent > 0;

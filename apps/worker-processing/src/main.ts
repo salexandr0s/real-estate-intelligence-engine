@@ -20,6 +20,7 @@ import { createGeocodingEnqueuer } from './workers/geocoding-enqueuer.js';
 import { createStaleCheckWorker } from './workers/stale-check-worker.js';
 import { createCanaryWorker } from './workers/canary-worker.js';
 import { createDeliveryWorker } from './workers/delivery-worker.js';
+import { closePushSession } from '@rei/alerts';
 
 const logger = createLogger('worker-processing');
 
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
     if (canaryWorker) await canaryWorker.close();
     if (geocodingWorker) await geocodingWorker.close();
     if (deliveryWorker) await deliveryWorker.close();
+    await closePushSession();
     await shutdownTracing();
     await closeRedisConnection();
     await closePool();

@@ -142,6 +142,18 @@ function sendSinglePush(
   });
 }
 
+function parseApnsReason(body: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed === 'object' && parsed !== null && 'reason' in parsed) {
+      return String((parsed as Record<string, unknown>)['reason']);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return undefined;
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -182,63 +194,57 @@ export async function sendAlertPush(params: {
     ...params.payload,
   });
 
-  for (const token of params.deviceTokens) {
-    try {
-      const response = await sendSinglePush(session, token, jwt, params.config.bundleId, bodyJson);
+  // Send to all tokens concurrently — HTTP/2 multiplexes on a single connection
+  await Promise.allSettled(
+    params.deviceTokens.map(async (token) => {
+      try {
+        const response = await sendSinglePush(
+          session,
+          token,
+          jwt,
+          params.config.bundleId,
+          bodyJson,
+        );
 
-      if (response.status === 200) {
-        result.sent++;
-      } else if (response.status === 410) {
-        // Unregistered — device token is no longer valid
-        result.invalidTokens.push(token);
-        log.info('Device token unregistered', { token });
-      } else if (response.status === 400) {
-        // Check if reason is BadDeviceToken — treat as invalid like 410
-        let reason: string | undefined;
-        try {
-          const parsed: unknown = JSON.parse(response.body);
-          if (typeof parsed === 'object' && parsed !== null && 'reason' in parsed) {
-            reason = String((parsed as Record<string, unknown>)['reason']);
-          }
-        } catch {
-          // Ignore parse errors
-        }
-        if (reason === 'BadDeviceToken') {
+        if (response.status === 200) {
+          result.sent++;
+        } else if (response.status === 410) {
           result.invalidTokens.push(token);
-          log.info('Bad device token', { token });
+          log.info('Device token unregistered', { token });
+        } else if (response.status === 400) {
+          const reason = parseApnsReason(response.body);
+          if (reason === 'BadDeviceToken') {
+            result.invalidTokens.push(token);
+            log.info('Bad device token', { token });
+          } else {
+            result.failed++;
+            log.warn('APNs bad request', {
+              token,
+              reason,
+              bodyPreview: response.body.slice(0, 200),
+            });
+          }
+        } else if (response.status === 429) {
+          result.failed++;
+          const retryAfter = parseApnsReason(response.body);
+          log.warn('APNs rate limited', { token, retryAfter });
         } else {
           result.failed++;
-          log.warn('APNs bad request', { token, reason, bodyPreview: response.body.slice(0, 200) });
+          log.warn('APNs delivery failed', {
+            token,
+            status: response.status,
+            bodyPreview: response.body.slice(0, 200),
+          });
         }
-      } else if (response.status === 429) {
+      } catch (err) {
         result.failed++;
-        // Parse Retry-After from response body if present
-        let retryAfter: string | undefined;
-        try {
-          const parsed: unknown = JSON.parse(response.body);
-          if (typeof parsed === 'object' && parsed !== null && 'retryAfter' in parsed) {
-            retryAfter = String((parsed as Record<string, unknown>)['retryAfter']);
-          }
-        } catch {
-          // Ignore parse errors on the response body
-        }
-        log.warn('APNs rate limited', { token, retryAfter });
-      } else {
-        result.failed++;
-        log.warn('APNs delivery failed', {
+        log.error('APNs request error', {
           token,
-          status: response.status,
-          bodyPreview: response.body.slice(0, 200),
+          error: err instanceof Error ? err.message : String(err),
         });
       }
-    } catch (err) {
-      result.failed++;
-      log.error('APNs request error', {
-        token,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+    }),
+  );
 
   log.info('Push delivery complete', {
     sent: result.sent,
@@ -248,4 +254,19 @@ export async function sendAlertPush(params: {
   });
 
   return result;
+}
+
+/**
+ * Gracefully close the persistent HTTP/2 session to APNs.
+ * Call during worker shutdown to avoid unclean TCP teardown.
+ */
+export function closePushSession(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (!h2Session || h2Session.closed || h2Session.destroyed) {
+      resolve();
+      return;
+    }
+    h2Session.close(resolve);
+    h2Session = undefined;
+  });
 }

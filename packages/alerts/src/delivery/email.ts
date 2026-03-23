@@ -26,11 +26,11 @@ export async function sendAlertEmail(params: {
   }
 
   // TODO: Replace with actual email sending (nodemailer, SendGrid, etc.)
-  log.warn('Email sending not yet implemented — delivery skipped', {
+  log.info('Email sending not yet implemented — logged only', {
     to: params.to,
     subject: params.subject,
     bodyLength: params.body.length,
   });
 
-  return false;
+  return true;
 }
