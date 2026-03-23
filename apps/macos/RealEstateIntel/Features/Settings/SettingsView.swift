@@ -105,7 +105,7 @@ struct SettingsView: View {
                 // Optional model override
                 TextField("Model override (optional)", text: $state.copilotModel)
                     .textFieldStyle(.roundedBorder)
-                Text("Leave empty for default (\(appState.copilotProvider == .openai ? "gpt-4o" : appState.copilotProvider == .claudeSubscription ? "claude-haiku-4-5" : "claude-sonnet-4"))")
+                Text("Leave empty for default (\(appState.copilotProvider == .openai ? "gpt-4o" : "claude-sonnet-4"))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

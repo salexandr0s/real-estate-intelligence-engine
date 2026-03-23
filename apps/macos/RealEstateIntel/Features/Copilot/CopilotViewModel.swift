@@ -23,6 +23,13 @@ final class CopilotViewModel {
 
     private let streamService = CopilotStreamService()
 
+    // MARK: - Inspector
+
+    var inspectedListing: Listing?
+    var isLoadingInspector: Bool = false
+    var inspectorError: String?
+    private var inspectorTask: Task<Void, Never>?
+
     // MARK: - Context
 
     var currentListingId: Int?
@@ -162,6 +169,33 @@ final class CopilotViewModel {
         currentBlocks = []
         streamTask?.cancel()
         streamTask = nil
+        inspectorTask?.cancel()
+        inspectorTask = nil
+        inspectedListing = nil
+        inspectorError = nil
+        isLoadingInspector = false
+    }
+
+    func selectListing(id: Int, using appState: AppState) {
+        inspectorTask?.cancel()
+        inspectorError = nil
+        isLoadingInspector = true
+
+        inspectorTask = Task {
+            do {
+                let listing = try await appState.apiClient.fetchListing(id: id)
+                guard !Task.isCancelled else { return }
+                inspectedListing = listing
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                Log.ui.error("Failed to load listing \(id): \(error, privacy: .public)")
+                inspectorError = "Could not load listing details."
+                inspectedListing = nil
+            }
+            isLoadingInspector = false
+        }
     }
 
     // MARK: - Stream Event Handling

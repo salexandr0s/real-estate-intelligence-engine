@@ -54,10 +54,6 @@ struct CopilotMessageBubble: View {
                 ForEach(message.contentBlocks) { block in
                     contentBlockView(block)
                 }
-
-                if message.isStreaming {
-                    TypingIndicator()
-                }
             }
 
             Spacer(minLength: 40)

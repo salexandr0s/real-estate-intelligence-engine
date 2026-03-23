@@ -23,7 +23,7 @@ const MAX_TOOL_LOOPS = 5;
 
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
-const DEFAULT_ANTHROPIC_OAUTH_MODEL = 'claude-haiku-4-5-20251001';
+const DEFAULT_ANTHROPIC_OAUTH_MODEL = 'claude-sonnet-4-20250514';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o';
 
 // ── Convert tool definitions to provider format ─────────────────────────
