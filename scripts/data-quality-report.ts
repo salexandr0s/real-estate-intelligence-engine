@@ -9,7 +9,7 @@
  *   4. Duplicate candidates (cross-source fingerprint collisions)
  *
  * Usage:
- *   npx tsx scripts/data-quality-report.ts [--source <code>]
+ *   npx tsx scripts/data-quality-report.ts [--source <code>] [--gate]
  */
 
 import { loadConfig } from '@rei/config';
@@ -20,19 +20,42 @@ const log = createLogger('data-quality');
 
 // ── CLI arg parsing ─────────────────────────────────────────────────────────
 
-function parseArgs(): { sourceCode: string | null } {
+function parseArgs(): { sourceCode: string | null; gate: boolean } {
   const args = process.argv.slice(2);
   let sourceCode: string | null = null;
+  let gate = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--source' && args[i + 1]) {
       sourceCode = args[i + 1]!;
       i++;
     }
+    if (args[i] === '--gate') {
+      gate = true;
+    }
   }
 
-  return { sourceCode };
+  return { sourceCode, gate };
 }
+
+// ── Quality Gate Thresholds ──────────────────────────────────────────────────
+
+interface GateResult {
+  name: string;
+  passed: boolean;
+  actual: number;
+  threshold: number;
+  unit: string;
+}
+
+const GATE_THRESHOLDS = {
+  /** Max percentage of active listings missing any critical field per source */
+  maxMissingFieldPct: 25,
+  /** Min percentage of Vienna listings with district resolved */
+  minDistrictResolutionPct: 85,
+  /** Max number of extreme outliers (>3 stddev) — if too many, data may be polluted */
+  maxOutlierCount: 20,
+} as const;
 
 // ── Report 1: Missing Critical Fields ───────────────────────────────────────
 
@@ -282,19 +305,132 @@ async function reportDuplicates(sourceCode: string | null): Promise<void> {
   console.log('');
 }
 
+// ── Gate Checks ──────────────────────────────────────────────────────────────
+
+interface MaxMissingPctRow {
+  source_code: string;
+  max_missing_pct: string;
+}
+
+async function checkGates(sourceCode: string | null): Promise<GateResult[]> {
+  const results: GateResult[] = [];
+
+  // Gate 1: Missing field percentage per source
+  const sourceFilter = sourceCode ? 'AND s.code = $1' : '';
+  const params = sourceCode ? [sourceCode] : [];
+
+  const missingRows = await query<MaxMissingPctRow>(
+    `WITH field_counts AS (
+       SELECT
+         s.code AS source_code,
+         COUNT(*) AS total,
+         COUNT(*) FILTER (
+           WHERE l.list_price_eur_cents IS NULL
+              OR l.living_area_sqm IS NULL
+              OR l.district_no IS NULL
+              OR l.rooms IS NULL
+         ) AS any_missing
+       FROM listings l
+       JOIN sources s ON s.id = l.source_id
+       WHERE l.listing_status = 'active'
+         ${sourceFilter}
+       GROUP BY s.code
+     )
+     SELECT
+       source_code,
+       CASE WHEN total > 0 THEN (any_missing::numeric / total * 100)::text ELSE '0' END AS max_missing_pct
+     FROM field_counts
+     ORDER BY any_missing::numeric / GREATEST(total, 1) DESC
+     LIMIT 1`,
+    params,
+  );
+
+  const worstMissingPct = missingRows.length > 0 ? Number(missingRows[0]!.max_missing_pct) : 0;
+  results.push({
+    name: 'Missing critical fields (worst source)',
+    passed: worstMissingPct <= GATE_THRESHOLDS.maxMissingFieldPct,
+    actual: Math.round(worstMissingPct * 10) / 10,
+    threshold: GATE_THRESHOLDS.maxMissingFieldPct,
+    unit: '%',
+  });
+
+  // Gate 2: District resolution rate
+  const districtRows = await query<{ has_district: string; total: string }>(
+    `SELECT
+       COUNT(l.district_no)::text AS has_district,
+       COUNT(*)::text AS total
+     FROM listings l
+     WHERE l.listing_status = 'active'
+       AND l.city = 'Wien'
+       ${sourceFilter}`,
+    params,
+  );
+
+  const districtRow = districtRows[0];
+  const districtTotal = districtRow ? Number(districtRow.total) : 0;
+  const districtResolved = districtRow ? Number(districtRow.has_district) : 0;
+  const districtPct = districtTotal > 0 ? (districtResolved / districtTotal) * 100 : 100;
+  results.push({
+    name: 'Vienna district resolution rate',
+    passed: districtPct >= GATE_THRESHOLDS.minDistrictResolutionPct,
+    actual: Math.round(districtPct * 10) / 10,
+    threshold: GATE_THRESHOLDS.minDistrictResolutionPct,
+    unit: '%',
+  });
+
+  // Gate 3: Outlier count
+  const outlierRows = await query<{ outlier_count: string }>(
+    `WITH district_stats AS (
+       SELECT
+         district_no,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price_per_sqm_eur) AS median_ppsqm,
+         STDDEV_POP(price_per_sqm_eur) AS stddev_ppsqm
+       FROM listings
+       WHERE listing_status = 'active'
+         AND price_per_sqm_eur IS NOT NULL
+         AND district_no IS NOT NULL
+       GROUP BY district_no
+       HAVING COUNT(*) >= 3
+     )
+     SELECT COUNT(*)::text AS outlier_count
+     FROM listings l
+     JOIN district_stats ds ON ds.district_no = l.district_no
+     WHERE l.listing_status = 'active'
+       AND l.price_per_sqm_eur IS NOT NULL
+       AND ds.stddev_ppsqm > 0
+       AND ABS(l.price_per_sqm_eur - ds.median_ppsqm) / ds.stddev_ppsqm > 3
+       ${sourceFilter}`,
+    params,
+  );
+
+  const outlierCount = outlierRows.length > 0 ? Number(outlierRows[0]!.outlier_count) : 0;
+  results.push({
+    name: 'Extreme outlier count (>3 stddev)',
+    passed: outlierCount <= GATE_THRESHOLDS.maxOutlierCount,
+    actual: outlierCount,
+    threshold: GATE_THRESHOLDS.maxOutlierCount,
+    unit: 'listings',
+  });
+
+  return results;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { sourceCode } = parseArgs();
+  const { sourceCode, gate } = parseArgs();
   loadConfig();
 
-  log.info('Starting data quality report', { sourceCode });
+  log.info('Starting data quality report', { sourceCode, gate });
 
   console.log('\n');
   console.log('DATA QUALITY REPORT');
   console.log(`Generated: ${new Date().toISOString()}`);
   if (sourceCode) {
     console.log(`Source filter: ${sourceCode}`);
+  }
+  if (gate) {
+    console.log('Mode: GATE CHECK (exit non-zero on threshold breach)');
   }
   console.log('\n');
 
@@ -303,7 +439,33 @@ async function main(): Promise<void> {
   await reportOutliers(sourceCode);
   await reportDuplicates(sourceCode);
 
-  console.log('Report complete.\n');
+  // ── Quality Gates ──────────────────────────────────────────────────
+  if (gate) {
+    console.log('='.repeat(60));
+    console.log('QUALITY GATES');
+    console.log('='.repeat(60));
+
+    const gates = await checkGates(sourceCode);
+    let allPassed = true;
+
+    for (const g of gates) {
+      const icon = g.passed ? 'PASS' : 'FAIL';
+      console.log(
+        `  [${icon}] ${g.name}: ${g.actual}${g.unit} (threshold: ${g.threshold}${g.unit})`,
+      );
+      if (!g.passed) allPassed = false;
+    }
+
+    console.log('');
+    if (!allPassed) {
+      console.log('RESULT: QUALITY GATE FAILED — one or more thresholds breached.\n');
+      await closePool();
+      process.exit(1);
+    }
+    console.log('RESULT: ALL QUALITY GATES PASSED.\n');
+  } else {
+    console.log('Report complete.\n');
+  }
 
   await closePool();
 }

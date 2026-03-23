@@ -1,0 +1,59 @@
+name: Canary Crawl
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Source code to canary (leave empty for all)'
+        required: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - willhaben
+          - immoscout24
+          - wohnnet
+          - derstandard
+          - findmyhome
+          - remax
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run canary crawl for ${{ matrix.source }}
+        if: ${{ !inputs.source || inputs.source == matrix.source }}
+        run: npx tsx scripts/canary-crawl.ts --source ${{ matrix.source }}
+        timeout-minutes: 5
+        env:
+          NODE_ENV: production
+
+      - name: Upload canary report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-${{ matrix.source }}
+          path: canary-*.log
+          retention-days: 14
+          if-no-files-found: ignore

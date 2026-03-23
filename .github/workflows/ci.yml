@@ -93,3 +93,24 @@ jobs:
           name: test-output
           path: test-output.log
           retention-days: 7
+
+  macos-build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build macOS app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project apps/macos/RealEstateIntel.xcodeproj \
+            -scheme RealEstateIntel \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -50
