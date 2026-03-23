@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Main listings view with native Table, sortable columns, filters, and HSplitView inspector.
+/// Main listings view with native Table, sortable columns, filters, and trailing inspector.
 struct ListingsView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = ListingsViewModel()
@@ -9,80 +9,75 @@ struct ListingsView: View {
     @State private var showExportError: Bool = false
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                ListingsFilterBar(viewModel: viewModel)
+        VStack(spacing: 0) {
+            ListingsFilterBar(viewModel: viewModel)
+            Divider()
+            if let error = viewModel.errorMessage {
+                HStack(spacing: Theme.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .accessibilityHidden(true)
+                    Text(error)
+                        .font(.callout)
+                    Spacer()
+                    Button("Retry") {
+                        Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.vertical, Theme.Spacing.sm)
+                .background(Color.red.opacity(0.1))
                 Divider()
-                if let error = viewModel.errorMessage {
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                            .accessibilityHidden(true)
-                        Text(error)
-                            .font(.callout)
-                        Spacer()
-                        Button("Retry") {
-                            Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    .padding(.horizontal, Theme.Spacing.lg)
-                    .padding(.vertical, Theme.Spacing.sm)
-                    .background(Color.red.opacity(0.1))
-                    Divider()
+            }
+            if viewModel.isLoading && viewModel.listings.isEmpty {
+                ContentUnavailableView {
+                    Label("Loading Listings", systemImage: "building.2")
+                } description: {
+                    Text("Fetching listings from the server\u{2026}")
                 }
-                if viewModel.isLoading && viewModel.listings.isEmpty {
-                    ContentUnavailableView {
-                        Label("Loading Listings", systemImage: "building.2")
-                    } description: {
-                        Text("Fetching listings from the server\u{2026}")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay {
-                        ProgressView()
-                            .controlSize(.large)
-                            .offset(y: -60)
-                    }
-                } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
-                    ContentUnavailableView {
-                        Label(
-                            viewModel.hasActiveFilters ? "No Matching Listings" : "No Listings",
-                            systemImage: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle" : "building.2"
-                        )
-                    } description: {
-                        Text(
-                            viewModel.hasActiveFilters
-                                ? "No listings match your current filters."
-                                : "No listings available yet."
-                        )
-                    } actions: {
-                        if viewModel.hasActiveFilters {
-                            Button("Clear Filters") {
-                                viewModel.clearFilters()
-                            }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    ProgressView()
+                        .controlSize(.large)
+                        .offset(y: -60)
+                }
+            } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        viewModel.hasActiveFilters ? "No Matching Listings" : "No Listings",
+                        systemImage: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle" : "building.2"
+                    )
+                } description: {
+                    Text(
+                        viewModel.hasActiveFilters
+                            ? "No listings match your current filters."
+                            : "No listings available yet."
+                    )
+                } actions: {
+                    if viewModel.hasActiveFilters {
+                        Button("Clear Filters") {
+                            viewModel.clearFilters()
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.isMapMode {
-                    ListingsMapView(viewModel: viewModel)
-                } else {
-                    ListingsTable(viewModel: viewModel)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewModel.isMapMode {
+                ListingsMapView(viewModel: viewModel)
+            } else {
+                ListingsTable(viewModel: viewModel)
+            }
+        }
+        .inspector(isPresented: $showInspector) {
+            ListingsInspectorContent(listing: viewModel.selectedListing) {
+                if let listing = viewModel.selectedListing, let coord = listing.coordinate {
+                    viewModel.focusedMapCoordinate = coord
+                    viewModel.mapFocusTrigger += 1
+                    viewModel.isMapMode = true
                 }
             }
-            .frame(minWidth: 400, maxHeight: .infinity)
-
-            if showInspector {
-                ListingsInspectorContent(listing: viewModel.selectedListing) {
-                    if let listing = viewModel.selectedListing, let coord = listing.coordinate {
-                        viewModel.focusedMapCoordinate = coord
-                        viewModel.mapFocusTrigger += 1
-                        viewModel.isMapMode = true
-                    }
-                }
-                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
-                .background(.regularMaterial)
-            }
+            .inspectorColumnWidth(360)
         }
         .navigationTitle("Listings")
         .toolbar {
