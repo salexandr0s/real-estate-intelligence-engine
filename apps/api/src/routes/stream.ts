@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { alerts } from '@rei/db';
+import { alerts, subscribeToAlerts } from '@rei/db';
+import type { AlertNotification } from '@rei/db';
 import { createLogger } from '@rei/observability';
 
 const logger = createLogger('api:stream');
@@ -12,7 +13,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
         tags: ['Streaming'],
         summary: 'Stream alerts via Server-Sent Events',
         description:
-          'Long-lived SSE connection that pushes new alerts as they are matched. Sends keepalive comments every 30 seconds.',
+          'Long-lived SSE connection that pushes new alerts in real-time via PG LISTEN/NOTIFY, with a 60-second fallback poll for robustness. Sends keepalive comments every 30 seconds.',
       },
     },
     async (request, reply) => {
@@ -29,27 +30,64 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
       const userId = request.userId;
       let lastChecked = new Date();
 
-      // Poll for new alerts every 5 seconds
-      const pollInterval = setInterval(async () => {
+      // Helper: send alert events to the SSE stream
+      const sendAlerts = async (newAlerts: Awaited<ReturnType<typeof alerts.findSince>>) => {
+        for (const alert of newAlerts) {
+          if (res.destroyed) return;
+          res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
+        }
+        if (newAlerts.length > 0) {
+          lastChecked = new Date(newAlerts[newAlerts.length - 1]!.matchedAt.getTime() + 1);
+        }
+      };
+
+      // Real-time: subscribe to PG NOTIFY for instant delivery
+      let unsubscribe: (() => void) | null = null;
+      try {
+        unsubscribe = await subscribeToAlerts((notification: AlertNotification) => {
+          if (notification.userId !== userId) return;
+          if (res.destroyed) return;
+
+          // Fetch the full alert by ID and send it
+          void alerts
+            .findById(notification.alertId)
+            .then((alert) => {
+              if (alert && alert.channel === 'in_app' && !res.destroyed) {
+                res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
+                lastChecked = new Date(alert.matchedAt.getTime() + 1);
+              }
+            })
+            .catch((err) => {
+              if (!res.destroyed) {
+                logger.error('Failed to fetch notified alert', {
+                  alertId: notification.alertId,
+                  error: (err as Error).message,
+                });
+              }
+            });
+        });
+      } catch (err) {
+        logger.warn('LISTEN/NOTIFY unavailable, falling back to polling only', {
+          error: (err as Error).message,
+        });
+      }
+
+      // Fallback poll every 60 seconds to catch any missed notifications
+      const fallbackPollInterval = setInterval(async () => {
         if (res.destroyed) return;
         try {
-          const newAlerts = await alerts.findSince(userId, lastChecked);
-          for (const alert of newAlerts) {
-            res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
-          }
-          if (newAlerts.length > 0) {
-            // Advance cursor 1ms past the last alert to avoid re-delivery
-            lastChecked = new Date(newAlerts[newAlerts.length - 1]!.matchedAt.getTime() + 1);
-          }
+          const allAlerts = await alerts.findSince(userId, lastChecked);
+          const inAppAlerts = allAlerts.filter((a) => a.channel === 'in_app');
+          await sendAlerts(inAppAlerts);
         } catch (err) {
           if (!res.destroyed) {
-            logger.error('SSE poll error', {
+            logger.error('SSE fallback poll error', {
               errorClass: (err as Error).name,
               message: (err as Error).message,
             } as Record<string, unknown>);
           }
         }
-      }, 5000);
+      }, 60_000);
 
       // Send keepalive every 30 seconds
       const keepaliveInterval = setInterval(() => {
@@ -59,12 +97,13 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
         } catch {
           // Connection already closed
         }
-      }, 30000);
+      }, 30_000);
 
       // Cleanup on client disconnect
       request.raw.on('close', () => {
-        clearInterval(pollInterval);
+        clearInterval(fallbackPollInterval);
         clearInterval(keepaliveInterval);
+        if (unsubscribe) unsubscribe();
         res.end();
       });
 

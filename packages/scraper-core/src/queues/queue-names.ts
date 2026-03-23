@@ -11,6 +11,9 @@ export const QUEUE_NAMES = {
   RESCORE: 'processing-rescore',
   CLUSTER: 'processing-cluster',
   GEOCODE_ENQUEUE: 'processing-geocode-enqueue',
+  STALE_CHECK: 'processing-stale-check',
+  CANARY: 'processing-canary',
+  ALERT_DELIVERY: 'processing-alert-delivery',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -87,3 +90,29 @@ export interface GeocodeEnqueueJobData {
   triggeredBy: 'scheduler' | 'manual';
   limit: number;
 }
+
+/** Job data for stale listing detection. */
+export interface StaleCheckJobData {
+  triggeredBy: 'scheduler' | 'manual';
+  thresholdDays?: number;
+  batchSize?: number;
+}
+
+/** Job data for canary health check. */
+export interface CanaryJobData {
+  triggeredBy: 'scheduler' | 'manual';
+  sourceCode?: string;
+}
+
+/** Job data for alert delivery (push, email, webhook). */
+export interface AlertDeliveryJobData {
+  alertId: number;
+  channel: string;
+  userId: number;
+}
+
+/** Default retry config for scraper jobs. */
+export const DEFAULT_JOB_RETRY_OPTS = {
+  attempts: 3,
+  backoff: { type: 'exponential' as const, delay: 5_000 },
+};

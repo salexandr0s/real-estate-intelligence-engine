@@ -55,7 +55,8 @@ function toMarketBaselineRow(row: MarketBaselineDbRow): MarketBaselineRow {
     sourceScope: row.source_scope,
     sampleSize: row.sample_size,
     medianPpsqmEur: Number(row.median_ppsqm_eur),
-    trimmedMeanPpsqmEur: row.trimmed_mean_ppsqm_eur != null ? Number(row.trimmed_mean_ppsqm_eur) : null,
+    trimmedMeanPpsqmEur:
+      row.trimmed_mean_ppsqm_eur != null ? Number(row.trimmed_mean_ppsqm_eur) : null,
     p25PpsqmEur: row.p25_ppsqm_eur != null ? Number(row.p25_ppsqm_eur) : null,
     p75PpsqmEur: row.p75_ppsqm_eur != null ? Number(row.p75_ppsqm_eur) : null,
     stddevPpsqmEur: row.stddev_ppsqm_eur != null ? Number(row.stddev_ppsqm_eur) : null,
@@ -231,4 +232,12 @@ export async function findBaselineWithFallback(params: {
   }
 
   return { baseline: null, fallbackLevel: 'none' };
+}
+
+/** Find the most recent baseline_date across all baselines. */
+export async function findLatestBaselineDate(): Promise<Date | null> {
+  const rows = await query<{ latest: Date | null }>(
+    `SELECT MAX(baseline_date) AS latest FROM market_baselines`,
+  );
+  return rows[0]?.latest ?? null;
 }

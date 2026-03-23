@@ -30,20 +30,25 @@ export interface FullIngestionPipelineDeps {
   raw: RawIngestionDeps;
   normalization: NormalizationDeps;
   scoreAndAlert: ScoreAndAlertDeps;
+  /** Look up source health score (0-100) by source ID. Falls back to 90 if not provided. */
+  getSourceHealthScore?: (sourceId: number) => Promise<number>;
+  /** Look up geocode precision score (0-100) by listing ID. Falls back to 75 if not provided. */
+  getLocationConfidence?: (listingId: number) => Promise<number>;
 }
 
 export class FullIngestionPipeline {
   private readonly rawIngestor: IngestRawListing;
   private readonly normalizer: NormalizeAndUpsert;
   private readonly scorer: ScoreAndAlert;
+  private readonly getSourceHealthScore: (sourceId: number) => Promise<number>;
+  private readonly getLocationConfidence: (listingId: number) => Promise<number>;
 
-  constructor(
-    normalizers: Map<string, SourceNormalizer>,
-    deps: FullIngestionPipelineDeps,
-  ) {
+  constructor(normalizers: Map<string, SourceNormalizer>, deps: FullIngestionPipelineDeps) {
     this.rawIngestor = new IngestRawListing(deps.raw);
     this.normalizer = new NormalizeAndUpsert(normalizers, deps.normalization);
     this.scorer = new ScoreAndAlert(deps.scoreAndAlert);
+    this.getSourceHealthScore = deps.getSourceHealthScore ?? (async () => 90);
+    this.getLocationConfidence = deps.getLocationConfidence ?? (async () => 75);
   }
 
   async ingestDetailCapture<T extends SourceRawListingBase>(
@@ -91,13 +96,18 @@ export class FullIngestionPipeline {
       normResult.listing != null
     ) {
       try {
+        const [sourceHealthScore, locationConfidence] = await Promise.all([
+          this.getSourceHealthScore(sourceId),
+          this.getLocationConfidence(normResult.listingId),
+        ]);
+
         scoreResult = await this.scorer.process({
           listingId: normResult.listingId,
           listingVersionId: normResult.listingVersionId,
           versionReason: normResult.versionReason as VersionReason,
           listing: normResult.listing,
-          sourceHealthScore: 90,
-          locationConfidence: 75,
+          sourceHealthScore,
+          locationConfidence,
         });
 
         log.info('Stage 3 complete: scored and alerts checked', {

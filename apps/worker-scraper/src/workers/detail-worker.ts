@@ -21,10 +21,11 @@ import {
   dismissCookieConsent,
   ArtifactWriter,
   setupRequestInterception,
+  DEFAULT_JOB_RETRY_OPTS,
 } from '@rei/scraper-core';
 import type { DetailJobData, ProcessingJobData } from '@rei/scraper-core';
 import { loadConfig } from '@rei/config';
-import { sources } from '@rei/db';
+import { sources, deadLetter } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
 
@@ -130,16 +131,20 @@ export function createDetailWorker(): Worker<DetailJobData> {
         detailCapture.htmlStorageKey = htmlStorageKey ?? null;
         detailCapture.harStorageKey = harStorageKey ?? null;
 
-        await processingQueue.add(`process:${sourceCode}`, {
-          sourceCode,
-          sourceId,
-          scrapeRunId,
-          detailUrl: fullUrl,
-          discoveryUrl,
-          captureJson: JSON.stringify(detailCapture),
-          htmlStorageKey,
-          harStorageKey,
-        });
+        await processingQueue.add(
+          `process:${sourceCode}`,
+          {
+            sourceCode,
+            sourceId,
+            scrapeRunId,
+            detailUrl: fullUrl,
+            discoveryUrl,
+            captureJson: JSON.stringify(detailCapture),
+            htmlStorageKey,
+            harStorageKey,
+          },
+          DEFAULT_JOB_RETRY_OPTS,
+        );
 
         circuitBreaker.recordSuccess(sourceCode);
         const payload = detailCapture.payload as Record<string, unknown>;
@@ -211,15 +216,32 @@ export function createDetailWorker(): Worker<DetailJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: config.scraper.detailWorkerConcurrency,
     },
   );
 
   worker.on('failed', (job, err) => {
+    const isTerminal = job != null && job.attemptsMade >= (job.opts?.attempts ?? 1);
     log.error('Detail job failed', {
       jobId: job?.id,
+      attempt: job?.attemptsMade,
+      terminal: isTerminal,
       error: err.message,
     });
+
+    if (isTerminal && job) {
+      deadLetter
+        .insert({
+          queueName: QUEUE_NAMES.SCRAPE_DETAIL,
+          jobId: job.id ?? 'unknown',
+          jobData: job.data as unknown as Record<string, unknown>,
+          errorMessage: err.message,
+          errorClass: classifyScraperError(err),
+          sourceCode: job.data.sourceCode,
+          attempts: job.attemptsMade,
+        })
+        .catch((dlqErr) => log.error('DLQ insert failed', { error: String(dlqErr) }));
+    }
   });
 
   return worker;

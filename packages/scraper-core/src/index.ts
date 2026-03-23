@@ -27,6 +27,12 @@ export { SourceCircuitBreaker, type CircuitState } from './health/circuit-breake
 
 // ── Adapters ─────────────────────────────────────────────────────────────────
 export { ScrapeRunContext } from './adapters/run-context.js';
+export {
+  getAdapter,
+  registerAdapter,
+  registerAdapters,
+  getRegisteredSourceCodes,
+} from './adapters/registry.js';
 
 // ── Browser Utilities ────────────────────────────────────────────────────────
 export {
@@ -50,5 +56,9 @@ export {
   type RescoreJobData,
   type ClusterJobData,
   type GeocodeEnqueueJobData,
+  type StaleCheckJobData,
+  type CanaryJobData,
+  type AlertDeliveryJobData,
+  DEFAULT_JOB_RETRY_OPTS,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';

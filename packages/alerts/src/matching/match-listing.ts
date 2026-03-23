@@ -1,4 +1,4 @@
-import type { AlertCreate, AlertType } from '@rei/contracts';
+import type { AlertChannel, AlertCreate, AlertType } from '@rei/contracts';
 import { buildAlertDedupeKey } from '@rei/contracts';
 
 interface MatchInput {
@@ -11,16 +11,30 @@ interface MatchInput {
   canonicalUrl: string;
 }
 
+const TITLE_PREFIX: Record<string, string> = {
+  new_match: 'Neues Inserat',
+  price_drop: 'Preissenkung',
+  price_change: 'Preisänderung',
+  score_upgrade: 'Score-Upgrade',
+  status_change: 'Statusänderung',
+  digest: 'Zusammenfassung',
+};
+
 /**
  * Generates AlertCreate records for each matching filter.
+ * Creates one record per channel the filter is subscribed to.
  */
 export function matchListingToFilters(
   listing: MatchInput,
-  matchingFilters: Array<{ filterId: number; userId: number }>,
+  matchingFilters: Array<{ filterId: number; userId: number; alertChannels?: string[] }>,
   alertType: AlertType,
   scoreVersion: number,
 ): AlertCreate[] {
-  return matchingFilters.map((match) => {
+  const results: AlertCreate[] = [];
+
+  for (const match of matchingFilters) {
+    const channels: string[] =
+      match.alertChannels && match.alertChannels.length > 0 ? match.alertChannels : ['in_app'];
     const dedupeKey = buildAlertDedupeKey({
       filterId: match.filterId,
       listingId: listing.listingId,
@@ -33,26 +47,21 @@ export function matchListingToFilters(
       : 'Preis auf Anfrage';
     const area = listing.livingAreaSqm ? `${listing.livingAreaSqm} m²` : '';
 
-    const titlePrefix: Record<string, string> = {
-      new_match: 'Neues Inserat',
-      price_drop: 'Preissenkung',
-      price_change: 'Preisänderung',
-      score_upgrade: 'Score-Upgrade',
-      status_change: 'Statusänderung',
-      digest: 'Zusammenfassung',
-    };
+    for (const channel of channels) {
+      results.push({
+        userId: match.userId,
+        userFilterId: match.filterId,
+        listingId: listing.listingId,
+        listingVersionId: listing.listingVersionId,
+        alertType,
+        channel: channel as AlertChannel,
+        dedupeKey,
+        title: `${TITLE_PREFIX[alertType] ?? 'Alert'}: ${listing.title}`,
+        body: `${price}${area ? ` · ${area}` : ''} · ${listing.city}`,
+        payload: { canonicalUrl: listing.canonicalUrl },
+      });
+    }
+  }
 
-    return {
-      userId: match.userId,
-      userFilterId: match.filterId,
-      listingId: listing.listingId,
-      listingVersionId: listing.listingVersionId,
-      alertType,
-      channel: 'in_app' as const,
-      dedupeKey,
-      title: `${titlePrefix[alertType] ?? 'Alert'}: ${listing.title}`,
-      body: `${price}${area ? ` · ${area}` : ''} · ${listing.city}`,
-      payload: { canonicalUrl: listing.canonicalUrl },
-    };
-  });
+  return results;
 }

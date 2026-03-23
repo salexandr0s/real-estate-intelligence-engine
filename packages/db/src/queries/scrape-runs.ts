@@ -160,10 +160,7 @@ export async function finish(
   return row ? toScrapeRunRow(row) : null;
 }
 
-export async function findRecent(
-  sourceId: number,
-  limit = 10,
-): Promise<ScrapeRunRow[]> {
+export async function findRecent(sourceId: number, limit = 10): Promise<ScrapeRunRow[]> {
   const rows = await query<ScrapeRunDbRow>(
     `SELECT * FROM scrape_runs
      WHERE source_id = $1
@@ -188,6 +185,45 @@ export async function findRecentAll(
     [sourceId, limit],
   );
   return rows.map((row) => ({ ...toScrapeRunRow(row), sourceCode: row.source_code }));
+}
+
+/** Cancel scrape runs stuck in 'running' state for longer than the threshold. */
+export async function cancelZombieRuns(thresholdMinutes = 30): Promise<number> {
+  const [row] = await query<{ count: string }>(
+    `WITH cancelled AS (
+       UPDATE scrape_runs
+       SET status = 'cancelled',
+           finished_at = NOW(),
+           error_code = 'zombie_timeout',
+           error_message = 'Cancelled: stuck in running state for > ' || $1 || ' minutes'
+       WHERE status = 'running'
+         AND started_at < NOW() - make_interval(mins => $1)
+       RETURNING id
+     )
+     SELECT COUNT(*) AS count FROM cancelled`,
+    [thresholdMinutes],
+  );
+  return Number(row!.count);
+}
+
+/** Find the rolling average of listings_discovered for recent successful runs. */
+export async function findRecentAverage(
+  sourceId: number,
+  windowHours = 168,
+): Promise<{ avgDiscovered: number; runCount: number }> {
+  const [row] = await query<{ avg_discovered: string; run_count: string }>(
+    `SELECT COALESCE(AVG(listings_discovered), 0) AS avg_discovered,
+            COUNT(*) AS run_count
+     FROM scrape_runs
+     WHERE source_id = $1
+       AND status = 'succeeded'
+       AND finished_at > NOW() - make_interval(hours => $2)`,
+    [sourceId, windowHours],
+  );
+  return {
+    avgDiscovered: Number(row!.avg_discovered),
+    runCount: Number(row!.run_count),
+  };
 }
 
 export async function updateMetrics(

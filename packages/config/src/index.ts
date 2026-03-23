@@ -85,14 +85,30 @@ export interface AppConfig {
     jitterMinMs: number;
     jitterMaxMs: number;
     canaryEnabled: boolean;
+    detailWorkerConcurrency: number;
   };
   scheduler: {
     enabled: boolean;
-    loopIntervalMs: number;
+    staleThresholdDays: number;
+    zombieRunTimeoutMinutes: number;
   };
   alerts: {
     emailEnabled: boolean;
     webhookEnabled: boolean;
+    pushEnabled: boolean;
+    operatorUserId: number | null;
+    apns: {
+      teamId: string;
+      keyId: string;
+      keyPath: string;
+      bundleId: string;
+      production: boolean;
+    };
+    email: {
+      smtpHost: string;
+      smtpPort: number;
+      fromAddress: string;
+    };
   };
   features: {
     geocodingEnabled: boolean;
@@ -173,14 +189,30 @@ export function loadConfig(): AppConfig {
       jitterMinMs: envInt('SCRAPER_JITTER_MIN_MS', 2000),
       jitterMaxMs: envInt('SCRAPER_JITTER_MAX_MS', 7000),
       canaryEnabled: envBool('SCRAPER_CANARY_ENABLED', true),
+      detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
     },
     scheduler: {
       enabled: envBool('SCHEDULER_ENABLED', true),
-      loopIntervalMs: envInt('SCHEDULER_LOOP_INTERVAL_MS', 30000),
+      staleThresholdDays: envInt('STALE_THRESHOLD_DAYS', 7),
+      zombieRunTimeoutMinutes: envInt('ZOMBIE_RUN_TIMEOUT_MINUTES', 30),
     },
     alerts: {
       emailEnabled: envBool('ALERTS_EMAIL_ENABLED', false),
       webhookEnabled: envBool('ALERTS_WEBHOOK_ENABLED', false),
+      pushEnabled: envBool('ALERTS_PUSH_ENABLED', false),
+      operatorUserId: process.env.OPERATOR_USER_ID ? envInt('OPERATOR_USER_ID') : null,
+      apns: {
+        teamId: envStr('APNS_TEAM_ID', ''),
+        keyId: envStr('APNS_KEY_ID', ''),
+        keyPath: envStr('APNS_KEY_PATH', ''),
+        bundleId: envStr('APNS_BUNDLE_ID', ''),
+        production: envBool('APNS_PRODUCTION', false),
+      },
+      email: {
+        smtpHost: envStr('SMTP_HOST', 'localhost'),
+        smtpPort: envInt('SMTP_PORT', 587),
+        fromAddress: envStr('SMTP_FROM_ADDRESS', 'noreply@localhost'),
+      },
     },
     features: {
       geocodingEnabled: envBool('FEATURE_GEOCODING_ENABLED', false),

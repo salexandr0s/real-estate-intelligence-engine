@@ -273,5 +273,8 @@ export {
   apiRequestDuration,
   queueDepth,
   sourceHealthGauge,
+  alertDeliveryTotal,
+  alertDeliveryDuration,
+  pushTokensActive,
 } from './metrics.js';
 export { initTracing, shutdownTracing } from './tracing.js';

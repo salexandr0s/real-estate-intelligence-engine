@@ -6,6 +6,12 @@ import type {
   VersionReason,
 } from './domain.js';
 
+/**
+ * Bump this when normalization logic changes in a way that alters content fingerprints.
+ * The pipeline uses this to distinguish "source content changed" from "our parsing improved".
+ */
+export const CURRENT_NORMALIZATION_VERSION = 1;
+
 // ── Canonical Listing Input ─────────────────────────────────────────────────
 
 export interface CanonicalListingInput {

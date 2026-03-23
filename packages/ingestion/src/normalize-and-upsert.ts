@@ -6,6 +6,7 @@ import type {
   SourceRawListingBase,
   VersionReason,
 } from '@rei/contracts';
+import { CURRENT_NORMALIZATION_VERSION } from '@rei/contracts';
 import { createLogger } from '@rei/observability';
 
 const log = createLogger('ingestion:normalize');
@@ -54,6 +55,7 @@ export interface NormalizationDeps {
   ) => Promise<{
     id: number;
     contentFingerprint: string;
+    normalizationVersion: number;
     listingStatus: string;
     listPriceEurCents: number | null;
     firstSeenAt: Date;
@@ -138,8 +140,20 @@ export class NormalizeAndUpsert {
       // Listing was previously inactive/withdrawn/expired and is now active again
       versionReason = 'relist_detected';
     } else if (existing.contentFingerprint !== listing.contentFingerprint) {
-      // Determine specific change type
-      if (existing.listPriceEurCents !== listing.listPriceEurCents) {
+      // Fingerprint changed — determine why
+      const isNormalizationUpgrade = existing.normalizationVersion < CURRENT_NORMALIZATION_VERSION;
+
+      if (isNormalizationUpgrade) {
+        // Fingerprint changed because our normalization logic improved, not because
+        // the source content changed. Update the listing but skip version creation
+        // to avoid spurious alerts.
+        log.info('Normalization upgrade detected, skipping version', {
+          sourceCode,
+          oldVersion: existing.normalizationVersion,
+          newVersion: CURRENT_NORMALIZATION_VERSION,
+        });
+        // versionReason stays null — listing will be upserted but no version/alert created
+      } else if (existing.listPriceEurCents !== listing.listPriceEurCents) {
         versionReason = 'price_change';
       } else if (existing.listingStatus !== listing.listingStatus) {
         versionReason = 'status_change';

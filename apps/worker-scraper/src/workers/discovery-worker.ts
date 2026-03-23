@@ -17,10 +17,11 @@ import {
   classifyScraperError,
   dismissCookieConsent,
   setupRequestInterception,
+  DEFAULT_JOB_RETRY_OPTS,
 } from '@rei/scraper-core';
 import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
 import type { CrawlProfile } from '@rei/contracts';
-import { scrapeRuns, sources } from '@rei/db';
+import { scrapeRuns, sources, deadLetter } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
 
@@ -55,8 +56,23 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   const worker = new Worker<DiscoveryJobData>(
     QUEUE_NAMES.SCRAPE_DISCOVERY,
     async (job: Job<DiscoveryJobData>) => {
-      const { sourceCode, sourceId, scrapeRunId, maxPages } = job.data;
+      const { sourceCode, sourceId, maxPages } = job.data;
       const adapter = getAdapter(sourceCode);
+
+      // For repeatable/scheduled jobs, scrapeRunId is 0 — create a new run
+      let scrapeRunId = job.data.scrapeRunId;
+      if (!scrapeRunId) {
+        const run = await scrapeRuns.create({
+          sourceId,
+          triggerType: 'schedule',
+          scope: 'full',
+          workerHost: 'discovery-worker',
+          workerVersion: '1.0.0',
+          browserType: 'chromium',
+        });
+        await scrapeRuns.start(run.id);
+        scrapeRunId = run.id;
+      }
 
       log.info('Discovery job started', { sourceCode, scrapeRunId, maxPages });
       const runCtx = new ScrapeRunContext(scrapeRunId, sourceCode);
@@ -112,17 +128,21 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
             });
 
             for (const item of result.items) {
-              await detailQueue.add(`detail:${sourceCode}`, {
-                sourceCode,
-                sourceId,
-                scrapeRunId,
-                detailUrl: item.detailUrl,
-                discoveryUrl: plan.url,
-                title: String(
-                  (item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown',
-                ),
-                externalId: item.externalId ?? undefined,
-              });
+              await detailQueue.add(
+                `detail:${sourceCode}`,
+                {
+                  sourceCode,
+                  sourceId,
+                  scrapeRunId,
+                  detailUrl: item.detailUrl,
+                  discoveryUrl: plan.url,
+                  title: String(
+                    (item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown',
+                  ),
+                  externalId: item.externalId ?? undefined,
+                },
+                DEFAULT_JOB_RETRY_OPTS,
+              );
               totalEnqueued++;
             }
 
@@ -148,9 +168,49 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
         const finalStatus = totalEnqueued > 0 ? 'succeeded' : 'failed';
         await scrapeRuns.finish(scrapeRunId, finalStatus, metrics);
 
-        // Update source health so scheduler respects crawl interval
+        // Update source health and detect transitions
         if (finalStatus === 'succeeded') {
           await sources.updateHealthStatus(sourceId, 'healthy', new Date());
+        }
+
+        // Check health transitions and log for monitoring
+        const healthResult = await sources.checkAndUpdateHealth(sourceId);
+        if (healthResult.changed) {
+          const severity =
+            healthResult.newStatus === 'blocked' || healthResult.newStatus === 'disabled'
+              ? 'error'
+              : healthResult.newStatus === 'degraded'
+                ? 'warn'
+                : 'info';
+
+          // Structured log that external monitoring (e.g. Grafana/PagerDuty) can trigger on
+          const logMethod =
+            severity === 'error' ? log.error : severity === 'warn' ? log.warn : log.info;
+          logMethod.call(log, 'SOURCE_HEALTH_TRANSITION', {
+            sourceCode,
+            sourceId,
+            previousStatus: healthResult.previousStatus,
+            newStatus: healthResult.newStatus,
+            severity,
+          });
+        }
+
+        // Anomaly detection: compare this run against rolling average
+        if (finalStatus === 'succeeded') {
+          const stats = await scrapeRuns.findRecentAverage(sourceId, 168); // 7 days
+          if (stats.runCount >= 3 && stats.avgDiscovered > 0) {
+            const ratio = totalEnqueued / stats.avgDiscovered;
+            if (ratio < 0.2) {
+              log.warn('SCRAPE_ANOMALY_DETECTED', {
+                sourceCode,
+                sourceId,
+                discovered: totalEnqueued,
+                avgDiscovered: Math.round(stats.avgDiscovered),
+                ratio: Math.round(ratio * 100) / 100,
+                recentRuns: stats.runCount,
+              });
+            }
+          }
         }
 
         log.info('Discovery job complete', { sourceCode, totalEnqueued, finalStatus });
@@ -166,10 +226,27 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   );
 
   worker.on('failed', (job, err) => {
+    const isTerminal = job != null && job.attemptsMade >= (job.opts?.attempts ?? 1);
     log.error('Discovery job failed', {
       jobId: job?.id,
+      attempt: job?.attemptsMade,
+      terminal: isTerminal,
       error: err.message,
     });
+
+    if (isTerminal && job) {
+      deadLetter
+        .insert({
+          queueName: QUEUE_NAMES.SCRAPE_DISCOVERY,
+          jobId: job.id ?? 'unknown',
+          jobData: job.data as unknown as Record<string, unknown>,
+          errorMessage: err.message,
+          errorClass: classifyScraperError(err),
+          sourceCode: job.data.sourceCode,
+          attempts: job.attemptsMade,
+        })
+        .catch((dlqErr) => log.error('DLQ insert failed', { error: String(dlqErr) }));
+    }
   });
 
   return worker;

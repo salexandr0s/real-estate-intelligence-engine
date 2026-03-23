@@ -68,6 +68,21 @@ async function main(): Promise<void> {
     status: Number(baselineCount) > 0 ? 'ok' : 'warn',
   });
 
+  // 4b. Baseline freshness
+  const [{ latest: latestBaseline }] = await query<{ latest: Date | null }>(
+    `SELECT MAX(baseline_date) AS latest FROM market_baselines`,
+  );
+  if (latestBaseline) {
+    const hoursAgo = (Date.now() - new Date(latestBaseline).getTime()) / 3600000;
+    checks.push({
+      name: 'Baseline freshness',
+      value: `${Math.round(hoursAgo * 10) / 10}h ago`,
+      status: hoursAgo < 2 ? 'ok' : hoursAgo < 4 ? 'warn' : 'error',
+    });
+  } else {
+    checks.push({ name: 'Baseline freshness', value: 'no baselines', status: 'error' });
+  }
+
   // 5. Pending alerts
   const [{ count: alertCount }] = await query<{ count: string }>(
     `SELECT COUNT(*) AS count FROM alerts WHERE status = 'queued'`,
@@ -98,7 +113,12 @@ async function main(): Promise<void> {
     checks.push({
       name: `Source: ${src.code}`,
       value: src.health_status,
-      status: src.health_status === 'healthy' ? 'ok' : src.health_status === 'degraded' ? 'warn' : 'error',
+      status:
+        src.health_status === 'healthy'
+          ? 'ok'
+          : src.health_status === 'degraded'
+            ? 'warn'
+            : 'error',
     });
   }
 

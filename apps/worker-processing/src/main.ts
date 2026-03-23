@@ -1,3 +1,6 @@
+// Register source adapters before any worker is created (canary needs them)
+import './adapter-registry.js';
+
 import { loadConfig } from '@rei/config';
 import {
   createLogger,
@@ -14,6 +17,9 @@ import { createBaselineWorker } from './workers/baseline-worker.js';
 import { createGeocodingWorker } from './workers/geocoding-worker.js';
 import { createClusterWorker } from './workers/cluster-worker.js';
 import { createGeocodingEnqueuer } from './workers/geocoding-enqueuer.js';
+import { createStaleCheckWorker } from './workers/stale-check-worker.js';
+import { createCanaryWorker } from './workers/canary-worker.js';
+import { createDeliveryWorker } from './workers/delivery-worker.js';
 
 const logger = createLogger('worker-processing');
 
@@ -31,12 +37,24 @@ async function main(): Promise<void> {
   const baselineWorker = createBaselineWorker();
   const clusterWorker = createClusterWorker();
   const geocodingEnqueuer = createGeocodingEnqueuer();
+  const staleCheckWorker = createStaleCheckWorker();
+
+  // Canary worker — gated on feature flag
+  const canaryWorker = config.scraper.canaryEnabled ? createCanaryWorker() : null;
 
   // Geocoding worker — gated on feature flag
   const geocodingWorker = config.features.geocodingEnabled ? createGeocodingWorker() : null;
 
-  const workerNames = ['ingestion', 'baseline', 'cluster', 'geocode-enqueue'];
+  // Alert delivery worker — gated on any delivery channel being enabled
+  const deliveryWorker =
+    config.alerts.pushEnabled || config.alerts.emailEnabled || config.alerts.webhookEnabled
+      ? createDeliveryWorker()
+      : null;
+
+  const workerNames = ['ingestion', 'baseline', 'cluster', 'geocode-enqueue', 'stale-check'];
+  if (canaryWorker) workerNames.push('canary');
   if (geocodingWorker) workerNames.push('geocoding');
+  if (deliveryWorker) workerNames.push('alert-delivery');
   logger.info(`Workers ready: ${workerNames.join(', ')}`);
 
   // Graceful shutdown
@@ -46,7 +64,10 @@ async function main(): Promise<void> {
     await baselineWorker.close();
     await clusterWorker.close();
     await geocodingEnqueuer.close();
+    await staleCheckWorker.close();
+    if (canaryWorker) await canaryWorker.close();
     if (geocodingWorker) await geocodingWorker.close();
+    if (deliveryWorker) await deliveryWorker.close();
     await shutdownTracing();
     await closeRedisConnection();
     await closePool();

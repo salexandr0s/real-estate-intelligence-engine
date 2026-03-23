@@ -10,9 +10,11 @@ import {
   QUEUE_NAMES,
   getRedisConnection,
   getQueuePrefix,
+  classifyScraperError,
 } from '@rei/scraper-core';
 import type { ProcessingJobData } from '@rei/scraper-core';
 import type { FullIngestionPipeline } from '@rei/ingestion';
+import { deadLetter } from '@rei/db';
 import { createPipeline } from '../pipeline-factory.js';
 
 const log = createLogger('worker:ingestion');
@@ -53,10 +55,27 @@ export function createIngestionWorker(): Worker<ProcessingJobData> {
   );
 
   worker.on('failed', (job, err) => {
+    const isTerminal = job != null && job.attemptsMade >= (job.opts?.attempts ?? 1);
     log.error('Ingestion job failed', {
       jobId: job?.id,
+      attempt: job?.attemptsMade,
+      terminal: isTerminal,
       error: err.message,
     });
+
+    if (isTerminal && job) {
+      deadLetter
+        .insert({
+          queueName: QUEUE_NAMES.PROCESSING,
+          jobId: job.id ?? 'unknown',
+          jobData: job.data as unknown as Record<string, unknown>,
+          errorMessage: err.message,
+          errorClass: classifyScraperError(err),
+          sourceCode: job.data.sourceCode,
+          attempts: job.attemptsMade,
+        })
+        .catch((dlqErr) => log.error('DLQ insert failed', { error: String(dlqErr) }));
+    }
   });
 
   return worker;

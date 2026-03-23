@@ -5,8 +5,16 @@
 
 import { FullIngestionPipeline } from '@rei/ingestion';
 import type { FullIngestionPipelineDeps } from '@rei/ingestion';
-import type { BaselineLookup, ListingStatus } from '@rei/contracts';
-import { computeContentHash } from '@rei/scraper-core';
+import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@rei/contracts';
+import { Queue } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
+import {
+  computeContentHash,
+  QUEUE_NAMES,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@rei/scraper-core';
+import type { AlertDeliveryJobData } from '@rei/scraper-core';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -29,6 +37,7 @@ import {
   alerts,
   proximity,
   listingPois,
+  sources,
 } from '@rei/db';
 import {
   rawSnapshotRate,
@@ -37,6 +46,35 @@ import {
   scoringDuration,
   alertLagSeconds,
 } from '@rei/observability';
+
+const HEALTH_STATUS_SCORES: Record<string, number> = {
+  healthy: 100,
+  degraded: 60,
+  blocked: 20,
+  disabled: 10,
+  unknown: 50,
+};
+
+const GEOCODE_PRECISION_SCORES: Record<string, number> = {
+  source_exact: 100,
+  source_approx: 80,
+  street: 70,
+  district: 50,
+  city: 30,
+  none: 10,
+};
+
+let _deliveryQueue: Queue<AlertDeliveryJobData> | null = null;
+
+function getDeliveryQueue(): Queue<AlertDeliveryJobData> {
+  if (!_deliveryQueue) {
+    _deliveryQueue = new Queue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY, {
+      connection: getRedisConnection() as ConnectionOptions,
+      prefix: getQueuePrefix(),
+    });
+  }
+  return _deliveryQueue;
+}
 
 export function buildPipelineDeps(): FullIngestionPipelineDeps {
   return {
@@ -58,6 +96,7 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         return {
           id: row.id,
           contentFingerprint: row.contentFingerprint,
+          normalizationVersion: row.normalizationVersion,
           listingStatus: row.listingStatus,
           listPriceEurCents: row.listPriceEurCents,
           firstSeenAt: row.firstSeenAt,
@@ -112,7 +151,11 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         const result = await userFilters.findMatchingFilters(listing);
         return {
           evaluatedIds: result.evaluatedIds,
-          matched: result.matched.map((f) => ({ filterId: f.id, userId: f.userId })),
+          matched: result.matched.map((f) => ({
+            filterId: f.id,
+            userId: f.userId,
+            alertChannels: f.alertChannels,
+          })),
         };
       },
       updateEvaluatedAt: async (filterIds) => {
@@ -139,6 +182,28 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
       cacheNearestPois: async (listingId, latitude, longitude) => {
         await listingPois.computeAndCache(listingId, latitude, longitude);
       },
+      findLatestBaselineDate: async () => {
+        return marketBaselines.findLatestBaselineDate();
+      },
+      enqueueDelivery: async (alertId, channel, userId) => {
+        await getDeliveryQueue().add(
+          `deliver:${alertId}`,
+          { alertId, channel: channel as string, userId },
+          { attempts: 3, backoff: { type: 'exponential', delay: 5_000 } },
+        );
+      },
+    },
+    getSourceHealthScore: async (sourceId: number) => {
+      const source = await sources.findById(sourceId);
+      if (!source) return 50;
+      return HEALTH_STATUS_SCORES[source.healthStatus] ?? 50;
+    },
+    getLocationConfidence: async (listingId: number) => {
+      const listing = await listings.findById(listingId);
+      if (!listing) return 50;
+      const precision = listing.geocodePrecision as GeocodePrecision | null;
+      if (!precision) return 50;
+      return GEOCODE_PRECISION_SCORES[precision] ?? 50;
     },
   };
 }

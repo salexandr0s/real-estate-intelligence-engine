@@ -1,4 +1,5 @@
 import type {
+  AlertChannel,
   AlertCreate,
   AlertType,
   BaselineLookup,
@@ -54,7 +55,7 @@ export interface ScoreAndAlertDeps {
     description: string | null;
   }) => Promise<{
     evaluatedIds: number[];
-    matched: Array<{ filterId: number; userId: number }>;
+    matched: Array<{ filterId: number; userId: number; alertChannels: string[] }>;
   }>;
 
   updateEvaluatedAt: (filterIds: number[]) => Promise<void>;
@@ -71,6 +72,12 @@ export interface ScoreAndAlertDeps {
   ) => Promise<{ latitude: number; longitude: number } | null>;
 
   cacheNearestPois?: (listingId: number, latitude: number, longitude: number) => Promise<void>;
+
+  /** Returns the most recent baseline computation date. Used for staleness detection. */
+  findLatestBaselineDate?: () => Promise<Date | null>;
+
+  /** Enqueue a non-in_app alert for async delivery (push, email, webhook). */
+  enqueueDelivery?: (alertId: number, channel: AlertChannel, userId: number) => Promise<void>;
 }
 
 export class ScoreAndAlert {
@@ -120,6 +127,23 @@ export class ScoreAndAlert {
       roomBucket,
     );
 
+    // 1b. Check baseline staleness — if baselines are outdated, reduce confidence
+    const BASELINE_STALE_HOURS = 4;
+    let baselineStale = false;
+    if (this.deps.findLatestBaselineDate) {
+      const latestDate = await this.deps.findLatestBaselineDate();
+      if (latestDate) {
+        const ageHours = (Date.now() - latestDate.getTime()) / 3_600_000;
+        if (ageHours > BASELINE_STALE_HOURS) {
+          baselineStale = true;
+          log.warn('Market baselines are stale', {
+            latestBaselineDate: latestDate.toISOString(),
+            ageHours: Math.round(ageHours),
+          });
+        }
+      }
+    }
+
     // 2. Compute price history signals
     let recentPriceDropPct = 0;
     const previousPrice = await this.deps.findPreviousPrice(listingId);
@@ -165,7 +189,9 @@ export class ScoreAndAlert {
       firstSeenAt: listing.firstSeenAt,
       lastPriceChangeAt: listing.lastPriceChangeAt,
       completenessScore: listing.completenessScore,
-      sourceHealthScore: params.sourceHealthScore,
+      sourceHealthScore: baselineStale
+        ? Math.round(params.sourceHealthScore * 0.7) // Penalize confidence when baselines are stale
+        : params.sourceHealthScore,
       locationConfidence: params.locationConfidence,
       recentPriceDropPct,
       relistDetected,
@@ -216,50 +242,80 @@ export class ScoreAndAlert {
     const alertType = this.determineAlertType(versionReason, scoreImproved, priceDecreased);
 
     for (const match of matched) {
+      const channels: string[] = match.alertChannels.length > 0 ? match.alertChannels : ['in_app'];
       const dedupeKey = buildAlertDedupeKey({
         filterId: match.filterId,
         listingId,
         alertType,
         scoreVersion: score.scoreVersion,
       });
+      const title = this.buildAlertTitle(alertType, listing.title);
+      const body = this.buildAlertBody(alertType, listing);
 
-      const alertInput: AlertCreate = {
-        userId: match.userId,
-        userFilterId: match.filterId,
-        listingId,
-        listingVersionId,
-        alertType,
-        channel: 'in_app',
-        dedupeKey,
-        title: this.buildAlertTitle(alertType, listing.title),
-        body: this.buildAlertBody(alertType, listing),
-      };
+      for (const channel of channels) {
+        const alertInput: AlertCreate = {
+          userId: match.userId,
+          userFilterId: match.filterId,
+          listingId,
+          listingVersionId,
+          alertType,
+          channel: channel as AlertChannel,
+          dedupeKey,
+          title,
+          body,
+        };
 
-      let alertResult: { id: number } | null = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          alertResult = await this.deps.createAlert(alertInput);
-          break;
-        } catch (err) {
-          if (attempt === 3) {
-            log.error('Alert creation failed after 3 attempts', {
-              filterId: match.filterId,
-              listingId,
-              alertType,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          } else {
-            log.warn(`Alert creation attempt ${attempt} failed, retrying`, {
-              filterId: match.filterId,
-              listingId,
-            });
-            await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+        let alertResult: { id: number } | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            alertResult = await this.deps.createAlert(alertInput);
+            break;
+          } catch (err) {
+            if (attempt === 3) {
+              log.error('Alert creation failed after 3 attempts', {
+                filterId: match.filterId,
+                listingId,
+                alertType,
+                channel,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            } else {
+              log.warn(`Alert creation attempt ${attempt} failed, retrying`, {
+                filterId: match.filterId,
+                listingId,
+                channel,
+              });
+              await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+            }
           }
         }
-      }
-      if (alertResult) {
-        log.info('Alert created', { filterId: match.filterId, listingId, alertType, dedupeKey });
-        alertsCreated++;
+        if (alertResult) {
+          alertsCreated++;
+          log.info('Alert created', {
+            filterId: match.filterId,
+            listingId,
+            alertType,
+            channel,
+            dedupeKey,
+          });
+
+          // Enqueue async delivery for non-in_app channels
+          if (channel !== 'in_app' && this.deps.enqueueDelivery) {
+            try {
+              await this.deps.enqueueDelivery(
+                alertResult.id,
+                channel as AlertChannel,
+                match.userId,
+              );
+            } catch (err) {
+              log.error('Failed to enqueue alert delivery', {
+                alertId: alertResult.id,
+                channel,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
       }
     }
 

@@ -115,3 +115,26 @@ export const sourceHealthGauge = new Gauge({
   labelNames: ['source'] as const,
   registers: [registry],
 });
+
+// Alert delivery metrics
+
+export const alertDeliveryTotal = new Counter({
+  name: 'rei_alert_delivery_total',
+  help: 'Alert delivery attempts by channel and outcome',
+  labelNames: ['channel', 'outcome'] as const,
+  registers: [registry],
+});
+
+export const alertDeliveryDuration = new Histogram({
+  name: 'rei_alert_delivery_duration_seconds',
+  help: 'Time to deliver an alert by channel',
+  labelNames: ['channel'] as const,
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30],
+  registers: [registry],
+});
+
+export const pushTokensActive = new Gauge({
+  name: 'rei_push_tokens_active',
+  help: 'Number of active push device tokens',
+  registers: [registry],
+});

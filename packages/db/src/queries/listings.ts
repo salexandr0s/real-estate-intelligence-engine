@@ -780,3 +780,31 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
       };
   }
 }
+
+// ── Stale Listing Detection ──────────────────────────────────────────────────
+
+/** Find active listings not observed within the threshold. */
+export async function findStaleActive(thresholdDays: number, limit = 100): Promise<ListingRow[]> {
+  const rows = await query<ListingDbRow>(
+    `SELECT * FROM listings
+     WHERE listing_status = 'active'
+       AND last_seen_at < NOW() - make_interval(days => $1)
+     ORDER BY last_seen_at ASC
+     LIMIT $2`,
+    [thresholdDays, limit],
+  );
+  return rows.map(toListingRow);
+}
+
+/** Mark a single listing as expired. */
+export async function markExpired(id: number): Promise<ListingRow | null> {
+  const rows = await query<ListingDbRow>(
+    `UPDATE listings
+     SET listing_status = 'expired'
+     WHERE id = $1 AND listing_status = 'active'
+     RETURNING *`,
+    [id],
+  );
+  const row = rows[0];
+  return row ? toListingRow(row) : null;
+}

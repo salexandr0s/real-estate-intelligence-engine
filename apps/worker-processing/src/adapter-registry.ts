@@ -1,9 +1,9 @@
 /**
  * Registers all source adapters into the shared registry at startup.
- * Re-exports getAdapter for convenience.
+ * Used by the canary worker which needs adapter access.
  */
 
-import { registerAdapters, getAdapter } from '@rei/scraper-core';
+import { registerAdapters } from '@rei/scraper-core';
 import { WillhabenAdapter } from '@rei/source-willhaben';
 import { Immoscout24Adapter } from '@rei/source-immoscout24';
 import { WohnnetAdapter } from '@rei/source-wohnnet';
@@ -21,5 +21,3 @@ registerAdapters([
   new OpenImmoAdapter(),
   new RemaxAdapter(),
 ]);
-
-export { getAdapter };

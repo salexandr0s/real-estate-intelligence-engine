@@ -22,6 +22,14 @@ export * as feedback from './queries/feedback.js';
 export * as proximity from './queries/proximity.js';
 export * as listingPois from './queries/listing-pois.js';
 export * as dashboard from './queries/dashboard.js';
+export * as deadLetter from './queries/dead-letter.js';
+export * as canaryResults from './queries/canary-results.js';
+export * as deviceTokens from './queries/device-tokens.js';
+export * as appUsers from './queries/app-users.js';
+
+// ── LISTEN/NOTIFY ──────────────────────────────────────────────────────────
+export { subscribeToAlerts, closeNotifyClient } from './notify.js';
+export type { AlertNotification, AlertListener } from './notify.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
 export type { SourceCreateInput } from './queries/sources.js';
@@ -31,3 +39,5 @@ export type { UpsertBaselineInput, MarketBaselineRow } from './queries/market-ba
 export type { UpsertPoiInput, PoiRow, PoiNearbyRow } from './queries/pois.js';
 export type { ListingPoiRow } from './queries/listing-pois.js';
 export type { UpsertDevelopmentInput, WienDevelopmentRow } from './queries/wien-developments.js';
+export type { DeviceTokenRow } from './queries/device-tokens.js';
+export type { AppUserRow } from './queries/app-users.js';
