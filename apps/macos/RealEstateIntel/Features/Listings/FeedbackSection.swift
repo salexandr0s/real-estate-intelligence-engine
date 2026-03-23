@@ -63,13 +63,10 @@ struct FeedbackSection: View {
                 .buttonStyle(.plain)
 
                 if showNotes {
-                    TextEditor(text: $notes)
+                    TextField("Add notes...", text: $notes, axis: .vertical)
                         .font(.caption)
-                        .frame(height: 60)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                        )
+                        .lineLimit(3...5)
+                        .textFieldStyle(.roundedBorder)
 
                     Button("Save Notes") {
                         Task { await saveNotes() }

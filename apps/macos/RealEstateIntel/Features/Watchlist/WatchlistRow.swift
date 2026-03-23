@@ -67,14 +67,11 @@ struct WatchlistRow: View {
             }
 
             // Unsave button
-            Button {
-                onUnsave()
-            } label: {
-                Image(systemName: "bookmark.slash")
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.borderless)
-            .help("Remove from watchlist")
+            Button("Remove from watchlist", systemImage: "bookmark.slash", action: onUnsave)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.red)
+                .buttonStyle(.borderless)
+                .help("Remove from watchlist")
         }
         .padding(.vertical, Theme.Spacing.xs)
     }

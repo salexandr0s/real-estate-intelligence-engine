@@ -16,12 +16,14 @@ struct ListingHeaderSection: View {
                 Spacer()
 
                 if let onToggleSave {
-                    Button {
+                    Button(
+                        isSaved ? "Remove from watchlist" : "Save to watchlist",
+                        systemImage: isSaved ? "bookmark.fill" : "bookmark"
+                    ) {
                         onToggleSave()
-                    } label: {
-                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                            .foregroundStyle(isSaved ? .yellow : .secondary)
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(isSaved ? .yellow : .secondary)
                     .buttonStyle(.borderless)
                     .help(isSaved ? "Remove from watchlist" : "Save to watchlist")
                 }

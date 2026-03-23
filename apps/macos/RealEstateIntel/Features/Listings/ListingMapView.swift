@@ -47,13 +47,7 @@ struct ListingMapView: View {
                 .mapStyle(mapStyle)
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-                .onAppear {
-                    position = .region(MKCoordinateRegion(
-                        center: coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
-                    ))
-                }
-                .onChange(of: listing.id) {
+                .task(id: listing.id) {
                     if let coord = listing.coordinate {
                         position = .region(MKCoordinateRegion(
                             center: coord,

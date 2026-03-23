@@ -41,25 +41,23 @@ struct CopilotInputBar: View {
     @ViewBuilder
     private var actionButton: some View {
         if isStreaming {
-            Button(action: onStop) {
-                Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.plain)
-            .help("Stop generating")
+            Button("Stop generating", systemImage: "stop.circle.fill", action: onStop)
+                .labelStyle(.iconOnly)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(.red)
+                .buttonStyle(.plain)
+                .help("Stop generating")
         } else {
-            Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(
-                        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? Color.secondary.opacity(0.4) : Color.accentColor
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .help("Send message (Return)")
+            Button("Send message", systemImage: "arrow.up.circle.fill", action: onSend)
+                .labelStyle(.iconOnly)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(
+                    text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? Color.secondary.opacity(0.4) : Color.accentColor
+                )
+                .buttonStyle(.plain)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("Send message (Return)")
         }
     }
 }

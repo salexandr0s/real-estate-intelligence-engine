@@ -6,6 +6,7 @@ struct ListingsView: View {
     @State private var viewModel = ListingsViewModel()
     @State private var showInspector: Bool = false
     @State private var exportError: String?
+    @State private var showExportError: Bool = false
 
     var body: some View {
         HSplitView {
@@ -144,7 +145,10 @@ struct ListingsView: View {
                 appState.deepLinkListingId = nil
             }
         }
-        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {} message: {
+        .onChange(of: exportError) { _, newValue in
+            showExportError = newValue != nil
+        }
+        .alert("Export Failed", isPresented: $showExportError) {} message: {
             if let msg = exportError { Text(msg) }
         }
     }

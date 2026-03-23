@@ -4,6 +4,7 @@ import SwiftUI
 struct FiltersView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = FiltersViewModel()
+    @State private var showTestError: Bool = false
 
     var body: some View {
         Group {
@@ -49,13 +50,10 @@ struct FiltersView: View {
         .task {
             await viewModel.refresh(using: appState.apiClient)
         }
-        .alert(
-            "Test Failed",
-            isPresented: Binding(
-                get: { viewModel.testErrorMessage != nil },
-                set: { if !$0 { viewModel.testErrorMessage = nil } }
-            )
-        ) {
+        .onChange(of: viewModel.testErrorMessage) { _, newValue in
+            showTestError = newValue != nil
+        }
+        .alert("Test Failed", isPresented: $showTestError) {
             Button("OK", role: .cancel) {}
         } message: {
             if let msg = viewModel.testErrorMessage {
@@ -390,17 +388,8 @@ private struct FilterEditorSheet: View {
                             .fontWeight(.medium)
                         HStack(spacing: Theme.Spacing.sm) {
                             ForEach(PropertyType.allCases) { propType in
-                                Toggle(propType.displayName, isOn: Binding(
-                                    get: { draft.selectedPropertyTypes.contains(propType) },
-                                    set: { selected in
-                                        if selected {
-                                            draft.selectedPropertyTypes.insert(propType)
-                                        } else {
-                                            draft.selectedPropertyTypes.remove(propType)
-                                        }
-                                    }
-                                ))
-                                .toggleStyle(.checkbox)
+                                Toggle(propType.displayName, isOn: propertyTypeBinding(propType))
+                                    .toggleStyle(.checkbox)
                             }
                         }
                     }
@@ -524,6 +513,19 @@ private struct FilterEditorSheet: View {
         }
         .frame(width: 560, height: 640)
     }
+
+    private func propertyTypeBinding(_ type: PropertyType) -> Binding<Bool> {
+        Binding(
+            get: { draft.selectedPropertyTypes.contains(type) },
+            set: { selected in
+                if selected {
+                    draft.selectedPropertyTypes.insert(type)
+                } else {
+                    draft.selectedPropertyTypes.remove(type)
+                }
+            }
+        )
+    }
 }
 
 // MARK: - District Grid
@@ -536,16 +538,7 @@ private struct DistrictGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.xs) {
             ForEach(ViennaDistricts.all, id: \.number) { district in
-                Toggle(isOn: Binding(
-                    get: { selected.contains(district.number) },
-                    set: { isOn in
-                        if isOn {
-                            selected.insert(district.number)
-                        } else {
-                            selected.remove(district.number)
-                        }
-                    }
-                )) {
+                Toggle(isOn: districtBinding(district.number)) {
                     Text("\(district.number). \(district.name)")
                         .font(.caption)
                         .lineLimit(1)
@@ -553,6 +546,19 @@ private struct DistrictGrid: View {
                 .toggleStyle(.checkbox)
             }
         }
+    }
+
+    private func districtBinding(_ number: Int) -> Binding<Bool> {
+        Binding(
+            get: { selected.contains(number) },
+            set: { isOn in
+                if isOn {
+                    selected.insert(number)
+                } else {
+                    selected.remove(number)
+                }
+            }
+        )
     }
 }
 
