@@ -68,6 +68,13 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
           maximum: 100,
           description: 'Minimum composite score (0-100). Use 70+ for good deals.',
         },
+        minLocationScore: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description:
+            'Minimum location score (0-100). Measures transit proximity (U-Bahn, tram, bus), parks, schools, supermarkets, hospitals. Use 60+ for well-connected, 75+ for great, 85+ for top-tier locations.',
+        },
         sortBy: {
           type: 'string',
           enum: ['score_desc', 'newest', 'price_asc', 'price_desc', 'sqm_desc'],

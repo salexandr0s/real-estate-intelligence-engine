@@ -20,6 +20,7 @@ export * as savedListings from './queries/saved-listings.js';
 export * as clusters from './queries/clusters.js';
 export * as feedback from './queries/feedback.js';
 export * as proximity from './queries/proximity.js';
+export * as listingPois from './queries/listing-pois.js';
 export * as dashboard from './queries/dashboard.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
@@ -28,4 +29,5 @@ export type { ListingSearchFilter } from './queries/listings.js';
 export type { AppendVersionInput, ListingVersionRow } from './queries/listing-versions.js';
 export type { UpsertBaselineInput, MarketBaselineRow } from './queries/market-baselines.js';
 export type { UpsertPoiInput, PoiRow, PoiNearbyRow } from './queries/pois.js';
+export type { ListingPoiRow } from './queries/listing-pois.js';
 export type { UpsertDevelopmentInput, WienDevelopmentRow } from './queries/wien-developments.js';

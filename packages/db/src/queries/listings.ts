@@ -407,6 +407,7 @@ export interface ListingSearchFilter {
   minRooms?: number | null;
   maxRooms?: number | null;
   minScore?: number | null;
+  minLocationScore?: number | null;
   sortBy?: SortBy;
 }
 
@@ -425,8 +426,24 @@ export async function searchListings(
   const sortBy = filter.sortBy ?? 'score_desc';
   const { orderClause, cursorClause, cursorParams } = buildSortAndCursor(sortBy, cursor);
 
-  // Parameter offset: filter params are $1-$10, cursor params start at $11
-  const filterParamOffset = 10;
+  // Location score join is only included when the filter is active to avoid
+  // a correlated subquery on every row for the common case.
+  const needsLocationJoin = filter.minLocationScore != null;
+  const locationJoin = needsLocationJoin
+    ? `LEFT JOIN LATERAL (
+        SELECT ls.location_score
+        FROM listing_scores ls
+        WHERE ls.listing_id = l.id
+        ORDER BY ls.scored_at DESC
+        LIMIT 1
+      ) lscore ON true`
+    : '';
+  const locationFilter = needsLocationJoin
+    ? 'AND ($11::numeric IS NULL OR lscore.location_score >= $11)'
+    : '';
+
+  // Parameter offset: filter params are $1-$11, cursor params start at $12
+  const filterParamOffset = 11;
   const cursorParamSql = cursorClause
     ? cursorClause.replace(/\$(\d+)/g, (_, n: string) => `$${Number(n) + filterParamOffset}`)
     : '';
@@ -472,6 +489,7 @@ export async function searchListings(
       ORDER BY v.version_no DESC
       LIMIT 1
     ) pc ON true
+    ${locationJoin}
     WHERE l.listing_status = 'active'
       AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)
@@ -484,6 +502,7 @@ export async function searchListings(
       AND ($8::numeric IS NULL OR l.rooms >= $8)
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
+      ${locationFilter}
       ${cursorParamSql ? `AND (${cursorParamSql})` : ''}
     ORDER BY ${orderClause}
     LIMIT $${limitParamIndex}
@@ -500,6 +519,7 @@ export async function searchListings(
     filter.minRooms ?? null,
     filter.maxRooms ?? null,
     filter.minScore ?? null,
+    filter.minLocationScore ?? null,
   ];
 
   const params: unknown[] = [
@@ -512,6 +532,7 @@ export async function searchListings(
   const countSql = `
     SELECT COUNT(*) AS total
     FROM listings l
+    ${locationJoin}
     WHERE l.listing_status = 'active'
       AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)
@@ -524,6 +545,7 @@ export async function searchListings(
       AND ($8::numeric IS NULL OR l.rooms >= $8)
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
+      ${locationFilter}
   `;
 
   const [rows, countRows] = await Promise.all([

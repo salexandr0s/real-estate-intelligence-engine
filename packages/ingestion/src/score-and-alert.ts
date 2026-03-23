@@ -69,6 +69,8 @@ export interface ScoreAndAlertDeps {
   getListingCoordinates: (
     listingId: number,
   ) => Promise<{ latitude: number; longitude: number } | null>;
+
+  cacheNearestPois?: (listingId: number, latitude: number, longitude: number) => Promise<void>;
 }
 
 export class ScoreAndAlert {
@@ -136,6 +138,9 @@ export class ScoreAndAlert {
     if (coords) {
       try {
         proximityData = await this.deps.computeProximity(coords.latitude, coords.longitude);
+        // TODO: computeProximity and cacheNearestPois both call findNearby internally.
+        // Refactor to share the result and avoid the duplicate Haversine query.
+        await this.deps.cacheNearestPois?.(listingId, coords.latitude, coords.longitude);
       } catch (err) {
         log.warn('Proximity computation failed, using default', {
           listingId,

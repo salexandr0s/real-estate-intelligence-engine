@@ -2,7 +2,15 @@
 // Routes tool calls to existing @rei/db query functions and formats results
 // into ContentBlock types for the Swift client + text summaries for Claude.
 
-import { listings, listingScores, listingVersions, clusters, pois, dashboard } from '@rei/db';
+import {
+  listings,
+  listingScores,
+  listingVersions,
+  clusters,
+  pois,
+  listingPois,
+  dashboard,
+} from '@rei/db';
 import { VIENNA_DISTRICTS } from '@rei/contracts';
 import type {
   ContentBlock,
@@ -71,6 +79,7 @@ interface SearchInput {
   minRooms?: number;
   maxRooms?: number;
   minScore?: number;
+  minLocationScore?: number;
   sortBy?: string;
 }
 
@@ -105,6 +114,7 @@ function asSearchInput(input: unknown): SearchInput {
     minRooms: typeof obj.minRooms === 'number' ? obj.minRooms : undefined,
     maxRooms: typeof obj.maxRooms === 'number' ? obj.maxRooms : undefined,
     minScore: typeof obj.minScore === 'number' ? obj.minScore : undefined,
+    minLocationScore: typeof obj.minLocationScore === 'number' ? obj.minLocationScore : undefined,
     sortBy: typeof obj.sortBy === 'string' ? obj.sortBy : undefined,
   };
 }
@@ -167,6 +177,7 @@ async function executeSearchListings(input: unknown): Promise<ToolResult> {
       minRooms: params.minRooms,
       maxRooms: params.maxRooms,
       minScore: params.minScore,
+      minLocationScore: params.minLocationScore,
       sortBy: (params.sortBy as SortBy) ?? 'score_desc',
     },
     null,
@@ -524,58 +535,89 @@ async function executeGetNearbyPois(input: unknown): Promise<ToolResult> {
     };
   }
 
-  if (listing.latitude == null || listing.longitude == null) {
+  // Try cached POIs first, fall back to live Haversine computation
+  let poiData: { name: string; category: string; distanceM: number }[] = [];
+  const cached = await listingPois.getByListingId(listingId);
+
+  if (cached.length > 0) {
+    poiData = cached.map((r) => ({
+      name: r.poiName,
+      category: r.category,
+      distanceM: r.distanceM,
+    }));
+  } else if (listing.latitude != null && listing.longitude != null) {
+    const nearby = await pois.findNearby(listing.latitude, listing.longitude, 2000);
+    // Cache for next time (best-effort, don't break the response on failure)
+    try {
+      await listingPois.cacheNearestPois(listingId, nearby);
+    } catch {
+      // Cache write failed — non-critical, continue with live data
+    }
+    // Take top 2 per category to match cached format
+    const byCategory = new Map<string, typeof nearby>();
+    for (const poi of nearby) {
+      const existing = byCategory.get(poi.category);
+      if (existing) {
+        if (existing.length < 2) existing.push(poi);
+      } else {
+        byCategory.set(poi.category, [poi]);
+      }
+    }
+    for (const items of byCategory.values()) {
+      for (const item of items) {
+        poiData.push({ name: item.name, category: item.category, distanceM: item.distanceM });
+      }
+    }
+  } else {
     return {
       contentBlock: {
         type: 'text',
-        text: `Listing ${listingId} has no geocoded coordinates. Proximity data is unavailable.`,
+        text: `Listing ${listingId} has no geocoded coordinates and no cached proximity data.`,
       },
       rawForClaude: `Listing ${listingId} has no geocoded coordinates.`,
     };
   }
 
-  const nearby = await pois.findNearby(listing.latitude, listing.longitude, 2000);
-
-  // Group by category
+  // Unified output: show up to 2 closest named POIs per category
   const categories = new Map<string, { name: string; distanceM: number }[]>();
-  for (const poi of nearby) {
+  for (const poi of poiData) {
     const existing = categories.get(poi.category) ?? [];
     existing.push({ name: poi.name, distanceM: poi.distanceM });
     categories.set(poi.category, existing);
   }
 
-  const stats: { label: string; value: string | number; trend?: 'up' | 'down' | 'flat' }[] = [];
+  const transitCats = ['ubahn', 'tram', 'bus'];
   const categoryLabels: Record<string, string> = {
-    ubahn: 'Nearest U-Bahn',
-    tram: 'Nearest Tram',
-    bus: 'Nearest Bus',
-    park: 'Parks within 500m',
-    school: 'Schools within 500m',
-    supermarket: 'Supermarkets within 500m',
-    hospital: 'Hospitals within 2km',
-    doctor: 'Doctors within 500m',
-    police: 'Police within 1km',
-    fire_station: 'Fire Stations within 1km',
+    ubahn: 'U-Bahn',
+    tram: 'Tram',
+    bus: 'Bus',
+    park: 'Park',
+    school: 'School',
+    supermarket: 'Supermarket',
+    hospital: 'Hospital',
+    doctor: 'Doctor',
+    police: 'Police',
+    fire_station: 'Fire Station',
   };
 
+  const stats: { label: string; value: string | number }[] = [];
   for (const [cat, label] of Object.entries(categoryLabels)) {
     const items = categories.get(cat) ?? [];
-    if (['ubahn', 'tram', 'bus'].includes(cat)) {
-      const nearest = items[0];
+    if (items.length === 0) {
+      stats.push({ label: `Nearest ${label}`, value: 'None nearby' });
+      continue;
+    }
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]!;
+      const suffix = items.length > 1 ? ` (#${i + 1})` : '';
       stats.push({
-        label,
-        value: nearest ? `${nearest.name} (${Math.round(nearest.distanceM)}m)` : 'None nearby',
+        label: transitCats.includes(cat) ? `${label}${suffix}` : `Nearest ${label}${suffix}`,
+        value: `${item.name} (${Math.round(item.distanceM)}m)`,
       });
-    } else {
-      const radius =
-        cat === 'hospital' ? 2000 : cat === 'police' || cat === 'fire_station' ? 1000 : 500;
-      const count = items.filter((i) => i.distanceM <= radius).length;
-      stats.push({ label, value: count });
     }
   }
 
   const block: ContentBlock = { type: 'market_stats', stats };
-
   const rawLines = stats.map((s) => `  ${s.label}: ${s.value}`);
   const rawForClaude = `Points of interest near listing #${listingId} "${listing.title}":\n${rawLines.join('\n')}`;
 

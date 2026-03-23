@@ -28,6 +28,7 @@ import {
   userFilters,
   alerts,
   proximity,
+  listingPois,
 } from '@rei/db';
 import {
   rawSnapshotRate,
@@ -134,6 +135,9 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         const row = await listings.findById(listingId);
         if (!row || row.latitude == null || row.longitude == null) return null;
         return { latitude: row.latitude, longitude: row.longitude };
+      },
+      cacheNearestPois: async (listingId, latitude, longitude) => {
+        await listingPois.computeAndCache(listingId, latitude, longitude);
       },
     },
   };
