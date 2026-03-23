@@ -258,6 +258,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         data: {
           id: listing.id,
           listingUid: listing.listingUid,
+          sourceCode: listing.sourceCode,
           sourceListingKey: listing.sourceListingKey,
           canonicalUrl: listing.canonicalUrl,
           operationType: listing.operationType,

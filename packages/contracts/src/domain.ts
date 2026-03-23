@@ -139,6 +139,7 @@ export interface ListingRow {
   id: number;
   listingUid: string;
   sourceId: number;
+  sourceCode?: string;
   sourceListingKey: string;
   sourceExternalId: string | null;
   currentRawListingId: number;

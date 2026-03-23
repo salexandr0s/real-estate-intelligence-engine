@@ -371,7 +371,13 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
 export async function findById(id: number): Promise<ListingRow | null> {
-  const rows = await query<ListingDbRow>('SELECT * FROM listings WHERE id = $1', [id]);
+  const rows = await query<ListingDbRow>(
+    `SELECT l.*, s.code AS source_code
+     FROM listings l
+     JOIN sources s ON s.id = l.source_id
+     WHERE l.id = $1`,
+    [id],
+  );
   const row = rows[0];
   return row ? toListingRow(row) : null;
 }
@@ -408,6 +414,7 @@ export interface ListingSearchFilter {
   maxRooms?: number | null;
   minScore?: number | null;
   minLocationScore?: number | null;
+  maxPoiDistances?: Record<string, number> | null;
   sortBy?: SortBy;
 }
 
@@ -442,8 +449,27 @@ export async function searchListings(
     ? 'AND ($11::numeric IS NULL OR lscore.location_score >= $11)'
     : '';
 
-  // Parameter offset: filter params are $1-$11, cursor params start at $12
-  const filterParamOffset = 11;
+  // POI proximity filter — uses listing_pois cache to filter by distance to POI categories.
+  // Passes two parallel arrays (categories + max distances) and ensures every requirement is met.
+  const poiEntries = filter.maxPoiDistances
+    ? Object.entries(filter.maxPoiDistances).filter(([, v]) => v > 0)
+    : [];
+  const needsPoiFilter = poiEntries.length > 0;
+  const poiFilter = needsPoiFilter
+    ? `AND NOT EXISTS (
+        SELECT 1 FROM unnest($12::text[], $13::numeric[]) AS req(category, max_dist)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM listing_pois lp
+          WHERE lp.listing_id = l.id
+            AND lp.category = req.category
+            AND lp.rank = 1
+            AND lp.distance_m <= req.max_dist
+        )
+      )`
+    : '';
+
+  // Parameter offset: filter params are $1-$13, cursor params start at $14
+  const filterParamOffset = 13;
   const cursorParamSql = cursorClause
     ? cursorClause.replace(/\$(\d+)/g, (_, n: string) => `$${Number(n) + filterParamOffset}`)
     : '';
@@ -503,6 +529,7 @@ export async function searchListings(
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
       ${locationFilter}
+      ${poiFilter}
       ${cursorParamSql ? `AND (${cursorParamSql})` : ''}
     ORDER BY ${orderClause}
     LIMIT $${limitParamIndex}
@@ -520,6 +547,8 @@ export async function searchListings(
     filter.maxRooms ?? null,
     filter.minScore ?? null,
     filter.minLocationScore ?? null,
+    needsPoiFilter ? poiEntries.map(([cat]) => cat) : null,
+    needsPoiFilter ? poiEntries.map(([, dist]) => dist) : null,
   ];
 
   const params: unknown[] = [
@@ -546,6 +575,7 @@ export async function searchListings(
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
       ${locationFilter}
+      ${poiFilter}
   `;
 
   const [rows, countRows] = await Promise.all([

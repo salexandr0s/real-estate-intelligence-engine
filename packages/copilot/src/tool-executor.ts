@@ -80,6 +80,7 @@ interface SearchInput {
   maxRooms?: number;
   minScore?: number;
   minLocationScore?: number;
+  maxPoiDistances?: Record<string, number>;
   sortBy?: string;
 }
 
@@ -115,8 +116,35 @@ function asSearchInput(input: unknown): SearchInput {
     maxRooms: typeof obj.maxRooms === 'number' ? obj.maxRooms : undefined,
     minScore: typeof obj.minScore === 'number' ? obj.minScore : undefined,
     minLocationScore: typeof obj.minLocationScore === 'number' ? obj.minLocationScore : undefined,
+    maxPoiDistances: parsePoiDistances(obj.maxPoiDistances),
     sortBy: typeof obj.sortBy === 'string' ? obj.sortBy : undefined,
   };
+}
+
+const VALID_POI_CATEGORIES = new Set([
+  'ubahn',
+  'tram',
+  'bus',
+  'park',
+  'school',
+  'supermarket',
+  'hospital',
+  'doctor',
+  'police',
+  'fire_station',
+  'taxi',
+]);
+
+function parsePoiDistances(value: unknown): Record<string, number> | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const obj = value as Record<string, unknown>;
+  const result: Record<string, number> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (VALID_POI_CATEGORIES.has(key) && typeof val === 'number' && val > 0) {
+      result[key] = val;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function asListingIdInput(input: unknown): ListingIdInput | null {
@@ -178,6 +206,7 @@ async function executeSearchListings(input: unknown): Promise<ToolResult> {
       maxRooms: params.maxRooms,
       minScore: params.minScore,
       minLocationScore: params.minLocationScore,
+      maxPoiDistances: params.maxPoiDistances,
       sortBy: (params.sortBy as SortBy) ?? 'score_desc',
     },
     null,

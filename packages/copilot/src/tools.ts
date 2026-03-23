@@ -75,6 +75,24 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
           description:
             'Minimum location score (0-100). Measures transit proximity (U-Bahn, tram, bus), parks, schools, supermarkets, hospitals. Use 60+ for well-connected, 75+ for great, 85+ for top-tier locations.',
         },
+        maxPoiDistances: {
+          type: 'object',
+          properties: {
+            ubahn: { type: 'integer', description: 'Max metres to nearest U-Bahn station' },
+            tram: { type: 'integer', description: 'Max metres to nearest tram stop' },
+            bus: { type: 'integer', description: 'Max metres to nearest bus stop' },
+            park: { type: 'integer', description: 'Max metres to nearest park' },
+            school: { type: 'integer', description: 'Max metres to nearest school' },
+            supermarket: {
+              type: 'integer',
+              description: 'Max metres to nearest supermarket',
+            },
+            hospital: { type: 'integer', description: 'Max metres to nearest hospital' },
+            doctor: { type: 'integer', description: 'Max metres to nearest doctor' },
+          },
+          description:
+            'Filter by proximity to points of interest. Specify category keys with max distance in metres. Common: ubahn 500 (walking), park 300, supermarket 500. Only listings with a cached POI within that distance are returned.',
+        },
         sortBy: {
           type: 'string',
           enum: ['score_desc', 'newest', 'price_asc', 'price_desc', 'sqm_desc'],

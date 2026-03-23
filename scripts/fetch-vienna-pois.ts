@@ -101,8 +101,8 @@ const TAXI_PAGE_URL = 'https://www.wien.gv.at/en/transportation/taxistands';
 
 const USER_AGENT = 'RealEstateIntel/0.1 (poi-fetch)';
 
-const OVERPASS_DELAY_MS = 6_000;
-const OVERPASS_MAX_RETRIES = 2;
+const OVERPASS_DELAY_MS = 12_000;
+const OVERPASS_MAX_RETRIES = 4;
 const NOMINATIM_DELAY_MS = 1_100;
 
 // ── Overpass category definitions ────────────────────────────────────────────
