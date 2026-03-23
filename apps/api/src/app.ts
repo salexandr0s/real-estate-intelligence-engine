@@ -24,6 +24,8 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { copilotRoutes } from './routes/copilot.js';
 import { deviceRoutes } from './routes/devices.js';
+import { analysisRoutes } from './routes/analysis.js';
+import { documentRoutes } from './routes/documents.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
@@ -109,6 +111,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(copilotRoutes);
   await app.register(deviceRoutes);
+  await app.register(analysisRoutes);
+  await app.register(documentRoutes);
 
   // API request duration metrics
   app.addHook('onResponse', (_request, reply, done) => {

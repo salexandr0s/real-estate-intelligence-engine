@@ -21,6 +21,9 @@ interface ListingScoreDbRow {
   discount_to_bucket_pct: string | null;
   matched_positive_keywords: string[];
   matched_negative_keywords: string[];
+  baseline_fallback_level: string | null;
+  baseline_sample_size: string | null;
+  baseline_freshness_hours: string | null;
   explanation: Record<string, unknown>;
   scored_at: Date;
   created_at: Date;
@@ -47,6 +50,11 @@ function toScoreResult(row: ListingScoreDbRow): ScoreResult {
     matchedNegativeKeywords: row.matched_negative_keywords,
     explanation: row.explanation,
     scoreVersion: row.score_version,
+    baselineFallbackLevel: row.baseline_fallback_level ?? undefined,
+    baselineSampleSize:
+      row.baseline_sample_size != null ? Number(row.baseline_sample_size) : undefined,
+    baselineFreshnessHours:
+      row.baseline_freshness_hours != null ? Number(row.baseline_freshness_hours) : undefined,
   };
 }
 
@@ -66,9 +74,12 @@ export async function insertScore(
        district_baseline_ppsqm_eur, bucket_baseline_ppsqm_eur,
        discount_to_district_pct, discount_to_bucket_pct,
        matched_positive_keywords, matched_negative_keywords,
-       explanation, scored_at
+       explanation,
+       baseline_fallback_level, baseline_sample_size, baseline_freshness_hours,
+       scored_at
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+       $18, $19, $20, NOW()
      )
      ON CONFLICT (listing_version_id, score_version) DO UPDATE SET
        overall_score = EXCLUDED.overall_score,
@@ -78,6 +89,9 @@ export async function insertScore(
        time_on_market_score = EXCLUDED.time_on_market_score,
        confidence_score = EXCLUDED.confidence_score,
        location_score = EXCLUDED.location_score,
+       baseline_fallback_level = EXCLUDED.baseline_fallback_level,
+       baseline_sample_size = EXCLUDED.baseline_sample_size,
+       baseline_freshness_hours = EXCLUDED.baseline_freshness_hours,
        scored_at = NOW()`,
     [
       listingId,
@@ -97,6 +111,9 @@ export async function insertScore(
       score.matchedPositiveKeywords,
       score.matchedNegativeKeywords,
       JSON.stringify(score.explanation),
+      score.baselineFallbackLevel ?? null,
+      score.baselineSampleSize ?? null,
+      score.baselineFreshnessHours ?? null,
     ],
   );
 }

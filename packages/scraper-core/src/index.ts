@@ -59,6 +59,7 @@ export {
   type StaleCheckJobData,
   type CanaryJobData,
   type AlertDeliveryJobData,
+  type DocumentProcessingJobData,
   DEFAULT_JOB_RETRY_OPTS,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';

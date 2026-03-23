@@ -23,9 +23,14 @@ import {
   setupRequestInterception,
   DEFAULT_JOB_RETRY_OPTS,
 } from '@rei/scraper-core';
-import type { DetailJobData, ProcessingJobData } from '@rei/scraper-core';
+import type {
+  DetailJobData,
+  ProcessingJobData,
+  DocumentProcessingJobData,
+} from '@rei/scraper-core';
+import type { DetailCapture } from '@rei/contracts';
 import { loadConfig } from '@rei/config';
-import { sources, deadLetter } from '@rei/db';
+import { sources, deadLetter, documents, listings } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
 
@@ -36,6 +41,11 @@ export function createDetailWorker(): Worker<DetailJobData> {
   const prefix = getQueuePrefix();
 
   const processingQueue = new Queue<ProcessingJobData>(QUEUE_NAMES.PROCESSING, {
+    connection,
+    prefix,
+  });
+
+  const documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
     connection,
     prefix,
   });
@@ -146,6 +156,17 @@ export function createDetailWorker(): Worker<DetailJobData> {
           DEFAULT_JOB_RETRY_OPTS,
         );
 
+        // Enqueue document processing for any attachment URLs found on the page.
+        // Best-effort: failures here never break the main detail flow.
+        try {
+          await enqueueAttachmentDocuments(detailCapture, sourceId, documentQueue);
+        } catch (docErr) {
+          log.warn('Failed to enqueue attachment documents', {
+            detailUrl: fullUrl,
+            error: docErr instanceof Error ? docErr.message : String(docErr),
+          });
+        }
+
         circuitBreaker.recordSuccess(sourceCode);
         const payload = detailCapture.payload as Record<string, unknown>;
         log.info('Detail extracted', { title: (payload.titleRaw as string) ?? 'Unknown' });
@@ -245,4 +266,50 @@ export function createDetailWorker(): Worker<DetailJobData> {
   });
 
   return worker;
+}
+
+/**
+ * For each attachment URL on the detail capture, upsert a listing_documents
+ * row (if the listing already exists) and enqueue a DOCUMENT_PROCESSING job.
+ *
+ * This is best-effort: if the listing hasn't been created yet (first scrape),
+ * the attachmentUrls are preserved in captureJson for downstream handling.
+ */
+async function enqueueAttachmentDocuments(
+  capture: DetailCapture<unknown>,
+  sourceId: number,
+  docQueue: Queue<DocumentProcessingJobData>,
+): Promise<void> {
+  const urls = capture.attachmentUrls;
+  if (!urls || urls.length === 0) return;
+
+  const sourceKey = capture.sourceListingKeyCandidate;
+  if (!sourceKey) return;
+
+  const listing = await listings.findBySourceKey(sourceId, sourceKey);
+  if (!listing) {
+    // Listing not yet created — attachmentUrls will be processed after ingestion
+    log.debug('Listing not yet created, skipping document enqueue', {
+      sourceKey,
+      attachmentCount: urls.length,
+    });
+    return;
+  }
+
+  for (const attachment of urls) {
+    const doc = await documents.upsertDocument({
+      listingId: listing.id,
+      url: attachment.url,
+      label: attachment.label ?? null,
+      documentType: attachment.type ?? 'unknown',
+    });
+
+    await docQueue.add(`doc:${doc.id}`, { documentId: doc.id }, DEFAULT_JOB_RETRY_OPTS);
+
+    log.info('Enqueued document for processing', {
+      documentId: doc.id,
+      listingId: listing.id,
+      url: attachment.url,
+    });
+  }
 }

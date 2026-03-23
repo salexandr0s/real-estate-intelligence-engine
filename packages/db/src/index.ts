@@ -26,6 +26,10 @@ export * as deadLetter from './queries/dead-letter.js';
 export * as canaryResults from './queries/canary-results.js';
 export * as deviceTokens from './queries/device-tokens.js';
 export * as appUsers from './queries/app-users.js';
+export * as comparables from './queries/comparables.js';
+export * as buildingFacts from './queries/building-facts.js';
+export * as legalRent from './queries/legal-rent.js';
+export * as documents from './queries/documents.js';
 
 // ── LISTEN/NOTIFY ──────────────────────────────────────────────────────────
 export { subscribeToAlerts, closeNotifyClient } from './notify.js';
@@ -41,3 +45,8 @@ export type { ListingPoiRow } from './queries/listing-pois.js';
 export type { UpsertDevelopmentInput, WienDevelopmentRow } from './queries/wien-developments.js';
 export type { DeviceTokenRow } from './queries/device-tokens.js';
 export type { AppUserRow } from './queries/app-users.js';
+export type { CanaryResultRow } from './queries/canary-results.js';
+export type { ComparableResult } from './queries/comparables.js';
+export type { BuildingFactRow, UpsertBuildingFactInput } from './queries/building-facts.js';
+export type { LegalRentAssessmentRow, CreateLegalRentInput } from './queries/legal-rent.js';
+export type { DocumentRow, FactSpanRow, UpsertDocumentInput } from './queries/documents.js';

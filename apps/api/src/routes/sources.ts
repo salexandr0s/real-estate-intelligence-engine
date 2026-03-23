@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
 import { NotFoundError } from '@rei/observability';
-import { sources, scrapeRuns } from '@rei/db';
+import { sources, scrapeRuns, canaryResults } from '@rei/db';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
 import type { DiscoveryJobData } from '@rei/scraper-core';
 import {
@@ -11,6 +11,7 @@ import {
   paginationQuerySchema,
   scrapeRunCreateSchema,
   sourceUpdateSchema,
+  canaryHistoryQuerySchema,
 } from '../schemas.js';
 
 // Lazily-initialized shared queue for discovery jobs (avoids one Redis connection per request)
@@ -29,29 +30,57 @@ function getDiscoveryQueue(): Queue<DiscoveryJobData> {
 }
 
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/sources - List all sources with health status
+  // GET /v1/sources - List all sources with health status and health summary
   app.get('/v1/sources', async (_request, reply) => {
-    const allSources = await sources.findAll();
+    const [allSources, latestCanaries] = await Promise.all([
+      sources.findAll(),
+      canaryResults.findLatestPerSource(),
+    ]);
 
-    const mappedData = allSources.map((source) => ({
-      id: source.id,
-      code: source.code,
-      name: source.name,
-      baseUrl: source.baseUrl,
-      countryCode: source.countryCode,
-      scrapeMode: source.scrapeMode,
-      isActive: source.isActive,
-      healthStatus: source.healthStatus,
-      crawlIntervalMinutes: source.crawlIntervalMinutes,
-      priority: source.priority,
-      rateLimitRpm: source.rateLimitRpm,
-      concurrencyLimit: source.concurrencyLimit,
-      parserVersion: source.parserVersion,
-      legalStatus: source.legalStatus,
-      lastSuccessfulRunAt: source.lastSuccessfulRunAt?.toISOString() ?? null,
-      createdAt: source.createdAt.toISOString(),
-      updatedAt: source.updatedAt.toISOString(),
-    }));
+    // Index latest canary results by source code for O(1) lookup
+    const canaryBySource = new Map(latestCanaries.map((c) => [c.sourceCode, c]));
+
+    const mappedData = await Promise.all(
+      allSources.map(async (source) => {
+        const lastCanary = canaryBySource.get(source.code) ?? null;
+        const { successRate } = await scrapeRuns.getRecentSuccessRate(source.id);
+
+        return {
+          id: source.id,
+          code: source.code,
+          name: source.name,
+          baseUrl: source.baseUrl,
+          countryCode: source.countryCode,
+          scrapeMode: source.scrapeMode,
+          isActive: source.isActive,
+          healthStatus: source.healthStatus,
+          crawlIntervalMinutes: source.crawlIntervalMinutes,
+          priority: source.priority,
+          rateLimitRpm: source.rateLimitRpm,
+          concurrencyLimit: source.concurrencyLimit,
+          parserVersion: source.parserVersion,
+          legalStatus: source.legalStatus,
+          lastSuccessfulRunAt: source.lastSuccessfulRunAt?.toISOString() ?? null,
+          createdAt: source.createdAt.toISOString(),
+          updatedAt: source.updatedAt.toISOString(),
+          healthSummary: {
+            lastCanary: lastCanary
+              ? {
+                  success: lastCanary.success,
+                  discoveryOk: lastCanary.discoveryOk,
+                  detailOk: lastCanary.detailOk,
+                  ingestionOk: lastCanary.ingestionOk,
+                  scoringOk: lastCanary.scoringOk,
+                  durationMs: lastCanary.durationMs,
+                  errorMessage: lastCanary.errorMessage,
+                  createdAt: lastCanary.createdAt.toISOString(),
+                }
+              : null,
+            recentSuccessRate: successRate,
+          },
+        };
+      }),
+    );
 
     return reply.send({
       data: mappedData,
@@ -109,6 +138,42 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     const affected = await sources.updateAllActive(true);
     return reply.send({ data: { affected }, meta: {} });
   });
+
+  // GET /v1/sources/:code/canary-history - Recent canary results for a source
+  app.get<{ Params: { code: string } }>(
+    '/v1/sources/:code/canary-history',
+    async (request, reply) => {
+      const { code } = request.params;
+      const { limit } = parseOrThrow(canaryHistoryQuerySchema, request.query);
+
+      // Verify the source exists
+      const source = await sources.findByCode(code);
+      if (!source) {
+        throw new NotFoundError('Source', code);
+      }
+
+      const results = await canaryResults.findBySourceCode(code, limit);
+
+      const mappedData = results.map((r) => ({
+        id: r.id,
+        sourceCode: r.sourceCode,
+        success: r.success,
+        discoveryOk: r.discoveryOk,
+        detailOk: r.detailOk,
+        ingestionOk: r.ingestionOk,
+        scoringOk: r.scoringOk,
+        listingsFound: r.listingsFound,
+        durationMs: r.durationMs,
+        errorMessage: r.errorMessage,
+        createdAt: r.createdAt.toISOString(),
+      }));
+
+      return reply.send({
+        data: mappedData,
+        meta: { total: mappedData.length },
+      });
+    },
+  );
 
   // GET /v1/scrape-runs - List recent scrape runs
   app.get('/v1/scrape-runs', async (request, reply) => {

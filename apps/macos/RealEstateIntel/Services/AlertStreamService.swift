@@ -134,7 +134,8 @@ final class AlertStreamService {
                     body: dto.body,
                     matchedAt: Date.fromISO(dto.matchedAt),
                     filterName: dto.filterName,
-                    listingId: dto.listingId
+                    listingId: dto.listingId,
+                    matchReasons: dto.matchReasons
                 )
                 lastEvent = alert
             } catch {

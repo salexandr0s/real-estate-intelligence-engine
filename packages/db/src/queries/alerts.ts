@@ -16,6 +16,8 @@ interface AlertDbRow {
   title: string;
   body: string;
   payload: Record<string, unknown>;
+  match_reasons_json: Record<string, unknown> | null;
+  cluster_fingerprint: string | null;
   matched_at: Date;
   scheduled_for: Date;
   sent_at: Date | null;
@@ -39,6 +41,8 @@ function toAlertRow(row: AlertDbRow): AlertRow {
     title: row.title,
     body: row.body,
     payload: row.payload,
+    matchReasons: (row.match_reasons_json as AlertRow['matchReasons']) ?? null,
+    clusterFingerprint: row.cluster_fingerprint,
     matchedAt: row.matched_at,
     scheduledFor: row.scheduled_for,
     sentAt: row.sent_at,
@@ -60,8 +64,9 @@ export async function create(input: AlertCreate): Promise<AlertRow | null> {
     `INSERT INTO alerts (
        user_id, user_filter_id, listing_id, listing_version_id,
        alert_type, channel, dedupe_key,
-       title, body, payload, scheduled_for
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       title, body, payload, scheduled_for,
+       match_reasons_json, cluster_fingerprint
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      ON CONFLICT (dedupe_key, channel) DO NOTHING
      RETURNING *`,
     [
@@ -76,10 +81,33 @@ export async function create(input: AlertCreate): Promise<AlertRow | null> {
       input.body,
       JSON.stringify(input.payload ?? {}),
       input.scheduledFor ?? new Date(),
+      input.matchReasons ? JSON.stringify(input.matchReasons) : null,
+      input.clusterFingerprint ?? null,
     ],
   );
   const row = rows[0];
   return row ? toAlertRow(row) : null;
+}
+
+/**
+ * Check if a cluster-aware alert already exists for a given filter + cluster + type.
+ * Used to suppress duplicate alerts for the same property across multiple sources.
+ */
+export async function existsForCluster(
+  userFilterId: number,
+  clusterFingerprint: string,
+  alertType: AlertType,
+): Promise<boolean> {
+  const rows = await query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM alerts
+       WHERE user_filter_id = $1
+         AND cluster_fingerprint = $2
+         AND alert_type = $3
+     ) AS exists`,
+    [userFilterId, clusterFingerprint, alertType],
+  );
+  return rows[0]?.exists ?? false;
 }
 
 /**

@@ -60,6 +60,7 @@ export function createGeocodingWorker(): Worker<GeocodingJobData> {
         result.latitude,
         result.longitude,
         result.geocodePrecision,
+        result.source,
       );
 
       log.info('Listing geocoded', {

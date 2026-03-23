@@ -226,6 +226,31 @@ export async function findRecentAverage(
   };
 }
 
+/** Calculate the success rate of recent scrape runs for a source. */
+export async function getRecentSuccessRate(
+  sourceId: number,
+  limit = 20,
+): Promise<{ successRate: number; totalRuns: number }> {
+  const [row] = await query<{ success_count: string; total_count: string }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE status IN ('succeeded', 'partial')) AS success_count,
+       COUNT(*) AS total_count
+     FROM (
+       SELECT status FROM scrape_runs
+       WHERE source_id = $1
+       ORDER BY scheduled_at DESC
+       LIMIT $2
+     ) recent`,
+    [sourceId, limit],
+  );
+  const total = Number(row!.total_count);
+  const successes = Number(row!.success_count);
+  return {
+    successRate: total > 0 ? successes / total : 0,
+    totalRuns: total,
+  };
+}
+
 export async function updateMetrics(
   id: number,
   metrics: Partial<ScrapeRunMetrics>,

@@ -96,6 +96,18 @@ export async function countConsecutiveFailures(sourceCode: string): Promise<numb
   return count;
 }
 
+/** Find recent canary results for a specific source code. */
+export async function findBySourceCode(sourceCode: string, limit = 10): Promise<CanaryResultRow[]> {
+  const rows = await query<CanaryResultDbRow>(
+    `SELECT * FROM canary_results
+     WHERE source_code = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [sourceCode, limit],
+  );
+  return rows.map(mapRow);
+}
+
 /** Find the most recent canary result per source. */
 export async function findLatestPerSource(): Promise<CanaryResultRow[]> {
   const rows = await query<CanaryResultDbRow>(

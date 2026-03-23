@@ -33,6 +33,7 @@
     "canary": "npx tsx scripts/canary-crawl.ts",
     "generate:types": "bash scripts/generate-types.sh",
     "load-test": "npx tsx scripts/load-test-search.ts",
+    "import:buildings": "npx tsx scripts/import-building-facts.ts",
     "prepare": "husky"
   },
   "lint-staged": {

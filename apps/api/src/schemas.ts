@@ -207,6 +207,10 @@ export const alertBulkUpdateSchema = z
     message: 'Either ids or filter must be provided',
   });
 
+export const canaryHistoryQuerySchema = z.object({
+  limit: z.preprocess(absentToUndefined, z.coerce.number().int().min(1).max(100).default(10)),
+});
+
 export const districtTrendQuerySchema = z.object({
   districtNo: optionalQueryNumber,
   operationType: z.enum(OPERATION_TYPES).optional(),

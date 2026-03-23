@@ -1,14 +1,14 @@
 /// Logical grouping for the POI picker UI.
 enum POICategoryGroup: CaseIterable {
     case transit
-    case safety
+    case emergencyServices
     case dailyLife
     case other
 
     var displayName: String {
         switch self {
         case .transit: "Transit"
-        case .safety: "Safety"
+        case .emergencyServices: "Emergency Services"
         case .dailyLife: "Daily Life"
         case .other: "Other"
         }
@@ -17,7 +17,7 @@ enum POICategoryGroup: CaseIterable {
     var categories: [POICategory] {
         switch self {
         case .transit: [.ubahn, .tram, .bus, .taxi]
-        case .safety: [.police, .fireStation]
+        case .emergencyServices: [.police, .fireStation]
         case .dailyLife: [.supermarket, .hospital, .doctor]
         case .other: [.park, .school]
         }

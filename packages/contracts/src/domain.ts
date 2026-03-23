@@ -163,6 +163,8 @@ export interface ListingRow {
   latitude: number | null;
   longitude: number | null;
   geocodePrecision: GeocodePrecision | null;
+  geocodeSource: string | null;
+  geocodeUpdatedAt: Date | null;
   crossSourceFingerprint: string | null;
   listPriceEurCents: number | null;
   monthlyOperatingCostEurCents: number | null;

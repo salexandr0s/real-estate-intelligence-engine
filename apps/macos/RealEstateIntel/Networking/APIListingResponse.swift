@@ -22,6 +22,7 @@ struct APIListingResponse: Codable {
     let latitude: Double?
     let longitude: Double?
     let geocodePrecision: String?
+    let geocodeSource: String?
     let lastPriceChangePct: Double?
     let lastPriceChangeAt: String?
     let firstSeenAt: String
@@ -57,6 +58,7 @@ struct APIListingResponse: Codable {
             latitude: latitude,
             longitude: longitude,
             geocodePrecision: geocodePrecision,
+            geocodeSource: geocodeSource,
             lastPriceChangePct: lastPriceChangePct,
             lastPriceChangeAt: priceChangeDate,
             firstSeenAt: date,

@@ -69,6 +69,9 @@ export interface ScoreResult {
   matchedNegativeKeywords: string[];
   explanation: Record<string, unknown>;
   scoreVersion: number;
+  baselineFallbackLevel?: string;
+  baselineSampleSize?: number;
+  baselineFreshnessHours?: number;
 }
 
 // ── Keyword Lexicon ─────────────────────────────────────────────────────────

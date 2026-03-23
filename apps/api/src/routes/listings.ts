@@ -278,6 +278,8 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           latitude: listing.latitude,
           longitude: listing.longitude,
           geocodePrecision: listing.geocodePrecision,
+          geocodeSource: listing.geocodeSource,
+          geocodeUpdatedAt: listing.geocodeUpdatedAt?.toISOString() ?? null,
           listPriceEur: centsToEur(listing.listPriceEurCents),
           listPriceEurCents: listing.listPriceEurCents,
           monthlyOperatingCostEur: centsToEur(listing.monthlyOperatingCostEurCents),

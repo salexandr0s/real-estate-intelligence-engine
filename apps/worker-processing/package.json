@@ -8,6 +8,7 @@
     "@rei/config": "*",
     "@rei/contracts": "*",
     "@rei/db": "*",
+    "@rei/documents": "*",
     "@rei/geocoding": "*",
     "@rei/ingestion": "*",
     "@rei/normalization": "*",

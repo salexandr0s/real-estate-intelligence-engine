@@ -27,6 +27,16 @@ struct ListingDetailsSection: View {
     }
 
     var body: some View {
-        InspectorGridSection(title: "Details", rows: rows)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            InspectorGridSection(title: "Details", rows: rows)
+
+            HStack {
+                Text("Location Accuracy")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                GeocodeBadge(precision: listing.geocodePrecision)
+            }
+        }
     }
 }

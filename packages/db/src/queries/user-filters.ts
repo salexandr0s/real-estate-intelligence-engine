@@ -8,6 +8,7 @@ import type {
   SortBy,
   OperationType,
 } from '@rei/contracts';
+import { passesKeywordFilter } from '@rei/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 
@@ -276,6 +277,8 @@ export async function findActiveFilters(): Promise<UserFilterRow[]> {
  */
 /**
  * Pure keyword post-filter for reverse-match results.
+ * Delegates to the shared keyword matching module in @rei/filtering
+ * to guarantee identical semantics with the SQL search path.
  * Exported for unit testing without DB access.
  */
 export function filterByKeywords(
@@ -283,16 +286,9 @@ export function filterByKeywords(
   title: string | null,
   description: string | null,
 ): UserFilterRow[] {
-  const text = ((title ?? '') + ' ' + (description ?? '')).toLowerCase();
-  return filters.filter((row) => {
-    if (row.requiredKeywords.length > 0) {
-      if (!row.requiredKeywords.every((kw) => text.includes(kw.toLowerCase()))) return false;
-    }
-    if (row.excludedKeywords.length > 0) {
-      if (row.excludedKeywords.some((kw) => text.includes(kw.toLowerCase()))) return false;
-    }
-    return true;
-  });
+  return filters.filter((row) =>
+    passesKeywordFilter(title, description, row.requiredKeywords, row.excludedKeywords),
+  );
 }
 
 export interface ReverseMatchResult {

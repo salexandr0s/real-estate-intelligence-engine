@@ -59,6 +59,11 @@ export async function poiRoutes(app: FastifyInstance): Promise<void> {
       const parsed = parseOrThrow(poisQuerySchema, request.query);
       const rows = await pois.findAll(parsed.categories);
 
+      const latestCreatedAt = rows.reduce<Date | null>((latest, poi) => {
+        if (!latest || poi.createdAt > latest) return poi.createdAt;
+        return latest;
+      }, null);
+
       return reply.send({
         data: rows.map((poi) => ({
           id: poi.id,
@@ -73,6 +78,9 @@ export async function poiRoutes(app: FastifyInstance): Promise<void> {
           properties: poi.properties,
         })),
         meta: { count: rows.length },
+        dataFreshness: {
+          importedAt: latestCreatedAt ? latestCreatedAt.toISOString() : null,
+        },
       });
     },
   );

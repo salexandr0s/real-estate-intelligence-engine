@@ -214,6 +214,21 @@ actor APIClient {
         return try decoder.decode(DashboardStats.self, from: data)
     }
 
+    func fetchAnalysis(listingId: Int) async throws -> ListingAnalysis {
+        let response: APIResponse<ListingAnalysis> = try await request(.getAnalysis(listingId: listingId))
+        return response.data
+    }
+
+    func fetchDocuments(listingId: Int) async throws -> [ListingDocument] {
+        let response: PaginatedResponse<ListingDocument> = try await requestPaginated(.getDocuments(listingId: listingId))
+        return response.data
+    }
+
+    func fetchDocumentFacts(documentId: Int) async throws -> [DocumentFact] {
+        let response: PaginatedResponse<DocumentFact> = try await requestPaginated(.getDocumentFacts(documentId: documentId))
+        return response.data
+    }
+
     func fetchScoreExplanation(listingId: Int) async throws -> ScoreExplanation {
         let response: APIResponse<ScoreExplanation> = try await request(
             .getScoreExplanation(listingId: listingId)
@@ -264,7 +279,8 @@ actor APIClient {
                 body: dto.body,
                 matchedAt: Date.fromISO(dto.matchedAt),
                 filterName: dto.filterName,
-                listingId: dto.listingId
+                listingId: dto.listingId,
+                matchReasons: dto.matchReasons
             )
         }
     }

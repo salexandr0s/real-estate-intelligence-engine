@@ -58,6 +58,15 @@ enum APIEndpoint {
 
     case getDashboardStats
 
+    // MARK: - Analysis
+
+    case getAnalysis(listingId: Int)
+
+    // MARK: - Documents
+
+    case getDocuments(listingId: Int)
+    case getDocumentFacts(documentId: Int)
+
     // MARK: - Analytics
 
     case getBaselines
@@ -73,6 +82,9 @@ enum APIEndpoint {
         case .getScoreExplanation(let id): "/v1/listings/\(id)/score-explanation"
         case .getListingHistory(let id): "/v1/listings/\(id)/history"
         case .getListingCluster(let id): "/v1/listings/\(id)/cluster"
+        case .getAnalysis(let id): "/v1/listings/\(id)/analysis"
+        case .getDocuments(let id): "/v1/listings/\(id)/documents"
+        case .getDocumentFacts(let id): "/v1/documents/\(id)/facts"
         case .listFilters: "/v1/filters"
         case .createFilter: "/v1/filters"
         case .getFilter(let id): "/v1/filters/\(id)"
@@ -108,6 +120,7 @@ enum APIEndpoint {
         switch self {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources, .getListingCluster, .listScrapeRuns,
+             .getAnalysis, .getDocuments, .getDocumentFacts,
              .listSavedListings, .checkSavedListings, .exportSavedListings, .exportListings,
              .getDashboardStats,
              .getBaselines, .getDistrictTrends, .getMarketTemperature,

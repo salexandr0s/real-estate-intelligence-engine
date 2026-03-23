@@ -39,6 +39,8 @@ interface ListingDbRow {
   latitude: string | null;
   longitude: string | null;
   geocode_precision: GeocodePrecision | null;
+  geocode_source: string | null;
+  geocode_updated_at: Date | null;
   cross_source_fingerprint: string | null;
   list_price_eur_cents: string | null;
   monthly_operating_cost_eur_cents: string | null;
@@ -107,6 +109,8 @@ function toListingRow(row: ListingDbRow): ListingRow {
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
     geocodePrecision: row.geocode_precision,
+    geocodeSource: row.geocode_source,
+    geocodeUpdatedAt: row.geocode_updated_at,
     crossSourceFingerprint: row.cross_source_fingerprint,
     listPriceEurCents: row.list_price_eur_cents != null ? Number(row.list_price_eur_cents) : null,
     monthlyOperatingCostEurCents:
@@ -629,12 +633,27 @@ export async function updateCoordinates(
   latitude: number,
   longitude: number,
   geocodePrecision: GeocodePrecision,
+  geocodeSource?: string,
 ): Promise<void> {
   await query(
     `UPDATE listings
-     SET latitude = $2, longitude = $3, geocode_precision = $4
+     SET latitude = $2, longitude = $3, geocode_precision = $4,
+         geocode_source = $5, geocode_updated_at = NOW()
      WHERE id = $1`,
-    [id, latitude, longitude, geocodePrecision],
+    [id, latitude, longitude, geocodePrecision, geocodeSource ?? null],
+  );
+}
+
+/**
+ * Update only the geocode_source and geocode_updated_at for a listing that
+ * already has coordinates. Used by backfill-geocode-provenance.
+ */
+export async function updateGeocodeSource(id: number, geocodeSource: string): Promise<void> {
+  await query(
+    `UPDATE listings
+     SET geocode_source = $2, geocode_updated_at = NOW()
+     WHERE id = $1`,
+    [id, geocodeSource],
   );
 }
 

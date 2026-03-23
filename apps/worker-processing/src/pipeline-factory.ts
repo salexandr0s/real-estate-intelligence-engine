@@ -38,6 +38,7 @@ import {
   proximity,
   listingPois,
   sources,
+  clusters,
 } from '@rei/db';
 import {
   rawSnapshotRate,
@@ -155,6 +156,17 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
             filterId: f.id,
             userId: f.userId,
             alertChannels: f.alertChannels,
+            filterName: f.name,
+            requiredKeywords: f.requiredKeywords,
+            excludedKeywords: f.excludedKeywords,
+            districts: f.districts,
+            minPriceEurCents: f.minPriceEurCents,
+            maxPriceEurCents: f.maxPriceEurCents,
+            minAreaSqm: f.minAreaSqm,
+            maxAreaSqm: f.maxAreaSqm,
+            minRooms: f.minRooms,
+            maxRooms: f.maxRooms,
+            minScore: f.minScore,
           })),
         };
       },
@@ -167,6 +179,13 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
       createAlert: async (alert) => {
         const row = await alerts.create(alert);
         return row ? { id: row.id } : null;
+      },
+      findClusterFingerprint: async (listingId) => {
+        const cluster = await clusters.findClusterByListingId(listingId);
+        return cluster?.fingerprint ?? null;
+      },
+      existsAlertForCluster: async (userFilterId, clusterFingerprint, alertType) => {
+        return alerts.existsForCluster(userFilterId, clusterFingerprint, alertType);
       },
       findPreviousPrice: async (listingId) => {
         return listingVersions.findPreviousPrice(listingId);
@@ -254,7 +273,7 @@ export function createPipeline(): FullIngestionPipeline {
     }
 
     // Score duration — currently measures full pipeline time as an upper bound.
-    // TODO: expose per-step timing from ScoreAndAlertResult for precise measurement
+    // NOTE: Per-step timing deferred — currently measures full pipeline time as upper bound.
     if (result.scoring) {
       const durationSec = (Date.now() - pipelineStart) / 1000;
       scoringDuration.observe(durationSec);

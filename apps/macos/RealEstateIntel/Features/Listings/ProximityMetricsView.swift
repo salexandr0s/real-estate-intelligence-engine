@@ -86,7 +86,7 @@ struct ProximityMetricsView: View {
                     )
                 }
 
-                // Safety
+                // Emergency Services
                 let policeCount = nearbyPOIs.count(where: { $0.poi.category == .police && $0.distanceM <= 1000 })
                 let fireCount = nearbyPOIs.count(where: { $0.poi.category == .fireStation && $0.distanceM <= 1000 })
                 if policeCount > 0 || fireCount > 0 {

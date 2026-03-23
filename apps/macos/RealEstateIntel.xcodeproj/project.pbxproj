@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ED884AA7DBBA1B53599D5EF9 /* Analysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E28018B430853A607E2841 /* Analysis.swift */; };
+		F84DB5BF01DCF88A05E1AEF2 /* AnalysisSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0740361394C0ED72E2EC261B /* AnalysisSection.swift */; };
 		816C88BEE8599D75DAF40DAF /* PriceTrendBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689AC45C7B917229883F3932 /* PriceTrendBadge.swift */; };
 		9960CCDA98DE86F7E97C74B1 /* MapStyleMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A40785059A06CBF26507B9D /* MapStyleMenu.swift */; };
 		CCDFEA7071B1660675A5B694 /* MapStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */; };
@@ -164,9 +166,14 @@
 		A1B2C3D4E5F60001AABB010D /* PriceHistoryBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001AABB000D /* PriceHistoryBlock.swift */; };
 		A1B2C3D4E5F60001AABB010E /* ChartBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001AABB000E /* ChartBlock.swift */; };
 		A1B2C3D4E5F60001AABB010F /* MarketStatsBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001AABB000F /* MarketStatsBlock.swift */; };
+		A2B3C4D5E6F70819D4E5F607 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F60718293041A2B3C4D5 /* Document.swift */; };
+		F6A7B8C9D0E1F203C3D4E5F6 /* DocumentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607182940B1C2D3E4 /* DocumentsSection.swift */; };
+		E8F90A1B2C3D4E5FA1B2C3D4 /* GeocodeBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		51E28018B430853A607E2841 /* Analysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Analysis.swift; sourceTree = "<group>"; };
+		0740361394C0ED72E2EC261B /* AnalysisSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisSection.swift; sourceTree = "<group>"; };
 		689AC45C7B917229883F3932 /* PriceTrendBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrendBadge.swift; sourceTree = "<group>"; };
 		4A40785059A06CBF26507B9D /* MapStyleMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleMenu.swift; sourceTree = "<group>"; };
 		FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStatusBar.swift; sourceTree = "<group>"; };
@@ -326,6 +333,9 @@
 		A1B2C3D4E5F60001AABB000D /* PriceHistoryBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryBlock.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60001AABB000E /* ChartBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartBlock.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60001AABB000F /* MarketStatsBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketStatsBlock.swift; sourceTree = "<group>"; };
+		D4E5F60718293041A2B3C4D5 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		C3D4E5F607182940B1C2D3E4 /* DocumentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsSection.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodeBadge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -351,6 +361,8 @@
 				9F8BCFD2F83B6A682FAC262E /* CrossSourceComparisonView.swift */,
 				78AFA579648506DD1AABED88 /* DevelopmentAnnotation.swift */,
 				7F182821E8F360F522253E21 /* FeedbackSection.swift */,
+				0740361394C0ED72E2EC261B /* AnalysisSection.swift */,
+				C3D4E5F607182940B1C2D3E4 /* DocumentsSection.swift */,
 				31E40700BCF762B3C6CF3725 /* ListingActionsSection.swift */,
 				271FB53A668734C9977451B6 /* ListingAnnotation.swift */,
 				E5F607182930A1B2C3D4B3D4 /* ListingClusterBubble.swift */,
@@ -540,6 +552,7 @@
 			isa = PBXGroup;
 			children = (
 				FD000E31F5577157C1E9B106 /* FlowLayout.swift */,
+				B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */,
 				80E4640A864C4746B76AC454 /* CardModifier.swift */,
 				51723DF63C1957AD412CFFEC /* DetailRow.swift */,
 				F1E2D3C4B5A6978081A2BFED /* InspectorGridSection.swift */,
@@ -606,6 +619,8 @@
 				F9E6891B12D1F3CFE67F006B /* SavedListingItem.swift */,
 				2B0B1FC9B25E6A327E95F62B /* DistrictSummary.swift */,
 				A1B2C3D4E5F60001AABB0001 /* CopilotMessage.swift */,
+				51E28018B430853A607E2841 /* Analysis.swift */,
+				D4E5F60718293041A2B3C4D5 /* Document.swift */,
 				4E9BF4DDE3E44BAE58F62C5C /* Alert.swift */,
 				520CF1A8627621B50AA6B2DF /* AlertFrequency.swift */,
 				A0DF2CB64F183CEA895198D0 /* AlertStatus.swift */,
@@ -799,6 +814,8 @@
 				D757CE68FC5742A63134FB65 /* AlertsViewModel.swift in Sources */,
 				00BD71FB74ED045C789C903F /* AnalyticsView.swift in Sources */,
 				C885197221B08448702B2950 /* AnalyticsViewModel.swift in Sources */,
+				ED884AA7DBBA1B53599D5EF9 /* Analysis.swift in Sources */,
+				F84DB5BF01DCF88A05E1AEF2 /* AnalysisSection.swift in Sources */,
 				14D87C355D327834194EAF77 /* AppState.swift in Sources */,
 				A1B2C3D4E5F60718A9B0C1D2 /* Logging.swift in Sources */,
 				4B6F3C07DAC7897AE8B657D5 /* CacheManager.swift in Sources */,
@@ -819,6 +836,8 @@
 				1CF3A1259C7D5CC42462D5EF /* DevelopmentAnnotation.swift in Sources */,
 				F57BB0D7605263374A8FC371 /* DistrictTrend.swift in Sources */,
 				10A11CEE450DFDD9C14727EB /* DistrictTrendChartView.swift in Sources */,
+				A2B3C4D5E6F70819D4E5F607 /* Document.swift in Sources */,
+				F6A7B8C9D0E1F203C3D4E5F6 /* DocumentsSection.swift in Sources */,
 				649DF8BA6B30A926E5B83404 /* FeedbackSection.swift in Sources */,
 				4D99DC37641FA71C53279378 /* Filter.swift in Sources */,
 				4C94021BDAC749D3DD65127E /* FilterCriteria.swift in Sources */,
@@ -826,6 +845,7 @@
 				4219481A1BBCBCC3F2220526 /* FilterKind.swift in Sources */,
 				DCE6657BA2E9DDB6AD967505 /* FiltersView.swift in Sources */,
 				741126387749FA36172696CF /* FiltersViewModel.swift in Sources */,
+				E8F90A1B2C3D4E5FA1B2C3D4 /* GeocodeBadge.swift in Sources */,
 				DBF2F349D551C6676971AF14 /* ISO8601.swift in Sources */,
 				E635B6AF81515E3DA2358C2C /* InvestorFeedback.swift in Sources */,
 				B1C2D3E4F5A60002AABB0101 /* ClaudeAuthHelper.swift in Sources */,

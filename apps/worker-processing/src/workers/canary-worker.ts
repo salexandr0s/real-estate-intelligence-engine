@@ -297,18 +297,34 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
         errorMessage,
       });
 
-      // Check for consecutive failures → degrade source health
+      // Auto-degrade: 3 consecutive failures → mark source as degraded
+      // Auto-recover: if source is degraded and latest canary succeeded → restore to healthy
+      const recentResults = await canaryResults.findBySourceCode(
+        sourceCode,
+        CONSECUTIVE_FAILURE_THRESHOLD,
+      );
+
       if (!success) {
-        const consecutiveFailures = await canaryResults.countConsecutiveFailures(sourceCode);
-        if (consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
+        const allFailed =
+          recentResults.length >= CONSECUTIVE_FAILURE_THRESHOLD &&
+          recentResults.slice(0, CONSECUTIVE_FAILURE_THRESHOLD).every((r) => !r.success);
+
+        if (allFailed) {
           const source = await sources.findByCode(sourceCode);
           if (source && source.healthStatus !== 'degraded' && source.healthStatus !== 'blocked') {
             await sources.updateHealthStatus(source.id, 'degraded');
             log.warn('Source degraded by canary', {
               sourceCode,
-              consecutiveFailures,
+              consecutiveFailures: CONSECUTIVE_FAILURE_THRESHOLD,
             });
           }
+        }
+      } else {
+        // Latest canary succeeded — check if source was degraded and should recover
+        const source = await sources.findByCode(sourceCode);
+        if (source && source.healthStatus === 'degraded') {
+          await sources.updateHealthStatus(source.id, 'healthy');
+          log.info('Source recovered by canary', { sourceCode });
         }
       }
 

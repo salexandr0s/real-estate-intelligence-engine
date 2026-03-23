@@ -1,6 +1,7 @@
 import type {
   AlertChannel,
   AlertCreate,
+  AlertMatchReasons,
   AlertType,
   BaselineLookup,
   ProximityInput,
@@ -55,13 +56,38 @@ export interface ScoreAndAlertDeps {
     description: string | null;
   }) => Promise<{
     evaluatedIds: number[];
-    matched: Array<{ filterId: number; userId: number; alertChannels: string[] }>;
+    matched: Array<{
+      filterId: number;
+      userId: number;
+      alertChannels: string[];
+      filterName?: string;
+      requiredKeywords?: string[];
+      excludedKeywords?: string[];
+      districts?: number[];
+      minPriceEurCents?: number | null;
+      maxPriceEurCents?: number | null;
+      minAreaSqm?: number | null;
+      maxAreaSqm?: number | null;
+      minRooms?: number | null;
+      maxRooms?: number | null;
+      minScore?: number | null;
+    }>;
   }>;
 
   updateEvaluatedAt: (filterIds: number[]) => Promise<void>;
   updateMatchedAt: (filterIds: number[]) => Promise<void>;
 
   createAlert: (alert: AlertCreate) => Promise<{ id: number } | null>;
+
+  /** Find cluster fingerprint for a listing. Returns null if listing is not in any cluster. */
+  findClusterFingerprint?: (listingId: number) => Promise<string | null>;
+
+  /** Check if a cluster-aware alert already exists for a filter + cluster + type. */
+  existsAlertForCluster?: (
+    userFilterId: number,
+    clusterFingerprint: string,
+    alertType: AlertType,
+  ) => Promise<boolean>;
 
   findPreviousPrice: (listingId: number) => Promise<number | null>;
 
@@ -130,10 +156,12 @@ export class ScoreAndAlert {
     // 1b. Check baseline staleness — if baselines are outdated, reduce confidence
     const BASELINE_STALE_HOURS = 4;
     let baselineStale = false;
+    let baselineFreshnessHours: number | undefined;
     if (this.deps.findLatestBaselineDate) {
       const latestDate = await this.deps.findLatestBaselineDate();
       if (latestDate) {
         const ageHours = (Date.now() - latestDate.getTime()) / 3_600_000;
+        baselineFreshnessHours = Math.round(ageHours * 100) / 100;
         if (ageHours > BASELINE_STALE_HOURS) {
           baselineStale = true;
           log.warn('Market baselines are stale', {
@@ -162,8 +190,8 @@ export class ScoreAndAlert {
     if (coords) {
       try {
         proximityData = await this.deps.computeProximity(coords.latitude, coords.longitude);
-        // TODO: computeProximity and cacheNearestPois both call findNearby internally.
-        // Refactor to share the result and avoid the duplicate Haversine query.
+        // NOTE: Known perf opportunity — computeProximity and cacheNearestPois both
+        // call findNearby internally. Could share the result to avoid duplicate Haversine query.
         await this.deps.cacheNearestPois?.(listingId, coords.latitude, coords.longitude);
       } catch (err) {
         log.warn('Proximity computation failed, using default', {
@@ -199,6 +227,11 @@ export class ScoreAndAlert {
     };
 
     const score = this.deps.scoreListing(scoreInput, baseline);
+
+    // 3a. Attach baseline provenance to score for persistence
+    score.baselineFallbackLevel = baseline.fallbackLevel;
+    score.baselineSampleSize = baseline.bucketSampleSize;
+    score.baselineFreshnessHours = baselineFreshnessHours;
 
     // 3. Persist score
     await this.deps.persistScore(listingId, listingVersionId, score);
@@ -241,7 +274,50 @@ export class ScoreAndAlert {
       listing.listPriceEurCents < previousPrice;
     const alertType = this.determineAlertType(versionReason, scoreImproved, priceDecreased);
 
+    // 5a. Cluster-aware dedup: look up cluster fingerprint once for this listing
+    let clusterFingerprint: string | null = null;
+    if (this.deps.findClusterFingerprint) {
+      try {
+        clusterFingerprint = await this.deps.findClusterFingerprint(listingId);
+      } catch (err) {
+        log.warn('Cluster fingerprint lookup failed', {
+          listingId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     for (const match of matched) {
+      // 5b. Cluster-aware dedup: if another listing in the same cluster already
+      // triggered an alert for this filter, suppress the duplicate
+      if (clusterFingerprint && this.deps.existsAlertForCluster) {
+        try {
+          const exists = await this.deps.existsAlertForCluster(
+            match.filterId,
+            clusterFingerprint,
+            alertType,
+          );
+          if (exists) {
+            log.info('Suppressed cluster-duplicate alert', {
+              filterId: match.filterId,
+              listingId,
+              clusterFingerprint,
+              alertType,
+            });
+            continue;
+          }
+        } catch (err) {
+          log.warn('Cluster dedup check failed, proceeding with alert', {
+            filterId: match.filterId,
+            listingId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // 5c. Build structured match reasons
+      const matchReasons = this.buildMatchReasons(match, listing, score.overallScore);
+
       const channels: string[] = match.alertChannels.length > 0 ? match.alertChannels : ['in_app'];
       const dedupeKey = buildAlertDedupeKey({
         filterId: match.filterId,
@@ -263,6 +339,8 @@ export class ScoreAndAlert {
           dedupeKey,
           title,
           body,
+          matchReasons,
+          clusterFingerprint,
         };
 
         let alertResult: { id: number } | null = null;
@@ -358,6 +436,75 @@ export class ScoreAndAlert {
       status_change: 'Statusänderung',
     };
     return `${prefix[alertType] ?? 'Alert'}: ${listingTitle}`;
+  }
+
+  private buildMatchReasons(
+    match: {
+      filterName?: string;
+      requiredKeywords?: string[];
+      excludedKeywords?: string[];
+      districts?: number[];
+      minPriceEurCents?: number | null;
+      maxPriceEurCents?: number | null;
+      minAreaSqm?: number | null;
+      maxAreaSqm?: number | null;
+      minRooms?: number | null;
+      maxRooms?: number | null;
+      minScore?: number | null;
+    },
+    listing: {
+      districtNo: number | null;
+      listPriceEurCents: number | null;
+      livingAreaSqm: number | null;
+      rooms: number | null;
+    },
+    currentScore: number,
+  ): AlertMatchReasons {
+    const reasons: AlertMatchReasons = {};
+
+    if (match.filterName) {
+      reasons.filterName = match.filterName;
+    }
+
+    // Keywords
+    if (match.requiredKeywords && match.requiredKeywords.length > 0) {
+      reasons.matchedKeywords = [...match.requiredKeywords];
+    }
+    if (match.excludedKeywords && match.excludedKeywords.length > 0) {
+      reasons.excludedKeywordsClean = true;
+    }
+
+    // District
+    if (match.districts && match.districts.length > 0 && listing.districtNo != null) {
+      reasons.districtMatch = match.districts.includes(listing.districtNo);
+    }
+
+    // Thresholds
+    const thresholdsMet: AlertMatchReasons['thresholdsMet'] = {};
+    let hasThreshold = false;
+
+    if (match.minPriceEurCents != null || match.maxPriceEurCents != null) {
+      thresholdsMet.price = true;
+      hasThreshold = true;
+    }
+    if (match.minAreaSqm != null || match.maxAreaSqm != null) {
+      thresholdsMet.area = true;
+      hasThreshold = true;
+    }
+    if (match.minRooms != null || match.maxRooms != null) {
+      thresholdsMet.rooms = true;
+      hasThreshold = true;
+    }
+    if (match.minScore != null && currentScore >= match.minScore) {
+      thresholdsMet.score = true;
+      hasThreshold = true;
+    }
+
+    if (hasThreshold) {
+      reasons.thresholdsMet = thresholdsMet;
+    }
+
+    return reasons;
   }
 
   private buildAlertBody(

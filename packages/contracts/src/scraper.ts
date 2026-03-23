@@ -1,4 +1,9 @@
-import type { ExtractionStatus, ScrapeRunScope, ScrapeRunStatus, ScrapeRunTriggerType } from './domain.js';
+import type {
+  ExtractionStatus,
+  ScrapeRunScope,
+  ScrapeRunStatus,
+  ScrapeRunTriggerType,
+} from './domain.js';
 
 // ── Source Adapter Contract ─────────────────────────────────────────────────
 
@@ -68,6 +73,8 @@ export interface DetailCapture<T> {
   harStorageKey?: string | null;
   parserVersion: number;
   extractionStatus: ExtractionStatus;
+  /** Document/PDF attachment URLs found on listing detail pages. */
+  attachmentUrls?: Array<{ url: string; label?: string; type?: string }>;
 }
 
 export type SourceAvailability =
@@ -208,7 +215,12 @@ export interface RawListingRow {
 
 // ── Retry / Error Classification ────────────────────────────────────────────
 
-export type ErrorClass = 'transient_network' | 'soft_anti_bot' | 'parse_failure' | 'terminal_page' | 'unknown';
+export type ErrorClass =
+  | 'transient_network'
+  | 'soft_anti_bot'
+  | 'parse_failure'
+  | 'terminal_page'
+  | 'unknown';
 
 export interface RetryPolicy {
   maxAttempts: number;

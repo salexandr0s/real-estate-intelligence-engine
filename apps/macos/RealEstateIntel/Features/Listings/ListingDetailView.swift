@@ -10,6 +10,10 @@ struct ListingDetailView: View {
     @State private var explanation: ScoreExplanation?
     @State private var priceVersions: [PriceVersion] = []
     @State private var cluster: ListingCluster?
+    @State private var analysis: ListingAnalysis?
+    @State private var isLoadingAnalysis: Bool = false
+    @State private var listingDocuments: [ListingDocument] = []
+    @State private var isLoadingDocuments: Bool = false
     @State private var isSaved: Bool = false
     @State private var isSaving: Bool = false
 
@@ -28,6 +32,16 @@ struct ListingDetailView: View {
 
                 // Score breakdown (collapsible)
                 ListingScoreSection(listing: listing, explanation: explanation)
+
+                // Investor analysis (market rent, metrics, building, legal-rent, flags)
+                AnalysisSection(analysis: analysis, isLoading: isLoadingAnalysis)
+
+                // Documents (collapsible)
+                DocumentsSection(
+                    documents: listingDocuments,
+                    isLoading: isLoadingDocuments,
+                    onLoadFacts: loadDocumentFacts
+                )
 
                 if let cluster, cluster.members.count >= 2 {
                     CrossSourceComparisonView(cluster: cluster)
@@ -62,7 +76,9 @@ struct ListingDetailView: View {
             async let e: Void = loadExplanation()
             async let c: Void = loadCluster()
             async let s: Void = checkIfSaved()
-            _ = await (v, e, c, s)
+            async let a: Void = loadAnalysis()
+            async let d: Void = loadDocuments()
+            _ = await (v, e, c, s, a, d)
         }
     }
 
@@ -101,6 +117,34 @@ struct ListingDetailView: View {
             cluster = try await appState.apiClient.fetchListingCluster(listingId: listing.id)
         } catch {
             cluster = nil
+        }
+    }
+
+    private func loadAnalysis() async {
+        isLoadingAnalysis = true
+        do {
+            analysis = try await appState.apiClient.fetchAnalysis(listingId: listing.id)
+        } catch {
+            analysis = nil
+        }
+        isLoadingAnalysis = false
+    }
+
+    private func loadDocuments() async {
+        isLoadingDocuments = true
+        do {
+            listingDocuments = try await appState.apiClient.fetchDocuments(listingId: listing.id)
+        } catch {
+            listingDocuments = []
+        }
+        isLoadingDocuments = false
+    }
+
+    private func loadDocumentFacts(documentId: Int) async -> [DocumentFact] {
+        do {
+            return try await appState.apiClient.fetchDocumentFacts(documentId: documentId)
+        } catch {
+            return []
         }
     }
 

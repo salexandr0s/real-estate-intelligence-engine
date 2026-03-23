@@ -14,6 +14,7 @@ export const QUEUE_NAMES = {
   STALE_CHECK: 'processing-stale-check',
   CANARY: 'processing-canary',
   ALERT_DELIVERY: 'processing-alert-delivery',
+  DOCUMENT_PROCESSING: 'document-processing',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -109,6 +110,11 @@ export interface AlertDeliveryJobData {
   alertId: number;
   channel: string;
   userId: number;
+}
+
+/** Job data for document processing (download, extract, parse). */
+export interface DocumentProcessingJobData {
+  documentId: number;
 }
 
 /** Default retry config for scraper jobs. */

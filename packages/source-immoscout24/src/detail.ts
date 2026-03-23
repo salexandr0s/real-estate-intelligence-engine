@@ -26,11 +26,15 @@ export function parseDetailPage(
   const jsonLdBlocks = extractJsonLdBlocks(html);
 
   const product = jsonLdBlocks.find(
-    (b): b is IS24Product => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
+    (b): b is IS24Product =>
+      typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
   ) as IS24Product | undefined;
 
   const agent = jsonLdBlocks.find(
-    (b): b is IS24RealEstateAgent => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'RealEstateAgent',
+    (b): b is IS24RealEstateAgent =>
+      typeof b === 'object' &&
+      b !== null &&
+      (b as Record<string, unknown>)['@type'] === 'RealEstateAgent',
   ) as IS24RealEstateAgent | undefined;
 
   if (!product) {
@@ -99,6 +103,9 @@ export function parseDetailPage(
     brokerName: agent?.name ?? null,
   };
 
+  // Extract document/attachment URLs (best-effort, never fails the capture)
+  const attachmentUrls = extractAttachmentUrls(html);
+
   return {
     sourceCode,
     sourceListingKeyCandidate: immoscout24Id,
@@ -109,6 +116,7 @@ export function parseDetailPage(
     payload,
     parserVersion,
     extractionStatus: payload.titleRaw ? 'captured' : 'parse_failed',
+    ...(attachmentUrls.length > 0 ? { attachmentUrls } : {}),
   };
 }
 
@@ -154,7 +162,8 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   const jsonLdBlocks = extractJsonLdBlocks(html);
 
   const product = jsonLdBlocks.find(
-    (b) => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
+    (b) =>
+      typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
   ) as IS24Product | undefined;
 
   if (product) {
@@ -210,7 +219,10 @@ function extractJsonLdBlocks(html: string): unknown[] {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -227,7 +239,8 @@ function normalizeDecimal(value: string): string {
 
 /** Parse area from text: "65,20 m2" or "65.20 m2" -> "65.20" */
 function parseArea(text: string): string | null {
-  const m = text.match(/Wohnfl[a\u00e4]che:\s*([\d.,]+)\s*m\u00b2/i) ?? text.match(/([\d.,]+)\s*m\u00b2/);
+  const m =
+    text.match(/Wohnfl[a\u00e4]che:\s*([\d.,]+)\s*m\u00b2/i) ?? text.match(/([\d.,]+)\s*m\u00b2/);
   if (!m?.[1]) return null;
   return normalizeDecimal(m[1]);
 }
@@ -282,7 +295,9 @@ function parseAddress(text: string): ParsedAddress {
   }
 
   // Fallback: try "PostalCode City" anywhere
-  const fallback = text.match(/(\d{4})\s+(Wien|Graz|Linz|Salzburg|Innsbruck|Klagenfurt|Villach|Wels|St\.\s*P[o\u00f6]lten)/i);
+  const fallback = text.match(
+    /(\d{4})\s+(Wien|Graz|Linz|Salzburg|Innsbruck|Klagenfurt|Villach|Wels|St\.\s*P[o\u00f6]lten)/i,
+  );
   if (fallback) {
     return {
       street: null,
@@ -309,4 +324,56 @@ function deriveDistrict(postcode: string | null): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Extract document/PDF attachment URLs from the HTML.
+ * Looks for anchor tags linking to PDFs, downloads, or document endpoints.
+ * Best-effort: returns empty array on any error.
+ */
+function extractAttachmentUrls(
+  html: string,
+): Array<{ url: string; label?: string; type?: string }> {
+  try {
+    const results: Array<{ url: string; label?: string; type?: string }> = [];
+    const seen = new Set<string>();
+
+    // Match <a> tags whose href points to PDF/document resources
+    const anchorRe = /<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = anchorRe.exec(html)) !== null) {
+      const href = match[1];
+      const innerHtml = match[2];
+      if (!href) continue;
+
+      const hrefLower = href.toLowerCase();
+      const isPdf =
+        hrefLower.endsWith('.pdf') ||
+        hrefLower.includes('/download/') ||
+        hrefLower.includes('/document/') ||
+        hrefLower.includes('/dokument/') ||
+        hrefLower.includes('/expose-pdf') ||
+        hrefLower.includes('filetype=pdf');
+
+      if (!isPdf) continue;
+
+      // Resolve relative URLs
+      const resolvedUrl = href.startsWith('http')
+        ? href
+        : `${BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+
+      if (seen.has(resolvedUrl)) continue;
+      seen.add(resolvedUrl);
+
+      const label = innerHtml ? stripHtml(innerHtml).substring(0, 200) || undefined : undefined;
+
+      const type = hrefLower.endsWith('.pdf') ? 'pdf' : 'document';
+
+      results.push({ url: resolvedUrl, ...(label ? { label } : {}), type });
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
 }

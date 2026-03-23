@@ -20,6 +20,7 @@ import { createGeocodingEnqueuer } from './workers/geocoding-enqueuer.js';
 import { createStaleCheckWorker } from './workers/stale-check-worker.js';
 import { createCanaryWorker } from './workers/canary-worker.js';
 import { createDeliveryWorker } from './workers/delivery-worker.js';
+import { createDocumentWorker } from './workers/document-worker.js';
 import { closePushSession } from '@rei/alerts';
 
 const logger = createLogger('worker-processing');
@@ -46,13 +47,23 @@ async function main(): Promise<void> {
   // Geocoding worker — gated on feature flag
   const geocodingWorker = config.features.geocodingEnabled ? createGeocodingWorker() : null;
 
+  // Document processing worker
+  const documentWorker = createDocumentWorker();
+
   // Alert delivery worker — gated on any delivery channel being enabled
   const deliveryWorker =
     config.alerts.pushEnabled || config.alerts.emailEnabled || config.alerts.webhookEnabled
       ? createDeliveryWorker()
       : null;
 
-  const workerNames = ['ingestion', 'baseline', 'cluster', 'geocode-enqueue', 'stale-check'];
+  const workerNames = [
+    'ingestion',
+    'baseline',
+    'cluster',
+    'geocode-enqueue',
+    'stale-check',
+    'document',
+  ];
   if (canaryWorker) workerNames.push('canary');
   if (geocodingWorker) workerNames.push('geocoding');
   if (deliveryWorker) workerNames.push('alert-delivery');
@@ -66,6 +77,7 @@ async function main(): Promise<void> {
     await clusterWorker.close();
     await geocodingEnqueuer.close();
     await staleCheckWorker.close();
+    await documentWorker.close();
     if (canaryWorker) await canaryWorker.close();
     if (geocodingWorker) await geocodingWorker.close();
     if (deliveryWorker) await deliveryWorker.close();

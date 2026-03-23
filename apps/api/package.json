@@ -12,7 +12,9 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@rei/config": "*",
     "@rei/contracts": "*",
+    "@rei/analysis": "*",
     "@rei/db": "*",
+    "@rei/legal-rent": "*",
     "@rei/observability": "*",
     "fastify": "^5.2.1",
     "zod": "^4.3.6"

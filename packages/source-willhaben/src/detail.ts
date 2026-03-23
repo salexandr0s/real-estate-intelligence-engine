@@ -113,6 +113,9 @@ export function parseDetailPage(
     contactPhone: getAttr(attrs, 'CONTACT/PHONE') ?? null,
   };
 
+  // Extract document/attachment URLs (best-effort, never fails the capture)
+  const attachmentUrls = extractAttachmentUrls(html);
+
   return {
     sourceCode,
     sourceListingKeyCandidate: willhabenId,
@@ -123,6 +126,7 @@ export function parseDetailPage(
     payload,
     parserVersion,
     extractionStatus: payload.titleRaw ? 'captured' : 'parse_failed',
+    ...(attachmentUrls.length > 0 ? { attachmentUrls } : {}),
   };
 }
 
@@ -267,4 +271,56 @@ function parseFreeAreas(
 
   // Also check combined FREE_AREA/FREE_AREA_TYPE_AND_AREA format
   return result;
+}
+
+/**
+ * Extract document/PDF attachment URLs from the HTML.
+ * Looks for anchor tags linking to PDFs, downloads, or document endpoints.
+ * Best-effort: returns empty array on any error.
+ */
+function extractAttachmentUrls(
+  html: string,
+): Array<{ url: string; label?: string; type?: string }> {
+  try {
+    const results: Array<{ url: string; label?: string; type?: string }> = [];
+    const seen = new Set<string>();
+
+    // Match <a> tags whose href points to PDF/document resources
+    const anchorRe = /<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = anchorRe.exec(html)) !== null) {
+      const href = match[1];
+      const innerHtml = match[2];
+      if (!href) continue;
+
+      const hrefLower = href.toLowerCase();
+      const isPdf =
+        hrefLower.endsWith('.pdf') ||
+        hrefLower.includes('/download/') ||
+        hrefLower.includes('/document/') ||
+        hrefLower.includes('/dokument/') ||
+        hrefLower.includes('/expose/') ||
+        hrefLower.includes('filetype=pdf');
+
+      if (!isPdf) continue;
+
+      // Resolve relative URLs
+      const resolvedUrl = href.startsWith('http')
+        ? href
+        : `https://www.willhaben.at${href.startsWith('/') ? '' : '/'}${href}`;
+
+      if (seen.has(resolvedUrl)) continue;
+      seen.add(resolvedUrl);
+
+      const label = innerHtml ? stripHtml(innerHtml).substring(0, 200) || undefined : undefined;
+
+      const type = hrefLower.endsWith('.pdf') ? 'pdf' : 'document';
+
+      results.push({ url: resolvedUrl, ...(label ? { label } : {}), type });
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
 }
