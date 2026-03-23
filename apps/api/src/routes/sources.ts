@@ -175,17 +175,37 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // GET /v1/scrape-runs - List recent scrape runs
-  app.get('/v1/scrape-runs', async (request, reply) => {
-    const { limit: rawLimit } = parseOrThrow(paginationQuerySchema, request.query);
-    const limit = rawLimit ?? 20;
+  // ── Scrape run mapping helper ──────────────────────────────────────────────
 
-    const runs = await scrapeRuns.findRecentAll(null, limit);
-
-    const mappedData = runs.map((run) => ({
+  function mapRun(run: {
+    id: number;
+    sourceId: number;
+    sourceCode?: string;
+    status: string;
+    scope: string;
+    triggerType: string;
+    seedName: string | null;
+    pagesFetched: number;
+    listingsDiscovered: number;
+    rawSnapshotsCreated: number;
+    normalizedCreated: number;
+    normalizedUpdated: number;
+    http2xx: number;
+    http4xx: number;
+    http5xx: number;
+    captchaCount: number;
+    retryCount: number;
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
       id: run.id,
       sourceId: run.sourceId,
-      sourceCode: run.sourceCode,
+      ...(run.sourceCode !== undefined ? { sourceCode: run.sourceCode } : {}),
       status: run.status,
       scope: run.scope,
       triggerType: run.triggerType,
@@ -206,12 +226,50 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       errorMessage: run.errorMessage,
       createdAt: run.createdAt.toISOString(),
       updatedAt: run.updatedAt.toISOString(),
-    }));
+    };
+  }
+
+  // GET /v1/scrape-runs - List recent scrape runs
+  app.get('/v1/scrape-runs', async (request, reply) => {
+    const { limit: rawLimit } = parseOrThrow(paginationQuerySchema, request.query);
+    const limit = rawLimit ?? 20;
+
+    const runs = await scrapeRuns.findRecentAll(null, limit);
 
     return reply.send({
-      data: mappedData,
+      data: runs.map(mapRun),
       meta: {},
     });
+  });
+
+  // GET /v1/scrape-runs/:id - Fetch a single scrape run by ID
+  app.get<{ Params: { id: string } }>('/v1/scrape-runs/:id', async (request, reply) => {
+    const { id } = parseOrThrow(idParamSchema, request.params);
+    const run = await scrapeRuns.findById(id);
+    if (!run) {
+      throw new NotFoundError('ScrapeRun', id);
+    }
+    return reply.send({ data: mapRun(run), meta: {} });
+  });
+
+  // POST /v1/scrape-runs/:id/cancel - Cancel a running scrape run
+  app.post<{ Params: { id: string } }>('/v1/scrape-runs/:id/cancel', async (request, reply) => {
+    const { id } = parseOrThrow(idParamSchema, request.params);
+    const run = await scrapeRuns.findById(id);
+    if (!run) {
+      throw new NotFoundError('ScrapeRun', id);
+    }
+
+    const terminalStatuses = ['succeeded', 'failed', 'cancelled', 'partial', 'rate_limited'];
+    if (terminalStatuses.includes(run.status)) {
+      return reply.status(409).send({
+        error: 'Conflict',
+        message: `Scrape run ${id} is already in terminal status '${run.status}'`,
+      });
+    }
+
+    await scrapeRuns.cancel(id);
+    return reply.send({ data: { id, status: 'cancelled' }, meta: {} });
   });
 
   // POST /v1/scrape-runs - Create a scrape run and enqueue discovery job
@@ -243,16 +301,21 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       typeof sourceConfig?.crawlProfile === 'object' && sourceConfig.crawlProfile != null
         ? (sourceConfig.crawlProfile as Record<string, unknown>)
         : undefined;
-    const rawMaxPages = crawlProfile?.maxPages;
-    const maxPages =
-      typeof rawMaxPages === 'number' && !Number.isNaN(rawMaxPages) ? rawMaxPages : 3;
+    const rawMaxPagesPerRun = (crawlProfile?.maxPagesPerRun ?? crawlProfile?.maxPages) as
+      | number
+      | undefined;
+    const maxPagesPerRun =
+      typeof rawMaxPagesPerRun === 'number' && !Number.isNaN(rawMaxPagesPerRun)
+        ? rawMaxPagesPerRun
+        : 100;
 
     await queue.add(`discovery:${source.code}`, {
       sourceCode: source.code,
       sourceId: source.id,
       scrapeRunId: run.id,
       page: 1,
-      maxPages,
+      maxPages: maxPagesPerRun, // legacy field, kept for compat
+      maxPagesPerRun,
     });
 
     return reply.status(201).send({

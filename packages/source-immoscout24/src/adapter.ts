@@ -24,23 +24,18 @@ export class Immoscout24Adapter implements SourceAdapter<
   readonly sourceName = 'ImmobilienScout24.at';
   readonly parserVersion = 2;
 
-  async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
-    const maxPages = profile.maxPages ?? 5;
-    const plans: RequestPlan[] = [];
+  async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
+    const url = new URL(SEARCH_PATH, BASE_URL);
 
-    for (let page = 1; page <= maxPages; page++) {
-      const basePath = page === 1 ? SEARCH_PATH : `${SEARCH_PATH}/seite-${page}`;
-      const url = new URL(basePath, BASE_URL);
-
-      plans.push({
+    // Only seed page 1 — the discovery worker follows nextPagePlan from parsers
+    return [
+      {
         url: url.toString(),
         waitForSelector: 'script[data-testid="collection-page-structured-data"]',
         waitForTimeout: 5000,
-        metadata: { page },
-      });
-    }
-
-    return plans;
+        metadata: { page: 1 },
+      },
+    ];
   }
 
   async extractDiscoveryPage(

@@ -17,6 +17,7 @@ import {
   PerDomainRateLimiter,
   SourceCircuitBreaker,
   pageNavigationDelay,
+  cooldownDelay,
   classifyScraperError,
   dismissCookieConsent,
   ArtifactWriter,
@@ -215,6 +216,11 @@ export function createDetailWorker(): Worker<DetailJobData> {
           } catch (_harErr) {
             log.warn('Failed to capture HAR artifact');
           }
+        }
+
+        if (errorClass === 'soft_anti_bot') {
+          log.warn('Soft block detected on detail page, applying cooldown', { sourceCode });
+          await cooldownDelay();
         }
 
         log.error('Detail extraction failed', {

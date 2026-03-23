@@ -19,8 +19,9 @@ describe('OpenImmoAdapter', () => {
   });
 
   it('canonicalizes URLs correctly', () => {
-    expect(adapter.canonicalizeUrl('https://www.openimmo.at/immobilie/OI-2026-001?ref=search'))
-      .toBe('https://www.openimmo.at/immobilie/OI-2026-001');
+    expect(
+      adapter.canonicalizeUrl('https://www.openimmo.at/immobilie/OI-2026-001?ref=search'),
+    ).toBe('https://www.openimmo.at/immobilie/OI-2026-001');
   });
 
   it('derives source listing key', () => {
@@ -36,16 +37,16 @@ describe('OpenImmoAdapter', () => {
     expect(key).toBe('openimmo:OI-2026-001');
   });
 
-  it('builds discovery requests with correct URL pattern', async () => {
+  it('builds discovery requests with page 1 seed only', async () => {
     const plans = await adapter.buildDiscoveryRequests({
       name: 'vienna-buy',
       sourceCode: 'openimmo',
       maxPages: 2,
     });
-    expect(plans).toHaveLength(2);
+    // Adapters now only build page 1; dynamic pagination follows nextPagePlan
+    expect(plans).toHaveLength(1);
     expect(plans[0]!.url).toContain('openimmo.at/suche');
     expect(plans[0]!.url).toContain('seite=1');
-    expect(plans[1]!.url).toContain('seite=2');
   });
 });
 
@@ -93,6 +94,48 @@ describe('Discovery page parsing', () => {
     expect(result.nextPagePlan).not.toBeNull();
     expect(result.nextPagePlan!.url).toContain('seite=2');
     expect(result.nextPagePlan!.metadata).toEqual(expect.objectContaining({ page: 2 }));
+  });
+
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `<script type="application/json" id="search-data">
+      {
+        "meta": { "page": 1, "pageSize": 20, "totalCount": 180 },
+        "results": [
+          {
+            "objektNr": "OI-PAGE-001",
+            "titel": "Pagination Test",
+            "detailUrl": "/immobilie/OI-PAGE-001",
+            "kaufpreis": 250000,
+            "wohnflaeche": 60,
+            "anzahlZimmer": 2,
+            "plz": "1020",
+            "ort": "Wien",
+            "stadtteil": null
+          }
+        ]
+      }
+    </script>`;
+    const result = parseDiscoveryPage(html, 'openimmo', {
+      url: 'https://www.openimmo.at/suche?typ=wohnung&aktion=kaufen&ort=wien&seite=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('seite=2');
+    expect(result.nextPagePlan!.metadata!.page).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = `<script type="application/json" id="search-data">
+      {
+        "meta": { "page": 1, "pageSize": 20, "totalCount": 0 },
+        "results": []
+      }
+    </script>`;
+    const result = parseDiscoveryPage(html, 'openimmo', {
+      url: 'https://www.openimmo.at/suche?seite=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).toBeNull();
   });
 
   it('returns empty result for missing search-data script', () => {
@@ -161,7 +204,12 @@ describe('Detail page parsing', () => {
 
   it('extracts coordinates', () => {
     const html = loadFixture('detail-page.html');
-    const result = parseDetailPage(html, 'https://www.openimmo.at/immobilie/OI-2026-001', 'openimmo', 1);
+    const result = parseDetailPage(
+      html,
+      'https://www.openimmo.at/immobilie/OI-2026-001',
+      'openimmo',
+      1,
+    );
     expect(result.payload.latRaw).toBe('48.2167');
     expect(result.payload.lonRaw).toBe('16.3976');
   });
@@ -206,7 +254,12 @@ describe('Detail page parsing', () => {
 
   it('handles parse failure gracefully', () => {
     const html = '<html><body>Empty page</body></html>';
-    const result = parseDetailPage(html, 'https://www.openimmo.at/immobilie/UNKNOWN-ID', 'openimmo', 1);
+    const result = parseDetailPage(
+      html,
+      'https://www.openimmo.at/immobilie/UNKNOWN-ID',
+      'openimmo',
+      1,
+    );
     expect(result.extractionStatus).toBe('parse_failed');
     expect(result.payload.openimmoId).toBe('UNKNOWN-ID');
     expect(result.payload.titleRaw).toBeNull();
@@ -215,7 +268,12 @@ describe('Detail page parsing', () => {
 
   it('returns failed capture for missing listing-data', () => {
     const html = `<script type="application/json" id="listing-data">{"not":"a listing"}</script>`;
-    const result = parseDetailPage(html, 'https://www.openimmo.at/immobilie/BAD-001', 'openimmo', 1);
+    const result = parseDetailPage(
+      html,
+      'https://www.openimmo.at/immobilie/BAD-001',
+      'openimmo',
+      1,
+    );
     expect(result.extractionStatus).toBe('parse_failed');
     expect(result.payload.openimmoId).toBe('BAD-001');
   });

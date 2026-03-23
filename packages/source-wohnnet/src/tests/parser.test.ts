@@ -19,13 +19,17 @@ describe('WohnnetAdapter', () => {
   });
 
   it('canonicalizes URLs correctly', () => {
-    expect(adapter.canonicalizeUrl('https://www.wohnnet.at/immobilien/eigentumswohnung-1020-wien-294241001?ref=search'))
-      .toBe('https://www.wohnnet.at/immobilien/eigentumswohnung-1020-wien-294241001');
+    expect(
+      adapter.canonicalizeUrl(
+        'https://www.wohnnet.at/immobilien/eigentumswohnung-1020-wien-294241001?ref=search',
+      ),
+    ).toBe('https://www.wohnnet.at/immobilien/eigentumswohnung-1020-wien-294241001');
   });
 
   it('strips trailing slash during canonicalization', () => {
-    expect(adapter.canonicalizeUrl('https://www.wohnnet.at/immobilien/test-123/'))
-      .toBe('https://www.wohnnet.at/immobilien/test-123');
+    expect(adapter.canonicalizeUrl('https://www.wohnnet.at/immobilien/test-123/')).toBe(
+      'https://www.wohnnet.at/immobilien/test-123',
+    );
   });
 
   it('derives source listing key', () => {
@@ -41,16 +45,15 @@ describe('WohnnetAdapter', () => {
     expect(key).toBe('wohnnet:296210602');
   });
 
-  it('builds discovery requests with pagination', async () => {
+  it('builds discovery requests with page 1 seed only', async () => {
     const plans = await adapter.buildDiscoveryRequests({
       name: 'wien-apartments',
       sourceCode: 'wohnnet',
       maxPages: 3,
     });
-    expect(plans.length).toBe(3);
+    // Adapters now only build page 1; dynamic pagination follows nextPagePlan
+    expect(plans.length).toBe(1);
     expect(plans[0]!.url).toContain('seite=1');
-    expect(plans[1]!.url).toContain('seite=2');
-    expect(plans[2]!.url).toContain('seite=3');
   });
 });
 
@@ -135,6 +138,47 @@ describe('Discovery page parsing', () => {
       metadata: { page: 1 },
     });
     expect(result.items.length).toBe(0);
+    expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `<!DOCTYPE html>
+<html><body>
+<div class="search-results">
+  <a href="/immobilien/test-123001" data-id="123001" data-title="Test Listing">
+    <div class="realty realty-result">
+      <div class="realty-content">
+        <div class="realty-detail-title-address"><div class="col-10"><p class="h4">Test Listing</p></div></div>
+        <div class="realty-detail-area-rooms">
+          <div class="col"><b>60</b> m&sup2;</div>
+          <div class="col"><b>2</b> Zimmer</div>
+          <div class="col text-right"><b>250.000 &euro;</b></div>
+        </div>
+      </div>
+    </div>
+  </a>
+</div>
+<nav><ul class="pagination">
+  <li class="page-item active"><a class="page-link" href="?seite=1">1</a></li>
+  <li class="page-item"><a class="page-link" href="?seite=2">2</a></li>
+  <li class="page-item"><a class="page-link" href="?seite=3">3</a></li>
+</ul></nav>
+</body></html>`;
+    const result = parseDiscoveryPage(html, 'wohnnet', {
+      url: 'https://www.wohnnet.at/immobilien/eigentumswohnungen/wien?seite=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('seite=2');
+    expect(result.nextPagePlan!.metadata!['page']).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = '<html><body><div class="search-results"></div></body></html>';
+    const result = parseDiscoveryPage(html, 'wohnnet', {
+      url: 'https://www.wohnnet.at/immobilien?seite=1',
+      metadata: { page: 1 },
+    });
     expect(result.nextPagePlan).toBeNull();
   });
 
@@ -271,7 +315,12 @@ describe('Detail page parsing', () => {
 
   it('returns empty result for missing data sources', () => {
     const html = '<html><body><h1>Error page</h1></body></html>';
-    const result = parseDetailPage(html, 'https://www.wohnnet.at/immobilien/test-999', 'wohnnet', 1);
+    const result = parseDetailPage(
+      html,
+      'https://www.wohnnet.at/immobilien/test-999',
+      'wohnnet',
+      1,
+    );
     expect(result.externalId).toBe('999');
     expect(result.payload.priceRaw).toBeNull();
     expect(result.payload.livingAreaRaw).toBeNull();

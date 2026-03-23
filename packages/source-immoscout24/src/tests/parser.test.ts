@@ -46,17 +46,17 @@ describe('Immoscout24Adapter', () => {
     expect(key).toBe('immoscout24:abc123def456789012345678');
   });
 
-  it('builds discovery requests with correct selector', async () => {
+  it('builds discovery requests with page 1 seed only', async () => {
     const plans = await adapter.buildDiscoveryRequests({
       name: 'test',
       sourceCode: 'immoscout24',
       maxPages: 2,
     });
-    expect(plans).toHaveLength(2);
+    // Adapters now only build page 1; dynamic pagination follows nextPagePlan
+    expect(plans).toHaveLength(1);
     expect(plans[0]!.waitForSelector).toBe('script[data-testid="collection-page-structured-data"]');
     expect(plans[0]!.url).toContain('/regional/wien/wien/immobilien');
     expect(plans[0]!.url).not.toContain('/seite-');
-    expect(plans[1]!.url).toContain('/seite-2');
   });
 
   it('builds detail request with correct URL', async () => {
@@ -190,6 +190,116 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
     });
     expect(result.items.length).toBe(0);
     expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `
+      <html><body>
+      <script data-testid="collection-page-structured-data" type="application/ld+json">
+      {
+        "@type": "CollectionPage",
+        "mainEntity": {
+          "@type": "ItemList",
+          "numberOfItems": 60,
+          "itemListElement": [
+            {"@type": "ListItem", "position": 1, "item": {
+              "@type": "RealEstateListing",
+              "name": "Test 3-Zimmer mit Balkon",
+              "url": "/expose/aaa111bbb222ccc333ddd444",
+              "description": "65,20 m\u00b2 . 3 Zimmer . 1020 Wien",
+              "mainEntity": {"@type": "Apartment", "address": {"postalCode": "1020", "addressLocality": "Wien"}}
+            }}
+          ]
+        }
+      }
+      </script>
+      <div data-testid="pagination-section"></div>
+      </body></html>`;
+    const result = parseDiscoveryPage(html, 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('/seite-2');
+    expect(result.nextPagePlan!.metadata!.page).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = `
+      <script data-testid="collection-page-structured-data" type="application/ld+json">
+      {
+        "@type": "CollectionPage",
+        "mainEntity": {
+          "@type": "ItemList",
+          "numberOfItems": 0,
+          "itemListElement": []
+        }
+      }
+      </script>`;
+    const result = parseDiscoveryPage(html, 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('returns nextPagePlan via seite-link fallback when pagination marker missing', () => {
+    const html = `
+      <html><body>
+      <script data-testid="collection-page-structured-data" type="application/ld+json">
+      {
+        "@type": "CollectionPage",
+        "mainEntity": {
+          "@type": "ItemList",
+          "numberOfItems": 0,
+          "itemListElement": [
+            {"@type": "ListItem", "position": 1, "item": {
+              "@type": "RealEstateListing",
+              "name": "Fallback Test",
+              "url": "/expose/bbb222ccc333ddd444eee555",
+              "description": "50 m\u00b2 . 2 Zimmer . 1030 Wien",
+              "mainEntity": {"@type": "Apartment", "address": {"postalCode": "1030", "addressLocality": "Wien"}}
+            }}
+          ]
+        }
+      }
+      </script>
+      <nav><a href="/regional/wien/wien/immobilien/seite-2">Seite 2</a></nav>
+      </body></html>`;
+    const result = parseDiscoveryPage(html, 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('/seite-2');
+  });
+
+  it('returns nextPagePlan via total count fallback', () => {
+    const html = `
+      <script data-testid="collection-page-structured-data" type="application/ld+json">
+      {
+        "@type": "CollectionPage",
+        "mainEntity": {
+          "@type": "ItemList",
+          "numberOfItems": 100,
+          "itemListElement": [
+            {"@type": "ListItem", "position": 1, "item": {
+              "@type": "RealEstateListing",
+              "name": "Count Fallback Test",
+              "url": "/expose/ccc333ddd444eee555fff666",
+              "description": "70 m\u00b2 . 3 Zimmer . 1010 Wien",
+              "mainEntity": {"@type": "Apartment", "address": {"postalCode": "1010", "addressLocality": "Wien"}}
+            }}
+          ]
+        }
+      }
+      </script>`;
+    const result = parseDiscoveryPage(html, 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('/seite-2');
   });
 
   it('includes discoveredAt and sourceCode on items', () => {

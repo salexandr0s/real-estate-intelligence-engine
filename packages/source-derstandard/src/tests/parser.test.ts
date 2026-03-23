@@ -43,16 +43,15 @@ describe('DerStandardAdapter', () => {
     expect(key).toBe('derstandard:15086452');
   });
 
-  it('builds discovery requests with correct pagination', async () => {
+  it('builds discovery requests with page 1 seed only', async () => {
     const plans = await adapter.buildDiscoveryRequests({
       name: 'derstandard-wien',
       sourceCode: 'derstandard',
       maxPages: 3,
     });
-    expect(plans).toHaveLength(3);
+    // Adapters now only build page 1; dynamic pagination follows nextPagePlan
+    expect(plans).toHaveLength(1);
     expect(plans[0]!.url).toContain('page=1');
-    expect(plans[1]!.url).toContain('page=2');
-    expect(plans[2]!.url).toContain('page=3');
     expect(plans[0]!.url).toContain('immobilien.derstandard.at');
   });
 
@@ -213,6 +212,43 @@ describe('Discovery page parsing', () => {
       metadata: { page: 1 },
     });
     expect(result.items.length).toBe(0);
+    expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `<html><body>
+      <li class="box resultitem">
+        <a href="/detail/88001/test-listing?src=search&pos=1">
+          <h2>Pagination Test Listing</h2>
+          <span class="adress">1010 Wien</span>
+          <span>Wohnfläche</span>75 m²
+          <span>Zimmer</span> 3
+          <span>Kaufpreis</span>€ 400.000
+        </a>
+      </li>
+      <nav>
+        <a href="/immobiliensuche?page=1">1</a>
+        <a href="/immobiliensuche?page=2">2</a>
+        <a href="/immobiliensuche?page=3">3</a>
+      </nav>
+    </body></html>`;
+    const result = parseDiscoveryPage(html, 'derstandard', {
+      url: 'https://immobilien.derstandard.at/immobiliensuche/i/kaufen/wohnung/wien?page=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('page=2');
+    expect(result.nextPagePlan!.metadata!.page).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = `<html><body>
+      <nav><a href="/immobiliensuche?page=2">2</a></nav>
+    </body></html>`;
+    const result = parseDiscoveryPage(html, 'derstandard', {
+      url: 'https://immobilien.derstandard.at/immobiliensuche?page=1',
+      metadata: { page: 1 },
+    });
     expect(result.nextPagePlan).toBeNull();
   });
 

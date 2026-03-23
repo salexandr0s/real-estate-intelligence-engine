@@ -22,24 +22,20 @@ export class RemaxAdapter implements SourceAdapter<RemaxDiscoveryItem, RemaxDeta
   readonly parserVersion = 2;
 
   async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
-    const maxPages = profile.maxPages ?? 5;
-    const plans: RequestPlan[] = [];
+    const url = new URL(SEARCH_PATH, BASE_URL);
+    url.searchParams.set('page', '1');
+    if (profile.propertyType) url.searchParams.set('type', profile.propertyType);
+    if (profile.regions?.length) url.searchParams.set('region', profile.regions[0]!);
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(SEARCH_PATH, BASE_URL);
-      url.searchParams.set('page', String(page));
-      if (profile.propertyType) url.searchParams.set('type', profile.propertyType);
-      if (profile.regions?.length) url.searchParams.set('region', profile.regions[0]!);
-
-      plans.push({
+    // Only seed page 1 — RE/MAX returns all results on one page (nextPagePlan: null)
+    return [
+      {
         url: url.toString(),
         waitForSelector: '.real-estate-wrapper',
         waitForTimeout: 5000,
-        metadata: { page },
-      });
-    }
-
-    return plans;
+        metadata: { page: 1 },
+      },
+    ];
   }
 
   async extractDiscoveryPage(

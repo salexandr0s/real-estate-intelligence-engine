@@ -75,9 +75,12 @@ export function parseDiscoveryPage(
   const pageNum = Number(requestPlan.metadata?.['page']) || 1;
   const numberOfItems = collection.mainEntity?.numberOfItems ?? 0;
 
-  // Detect pagination: check for pagination section in HTML
-  const hasPagination = html.includes('data-testid="pagination-section"');
-  const hasMore = items.length > 0 && hasPagination && (numberOfItems > items.length || pageNum === 1);
+  // Multi-strategy pagination detection (resilient to HTML changes)
+  const hasPaginationMarker = html.includes('data-testid="pagination-section"');
+  const hasSeiteLinks = /\/seite-\d+/.test(html);
+  const hasTotalCountRoom = numberOfItems > 0 && pageNum * items.length < numberOfItems;
+
+  const hasMore = items.length > 0 && (hasPaginationMarker || hasSeiteLinks || hasTotalCountRoom);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
@@ -115,7 +118,9 @@ function parseRooms(desc: string): string | null {
 }
 
 /** Build location string from JSON-LD address data */
-function buildLocation(listing: { mainEntity?: { address?: { postalCode?: string; addressLocality?: string } } }): string | null {
+function buildLocation(listing: {
+  mainEntity?: { address?: { postalCode?: string; addressLocality?: string } };
+}): string | null {
   const addr = listing.mainEntity?.address;
   if (!addr) return null;
   const parts: string[] = [];

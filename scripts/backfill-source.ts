@@ -28,7 +28,7 @@ import {
   pickRandomUserAgent,
   setupRequestInterception,
 } from '@rei/scraper-core';
-import type { SourceAdapter, CrawlProfile } from '@rei/contracts';
+import type { SourceAdapter, CrawlProfile, RequestPlan } from '@rei/contracts';
 import { WillhabenAdapter } from '@rei/source-willhaben';
 import { Immoscout24Adapter } from '@rei/source-immoscout24';
 import { WohnnetAdapter } from '@rei/source-wohnnet';
@@ -145,7 +145,8 @@ async function main(): Promise<void> {
   const profile: CrawlProfile = {
     name: `${sourceCode}-backfill`,
     sourceCode,
-    maxPages,
+    maxPages: 1, // Only build page 1 seed; dynamic pagination follows nextPagePlan
+    maxPagesPerRun: maxPages,
     operationType: (crawlConfig?.operationType as string) ?? undefined,
     propertyType: (crawlConfig?.propertyType as string) ?? undefined,
     regions: (crawlConfig?.regions as string[]) ?? undefined,
@@ -180,9 +181,8 @@ async function main(): Promise<void> {
 
     const page = await context.newPage();
 
-    // 7. Discovery phase
+    // 7. Discovery phase — dynamic pagination via nextPagePlan
     const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
-    log.info(`Discovery: ${discoveryPlans.length} page(s) to fetch`);
 
     const allDiscoveredItems: Array<{
       detailUrl: string;
@@ -191,7 +191,10 @@ async function main(): Promise<void> {
       discoveryUrl: string;
     }> = [];
 
-    for (const plan of discoveryPlans) {
+    let currentPlan: RequestPlan | null = discoveryPlans[0] ?? null;
+    let pagesProcessed = 0;
+
+    while (currentPlan !== null && pagesProcessed < maxPages) {
       if (circuitBreaker.isOpen(sourceCode)) {
         log.warn('Circuit breaker open, stopping discovery');
         break;
@@ -201,17 +204,18 @@ async function main(): Promise<void> {
         await rateLimiter.waitForSlot(sourceCode);
         await pageNavigationDelay();
 
-        log.info(`Fetching discovery page: ${plan.url}`);
-        await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+        log.info(`Fetching discovery page ${pagesProcessed + 1}: ${currentPlan.url}`);
+        await page.goto(currentPlan.url, { waitUntil: 'networkidle', timeout: 30_000 });
         await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();
         runCtx.incrementMetric('pagesFetched');
         runCtx.incrementMetric('http2xx');
+        pagesProcessed++;
 
         const discoveryResult = await adapter.extractDiscoveryPage({
           page,
-          requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
+          requestPlan: { ...currentPlan, metadata: { ...currentPlan.metadata, html } },
           profile,
           scrapeRunId: run.id,
         });
@@ -222,27 +226,33 @@ async function main(): Promise<void> {
             detailUrl: item.detailUrl,
             title: (payload.titleRaw as string) ?? 'Unknown',
             externalId: item.externalId ?? undefined,
-            discoveryUrl: plan.url,
+            discoveryUrl: currentPlan.url,
           });
         }
 
         runCtx.incrementMetric('listingsDiscovered', discoveryResult.items.length);
         circuitBreaker.recordSuccess(sourceCode);
 
-        log.info(
-          `Discovered ${discoveryResult.items.length} items from page ${(plan.metadata as Record<string, unknown>)?.page ?? '?'}`,
-        );
+        log.info(`Discovered ${discoveryResult.items.length} items from page ${pagesProcessed}`);
+
+        // Follow dynamic pagination from parser
+        currentPlan = discoveryResult.nextPagePlan;
+        if (discoveryResult.items.length === 0) {
+          log.info('Empty page detected, stopping pagination');
+          currentPlan = null;
+        }
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
-        log.error(`Discovery page failed: ${plan.url}`, { errorClass });
-
-        if (errorClass === 'terminal_page') continue;
+        log.error(`Discovery page failed: ${currentPlan.url}`, { errorClass });
         runCtx.incrementMetric('http4xx');
+        currentPlan = null; // Stop on error
       }
     }
 
-    log.info(`Total discovered: ${allDiscoveredItems.length} listings`);
+    log.info(
+      `Total discovered: ${allDiscoveredItems.length} listings across ${pagesProcessed} pages`,
+    );
 
     // 8. Check which listings already exist and filter to new ones
     let newItems = 0;

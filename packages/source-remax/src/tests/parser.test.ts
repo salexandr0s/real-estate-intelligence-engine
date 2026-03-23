@@ -55,16 +55,15 @@ describe('RemaxAdapter', () => {
     expect(key).toBe('remax:350755');
   });
 
-  it('builds discovery requests with pagination', async () => {
+  it('builds discovery requests with page 1 seed only', async () => {
     const plans = await adapter.buildDiscoveryRequests({
       name: 'test',
       sourceCode: 'remax',
       maxPages: 3,
     });
-    expect(plans).toHaveLength(3);
+    // Adapters now only build page 1; dynamic pagination follows nextPagePlan
+    expect(plans).toHaveLength(1);
     expect(plans[0]!.url).toContain('page=1');
-    expect(plans[1]!.url).toContain('page=2');
-    expect(plans[2]!.url).toContain('page=3');
     expect(plans[0]!.waitForSelector).toBe('.real-estate-wrapper');
   });
 
@@ -173,6 +172,16 @@ describe('Discovery page parsing', () => {
       metadata: { page: 1 },
     });
 
+    expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('always returns nextPagePlan null (single-page source)', () => {
+    const html = loadFixture('discovery-page.html');
+    const result = parseDiscoveryPage(html, 'remax', {
+      url: 'https://www.remax.at/de/immobilien/immobilien-suchen?page=1',
+      metadata: { page: 1 },
+    });
+    expect(result.items.length).toBeGreaterThan(0);
     expect(result.nextPagePlan).toBeNull();
   });
 

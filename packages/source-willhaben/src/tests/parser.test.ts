@@ -19,8 +19,9 @@ describe('WillhabenAdapter', () => {
   });
 
   it('canonicalizes URLs correctly', () => {
-    expect(adapter.canonicalizeUrl('https://www.willhaben.at/iad/immobilien/123?ref=search'))
-      .toBe('https://www.willhaben.at/iad/immobilien/123');
+    expect(adapter.canonicalizeUrl('https://www.willhaben.at/iad/immobilien/123?ref=search')).toBe(
+      'https://www.willhaben.at/iad/immobilien/123',
+    );
   });
 
   it('derives source listing key', () => {
@@ -75,6 +76,42 @@ describe('Discovery page parsing', () => {
       metadata: { page: 1 },
     });
     expect(result.items.length).toBe(0);
+    expect(result.nextPagePlan).toBeNull();
+  });
+
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `<script id="__NEXT_DATA__" type="application/json">
+      {"props":{"pageProps":{"searchResult":{
+        "rowsFound": 200,
+        "advertSummaryList":{"advertSummary":[
+          {"id":"111","description":"Test","attributes":{"attribute":[
+            {"name":"SEO_URL","values":["immobilien/d/test-111"]},
+            {"name":"HEADING","values":["Test Listing"]},
+            {"name":"PRICE","values":["100000"]}
+          ]}}
+        ]}
+      }}}}
+    </script>`;
+    const result = parseDiscoveryPage(html, 'willhaben', {
+      url: 'https://www.willhaben.at/iad/immobilien?page=1&rows=25',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('page=2');
+    expect(result.nextPagePlan!.metadata!.page).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = `<script id="__NEXT_DATA__" type="application/json">
+      {"props":{"pageProps":{"searchResult":{
+        "rowsFound": 0,
+        "advertSummaryList":{"advertSummary":[]}
+      }}}}
+    </script>`;
+    const result = parseDiscoveryPage(html, 'willhaben', {
+      url: 'https://www.willhaben.at/iad/immobilien?page=1&rows=25',
+      metadata: { page: 1 },
+    });
     expect(result.nextPagePlan).toBeNull();
   });
 });

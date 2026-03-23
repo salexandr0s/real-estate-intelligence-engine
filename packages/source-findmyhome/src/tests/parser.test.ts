@@ -163,6 +163,35 @@ describe('Discovery page parsing', () => {
     expect(result.nextPagePlan!.metadata?.['page']).toBe(2);
   });
 
+  it('returns nextPagePlan when more pages exist', () => {
+    const html = `<html><body>
+      <p>Wir haben 250 Immobilien</p>
+      <!-- **** IMMO LIST ***** -->
+      <a class="btnHeadlineErgebnisliste" href="/7770001">Pagination Test</a>
+      <strong>Ort: 1020</strong> Wien
+      <strong>Kaufpreis:</strong><br>300.000,- EUR
+      <strong>Flaeche:</strong><br>65 m2
+      <strong>Zimmer:</strong><br>3.0
+      <nav class="pagination"><a href="?entry=20">2</a></nav>
+    </body></html>`;
+    const result = parseDiscoveryPage(html, 'findmyhome', {
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).not.toBeNull();
+    expect(result.nextPagePlan!.url).toContain('entry=20');
+    expect(result.nextPagePlan!.metadata!['page']).toBe(2);
+  });
+
+  it('returns nextPagePlan null when no items found', () => {
+    const html = '<html><body><p>Wir haben 0 Immobilien</p></body></html>';
+    const result = parseDiscoveryPage(html, 'findmyhome', {
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
+      metadata: { page: 1 },
+    });
+    expect(result.nextPagePlan).toBeNull();
+  });
+
   it('returns empty result for HTML without listing cards', () => {
     const html = '<html><body><h1>No data here</h1></body></html>';
     const result = parseDiscoveryPage(html, 'findmyhome', {

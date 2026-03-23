@@ -14,13 +14,14 @@ import {
   SourceCircuitBreaker,
   ScrapeRunContext,
   pageNavigationDelay,
+  cooldownDelay,
   classifyScraperError,
   dismissCookieConsent,
   setupRequestInterception,
   DEFAULT_JOB_RETRY_OPTS,
 } from '@rei/scraper-core';
 import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
-import type { CrawlProfile } from '@rei/contracts';
+import type { CrawlProfile, RequestPlan } from '@rei/contracts';
 import { scrapeRuns, sources, deadLetter } from '@rei/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
@@ -56,7 +57,8 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
   const worker = new Worker<DiscoveryJobData>(
     QUEUE_NAMES.SCRAPE_DISCOVERY,
     async (job: Job<DiscoveryJobData>) => {
-      const { sourceCode, sourceId, maxPages } = job.data;
+      const { sourceCode, sourceId } = job.data;
+      const maxPagesPerRun = job.data.maxPagesPerRun ?? job.data.maxPages ?? 50;
       const adapter = getAdapter(sourceCode);
 
       // For repeatable/scheduled jobs, scrapeRunId is 0 — create a new run
@@ -74,7 +76,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
         scrapeRunId = run.id;
       }
 
-      log.info('Discovery job started', { sourceCode, scrapeRunId, maxPages });
+      log.info('Discovery job started', { sourceCode, scrapeRunId, maxPagesPerRun });
       const runCtx = new ScrapeRunContext(scrapeRunId, sourceCode);
 
       // Wire per-source rate limit (cached)
@@ -89,7 +91,8 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
       const profile: CrawlProfile = {
         name: `${sourceCode}-scheduled`,
         sourceCode,
-        maxPages,
+        maxPages: 1, // Only build page 1 seed; dynamic pagination follows nextPagePlan
+        maxPagesPerRun,
         operationType: crawlConfig?.operationType as string | undefined,
         propertyType: crawlConfig?.propertyType as string | undefined,
         regions: crawlConfig?.regions as string[] | undefined,
@@ -103,26 +106,32 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
       try {
         const page = await context.newPage();
         let totalEnqueued = 0;
+        let pagesProcessed = 0;
 
-        for (const plan of discoveryPlans) {
+        // Dynamic pagination: start with page 1, follow nextPagePlan from parsers
+        let currentPlan: RequestPlan | null = discoveryPlans[0] ?? null;
+
+        while (currentPlan !== null && pagesProcessed < maxPagesPerRun) {
           if (circuitBreaker.isOpen(sourceCode)) {
             log.warn('Circuit breaker open, stopping discovery', { sourceCode });
             break;
           }
 
+          const planUrl = currentPlan.url;
           try {
             await rateLimiter.waitForSlot(sourceCode);
             await pageNavigationDelay();
 
-            await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+            await page.goto(planUrl, { waitUntil: 'networkidle', timeout: 30_000 });
             await dismissCookieConsent(page, sourceCode);
             const html = await page.content();
             runCtx.incrementMetric('pagesFetched');
             runCtx.incrementMetric('http2xx');
+            pagesProcessed++;
 
             const result = await adapter.extractDiscoveryPage({
               page,
-              requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
+              requestPlan: { ...currentPlan, metadata: { ...currentPlan.metadata, html } },
               profile,
               scrapeRunId,
             });
@@ -135,7 +144,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
                   sourceId,
                   scrapeRunId,
                   detailUrl: item.detailUrl,
-                  discoveryUrl: plan.url,
+                  discoveryUrl: currentPlan.url,
                   title: String(
                     (item.summaryPayload as Record<string, unknown>)?.titleRaw ?? 'Unknown',
                   ),
@@ -149,14 +158,37 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
             runCtx.incrementMetric('listingsDiscovered', result.items.length);
             circuitBreaker.recordSuccess(sourceCode);
             log.info(`Discovered ${result.items.length} items`, {
-              page: (plan.metadata as Record<string, unknown>)?.page,
+              page: pagesProcessed,
+              totalEstimate: result.totalEstimate,
+              hasNextPage: result.nextPagePlan !== null,
             });
+
+            // Follow dynamic pagination from parser
+            currentPlan = result.nextPagePlan;
+
+            // Empty page guard — stop if parser returned 0 items
+            if (result.items.length === 0) {
+              log.info('Empty page detected, stopping pagination', { page: pagesProcessed });
+              currentPlan = null;
+            }
           } catch (err) {
             const errorClass = classifyScraperError(err);
             circuitBreaker.recordFailure(sourceCode, errorClass);
-            log.error('Discovery page failed', { url: plan.url, errorClass });
+            log.error('Discovery page failed', { url: planUrl, errorClass });
             runCtx.incrementMetric('http4xx');
+
+            if (errorClass === 'soft_anti_bot') {
+              log.warn('Soft block detected, applying cooldown before stopping', { sourceCode });
+              await cooldownDelay();
+            }
+
+            // Stop pagination on error — don't blindly continue to next page
+            currentPlan = null;
           }
+        }
+
+        if (pagesProcessed >= maxPagesPerRun) {
+          log.warn('Discovery hit safety cap', { sourceCode, maxPagesPerRun, pagesProcessed });
         }
 
         const metrics = runCtx.getMetrics();

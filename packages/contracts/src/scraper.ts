@@ -24,6 +24,8 @@ export interface CrawlProfile {
   regions?: string[];
   districts?: number[];
   maxPages?: number;
+  /** Safety cap: maximum pages the discovery worker will fetch per run. Parsers control actual stop via nextPagePlan. */
+  maxPagesPerRun?: number;
   sortOrder?: string;
 }
 

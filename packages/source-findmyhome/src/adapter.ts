@@ -29,26 +29,18 @@ export class FindMyHomeAdapter implements SourceAdapter<
   readonly sourceName = 'findmyhome.at';
   readonly parserVersion = 2;
 
-  async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
-    const maxPages = profile.maxPages ?? 5;
-    const plans: RequestPlan[] = [];
+  async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
+    const url = new URL(SEARCH_PATH, BASE_URL);
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(SEARCH_PATH, BASE_URL);
-      if (page > 1) {
-        // findmyhome uses entry= offset (20 items per page)
-        url.searchParams.set('entry', String((page - 1) * 20));
-      }
-
-      plans.push({
+    // Only seed page 1 — the discovery worker follows nextPagePlan from parsers
+    return [
+      {
         url: url.toString(),
         waitForSelector: 'h3.obj_list',
         waitForTimeout: 5000,
-        metadata: { page },
-      });
-    }
-
-    return plans;
+        metadata: { page: 1 },
+      },
+    ];
   }
 
   async extractDiscoveryPage(

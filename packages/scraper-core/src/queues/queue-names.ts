@@ -24,6 +24,8 @@ export interface DiscoveryJobData {
   scrapeRunId: number;
   page: number;
   maxPages: number;
+  /** Safety cap for dynamic pagination. Falls back to maxPages if not set. */
+  maxPagesPerRun?: number;
 }
 
 /** Job data for a detail page scrape. */

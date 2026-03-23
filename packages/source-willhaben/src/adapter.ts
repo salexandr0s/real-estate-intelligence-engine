@@ -22,27 +22,21 @@ export class WillhabenAdapter implements SourceAdapter<WillhabenDiscoveryItem, W
   readonly parserVersion = 1;
 
   async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
-    const maxPages = profile.maxPages ?? 5;
-    const plans: RequestPlan[] = [];
-
     const regionSlug = profile.regions?.[0] ?? 'wien';
-    const searchPath = `${BASE_SEARCH_PATH}/${regionSlug}`;
+    const url = new URL(`${BASE_SEARCH_PATH}/${regionSlug}`, BASE_URL);
+    url.searchParams.set('page', '1');
+    url.searchParams.set('rows', '25');
+    url.searchParams.set('sort', '1');
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(searchPath, BASE_URL);
-      url.searchParams.set('page', String(page));
-      url.searchParams.set('rows', '25');
-      url.searchParams.set('sort', '1');
-
-      plans.push({
+    // Only seed page 1 — the discovery worker follows nextPagePlan from parsers
+    return [
+      {
         url: url.toString(),
         waitForSelector: '#__NEXT_DATA__',
         waitForTimeout: 5000,
-        metadata: { page },
-      });
-    }
-
-    return plans;
+        metadata: { page: 1 },
+      },
+    ];
   }
 
   async extractDiscoveryPage(

@@ -22,7 +22,7 @@ export async function seed(): Promise<void> {
     operationType: 'sale',
     propertyType: 'apartment',
     regions: ['wien'],
-    maxPages: 5,
+    maxPagesPerRun: 100, // Safety cap; parsers control actual stop via nextPagePlan
     sortOrder: 'published_desc',
   };
 

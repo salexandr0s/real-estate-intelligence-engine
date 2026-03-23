@@ -24,23 +24,19 @@ export class DerStandardAdapter implements SourceAdapter<
   readonly sourceName = 'derstandard.at Immobilien';
   readonly parserVersion = 2;
 
-  async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
-    const maxPages = profile.maxPages ?? 5;
-    const plans: RequestPlan[] = [];
+  async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
+    const url = new URL(SEARCH_PATH, BASE_URL);
+    url.searchParams.set('page', '1');
 
-    for (let page = 1; page <= maxPages; page++) {
-      const url = new URL(SEARCH_PATH, BASE_URL);
-      url.searchParams.set('page', String(page));
-
-      plans.push({
+    // Only seed page 1 — the discovery worker follows nextPagePlan from parsers
+    return [
+      {
         url: url.toString(),
         waitForSelector: '.resultitem a[href*="/detail/"]',
         waitForTimeout: 5000,
-        metadata: { page },
-      });
-    }
-
-    return plans;
+        metadata: { page: 1 },
+      },
+    ];
   }
 
   async extractDiscoveryPage(

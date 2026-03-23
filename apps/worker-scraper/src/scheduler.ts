@@ -163,7 +163,10 @@ export async function startScheduler(): Promise<void> {
 
     const sourceConfig = source.config as Record<string, unknown> | null;
     const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
-    const maxPages = (crawlProfile?.maxPages as number) ?? 3;
+    const maxPagesPerRun =
+      (crawlProfile?.maxPagesPerRun as number) ??
+      (crawlProfile?.maxPages as number) ?? // backward compat with old config
+      100;
 
     await discoveryQueue.upsertJobScheduler(
       `discovery-${source.code}`,
@@ -175,7 +178,8 @@ export async function startScheduler(): Promise<void> {
           sourceId: source.id,
           scrapeRunId: 0, // Will be created by the worker before scraping
           page: 1,
-          maxPages,
+          maxPages: maxPagesPerRun, // legacy field, kept for compat
+          maxPagesPerRun,
         },
         opts: DEFAULT_JOB_RETRY_OPTS,
       },
@@ -184,7 +188,7 @@ export async function startScheduler(): Promise<void> {
     log.info(`Discovery schedule registered`, {
       source: source.code,
       cron: cronPattern,
-      maxPages,
+      maxPagesPerRun,
     });
   }
 
