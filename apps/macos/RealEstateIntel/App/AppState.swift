@@ -1,30 +1,5 @@
 import SwiftUI
 
-// MARK: - Copilot Provider
-
-enum CopilotProvider: String, CaseIterable, Identifiable {
-    case anthropic
-    case openai
-    case claudeSubscription
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .anthropic: "Anthropic API Key"
-        case .openai: "OpenAI"
-        case .claudeSubscription: "Claude Subscription"
-        }
-    }
-
-    var apiProvider: String {
-        switch self {
-        case .anthropic, .claudeSubscription: "anthropic"
-        case .openai: "openai"
-        }
-    }
-}
-
 // MARK: - App State
 
 /// Central observable state for the application.
@@ -209,14 +184,5 @@ final class AppState {
         } catch {
             // Silently fail — count stays at last known value
         }
-    }
-}
-
-// MARK: - Int Clamping Helper
-
-private extension Int {
-    func clamped(to range: ClosedRange<Int>, default defaultValue: Int) -> Int {
-        if self == 0 { return defaultValue }
-        return Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

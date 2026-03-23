@@ -62,20 +62,15 @@ struct CopilotView: View {
     // MARK: - Empty State (bottom-pinned input + suggestions)
 
     private var emptyState: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
-            CopilotSuggestionChips(suggestions: viewModel.suggestions) { query in
+        CopilotEmptyState(
+            suggestions: viewModel.suggestions,
+            onSuggestionSelected: { query in
                 viewModel.inputText = query
                 Task { await viewModel.send(using: appState) }
             }
-            .padding(.horizontal, Theme.Spacing.xxl)
-            .padding(.bottom, Theme.Spacing.lg)
-
+        ) {
             inputBar
-                .padding(.bottom, Theme.Spacing.xl)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Conversation State

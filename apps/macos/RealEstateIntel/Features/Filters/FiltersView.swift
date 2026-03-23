@@ -54,7 +54,7 @@ struct FiltersView: View {
             showTestError = newValue != nil
         }
         .alert("Test Failed", isPresented: $showTestError) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) { viewModel.testErrorMessage = nil }
         } message: {
             if let msg = viewModel.testErrorMessage {
                 Text(msg)

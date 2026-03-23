@@ -8,20 +8,28 @@ struct CopilotMessageBubble: View {
     var body: some View {
         switch message.role {
         case .user:
-            userBubble
+            UserBubble(contentBlocks: message.contentBlocks)
         case .assistant:
-            assistantBubble
+            AssistantBubble(
+                contentBlocks: message.contentBlocks,
+                isStreaming: message.isStreaming,
+                onListingTap: onListingTap
+            )
         }
     }
+}
 
-    // MARK: - User Bubble
+// MARK: - User Bubble
 
-    private var userBubble: some View {
+private struct UserBubble: View {
+    let contentBlocks: [ContentBlock]
+
+    var body: some View {
         HStack {
             Spacer(minLength: 80)
 
             VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
-                ForEach(message.contentBlocks) { block in
+                ForEach(contentBlocks) { block in
                     if case .text(let text) = block.content {
                         Text(text)
                             .textSelection(.enabled)
@@ -35,23 +43,29 @@ struct CopilotMessageBubble: View {
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
         }
     }
+}
 
-    // MARK: - Assistant Bubble
+// MARK: - Assistant Bubble
 
-    private var assistantBubble: some View {
+private struct AssistantBubble: View {
+    let contentBlocks: [ContentBlock]
+    let isStreaming: Bool
+    let onListingTap: (Int) -> Void
+
+    var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.md) {
             // Avatar
             Circle()
                 .fill(.purple.opacity(0.15))
                 .frame(width: 28, height: 28)
-                .overlay(
+                .overlay {
                     Image(systemName: "sparkle")
                         .font(.caption)
                         .foregroundStyle(.purple)
-                )
+                }
 
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                ForEach(message.contentBlocks) { block in
+                ForEach(contentBlocks) { block in
                     contentBlockView(block)
                 }
             }
@@ -60,13 +74,11 @@ struct CopilotMessageBubble: View {
         }
     }
 
-    // MARK: - Content Block Dispatch
-
     @ViewBuilder
     private func contentBlockView(_ block: ContentBlock) -> some View {
         switch block.content {
         case .text(let text):
-            TextContentBlock(text: text, isStreaming: message.isStreaming)
+            TextContentBlock(text: text, isStreaming: isStreaming)
 
         case .listingCards(let listings):
             ListingCardBlock(listings: listings, onTap: onListingTap)

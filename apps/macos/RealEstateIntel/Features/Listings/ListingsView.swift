@@ -148,7 +148,9 @@ struct ListingsView: View {
         .onChange(of: exportError) { _, newValue in
             showExportError = newValue != nil
         }
-        .alert("Export Failed", isPresented: $showExportError) {} message: {
+        .alert("Export Failed", isPresented: $showExportError) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
             if let msg = exportError { Text(msg) }
         }
     }

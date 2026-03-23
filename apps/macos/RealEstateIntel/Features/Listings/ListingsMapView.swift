@@ -24,6 +24,7 @@ struct ListingsMapView: View {
     @State private var showDevelopments: Bool = false
     @State private var visibleDevelopments: [WienDevelopment] = []
     @State private var showPOIPicker: Bool = false
+    @State private var listingClusters: [DistrictCluster] = []
 
     private var showPOIs: Bool { !activePOICategories.isEmpty }
 
@@ -35,23 +36,6 @@ struct ListingsMapView: View {
     private var isZoomedIn: Bool {
         guard let region = visibleRegion else { return false }
         return region.span.latitudeDelta < 0.04
-    }
-
-    /// Group listings by district for cluster bubbles.
-    private var listingClusters: [DistrictCluster] {
-        let byDistrict = Dictionary(grouping: mappableListings.filter { $0.districtNo != nil }) { $0.districtNo! }
-        return byDistrict.map { districtNo, listings in
-            let avgLat = listings.compactMap(\.latitude).reduce(0, +) / Double(listings.count)
-            let avgLon = listings.compactMap(\.longitude).reduce(0, +) / Double(listings.count)
-            let avgScore = listings.compactMap(\.currentScore).reduce(0, +) / max(1, Double(listings.compactMap(\.currentScore).count))
-            return DistrictCluster(
-                districtNo: districtNo,
-                districtName: listings.first?.districtName,
-                count: listings.count,
-                center: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
-                avgScore: avgScore
-            )
-        }
     }
 
     var body: some View {
@@ -163,7 +147,7 @@ struct ListingsMapView: View {
                 // Map style — top left
                 VStack {
                     HStack {
-                        mapStyleMenu
+                        MapStyleMenu(mapStyle: $mapStyle)
                         Spacer()
                     }
                     Spacer()
@@ -181,16 +165,25 @@ struct ListingsMapView: View {
                 .padding(12)
             }
 
-            statusBar
+            MapStatusBar(
+                filteredCount: viewModel.filteredListings.count,
+                mappableCount: mappableListings.count,
+                hasSelectionRegion: viewModel.selectionRegion != nil,
+                onClearSelection: { viewModel.selectionRegion = nil }
+            )
         }
         .task {
             districtBoundaries = ViennaDistrictStore.boundaries
             await ViennaPOIStore.loadIfNeeded()
+            recomputeClusters()
             // If a district filter is already active, zoom to it
             if let districtNo = viewModel.selectedDistrict,
                let boundary = ViennaDistrictStore.boundary(for: districtNo) {
                 position = .region(boundary.boundingBox)
             }
+        }
+        .onChange(of: viewModel.filteredListings.count) {
+            recomputeClusters()
         }
         .onChange(of: viewModel.mapFocusTrigger) {
             if let coord = viewModel.focusedMapCoordinate {
@@ -287,7 +280,11 @@ struct ListingsMapView: View {
                     }
                 }
 
-                poiLayerMenu
+                POILayerMenu(
+                    activePOICategories: $activePOICategories,
+                    showPOIPicker: $showPOIPicker,
+                    onCategoryChanged: { refreshVisiblePOIs() }
+                )
             }
         }
     }
@@ -317,101 +314,6 @@ struct ListingsMapView: View {
             .help(tooltip)
     }
 
-    private var mapStyleMenu: some View {
-        Menu("Map Style", systemImage: "map") {
-            Button("Standard") { mapStyle = .standard }
-            Button("Satellite") { mapStyle = .imagery }
-            Button("Hybrid") { mapStyle = .hybrid }
-        }
-        .labelStyle(.iconOnly)
-        .font(.system(size: 16, weight: .medium)) // Fixed size: map control
-        .foregroundStyle(.primary)
-        .menuStyle(.borderlessButton)
-        .frame(width: 36, height: 36)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
-        .help("Map Style")
-    }
-
-    private var poiLayerMenu: some View {
-        Button("Points of Interest", systemImage: showPOIs ? "signpost.right.and.left.fill" : "signpost.right.and.left") {
-            showPOIPicker.toggle()
-        }
-        .labelStyle(.iconOnly)
-        .font(.system(size: 16, weight: .medium)) // Fixed size: map control
-        .foregroundStyle(showPOIs ? .blue : .primary)
-        .frame(width: 36, height: 36)
-        .contentShape(Rectangle())
-        .buttonStyle(.plain)
-        .help("Points of Interest")
-        .popover(isPresented: $showPOIPicker, arrowEdge: .leading) {
-            poiPickerContent
-        }
-    }
-
-    private var poiPickerContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(POICategoryGroup.allCases.enumerated()), id: \.element) { index, group in
-                if index > 0 {
-                    Divider().padding(.vertical, 2)
-                }
-                poiGroupSection(group)
-            }
-
-            Divider().padding(.vertical, 2)
-
-            Button(activePOICategories.count == POICategory.allCases.count ? "Clear All" : "Select All") {
-                if activePOICategories.count == POICategory.allCases.count {
-                    activePOICategories.removeAll()
-                } else {
-                    activePOICategories = Set(POICategory.allCases)
-                }
-                updateVisiblePOIs()
-            }
-            .font(.caption)
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .fixedSize()
-    }
-
-    @ViewBuilder
-    private func poiGroupSection(_ group: POICategoryGroup) -> some View {
-        Text(group.displayName)
-            .font(.caption2.bold())
-            .foregroundStyle(.tertiary)
-            .textCase(.uppercase)
-
-        let cats: [POICategory] = group.categories
-        ForEach(cats, id: \.self) { category in
-            poiCategoryButton(category)
-        }
-    }
-
-    private func poiCategoryButton(_ category: POICategory) -> some View {
-        Button {
-            if activePOICategories.contains(category) {
-                activePOICategories.remove(category)
-            } else {
-                activePOICategories.insert(category)
-            }
-            updateVisiblePOIs()
-        } label: {
-            HStack {
-                Label(category.displayName, systemImage: category.systemImage)
-                    .font(.caption)
-                Spacer()
-                if activePOICategories.contains(category) {
-                    Image(systemName: "checkmark")
-                        .font(.caption)
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
     /// Maximum annotations to render simultaneously for smooth performance.
     private static let maxAnnotations = 500
 
@@ -419,10 +321,6 @@ struct ListingsMapView: View {
     private static let alwaysShowCategories: Set<POICategory> = [
         .ubahn, .hospital, .fireStation, .police,
     ]
-
-    private func updateVisiblePOIs() {
-        refreshVisiblePOIs()
-    }
 
     /// Recompute visible POIs based on actual viewport and active categories.
     /// Applies density limiting when annotation count would exceed the cap.
@@ -479,44 +377,23 @@ struct ListingsMapView: View {
         visiblePOIs = kept
     }
 
-    // MARK: - Status Bar
+    // MARK: - Cluster Computation
 
-    private var statusBar: some View {
-        HStack {
-            let total = viewModel.filteredListings.count
-            let mapped = mappableListings.count
-            Text("\(mapped) of \(total) listings on map")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if mapped < total {
-                Text("(\(total - mapped) without coordinates)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            Spacer()
-
-            if viewModel.selectionRegion != nil {
-                HStack(spacing: Theme.Spacing.xs) {
-                    Image(systemName: "selection.pin.in.out")
-                        .foregroundStyle(Color.accentColor)
-                    Text("Area selected")
-                        .font(.caption)
-                        .foregroundStyle(Color.accentColor)
-                    Button("Clear Selection", systemImage: "xmark.circle.fill") {
-                        viewModel.selectionRegion = nil
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.borderless)
-                    .controlSize(.mini)
-                }
-            }
+    private func recomputeClusters() {
+        let mappable = mappableListings
+        let byDistrict = Dictionary(grouping: mappable.filter { $0.districtNo != nil }) { $0.districtNo! }
+        listingClusters = byDistrict.map { districtNo, listings in
+            let avgLat = listings.compactMap(\.latitude).reduce(0, +) / Double(listings.count)
+            let avgLon = listings.compactMap(\.longitude).reduce(0, +) / Double(listings.count)
+            let avgScore = listings.compactMap(\.currentScore).reduce(0, +) / max(1, Double(listings.compactMap(\.currentScore).count))
+            return DistrictCluster(
+                districtNo: districtNo,
+                districtName: listings.first?.districtName,
+                count: listings.count,
+                center: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
+                avgScore: avgScore
+            )
         }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.xs)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     // MARK: - Helpers

@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		816C88BEE8599D75DAF40DAF /* PriceTrendBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689AC45C7B917229883F3932 /* PriceTrendBadge.swift */; };
+		9960CCDA98DE86F7E97C74B1 /* MapStyleMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A40785059A06CBF26507B9D /* MapStyleMenu.swift */; };
+		CCDFEA7071B1660675A5B694 /* MapStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */; };
+		5E5D305A04167889DD238B6C /* POILayerMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8450FC08821EEE34B450C8ED /* POILayerMenu.swift */; };
+		C97F30BE7A2306D8B27BC249 /* PriceVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7164D25B7959E1E1D15A2DA /* PriceVersion.swift */; };
+		598B62A512934F088AF5C5D6 /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD97FE9C3986F97208B77AB /* CopilotProvider.swift */; };
+		6B04D21BE3F5A56775B64757 /* SavedListingItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9E6891B12D1F3CFE67F006B /* SavedListingItem.swift */; };
+		F95C75A0264D86F9AC74ED14 /* DistrictSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0B1FC9B25E6A327E95F62B /* DistrictSummary.swift */; };
+		4E728EFC40782014B261BDC9 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD000E31F5577157C1E9B106 /* FlowLayout.swift */; };
+		082B95AFDE76E8552D48D64A /* Int+Clamped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 547231FC7CE8EE7D04B8B8AB /* Int+Clamped.swift */; };
+		16D1D4CD19115F4EE7A79D8F /* CopilotEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F364FFFBC5E8996A4009CDB0 /* CopilotEmptyState.swift */; };
 		00BD71FB74ED045C789C903F /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C68CA156ED9C05D6B98062A /* AnalyticsView.swift */; };
 		01859D811827BC858C194B1A /* AlertsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6951A36903E0C366EE53B95 /* AlertsList.swift */; };
 		038D5DF89769E7942C7C2A72 /* AlertQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2935C92AC4DA5E19FFB224C /* AlertQuery.swift */; };
@@ -156,6 +167,17 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		689AC45C7B917229883F3932 /* PriceTrendBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrendBadge.swift; sourceTree = "<group>"; };
+		4A40785059A06CBF26507B9D /* MapStyleMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleMenu.swift; sourceTree = "<group>"; };
+		FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStatusBar.swift; sourceTree = "<group>"; };
+		8450FC08821EEE34B450C8ED /* POILayerMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POILayerMenu.swift; sourceTree = "<group>"; };
+		B7164D25B7959E1E1D15A2DA /* PriceVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceVersion.swift; sourceTree = "<group>"; };
+		BBD97FE9C3986F97208B77AB /* CopilotProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotProvider.swift; sourceTree = "<group>"; };
+		F9E6891B12D1F3CFE67F006B /* SavedListingItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedListingItem.swift; sourceTree = "<group>"; };
+		2B0B1FC9B25E6A327E95F62B /* DistrictSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictSummary.swift; sourceTree = "<group>"; };
+		FD000E31F5577157C1E9B106 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		547231FC7CE8EE7D04B8B8AB /* Int+Clamped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+Clamped.swift"; sourceTree = "<group>"; };
+		F364FFFBC5E8996A4009CDB0 /* CopilotEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotEmptyState.swift; sourceTree = "<group>"; };
 		0342845B033E31B2690AC39A /* MapKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MapKit.framework; path = System/Library/Frameworks/MapKit.framework; sourceTree = SDKROOT; };
 		03E9AE0DC9DCEF91FAEA0AA2 /* ListingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingStatus.swift; sourceTree = "<group>"; };
 		04CC404F9ACBC58732F26069 /* WatchlistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistViewModel.swift; sourceTree = "<group>"; };
@@ -321,6 +343,10 @@
 		0FA5AC151D4BFAEE44D8370E /* Listings */ = {
 			isa = PBXGroup;
 			children = (
+				689AC45C7B917229883F3932 /* PriceTrendBadge.swift */,
+				4A40785059A06CBF26507B9D /* MapStyleMenu.swift */,
+				FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */,
+				8450FC08821EEE34B450C8ED /* POILayerMenu.swift */,
 				347FE4C4C7E22F18CA42A2E8 /* CrossSourceBadge.swift */,
 				9F8BCFD2F83B6A682FAC262E /* CrossSourceComparisonView.swift */,
 				78AFA579648506DD1AABED88 /* DevelopmentAnnotation.swift */,
@@ -513,6 +539,7 @@
 		B5BE644A9B3FB26C42D5C40B /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				FD000E31F5577157C1E9B106 /* FlowLayout.swift */,
 				80E4640A864C4746B76AC454 /* CardModifier.swift */,
 				51723DF63C1957AD412CFFEC /* DetailRow.swift */,
 				F1E2D3C4B5A6978081A2BFED /* InspectorGridSection.swift */,
@@ -566,6 +593,7 @@
 				7C514CF4AD05D3B30EE05944 /* Networking */,
 				D76AABBEBD01CA3D98BEBD75 /* Resources */,
 				357C6126EC1DB2E2D9C949BF /* Services */,
+				E5C00572BDB0DF73A99CD659 /* Extensions */,
 			);
 			path = RealEstateIntel;
 			sourceTree = "<group>";
@@ -573,6 +601,10 @@
 		FEA6366FC2393795C53A07F0 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				B7164D25B7959E1E1D15A2DA /* PriceVersion.swift */,
+				BBD97FE9C3986F97208B77AB /* CopilotProvider.swift */,
+				F9E6891B12D1F3CFE67F006B /* SavedListingItem.swift */,
+				2B0B1FC9B25E6A327E95F62B /* DistrictSummary.swift */,
 				A1B2C3D4E5F60001AABB0001 /* CopilotMessage.swift */,
 				4E9BF4DDE3E44BAE58F62C5C /* Alert.swift */,
 				520CF1A8627621B50AA6B2DF /* AlertFrequency.swift */,
@@ -621,6 +653,7 @@
 		A1B2C3D4E5F60001AABB0020 /* Copilot */ = {
 			isa = PBXGroup;
 			children = (
+				F364FFFBC5E8996A4009CDB0 /* CopilotEmptyState.swift */,
 				A1B2C3D4E5F60001AABB0003 /* CopilotView.swift */,
 				A1B2C3D4E5F60001AABB0004 /* CopilotViewModel.swift */,
 				A1B2C3D4E5F60001AABB0005 /* CopilotInputBar.swift */,
@@ -630,6 +663,14 @@
 				A1B2C3D4E5F60001AABB0021 /* ContentBlocks */,
 			);
 			path = Copilot;
+			sourceTree = "<group>";
+		};
+		E5C00572BDB0DF73A99CD659 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				547231FC7CE8EE7D04B8B8AB /* Int+Clamped.swift */,
+			);
+			path = Extensions;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -708,6 +749,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				816C88BEE8599D75DAF40DAF /* PriceTrendBadge.swift in Sources */,
+				9960CCDA98DE86F7E97C74B1 /* MapStyleMenu.swift in Sources */,
+				CCDFEA7071B1660675A5B694 /* MapStatusBar.swift in Sources */,
+				5E5D305A04167889DD238B6C /* POILayerMenu.swift in Sources */,
+				C97F30BE7A2306D8B27BC249 /* PriceVersion.swift in Sources */,
+				598B62A512934F088AF5C5D6 /* CopilotProvider.swift in Sources */,
+				6B04D21BE3F5A56775B64757 /* SavedListingItem.swift in Sources */,
+				F95C75A0264D86F9AC74ED14 /* DistrictSummary.swift in Sources */,
+				4E728EFC40782014B261BDC9 /* FlowLayout.swift in Sources */,
+				082B95AFDE76E8552D48D64A /* Int+Clamped.swift in Sources */,
+				16D1D4CD19115F4EE7A79D8F /* CopilotEmptyState.swift in Sources */,
 				A1B2C3D4E5F60001AABB0101 /* CopilotMessage.swift in Sources */,
 				A1B2C3D4E5F60001AABB0102 /* CopilotStreamService.swift in Sources */,
 				A1B2C3D4E5F60001AABB0103 /* CopilotView.swift in Sources */,
