@@ -50,6 +50,11 @@ enum PriceFormatter {
         eurFormatter.string(from: NSNumber(value: amount)) ?? "EUR \(amount)"
     }
 
+    /// Format whole-euro prices from a Double: "EUR 299.000"
+    static func format(eurDouble amount: Double) -> String {
+        format(eur: Int(amount))
+    }
+
     /// Format price per sqm with decimals: "EUR 4.124,14"
     static func formatPerSqm(_ amount: Double) -> String {
         eurDecimalFormatter.string(from: NSNumber(value: amount)) ?? "EUR \(amount)"

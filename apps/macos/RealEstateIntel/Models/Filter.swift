@@ -39,8 +39,8 @@ extension Filter {
                 sortBy: "score_desc"
             ),
             alertFrequency: .instant,
-            createdAt: Calendar.current.date(byAdding: .day, value: -30, to: Date.now)!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -2, to: .now) ?? .now,
             matchCount: 14
         ),
         Filter(
@@ -64,8 +64,8 @@ extension Filter {
                 sortBy: "price_asc"
             ),
             alertFrequency: .daily,
-            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date.now)!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -5, to: Date.now)!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: .now) ?? .now,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -5, to: .now) ?? .now,
             matchCount: 37
         ),
         Filter(
@@ -89,8 +89,8 @@ extension Filter {
                 sortBy: "score_desc"
             ),
             alertFrequency: .hourly,
-            createdAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
-            updatedAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
+            createdAt: Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now,
             matchCount: 8
         ),
     ]

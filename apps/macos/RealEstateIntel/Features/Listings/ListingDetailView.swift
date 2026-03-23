@@ -87,6 +87,7 @@ struct ListingDetailView: View {
             explanation = try await appState.apiClient.fetchScoreExplanation(listingId: listing.id)
         } catch {
             explanation = nil
+            Log.ui.error("Failed to load score explanation for listing \(self.listing.id): \(error, privacy: .public)")
         }
     }
 
@@ -102,6 +103,7 @@ struct ListingDetailView: View {
                 )
             }
         } catch {
+            Log.ui.error("Failed to load price versions for listing \(self.listing.id): \(error, privacy: .public)")
             priceVersions = [
                 PriceVersion(
                     date: listing.firstSeenAt,
@@ -117,6 +119,7 @@ struct ListingDetailView: View {
             cluster = try await appState.apiClient.fetchListingCluster(listingId: listing.id)
         } catch {
             cluster = nil
+            Log.ui.error("Failed to load cluster for listing \(self.listing.id): \(error, privacy: .public)")
         }
     }
 
@@ -126,6 +129,7 @@ struct ListingDetailView: View {
             analysis = try await appState.apiClient.fetchAnalysis(listingId: listing.id)
         } catch {
             analysis = nil
+            Log.ui.error("Failed to load analysis for listing \(self.listing.id): \(error, privacy: .public)")
         }
         isLoadingAnalysis = false
     }
@@ -136,6 +140,7 @@ struct ListingDetailView: View {
             listingDocuments = try await appState.apiClient.fetchDocuments(listingId: listing.id)
         } catch {
             listingDocuments = []
+            Log.ui.error("Failed to load documents for listing \(self.listing.id): \(error, privacy: .public)")
         }
         isLoadingDocuments = false
     }
@@ -144,6 +149,7 @@ struct ListingDetailView: View {
         do {
             return try await appState.apiClient.fetchDocumentFacts(documentId: documentId)
         } catch {
+            Log.ui.error("Failed to load document facts for document \(documentId): \(error, privacy: .public)")
             return []
         }
     }
@@ -154,6 +160,7 @@ struct ListingDetailView: View {
             isSaved = savedIds.contains(listing.id)
         } catch {
             isSaved = false
+            Log.ui.error("Failed to check saved status for listing \(self.listing.id): \(error, privacy: .public)")
         }
     }
 

@@ -50,6 +50,18 @@ enum Theme {
         }
     }
 
+    // MARK: - Confidence Colors
+
+    /// Maps a confidence level string (high/medium/low) to a semantic color.
+    static func confidenceColor(for level: String) -> Color {
+        switch level.lowercased() {
+        case "high", "exact": .green
+        case "medium": .orange
+        case "low": .red
+        default: .secondary
+        }
+    }
+
     // MARK: - Spacing
 
     enum Spacing {

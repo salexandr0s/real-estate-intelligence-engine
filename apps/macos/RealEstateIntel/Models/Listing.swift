@@ -78,7 +78,7 @@ extension Listing {
             geocodeSource: "source",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -3, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -104,7 +104,7 @@ extension Listing {
             geocodeSource: "source",
             lastPriceChangePct: -4.8,
             lastPriceChangeAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now),
-            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .hour, value: -5, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -130,7 +130,7 @@ extension Listing {
             geocodeSource: "nominatim",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -1, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -156,7 +156,7 @@ extension Listing {
             geocodeSource: "source",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -2, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -182,7 +182,7 @@ extension Listing {
             geocodeSource: "nominatim",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -4, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -208,7 +208,7 @@ extension Listing {
             geocodeSource: "source",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -234,7 +234,7 @@ extension Listing {
             geocodeSource: "source",
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -10, to: .now) ?? .now,
             listingStatus: .active
         ),
         Listing(
@@ -260,7 +260,7 @@ extension Listing {
             geocodeSource: nil,
             lastPriceChangePct: -7.2,
             lastPriceChangeAt: Calendar.current.date(byAdding: .day, value: -5, to: Date.now),
-            firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: Date.now)!,
+            firstSeenAt: Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now,
             listingStatus: .active
         ),
     ]

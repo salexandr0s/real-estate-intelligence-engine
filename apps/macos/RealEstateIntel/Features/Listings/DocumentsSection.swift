@@ -20,7 +20,13 @@ struct DocumentsSection: View {
             DisclosureGroup(isExpanded: $isExpanded) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                     ForEach(documents) { doc in
-                        documentRow(doc)
+                        DocumentRow(
+                            doc: doc,
+                            isExpanded: expandedDocId == doc.id,
+                            isLoadingFacts: loadingFacts.contains(doc.id),
+                            facts: factsCache[doc.id],
+                            onToggle: { toggleFacts(for: doc.id) }
+                        )
                     }
                 }
                 .padding(.top, Theme.Spacing.sm)
@@ -40,94 +46,6 @@ struct DocumentsSection: View {
         }
     }
 
-    @ViewBuilder
-    private func documentRow(_ doc: ListingDocument) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            HStack {
-                Image(systemName: documentIcon(doc.documentType))
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Text(doc.label ?? doc.documentType.capitalized)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-
-                    HStack(spacing: Theme.Spacing.sm) {
-                        StatusBadge(label: doc.status.capitalized, color: statusColor(doc.status))
-                        if let pages = doc.pageCount {
-                            Text("\(pages) pages")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                Spacer()
-
-                if let url = URL(string: doc.url) {
-                    Link(destination: url) {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(.caption)
-                    }
-                    .help("Open original document")
-                }
-
-                Button {
-                    toggleFacts(for: doc.id)
-                } label: {
-                    Image(systemName: expandedDocId == doc.id ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
-            }
-
-            if expandedDocId == doc.id {
-                factsView(for: doc.id)
-            }
-        }
-        .padding(Theme.Spacing.sm)
-        .background(Theme.cardBackground)
-        .clipShape(.rect(cornerRadius: Theme.Radius.sm))
-    }
-
-    @ViewBuilder
-    private func factsView(for docId: Int) -> some View {
-        if loadingFacts.contains(docId) {
-            ProgressView()
-                .controlSize(.small)
-                .padding(.vertical, Theme.Spacing.xs)
-        } else if let facts = factsCache[docId] {
-            if facts.isEmpty {
-                Text("No facts extracted")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.vertical, Theme.Spacing.xs)
-            } else {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    ForEach(facts) { fact in
-                        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                                Text(fact.factType.replacingOccurrences(of: "_", with: " ").capitalized)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(fact.factValue)
-                                    .font(.caption)
-                            }
-                            Spacer()
-                            StatusBadge(
-                                label: fact.confidence.capitalized,
-                                color: confidenceColor(fact.confidence)
-                            )
-                        }
-                    }
-                }
-                .padding(.top, Theme.Spacing.xs)
-            }
-        }
-    }
-
     private func toggleFacts(for docId: Int) {
         if expandedDocId == docId {
             expandedDocId = nil
@@ -141,35 +59,6 @@ struct DocumentsSection: View {
                     loadingFacts.remove(docId)
                 }
             }
-        }
-    }
-
-    private func documentIcon(_ type: String) -> String {
-        switch type.lowercased() {
-        case "pdf", "expose": "doc.richtext"
-        case "floor_plan", "floorplan": "square.grid.3x3"
-        case "energy_certificate": "bolt.fill"
-        case "image", "photo": "photo"
-        default: "doc"
-        }
-    }
-
-    private func statusColor(_ status: String) -> Color {
-        switch status.lowercased() {
-        case "extracted": .green
-        case "downloaded": .blue
-        case "pending": .orange
-        case "failed": .red
-        default: .secondary
-        }
-    }
-
-    private func confidenceColor(_ level: String) -> Color {
-        switch level.lowercased() {
-        case "high": .green
-        case "medium": .orange
-        case "low": .red
-        default: .secondary
         }
     }
 }

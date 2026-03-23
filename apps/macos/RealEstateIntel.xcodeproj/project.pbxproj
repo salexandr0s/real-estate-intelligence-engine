@@ -169,6 +169,24 @@
 		A2B3C4D5E6F70819D4E5F607 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F60718293041A2B3C4D5 /* Document.swift */; };
 		F6A7B8C9D0E1F203C3D4E5F6 /* DocumentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607182940B1C2D3E4 /* DocumentsSection.swift */; };
 		E8F90A1B2C3D4E5FA1B2C3D4 /* GeocodeBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */; };
+		F1E2D3C4B5A60718B0C1D201 /* MetricCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C201 /* MetricCell.swift */; };
+		F1E2D3C4B5A60718B0C1D202 /* InspectorDetailRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C202 /* InspectorDetailRow.swift */; };
+		F1E2D3C4B5A60718B0C1D203 /* AnalysisConfidenceBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C203 /* AnalysisConfidenceBadge.swift */; };
+		F1E2D3C4B5A60718B0C1D204 /* AnalysisMarketRentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C204 /* AnalysisMarketRentCard.swift */; };
+		F1E2D3C4B5A60718B0C1D205 /* AnalysisInvestorMetricsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C205 /* AnalysisInvestorMetricsCard.swift */; };
+		F1E2D3C4B5A60718B0C1D206 /* AnalysisBuildingContextCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C206 /* AnalysisBuildingContextCard.swift */; };
+		F1E2D3C4B5A60718B0C1D207 /* AnalysisSaleContextCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C207 /* AnalysisSaleContextCard.swift */; };
+		F1E2D3C4B5A60718B0C1D208 /* AnalysisLegalRentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C208 /* AnalysisLegalRentCard.swift */; };
+		F1E2D3C4B5A60718B0C1D209 /* AnalysisFlagsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C209 /* AnalysisFlagsSection.swift */; };
+		F1E2D3C4B5A60718B0C1D20A /* DocumentRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20A /* DocumentRow.swift */; };
+		F1E2D3C4B5A60718B0C1D20B /* DocumentFactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20B /* DocumentFactsView.swift */; };
+		F1E2D3C4B5A60718B0C1D20C /* ProximityCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20C /* ProximityCell.swift */; };
+		F1E2D3C4B5A60718B0C1D20D /* ProximityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20D /* ProximityRow.swift */; };
+		F1E2D3C4B5A60718B0C1D20E /* MatchReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20E /* MatchReasonsView.swift */; };
+		F1E2D3C4B5A60718B0C1D20F /* ThresholdBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C20F /* ThresholdBadge.swift */; };
+		F1E2D3C4B5A60718B0C1D210 /* AnalysisMissingDataList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C210 /* AnalysisMissingDataList.swift */; };
+		F1E2D3C4B5A60718B0C1D211 /* AnalysisAssumptionsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C211 /* AnalysisAssumptionsList.swift */; };
+		F1E2D3C4B5A60718B0C1D212 /* LegalRentSignalList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A0B1C212 /* LegalRentSignalList.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -336,6 +354,24 @@
 		D4E5F60718293041A2B3C4D5 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		C3D4E5F607182940B1C2D3E4 /* DocumentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsSection.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodeBadge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C201 /* MetricCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricCell.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C202 /* InspectorDetailRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDetailRow.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C203 /* AnalysisConfidenceBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisConfidenceBadge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C204 /* AnalysisMarketRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisMarketRentCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C205 /* AnalysisInvestorMetricsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisInvestorMetricsCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C206 /* AnalysisBuildingContextCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisBuildingContextCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C207 /* AnalysisSaleContextCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisSaleContextCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C208 /* AnalysisLegalRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisLegalRentCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C209 /* AnalysisFlagsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisFlagsSection.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20A /* DocumentRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentRow.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20B /* DocumentFactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentFactsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20C /* ProximityCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityCell.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20D /* ProximityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityRow.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20E /* MatchReasonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchReasonsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C20F /* ThresholdBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdBadge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C210 /* AnalysisMissingDataList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisMissingDataList.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C211 /* AnalysisAssumptionsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisAssumptionsList.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A0B1C212 /* LegalRentSignalList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalRentSignalList.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -353,6 +389,20 @@
 		0FA5AC151D4BFAEE44D8370E /* Listings */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F60718A0B1C203 /* AnalysisConfidenceBadge.swift */,
+				A1B2C3D4E5F60718A0B1C204 /* AnalysisMarketRentCard.swift */,
+				A1B2C3D4E5F60718A0B1C205 /* AnalysisInvestorMetricsCard.swift */,
+				A1B2C3D4E5F60718A0B1C206 /* AnalysisBuildingContextCard.swift */,
+				A1B2C3D4E5F60718A0B1C207 /* AnalysisSaleContextCard.swift */,
+				A1B2C3D4E5F60718A0B1C208 /* AnalysisLegalRentCard.swift */,
+				A1B2C3D4E5F60718A0B1C209 /* AnalysisFlagsSection.swift */,
+				A1B2C3D4E5F60718A0B1C210 /* AnalysisMissingDataList.swift */,
+				A1B2C3D4E5F60718A0B1C211 /* AnalysisAssumptionsList.swift */,
+				A1B2C3D4E5F60718A0B1C212 /* LegalRentSignalList.swift */,
+				A1B2C3D4E5F60718A0B1C20A /* DocumentRow.swift */,
+				A1B2C3D4E5F60718A0B1C20B /* DocumentFactsView.swift */,
+				A1B2C3D4E5F60718A0B1C20C /* ProximityCell.swift */,
+				A1B2C3D4E5F60718A0B1C20D /* ProximityRow.swift */,
 				689AC45C7B917229883F3932 /* PriceTrendBadge.swift */,
 				4A40785059A06CBF26507B9D /* MapStyleMenu.swift */,
 				FC4747A6DF6B7E4FBF9EF573 /* MapStatusBar.swift */,
@@ -428,6 +478,8 @@
 		30A3FC75ED3F2E46CBB07344 /* Alerts */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F60718A0B1C20E /* MatchReasonsView.swift */,
+				A1B2C3D4E5F60718A0B1C20F /* ThresholdBadge.swift */,
 				E1D7588DD2F1F02D8EF3E39D /* AlertInspectorContent.swift */,
 				42983CB09858366E81BF27B1 /* AlertRow.swift */,
 				07FC06739868ADDE7BFA40EE /* AlertsEmptyState.swift */,
@@ -551,6 +603,8 @@
 		B5BE644A9B3FB26C42D5C40B /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F60718A0B1C201 /* MetricCell.swift */,
+				A1B2C3D4E5F60718A0B1C202 /* InspectorDetailRow.swift */,
 				FD000E31F5577157C1E9B106 /* FlowLayout.swift */,
 				B2C3D4E5F6071830A0B1C2D3 /* GeocodeBadge.swift */,
 				80E4640A864C4746B76AC454 /* CardModifier.swift */,
@@ -846,6 +900,24 @@
 				DCE6657BA2E9DDB6AD967505 /* FiltersView.swift in Sources */,
 				741126387749FA36172696CF /* FiltersViewModel.swift in Sources */,
 				E8F90A1B2C3D4E5FA1B2C3D4 /* GeocodeBadge.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D201 /* MetricCell.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D202 /* InspectorDetailRow.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D203 /* AnalysisConfidenceBadge.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D204 /* AnalysisMarketRentCard.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D205 /* AnalysisInvestorMetricsCard.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D206 /* AnalysisBuildingContextCard.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D207 /* AnalysisSaleContextCard.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D208 /* AnalysisLegalRentCard.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D209 /* AnalysisFlagsSection.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D210 /* AnalysisMissingDataList.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D211 /* AnalysisAssumptionsList.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D212 /* LegalRentSignalList.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20A /* DocumentRow.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20B /* DocumentFactsView.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20C /* ProximityCell.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20D /* ProximityRow.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20E /* MatchReasonsView.swift in Sources */,
+				F1E2D3C4B5A60718B0C1D20F /* ThresholdBadge.swift in Sources */,
 				DBF2F349D551C6676971AF14 /* ISO8601.swift in Sources */,
 				E635B6AF81515E3DA2358C2C /* InvestorFeedback.swift in Sources */,
 				B1C2D3E4F5A60002AABB0101 /* ClaudeAuthHelper.swift in Sources */,
