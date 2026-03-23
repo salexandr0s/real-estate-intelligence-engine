@@ -79,6 +79,7 @@ interface ListingDbRow {
   last_scored_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  source_code?: string | null;
 }
 
 function toListingRow(row: ListingDbRow): ListingRow {
@@ -86,6 +87,7 @@ function toListingRow(row: ListingDbRow): ListingRow {
     id: Number(row.id),
     listingUid: row.listing_uid,
     sourceId: Number(row.source_id),
+    sourceCode: row.source_code ?? undefined,
     sourceListingKey: row.source_listing_key,
     sourceExternalId: row.source_external_id,
     currentRawListingId: Number(row.current_raw_listing_id),

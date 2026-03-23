@@ -5,7 +5,7 @@ import Foundation
 struct APIListingResponse: Codable {
     let id: Int
     let listingUid: String
-    let sourceCode: String
+    let sourceCode: String?
     let title: String
     let canonicalUrl: String
     let operationType: String
@@ -41,7 +41,7 @@ struct APIListingResponse: Codable {
         return Listing(
             id: id,
             listingUid: listingUid,
-            sourceCode: sourceCode,
+            sourceCode: sourceCode ?? "unknown",
             title: title,
             canonicalUrl: canonicalUrl,
             operationType: opType,
