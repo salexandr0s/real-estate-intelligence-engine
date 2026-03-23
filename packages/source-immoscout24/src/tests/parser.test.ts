@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { parseDiscoveryPage } from '../discovery.js';
 import { parseDetailPage, detectDetailAvailability } from '../detail.js';
 import { Immoscout24Adapter } from '../adapter.js';
+import type { Immoscout24DiscoveryItem } from '../dto.js';
 
 function loadFixture(name: string): string {
   return readFileSync(resolve(__dirname, '..', 'fixtures', name), 'utf-8');
@@ -19,13 +20,17 @@ describe('Immoscout24Adapter', () => {
   });
 
   it('canonicalizes URLs correctly', () => {
-    expect(adapter.canonicalizeUrl('https://www.immobilienscout24.at/expose/abc123def456789012345678?ref=search'))
-      .toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
+    expect(
+      adapter.canonicalizeUrl(
+        'https://www.immobilienscout24.at/expose/abc123def456789012345678?ref=search',
+      ),
+    ).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
   });
 
   it('strips trailing slash from canonical URL', () => {
-    expect(adapter.canonicalizeUrl('https://www.immobilienscout24.at/expose/abc123def456789012345678/'))
-      .toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
+    expect(
+      adapter.canonicalizeUrl('https://www.immobilienscout24.at/expose/abc123def456789012345678/'),
+    ).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
   });
 
   it('derives source listing key from hex hash ID', () => {
@@ -73,6 +78,28 @@ describe('Immoscout24Adapter', () => {
     expect(plan).not.toBeNull();
     expect(plan!.url).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
     expect(plan!.waitForSelector).toBe('script[type="application/ld+json"]');
+  });
+
+  it('builds detail request with empty summaryPayload (runtime scenario)', async () => {
+    const plan = await adapter.buildDetailRequest({
+      detailUrl: 'https://www.immobilienscout24.at/expose/abc123def456789012345678',
+      sourceCode: 'immoscout24',
+      discoveredAt: new Date().toISOString(),
+      summaryPayload: {} as Immoscout24DiscoveryItem,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.url).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
+  });
+
+  it('builds detail request with relative detailUrl', async () => {
+    const plan = await adapter.buildDetailRequest({
+      detailUrl: '/expose/abc123def456789012345678',
+      sourceCode: 'immoscout24',
+      discoveredAt: new Date().toISOString(),
+      summaryPayload: {} as Immoscout24DiscoveryItem,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.url).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
   });
 });
 
@@ -155,7 +182,8 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   });
 
   it('returns empty result for invalid JSON', () => {
-    const html = '<script data-testid="collection-page-structured-data" type="application/ld+json">{invalid json</script>';
+    const html =
+      '<script data-testid="collection-page-structured-data" type="application/ld+json">{invalid json</script>';
     const result = parseDiscoveryPage(html, 'immoscout24', {
       url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
       metadata: { page: 1 },
@@ -269,7 +297,9 @@ describe('Detail page parsing (Product + RealEstateAgent JSON-LD)', () => {
       'immoscout24',
       2,
     );
-    expect(result.canonicalUrl).toBe('https://www.immobilienscout24.at/expose/abc123def456789012345678');
+    expect(result.canonicalUrl).toBe(
+      'https://www.immobilienscout24.at/expose/abc123def456789012345678',
+    );
   });
 
   it('handles parse failure gracefully (no JSON-LD)', () => {

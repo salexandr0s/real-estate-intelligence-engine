@@ -322,7 +322,7 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
       } else {
         // Latest canary succeeded — check if source was degraded and should recover
         const source = await sources.findByCode(sourceCode);
-        if (source && source.healthStatus === 'degraded') {
+        if (source && (source.healthStatus === 'degraded' || source.healthStatus === 'unknown')) {
           await sources.updateHealthStatus(source.id, 'healthy');
           log.info('Source recovered by canary', { sourceCode });
         }

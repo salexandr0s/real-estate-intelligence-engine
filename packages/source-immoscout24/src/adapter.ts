@@ -16,9 +16,10 @@ import { parseDetailPage, detectDetailAvailability } from './detail.js';
 const BASE_URL = 'https://www.immobilienscout24.at';
 const SEARCH_PATH = '/regional/wien/wien/immobilien';
 
-export class Immoscout24Adapter
-  implements SourceAdapter<Immoscout24DiscoveryItem, Immoscout24DetailDTO>
-{
+export class Immoscout24Adapter implements SourceAdapter<
+  Immoscout24DiscoveryItem,
+  Immoscout24DetailDTO
+> {
   readonly sourceCode = 'immoscout24';
   readonly sourceName = 'ImmobilienScout24.at';
   readonly parserVersion = 2;
@@ -47,7 +48,9 @@ export class Immoscout24Adapter
   ): Promise<DiscoveryPageResult<Immoscout24DiscoveryItem>> {
     // In live mode, this would use ctx.page (Playwright Page)
     // For fixtures, we support passing HTML content through ctx.requestPlan.metadata
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as string | undefined;
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as
+      | string
+      | undefined;
     if (html) {
       return parseDiscoveryPage(html, ctx.profile.sourceCode, ctx.requestPlan);
     }
@@ -59,19 +62,17 @@ export class Immoscout24Adapter
   async buildDetailRequest(
     item: DiscoveryItem<Immoscout24DiscoveryItem>,
   ): Promise<RequestPlan | null> {
-    const exposeId = item.summaryPayload.exposeId;
-    const url = `${BASE_URL}/expose/${exposeId}`;
     return {
-      url,
+      url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
       waitForSelector: 'script[type="application/ld+json"]',
       waitForTimeout: 5000,
     };
   }
 
-  async extractDetailPage(
-    ctx: DetailContext,
-  ): Promise<DetailCapture<Immoscout24DetailDTO>> {
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as string | undefined;
+  async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<Immoscout24DetailDTO>> {
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as
+      | string
+      | undefined;
     if (html) {
       return parseDetailPage(html, ctx.requestPlan.url, ctx.sourceCode, this.parserVersion);
     }
@@ -79,9 +80,7 @@ export class Immoscout24Adapter
     throw new Error('Live Playwright extraction not implemented -- use fixtures for testing');
   }
 
-  deriveSourceListingKey(
-    detail: DetailCapture<Immoscout24DetailDTO>,
-  ): string {
+  deriveSourceListingKey(detail: DetailCapture<Immoscout24DetailDTO>): string {
     const id = detail.payload.immoscout24Id || detail.externalId || '';
     return `immoscout24:${id}`;
   }
@@ -99,7 +98,9 @@ export class Immoscout24Adapter
   }
 
   detectAvailability(ctx: DetailContext): SourceAvailability {
-    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as string | undefined;
+    const html = (ctx.requestPlan.metadata as Record<string, unknown>)?.['html'] as
+      | string
+      | undefined;
     if (html) {
       return detectDetailAvailability(html);
     }
