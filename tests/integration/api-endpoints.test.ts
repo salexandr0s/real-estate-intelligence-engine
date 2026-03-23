@@ -38,6 +38,58 @@ describe('API endpoints', () => {
     });
   });
 
+  describe('GET /metrics (token-protected)', () => {
+    let protectedApp: FastifyInstance;
+    const metricsToken = 'test-metrics-secret';
+
+    beforeAll(async () => {
+      process.env.METRICS_TOKEN = metricsToken;
+      resetConfig();
+      protectedApp = await buildApp();
+      await protectedApp.ready();
+    });
+
+    afterAll(async () => {
+      await protectedApp.close();
+      delete process.env.METRICS_TOKEN;
+      resetConfig();
+    });
+
+    it('rejects query-param token (removed)', async () => {
+      const res = await protectedApp.inject({
+        method: 'GET',
+        url: `/metrics?token=${metricsToken}`,
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('returns 200 with correct Bearer token', async () => {
+      const res = await protectedApp.inject({
+        method: 'GET',
+        url: '/metrics',
+        headers: { authorization: `Bearer ${metricsToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('returns 403 with wrong Bearer token', async () => {
+      const res = await protectedApp.inject({
+        method: 'GET',
+        url: '/metrics',
+        headers: { authorization: 'Bearer wrong-token' },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('returns 403 without any auth', async () => {
+      const res = await protectedApp.inject({
+        method: 'GET',
+        url: '/metrics',
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   describe('Authentication', () => {
@@ -65,6 +117,37 @@ describe('API endpoints', () => {
       const spec = res.json<{ openapi: string; info: { title: string } }>();
       expect(spec.openapi).toMatch(/^3\./);
       expect(spec.info.title).toBe('Real Estate Intelligence Engine API');
+    });
+  });
+
+  describe('GET /docs/json (protected)', () => {
+    let protectedApp: FastifyInstance;
+
+    beforeAll(async () => {
+      process.env.API_DOCS_PUBLIC = 'false';
+      resetConfig();
+      protectedApp = await buildApp();
+      await protectedApp.ready();
+    });
+
+    afterAll(async () => {
+      await protectedApp.close();
+      delete process.env.API_DOCS_PUBLIC;
+      resetConfig();
+    });
+
+    it('returns 401 without auth when docs are private', async () => {
+      const res = await protectedApp.inject({ method: 'GET', url: '/docs/json' });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('returns 200 with auth when docs are private', async () => {
+      const res = await protectedApp.inject({
+        method: 'GET',
+        url: '/docs/json',
+        headers: AUTH_HEADER,
+      });
+      expect(res.statusCode).toBe(200);
     });
   });
 

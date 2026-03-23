@@ -134,6 +134,9 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
       });
 
       const provider = body.provider ?? config.copilot.defaultProvider;
+      // Design decision: The client sends their own LLM provider API key via
+      // X-Copilot-Api-Key. The key is never stored server-side — only forwarded
+      // to the LLM provider within this request's lifetime. Requires TLS in production.
       const clientKey = request.headers['x-copilot-api-key'] as string | undefined;
       const apiKey =
         clientKey ??

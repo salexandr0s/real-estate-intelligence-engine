@@ -56,3 +56,13 @@ jobs:
             ghcr.io/${{ github.repository }}/worker-processing:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Scan API image for known vulnerabilities
+      - name: Scan API image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true

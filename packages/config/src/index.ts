@@ -48,6 +48,7 @@ export interface AppConfig {
     rateLimitMax: number;
     rateLimitWindowMs: number;
     trustProxy: boolean | number | string;
+    docsPublic: boolean;
   };
   database: {
     url: string;
@@ -152,6 +153,7 @@ export function loadConfig(): AppConfig {
         const n = parseInt(raw, 10);
         return Number.isNaN(n) ? raw : n;
       })(),
+      docsPublic: envBool('API_DOCS_PUBLIC', nodeEnv !== 'production'),
     },
     database: {
       url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/real_estate_intel'),
@@ -230,6 +232,23 @@ export function loadConfig(): AppConfig {
       maxTokens: envInt('COPILOT_MAX_TOKENS', 4096),
     },
   };
+
+  // Production safety: refuse to start without encrypted connections
+  if (nodeEnv === 'production') {
+    const dbUrl = new URL(_config.database.url);
+    const sslmode = dbUrl.searchParams.get('sslmode');
+    const ssl = dbUrl.searchParams.get('ssl');
+    const secureModes = new Set(['require', 'verify-ca', 'verify-full']);
+    if (!(sslmode && secureModes.has(sslmode)) && ssl !== 'true') {
+      throw new Error(
+        'DATABASE_URL must include sslmode=require (or verify-ca/verify-full) in production',
+      );
+    }
+    const redisUrl = new URL(_config.redis.url);
+    if (!redisUrl.password) {
+      throw new Error('REDIS_URL must include authentication in production');
+    }
+  }
 
   return _config;
 }

@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Create PostgreSQL extensions
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d real_estate_intel -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"

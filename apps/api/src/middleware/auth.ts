@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { loadConfig } from '@rei/config';
 import { UnauthorizedError } from '@rei/observability';
 
-function constantTimeEquals(a: string, b: string): boolean {
+export function constantTimeEquals(a: string, b: string): boolean {
   const hashA = createHash('sha256').update(a).digest();
   const hashB = createHash('sha256').update(b).digest();
   return timingSafeEqual(hashA, hashB);
@@ -25,7 +25,7 @@ export function registerAuth(app: FastifyInstance): void {
   app.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     // Skip auth for health check, metrics, docs, and similar paths
     const urlPath = request.url.split('?')[0]!;
-    if (SKIP_AUTH_PATHS.has(urlPath) || urlPath.startsWith('/docs')) {
+    if (SKIP_AUTH_PATHS.has(urlPath) || (urlPath.startsWith('/docs') && config.api.docsPublic)) {
       request.userId = 0;
       return;
     }
