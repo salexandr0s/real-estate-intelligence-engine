@@ -25,7 +25,7 @@ private struct UserBubble: View {
     let contentBlocks: [ContentBlock]
 
     var body: some View {
-        HStack {
+        HStack(alignment: .top, spacing: Theme.Spacing.md) {
             Spacer(minLength: 80)
 
             VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
@@ -41,6 +41,16 @@ private struct UserBubble: View {
             .background(Color.accentColor)
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+
+            // User avatar
+            Circle()
+                .fill(Color.secondary.opacity(0.15))
+                .frame(width: 28, height: 28)
+                .overlay {
+                    Image(systemName: "person.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
         }
     }
 }
@@ -54,15 +64,12 @@ private struct AssistantBubble: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            // Avatar
-            Circle()
-                .fill(.purple.opacity(0.15))
+            // Agent avatar — app icon
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
                 .frame(width: 28, height: 28)
-                .overlay {
-                    Image(systemName: "sparkle")
-                        .font(.caption)
-                        .foregroundStyle(.purple)
-                }
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
 
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                 ForEach(contentBlocks) { block in
