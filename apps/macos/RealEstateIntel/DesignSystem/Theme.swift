@@ -69,11 +69,15 @@ enum Theme {
         static let sm: CGFloat = 4
         static let md: CGFloat = 8
         static let lg: CGFloat = 12
+        static let xl: CGFloat = 24
     }
 
     // MARK: - Card Style
 
     static let cardBackground = Color(nsColor: .controlBackgroundColor)
+
+    /// Slightly elevated surface for the input bar — distinct from window background.
+    static let inputBarBackground = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
     static let cardShadowRadius: CGFloat = 2
     static let cardShadowY: CGFloat = 1
 }

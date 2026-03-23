@@ -10,7 +10,7 @@ struct ScoreRow: View {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+                .frame(width: 110, alignment: .leading)
             ScoreBar(score: value)
         }
     }

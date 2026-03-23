@@ -1,19 +1,32 @@
 import SwiftUI
 
-/// Details section showing operation type, property type, UID, first seen date, and status.
+/// Property details and location in a 2-column grid layout.
 struct ListingDetailsSection: View {
     let listing: Listing
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Text("Details")
-                .font(.headline)
+    private var rows: [(label: String, value: String)] {
+        var result: [(String, String)] = [
+            ("Operation", listing.operationType.rawValue.capitalized),
+            ("Property Type", listing.propertyType.displayName),
+        ]
 
-            DetailRow(label: "Operation", value: listing.operationType.rawValue.capitalized)
-            DetailRow(label: "Property Type", value: listing.propertyType.displayName)
-            DetailRow(label: "Listing UID", value: String(listing.listingUid.prefix(8)) + "...")
-            DetailRow(label: "First Seen", value: PriceFormatter.formatDateTime(listing.firstSeenAt))
-            DetailRow(label: "Status", value: listing.listingStatus.rawValue.capitalized)
+        result.append(("City", listing.city))
+
+        if let districtNo = listing.districtNo {
+            result.append(("District", "\(districtNo). \(listing.districtName ?? "")"))
         }
+        if let postalCode = listing.postalCode {
+            result.append(("Postal Code", postalCode))
+        }
+
+        result.append(("Status", listing.listingStatus.rawValue.capitalized))
+        result.append(("First Seen", PriceFormatter.formatDateTime(listing.firstSeenAt)))
+        result.append(("Listing UID", String(listing.listingUid.prefix(8)) + "..."))
+
+        return result
+    }
+
+    var body: some View {
+        InspectorGridSection(title: "Details", rows: rows)
     }
 }

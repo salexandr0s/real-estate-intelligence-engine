@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Location section showing city, district, postal code, and nearby POI metrics.
+/// Location section showing nearby POI metrics with full details.
+/// Basic location fields (city, district, postal) are in ListingDetailsSection.
 struct ListingLocationSection: View {
     let listing: Listing
 
@@ -8,22 +9,9 @@ struct ListingLocationSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Text("Location")
-                .font(.headline)
-
-            DetailRow(label: "City", value: listing.city)
-            if let districtNo = listing.districtNo {
-                DetailRow(label: "District", value: "\(districtNo). \(listing.districtName ?? "")")
-            }
-            if let postalCode = listing.postalCode {
-                DetailRow(label: "Postal Code", value: postalCode)
-            }
-
             if listing.coordinate != nil, !nearbyPOIs.isEmpty {
-                Divider()
                 Text("Nearby")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .font(.headline)
 
                 ProximityMetricsView(nearbyPOIs: nearbyPOIs)
             }

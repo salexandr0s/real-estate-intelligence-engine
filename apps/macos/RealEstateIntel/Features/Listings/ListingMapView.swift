@@ -2,7 +2,6 @@ import MapKit
 import SwiftUI
 
 /// Map section in the listing inspector showing a single listing's location.
-/// Replaces MapPlaceholder with an actual MapKit view.
 struct ListingMapView: View {
     let listing: Listing
     var onExpandToFullMap: (() -> Void)?
@@ -46,7 +45,7 @@ struct ListingMapView: View {
                     }
                 }
                 .mapStyle(mapStyle)
-                .frame(height: 200)
+                .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
                 .onAppear {
                     position = .region(MKCoordinateRegion(

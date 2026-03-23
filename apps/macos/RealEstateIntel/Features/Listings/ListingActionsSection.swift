@@ -5,7 +5,7 @@ struct ListingActionsSection: View {
     let canonicalUrl: String
 
     var body: some View {
-        VStack(spacing: Theme.Spacing.sm) {
+        HStack(spacing: Theme.Spacing.sm) {
             Button {
                 if let url = URL(string: canonicalUrl) {
                     NSWorkspace.shared.open(url)
@@ -14,7 +14,7 @@ struct ListingActionsSection: View {
                 Label("Open in Browser", systemImage: "safari")
                     .frame(maxWidth: .infinity)
             }
-            .controlSize(.large)
+            .controlSize(.regular)
             .buttonStyle(.borderedProminent)
 
             Button {
@@ -24,7 +24,7 @@ struct ListingActionsSection: View {
                 Label("Copy URL", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity)
             }
-            .controlSize(.large)
+            .controlSize(.regular)
             .buttonStyle(.bordered)
         }
     }

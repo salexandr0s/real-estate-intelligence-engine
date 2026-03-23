@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// Header section for the listing detail inspector showing status, title, price, and key metrics.
+/// Header section for the listing detail inspector showing status, title, price, score, and key metrics.
 struct ListingHeaderSection: View {
     let listing: Listing
     var isSaved: Bool = false
+    var cluster: ListingCluster?
     var onToggleSave: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            // Row 1: Status + bookmark + source
             HStack {
                 StatusBadge(listingStatus: listing.listingStatus)
 
@@ -35,14 +37,30 @@ struct ListingHeaderSection: View {
                 .background(Color.secondary.opacity(0.1), in: Capsule())
             }
 
+            // Row 2: Title
             Text(listing.title)
                 .font(.title3.bold())
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(PriceFormatter.format(eur: listing.listPriceEur))
-                .font(.title2.bold().monospacedDigit())
-                .foregroundStyle(.blue)
+            // Row 3: Price + score
+            HStack(alignment: .center) {
+                Text(PriceFormatter.format(eur: listing.listPriceEur))
+                    .font(.title2.bold().monospacedDigit())
+                    .foregroundStyle(.blue)
 
+                Spacer()
+
+                if let score = listing.currentScore {
+                    VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
+                        ScoreIndicator(score: score, size: .regular)
+                        Text(Theme.scoreLabel(for: score))
+                            .font(.caption2.bold())
+                            .foregroundStyle(Theme.scoreColor(for: score))
+                    }
+                }
+            }
+
+            // Row 4: Key metrics
             HStack(spacing: Theme.Spacing.lg) {
                 Label(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0), systemImage: "ruler")
                     .font(.subheadline)
@@ -55,6 +73,11 @@ struct ListingHeaderSection: View {
                 .font(.subheadline.monospacedDigit())
             }
             .foregroundStyle(.secondary)
+
+            // Row 5: Cross-source badge (conditional)
+            if let cluster {
+                CrossSourceBadge(cluster: cluster, currentListingId: listing.id)
+            }
         }
     }
 }

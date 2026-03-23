@@ -98,7 +98,6 @@ struct FeedbackSection: View {
                 showNotes = false
             }
         } catch {
-            // No feedback exists or fetch failed
             currentRating = nil
         }
     }

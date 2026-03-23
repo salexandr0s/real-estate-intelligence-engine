@@ -2,6 +2,7 @@ import os
 import SwiftUI
 
 /// Detail view for a single listing, shown in the inspector pane.
+/// Uses grouped sections with subtle card backgrounds for a native macOS inspector feel.
 struct ListingDetailView: View {
     let listing: Listing
     var onExpandMap: (() -> Void)?
@@ -14,36 +15,43 @@ struct ListingDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                // Header: status, title, price, score, metrics
                 ListingHeaderSection(
                     listing: listing,
                     isSaved: isSaved,
+                    cluster: cluster,
                     onToggleSave: { Task { await toggleSave() } }
                 )
 
-                if let cluster {
-                    CrossSourceBadge(cluster: cluster, currentListingId: listing.id)
-                }
-
                 FeedbackSection(listingId: listing.id)
 
-                Divider()
+                // Score breakdown (collapsible)
                 ListingScoreSection(listing: listing, explanation: explanation)
 
                 if let cluster, cluster.members.count >= 2 {
-                    Divider()
                     CrossSourceComparisonView(cluster: cluster)
                 }
 
                 Divider()
+
+                // Property details + location in 2-column grid
                 ListingDetailsSection(listing: listing)
-                Divider()
+
+                // Nearby POIs
                 ListingLocationSection(listing: listing)
+
                 Divider()
+
+                // Price history
                 PriceHistoryView(versions: priceVersions)
+
                 Divider()
+
+                // Map
                 ListingMapView(listing: listing, onExpandToFullMap: onExpandMap)
-                Divider()
+
+                // Actions
                 ListingActionsSection(canonicalUrl: listing.canonicalUrl)
             }
             .padding(Theme.Spacing.lg)
@@ -92,7 +100,7 @@ struct ListingDetailView: View {
         do {
             cluster = try await appState.apiClient.fetchListingCluster(listingId: listing.id)
         } catch {
-            cluster = nil // 404 = no cluster, expected for single-source listings
+            cluster = nil
         }
     }
 
@@ -111,7 +119,7 @@ struct ListingDetailView: View {
         defer { isSaving = false }
 
         let wasSaved = isSaved
-        isSaved.toggle() // Optimistic update
+        isSaved.toggle()
 
         do {
             if wasSaved {
@@ -120,7 +128,7 @@ struct ListingDetailView: View {
                 try await appState.apiClient.saveListing(listingId: listing.id)
             }
         } catch {
-            isSaved = wasSaved // Revert on failure
+            isSaved = wasSaved
             Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
         }
     }
