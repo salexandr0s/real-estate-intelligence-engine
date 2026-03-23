@@ -22,20 +22,24 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
 
-      const docs = await documents.findByListingId(id);
+      try {
+        const docs = await documents.findByListingId(id);
 
-      const data = docs.map((doc) => ({
-        id: doc.id,
-        url: doc.url,
-        documentType: doc.documentType,
-        status: doc.status,
-        mimeType: doc.mimeType,
-        pageCount: doc.pageCount,
-        label: doc.label,
-        firstSeenAt: doc.firstSeenAt.toISOString(),
-      }));
+        const data = docs.map((doc) => ({
+          id: doc.id,
+          url: doc.url,
+          documentType: doc.documentType,
+          status: doc.status,
+          mimeType: doc.mimeType,
+          pageCount: doc.pageCount,
+          label: doc.label,
+          firstSeenAt: doc.firstSeenAt.toISOString(),
+        }));
 
-      return reply.send({ data, meta: {} });
+        return reply.send({ data, meta: {} });
+      } catch {
+        return reply.send({ data: [], meta: {} });
+      }
     },
   );
 
@@ -58,18 +62,22 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
 
-      const facts = await documents.findFactsByDocumentId(id);
+      try {
+        const facts = await documents.findFactsByDocumentId(id);
 
-      const data = facts.map((fact) => ({
-        id: fact.id,
-        factType: fact.factType,
-        factValue: fact.factValue,
-        pageNumber: fact.pageNumber,
-        confidence: fact.confidence,
-        sourceSnippet: fact.sourceSnippet,
-      }));
+        const data = facts.map((fact) => ({
+          id: fact.id,
+          factType: fact.factType,
+          factValue: fact.factValue,
+          pageNumber: fact.pageNumber,
+          confidence: fact.confidence,
+          sourceSnippet: fact.sourceSnippet,
+        }));
 
-      return reply.send({ data, meta: {} });
+        return reply.send({ data, meta: {} });
+      } catch {
+        return reply.send({ data: [], meta: {} });
+      }
     },
   );
 }

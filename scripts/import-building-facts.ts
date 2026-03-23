@@ -125,17 +125,22 @@ async function main(): Promise<void> {
 
     try {
       const props = feature.properties;
-      const street = (props.STRASSE ?? props.strasse ?? props.street ?? null) as string | null;
-      const houseNumber = (props.HAUSNUMMER ??
+      const street = (props.STRNAML ?? props.STRASSE ?? props.strasse ?? props.street ?? null) as
+        | string
+        | null;
+      const houseNumber = (props.VONN ??
+        props.HAUSNUMMER ??
         props.hausnummer ??
         props.house_number ??
         props.ONR ??
-        null) as string | null;
+        null) as string | number | null;
       const yearBuilt = (props.BAUJAHR ?? props.baujahr ?? props.year_built ?? null) as
         | number
         | string
         | null;
-      const typology = (props.BAUTYP ??
+      const buildingEra = (props.L_BAUJ ?? null) as string | null;
+      const typology = (props.L_BAUTYP ??
+        props.BAUTYP ??
         props.bautyp ??
         props.typology ??
         props.GEBAEUDETYP ??
@@ -165,11 +170,13 @@ async function main(): Promise<void> {
 
       const factsJson: Record<string, unknown> = {};
       if (validYear != null) factsJson.year_built = validYear;
+      if (buildingEra != null) factsJson.building_era = buildingEra;
       if (typology != null) factsJson.typology = typology;
       // Preserve other potentially useful properties
-      if (props.STOCKWERKE ?? props.stockwerke)
-        factsJson.floors = props.STOCKWERKE ?? props.stockwerke;
-      if (props.NUTZUNG ?? props.nutzung) factsJson.usage = props.NUTZUNG ?? props.nutzung;
+      const floors = props.GESCH_ANZ ?? props.STOCKWERKE ?? props.stockwerke;
+      if (floors != null) factsJson.floors = floors;
+      const usage = props.L_NUTZUNG ?? props.NUTZUNG ?? props.nutzung;
+      if (usage != null) factsJson.usage = usage;
 
       const result = await buildingFacts.upsertBuildingFact({
         buildingKey,

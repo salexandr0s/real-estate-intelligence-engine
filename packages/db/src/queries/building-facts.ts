@@ -113,14 +113,15 @@ export async function findByBuildingKey(buildingKey: string): Promise<BuildingFa
 
 /**
  * Find nearest building fact within a radius using Haversine distance.
+ * Returns the row with a computed distanceM field for confidence derivation.
  */
 export async function findNearestBuilding(
   lat: number,
   lon: number,
   radiusM?: number,
-): Promise<BuildingFactRow | null> {
+): Promise<(BuildingFactRow & { distanceM: number }) | null> {
   const radius = radiusM ?? 50;
-  const rows = await query<BuildingFactDbRow>(
+  const rows = await query<BuildingFactDbRow & { dist_m: string }>(
     `SELECT *,
        6371000 * acos(
          LEAST(1.0, cos(radians($1)) * cos(radians(lat))
@@ -138,5 +139,6 @@ export async function findNearestBuilding(
      LIMIT 1`,
     [lat, lon, radius],
   );
-  return rows[0] ? toBuildingFactRow(rows[0]) : null;
+  if (!rows[0]) return null;
+  return { ...toBuildingFactRow(rows[0]), distanceM: Number(rows[0].dist_m) };
 }

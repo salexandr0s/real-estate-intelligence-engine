@@ -64,15 +64,41 @@ export async function analysisRoutes(app: FastifyInstance): Promise<void> {
       let buildingContext: BuildingContext | null = null;
       let buildingMatchConfidence: string | null = null;
 
-      // Try spatial lookup by coordinates
-      const buildingFactRow =
-        listing.latitude != null && listing.longitude != null
-          ? await buildingFacts.findNearestBuilding(listing.latitude, listing.longitude, 50)
-          : null;
+      // Try spatial lookup by coordinates — degrade gracefully if table missing.
+      // Widen radius for less precise geocodes to increase match rate.
+      const buildingSearchRadius =
+        listing.geocodePrecision === 'source_exact'
+          ? 50
+          : listing.geocodePrecision === 'street'
+            ? 100
+            : 150;
+
+      let buildingFactRow = null;
+      try {
+        buildingFactRow =
+          listing.latitude != null && listing.longitude != null
+            ? await buildingFacts.findNearestBuilding(
+                listing.latitude,
+                listing.longitude,
+                buildingSearchRadius,
+              )
+            : null;
+      } catch {
+        buildingFactRow = null;
+      }
 
       if (buildingFactRow) {
-        buildingMatchConfidence = buildingFactRow.matchConfidence;
-        const acceptableConfidence = ['exact', 'high', 'medium'].includes(
+        // Derive confidence from spatial distance when stored confidence is unknown
+        buildingMatchConfidence =
+          buildingFactRow.matchConfidence !== 'unknown'
+            ? buildingFactRow.matchConfidence
+            : buildingFactRow.distanceM <= 30
+              ? 'high'
+              : buildingFactRow.distanceM <= 80
+                ? 'medium'
+                : 'low';
+
+        const acceptableConfidence = ['exact', 'high', 'medium', 'low'].includes(
           buildingMatchConfidence ?? '',
         );
 

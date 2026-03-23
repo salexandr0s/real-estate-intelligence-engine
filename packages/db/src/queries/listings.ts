@@ -451,8 +451,13 @@ export async function searchListings(
         LIMIT 1
       ) lscore ON true`
     : '';
+
+  // Track dynamic parameter index after the 10 base filter params
+  let nextParamIndex = 11;
+
+  const locationScoreParamIndex = needsLocationJoin ? nextParamIndex++ : -1;
   const locationFilter = needsLocationJoin
-    ? 'AND ($11::numeric IS NULL OR lscore.location_score >= $11)'
+    ? `AND ($${locationScoreParamIndex}::numeric IS NULL OR lscore.location_score >= $${locationScoreParamIndex})`
     : '';
 
   // POI proximity filter — uses listing_pois cache to filter by distance to POI categories.
@@ -461,9 +466,11 @@ export async function searchListings(
     ? Object.entries(filter.maxPoiDistances).filter(([, v]) => v > 0)
     : [];
   const needsPoiFilter = poiEntries.length > 0;
+  const poiCategoriesParamIndex = needsPoiFilter ? nextParamIndex++ : -1;
+  const poiDistancesParamIndex = needsPoiFilter ? nextParamIndex++ : -1;
   const poiFilter = needsPoiFilter
     ? `AND NOT EXISTS (
-        SELECT 1 FROM unnest($12::text[], $13::numeric[]) AS req(category, max_dist)
+        SELECT 1 FROM unnest($${poiCategoriesParamIndex}::text[], $${poiDistancesParamIndex}::numeric[]) AS req(category, max_dist)
         WHERE NOT EXISTS (
           SELECT 1 FROM listing_pois lp
           WHERE lp.listing_id = l.id
@@ -474,8 +481,8 @@ export async function searchListings(
       )`
     : '';
 
-  // Parameter offset: filter params are $1-$13, cursor params start at $14
-  const filterParamOffset = 13;
+  // Parameter offset: filter params are $1-$N, cursor params start at $N+1
+  const filterParamOffset = nextParamIndex - 1;
   const cursorParamSql = cursorClause
     ? cursorClause.replace(/\$(\d+)/g, (_, n: string) => `$${Number(n) + filterParamOffset}`)
     : '';
@@ -552,9 +559,8 @@ export async function searchListings(
     filter.minRooms ?? null,
     filter.maxRooms ?? null,
     filter.minScore ?? null,
-    filter.minLocationScore ?? null,
-    needsPoiFilter ? poiEntries.map(([cat]) => cat) : null,
-    needsPoiFilter ? poiEntries.map(([, dist]) => dist) : null,
+    ...(needsLocationJoin ? [filter.minLocationScore ?? null] : []),
+    ...(needsPoiFilter ? [poiEntries.map(([cat]) => cat), poiEntries.map(([, dist]) => dist)] : []),
   ];
 
   const params: unknown[] = [
