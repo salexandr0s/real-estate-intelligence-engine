@@ -33,7 +33,7 @@ struct CopilotView: View {
                         ListingsInspectorContent(listing: viewModel.inspectedListing)
                     }
                 }
-                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
+                .frame(minWidth: 280, idealWidth: 360, maxWidth: 480, maxHeight: .infinity)
                 .background(.regularMaterial)
             }
         }
