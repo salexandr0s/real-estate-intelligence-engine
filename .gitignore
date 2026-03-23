@@ -18,3 +18,16 @@ DerivedData/
 # Scraper artifacts and local data
 real-estate-intel/
 assets/
+
+# Certificates and keys
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local databases
+*.sqlite
+*.db
+
+# Python virtual environment
+scripts/.venv/
