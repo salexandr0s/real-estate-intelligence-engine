@@ -28,45 +28,131 @@ struct ListingDetailView: View {
                     onToggleSave: { Task { await toggleSave() } }
                 )
 
+                // Actions (moved up for quick access)
+                HStack(spacing: Theme.Spacing.sm) {
+                    Button {
+                        if let url = URL(string: listing.canonicalUrl) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Label("Open in Browser", systemImage: "safari")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.regular)
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(listing.canonicalUrl, forType: .string)
+                    } label: {
+                        Label("Copy URL", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.regular)
+                    .buttonStyle(.bordered)
+                }
+
                 FeedbackSection(listingId: listing.id)
 
-                // Score breakdown (collapsible)
-                ListingScoreSection(listing: listing, explanation: explanation)
+                // Key investor metrics ribbon
+                KeyMetricsRibbon(analysis: analysis, explanation: explanation)
 
-                // Investor analysis (market rent, metrics, building, legal-rent, flags)
-                AnalysisSection(analysis: analysis, isLoading: isLoadingAnalysis)
+                // Investor analysis cards
+                if isLoadingAnalysis && analysis == nil {
+                    ProgressView("Loading analysis\u{2026}")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, Theme.Spacing.md)
+                } else if let analysis {
+                    if let rent = analysis.marketRentContext {
+                        AnalysisMarketRentCard(rent: rent)
+                    }
 
-                // Documents (collapsible)
-                DocumentsSection(
-                    documents: listingDocuments,
-                    isLoading: isLoadingDocuments,
-                    onLoadFacts: loadDocumentFacts
-                )
+                    if let metrics = analysis.investorMetrics {
+                        AnalysisInvestorMetricsCard(metrics: metrics)
+                    }
 
+                    if let sale = analysis.marketSaleContext {
+                        AnalysisSaleContextCard(sale: sale)
+                    }
+
+                    if let legal = analysis.legalRentSummary {
+                        AnalysisLegalRentCard(legal: legal)
+                    }
+
+                    // Risk + Upside flags side-by-side when both present
+                    if !analysis.riskFlags.isEmpty && !analysis.upsideFlags.isEmpty {
+                        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+                            AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
+                                .frame(maxWidth: .infinity)
+                            AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        if !analysis.riskFlags.isEmpty {
+                            AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
+                        }
+                        if !analysis.upsideFlags.isEmpty {
+                            AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
+                        }
+                    }
+
+                    if !analysis.missingData.isEmpty {
+                        AnalysisMissingDataList(items: analysis.missingData)
+                    }
+
+                    if !analysis.assumptions.isEmpty {
+                        AnalysisAssumptionsList(items: analysis.assumptions)
+                    }
+                }
+
+                // Price history
+                PriceHistoryView(versions: priceVersions)
+
+                // Cross-source comparison
                 if let cluster, cluster.members.count >= 2 {
                     CrossSourceComparisonView(cluster: cluster)
                 }
 
                 Divider()
 
-                // Property details + location in 2-column grid
+                // Score breakdown
+                if let explanation {
+                    Text("Score Breakdown")
+                        .font(.headline)
+                    ScoreBreakdownView(explanation: explanation)
+                }
+
+                // Confidence
+                if let analysis {
+                    AnalysisConfidenceBadge(confidence: analysis.confidence)
+                }
+
+                Divider()
+
+                // Property details grid
                 ListingDetailsSection(listing: listing)
+
+                // Building context
+                if let building = analysis?.buildingContext {
+                    AnalysisBuildingContextCard(building: building)
+                }
 
                 // Nearby POIs
                 ListingLocationSection(listing: listing)
 
                 Divider()
 
-                // Price history
-                PriceHistoryView(versions: priceVersions)
+                // Documents
+                DocumentsSection(
+                    documents: listingDocuments,
+                    isLoading: isLoadingDocuments,
+                    onLoadFacts: loadDocumentFacts
+                )
 
                 Divider()
 
                 // Map
                 ListingMapView(listing: listing, onExpandToFullMap: onExpandMap)
-
-                // Actions
-                ListingActionsSection(canonicalUrl: listing.canonicalUrl)
             }
             .padding(Theme.Spacing.lg)
         }

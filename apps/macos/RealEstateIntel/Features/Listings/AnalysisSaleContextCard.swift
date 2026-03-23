@@ -29,6 +29,7 @@ struct AnalysisSaleContextCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 }

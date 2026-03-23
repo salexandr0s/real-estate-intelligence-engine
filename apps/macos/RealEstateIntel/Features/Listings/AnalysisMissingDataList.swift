@@ -12,10 +12,18 @@ struct AnalysisMissingDataList: View {
                 .foregroundStyle(.orange)
 
             ForEach(items, id: \.self) { item in
-                Text("• \(item)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: Theme.Spacing.xs) {
+                    Circle()
+                        .fill(Color.orange.opacity(0.6))
+                        .frame(width: 6, height: 6)
+                    Text(item)
+                        .font(.caption)
+                }
             }
         }
+        .padding(Theme.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.06))
+        .clipShape(.rect(cornerRadius: Theme.Radius.md))
     }
 }

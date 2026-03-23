@@ -14,39 +14,26 @@ struct PriceHistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Text("Price History")
-                .font(.headline)
-
             if priceRelevantVersions.count <= 1 {
-                SingleVersionContent(version: priceRelevantVersions.first)
+                // Compact single-line when no price changes
+                HStack(spacing: Theme.Spacing.sm) {
+                    Text("Price History")
+                        .font(.headline)
+                    Spacer()
+                    if let version = priceRelevantVersions.first {
+                        Text(PriceFormatter.format(eur: version.priceEur))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("No changes")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             } else {
+                Text("Price History")
+                    .font(.headline)
                 CompactTimelineContent(versions: priceRelevantVersions)
             }
-        }
-    }
-}
-
-// MARK: - Single Version
-
-private struct SingleVersionContent: View {
-    let version: PriceVersion?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            if let version {
-                HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "tag.fill")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-                    Text("Current: \(PriceFormatter.format(eur: version.priceEur))")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-            }
-
-            Text("No price changes recorded")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
     }
 }

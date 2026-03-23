@@ -28,6 +28,7 @@ struct AnalysisBuildingContextCard: View {
                 DetailRow(label: row.0, value: row.1)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 }

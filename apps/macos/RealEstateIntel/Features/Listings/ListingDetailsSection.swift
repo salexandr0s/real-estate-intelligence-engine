@@ -19,7 +19,6 @@ struct ListingDetailsSection: View {
             result.append(("Postal Code", postalCode))
         }
 
-        result.append(("Status", listing.listingStatus.rawValue.capitalized))
         result.append(("First Seen", PriceFormatter.formatDateTime(listing.firstSeenAt)))
         result.append(("Listing UID", String(listing.listingUid.prefix(8)) + "..."))
 

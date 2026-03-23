@@ -5,6 +5,14 @@ struct AnalysisMarketRentCard: View {
     let rent: AnalysisMarketRentEstimate
 
     var body: some View {
+        if rent.estimateMid != nil {
+            fullCard
+        } else {
+            compactEmpty
+        }
+    }
+
+    private var fullCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("Market Rent Estimate")
                 .font(.subheadline)
@@ -43,6 +51,23 @@ struct AnalysisMarketRentCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    /// Compact inline display when no rent estimate is available.
+    private var compactEmpty: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Text("Market Rent")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            StatusBadge(label: rent.confidence.capitalized, color: Theme.confidenceColor(for: rent.confidence))
+            Text("\(rent.sampleSize) comps · \(rent.fallbackLevel)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 }

@@ -13,12 +13,7 @@ struct FeedbackSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text("Your Feedback")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: Theme.Spacing.md) {
+            HStack(spacing: Theme.Spacing.sm) {
                 ForEach(FeedbackRating.allCases, id: \.rawValue) { rating in
                     Button {
                         Task { await toggleRating(rating) }
@@ -33,7 +28,7 @@ struct FeedbackSection: View {
                                 .foregroundStyle(currentRating == rating ? .primary : .tertiary)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, Theme.Spacing.xs)
+                        .padding(.vertical, Theme.Spacing.xxs)
                         .background(
                             currentRating == rating
                                 ? ratingColor(rating).opacity(0.1)
