@@ -64,9 +64,10 @@ export async function deviceRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
+      const userId = request.userId;
       const { token } = parseOrThrow(deleteTokenSchema, request.body);
 
-      const deleted = await deviceTokens.removeByToken(token);
+      const deleted = await deviceTokens.removeByUserAndToken(userId, token);
 
       return reply.status(200).send({ deleted });
     },

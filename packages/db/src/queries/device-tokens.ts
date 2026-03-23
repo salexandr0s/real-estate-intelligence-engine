@@ -73,6 +73,7 @@ export async function findByUser(userId: number): Promise<DeviceTokenRow[]> {
 
 /**
  * Remove a specific token (e.g. APNs invalid-token cleanup).
+ * Not user-scoped — used internally when APNs reports a token as unregistered.
  * Returns true if a row was deleted.
  */
 export async function removeByToken(token: string): Promise<boolean> {
@@ -81,6 +82,20 @@ export async function removeByToken(token: string): Promise<boolean> {
      WHERE token = $1
      RETURNING id`,
     [token],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Remove a token owned by a specific user.
+ * Used by the API endpoint to ensure users can only delete their own tokens.
+ */
+export async function removeByUserAndToken(userId: number, token: string): Promise<boolean> {
+  const rows = await query(
+    `DELETE FROM device_tokens
+     WHERE user_id = $1 AND token = $2
+     RETURNING id`,
+    [userId, token],
   );
   return rows.length > 0;
 }

@@ -192,6 +192,24 @@ export async function sendAlertPush(params: {
         // Unregistered — device token is no longer valid
         result.invalidTokens.push(token);
         log.info('Device token unregistered', { token });
+      } else if (response.status === 400) {
+        // Check if reason is BadDeviceToken — treat as invalid like 410
+        let reason: string | undefined;
+        try {
+          const parsed: unknown = JSON.parse(response.body);
+          if (typeof parsed === 'object' && parsed !== null && 'reason' in parsed) {
+            reason = String((parsed as Record<string, unknown>)['reason']);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+        if (reason === 'BadDeviceToken') {
+          result.invalidTokens.push(token);
+          log.info('Bad device token', { token });
+        } else {
+          result.failed++;
+          log.warn('APNs bad request', { token, reason, bodyPreview: response.body.slice(0, 200) });
+        }
       } else if (response.status === 429) {
         result.failed++;
         // Parse Retry-After from response body if present

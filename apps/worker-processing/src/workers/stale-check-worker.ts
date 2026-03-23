@@ -150,5 +150,12 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
     });
   });
 
+  // Close the delivery queue when the worker closes
+  const origClose = worker.close.bind(worker);
+  worker.close = async (force?: boolean) => {
+    await deliveryQueue.close();
+    return origClose(force);
+  };
+
   return worker;
 }
