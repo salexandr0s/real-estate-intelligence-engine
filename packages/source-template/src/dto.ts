@@ -1,4 +1,4 @@
-import type { SourceRawListingBase } from '@rei/contracts';
+import type { SourceRawListingBase } from '@immoradar/contracts';
 
 // TODO: Replace with source-specific discovery item fields
 export interface TemplateDiscoveryItem {

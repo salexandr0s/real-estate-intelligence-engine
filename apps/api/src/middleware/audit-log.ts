@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 declare module 'fastify' {
   interface FastifyRequest {

@@ -1,5 +1,5 @@
-import type { DetailCapture, RawListingUpsert, ScrapeRunMetrics } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+import type { DetailCapture, RawListingUpsert, ScrapeRunMetrics } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('ingestion:raw');
 
@@ -36,7 +36,9 @@ export class IngestRawListing {
     const sourceListingKey =
       capture.sourceListingKeyCandidate ?? this.deriveKeyFromUrl(capture.canonicalUrl);
 
-    const contentSha256 = this.deps.computeContentHash(capture.payload as unknown as Record<string, unknown>);
+    const contentSha256 = this.deps.computeContentHash(
+      capture.payload as unknown as Record<string, unknown>,
+    );
 
     const upsertInput: RawListingUpsert = {
       sourceId,

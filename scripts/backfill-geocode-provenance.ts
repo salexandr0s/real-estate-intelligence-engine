@@ -13,8 +13,8 @@
  *   npx tsx scripts/backfill-geocode-provenance.ts --dry-run
  */
 
-import { createLogger } from '@rei/observability';
-import { query, listings, closePool } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { query, listings, closePool } from '@immoradar/db';
 
 const log = createLogger('backfill-geocode-provenance');
 const isDryRun = process.argv.includes('--dry-run');

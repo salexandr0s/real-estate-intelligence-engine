@@ -1,7 +1,7 @@
 /**
  * Keyword equivalence tests.
  *
- * Proves that the shared keyword matching module (@rei/filtering/keyword-match)
+ * Proves that the shared keyword matching module (@immoradar/filtering/keyword-match)
  * produces identical results to what the SQL ILIKE path in build-search-query.ts
  * would produce. This ensures search, filter-test, and live alert matching
  * all agree on keyword semantics.
@@ -14,7 +14,7 @@ import {
   allRequiredKeywordsMatch,
   anyExcludedKeywordMatches,
   escapeForIlike,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

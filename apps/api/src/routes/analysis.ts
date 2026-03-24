@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError } from '@rei/observability';
+import { NotFoundError } from '@immoradar/observability';
 import type {
   ComparableEntry,
   ComparableFallbackLevel,
@@ -7,8 +7,8 @@ import type {
   MarketContext,
   BuildingContext,
   LegalRentSummary,
-} from '@rei/contracts';
-import { listings, comparables, listingPois, marketBaselines, buildingFacts } from '@rei/db';
+} from '@immoradar/contracts';
+import { listings, comparables, listingPois, marketBaselines, buildingFacts } from '@immoradar/db';
 import {
   estimateMarketRent,
   computeInvestorMetrics,
@@ -16,8 +16,8 @@ import {
   computeUpsideFlags,
   computeAnalysisConfidence,
   deriveConfidence,
-} from '@rei/analysis';
-import { assessLegalRent } from '@rei/legal-rent';
+} from '@immoradar/analysis';
+import { assessLegalRent } from '@immoradar/legal-rent';
 import { parseOrThrow, idParamSchema } from '../schemas.js';
 
 export async function analysisRoutes(app: FastifyInstance): Promise<void> {

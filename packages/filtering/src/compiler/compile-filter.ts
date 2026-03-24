@@ -1,4 +1,4 @@
-import type { CompiledFilter, FilterCriteria } from '@rei/contracts';
+import type { CompiledFilter, FilterCriteria } from '@immoradar/contracts';
 
 export function compileFilter(criteria: FilterCriteria): CompiledFilter {
   const compiled: CompiledFilter = {
@@ -29,12 +29,14 @@ export function compileFilter(criteria: FilterCriteria): CompiledFilter {
 
   if (criteria.requiredKeywords?.length) {
     compiled.requiredKeywords = criteria.requiredKeywords
-      .map(k => k.trim().toLowerCase()).filter(Boolean);
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean);
   }
 
   if (criteria.excludedKeywords?.length) {
     compiled.excludedKeywords = criteria.excludedKeywords
-      .map(k => k.trim().toLowerCase()).filter(Boolean);
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean);
   }
 
   return compiled;

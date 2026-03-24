@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { loadConfig } from '@rei/config';
-import { UnauthorizedError } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { UnauthorizedError } from '@immoradar/observability';
 
 export function constantTimeEquals(a: string, b: string): boolean {
   const hashA = createHash('sha256').update(a).digest();

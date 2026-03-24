@@ -6,7 +6,7 @@ import type {
   ScrapeRunStatus,
   ScrapeRunTriggerType,
   ScrapeRunScope,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 

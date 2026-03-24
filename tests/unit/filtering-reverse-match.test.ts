@@ -4,8 +4,8 @@
  * for unit testing without DB access.
  */
 import { describe, it, expect } from 'vitest';
-import { userFilters } from '@rei/db';
-import type { UserFilterRow } from '@rei/contracts';
+import { userFilters } from '@immoradar/db';
+import type { UserFilterRow } from '@immoradar/contracts';
 
 const { filterByKeywords } = userFilters;
 

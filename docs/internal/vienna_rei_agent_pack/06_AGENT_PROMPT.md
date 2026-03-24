@@ -1,7 +1,7 @@
 You are acting as a principal engineer, product strategist, data architect, and real-estate intelligence engineer.
 
 You are working inside the repository:
-- `salexandr0s/real-estate-intelligence-engine`
+- `salexandr0s/immoradar`
 
 Mode:
 - implementation mode,
@@ -11,7 +11,7 @@ Mode:
 - no shallow generic advice,
 - do not invent a parallel system unless strictly necessary.
 
-Your mission is to execute the next serious product phase for the Vienna Real Estate Intelligence Engine.
+Your mission is to execute the next serious product phase for the Vienna ImmoRadar.
 
 You must use the attached markdown documents as your operating brief:
 
@@ -262,7 +262,7 @@ Audit confirmed:
 ### What was built
 - **Shared keyword matching contract** in `packages/contracts/src/keyword-match.ts` — single source of truth for keyword semantics (case-insensitive substring, ILIKE-equivalent escaping)
 - **Unified reverse-match** — `packages/db/src/queries/user-filters.ts:filterByKeywords()` now delegates to shared `passesKeywordFilter()`
-- **Re-export** in `packages/filtering/src/compiler/keyword-match.ts` preserves `@rei/filtering` API surface
+- **Re-export** in `packages/filtering/src/compiler/keyword-match.ts` preserves `@immoradar/filtering` API surface
 - **Alert match explanations** — `AlertMatchReasons` type in contracts, `match_reasons_json JSONB` column via migration 013, populated in `score-and-alert.ts:buildMatchReasons()`
 - **Cluster-aware dedup** — `cluster_fingerprint CHAR(64)` column + index via migration 013, `existsForCluster()` query, dedup check before alert creation in `score-and-alert.ts`
 - **Pipeline factory** extended to pass filter criteria through for match reason building + cluster deps wired
@@ -338,7 +338,7 @@ Audit confirmed:
 ## Phase 5 — Listing Analysis Page (DONE)
 
 ### What was built
-- **New `@rei/analysis` package** with market-rent estimation, investor metrics, risk/upside flags, confidence model
+- **New `@immoradar/analysis` package** with market-rent estimation, investor metrics, risk/upside flags, confidence model
 - **Analysis types** in `packages/contracts/src/analysis.ts` — `ListingAnalysis`, `MarketContext`, `MarketRentEstimate`, `InvestorMetrics`, `ComparableEntry`, `BuildingContext`, `LegalRentSummary`, `AnalysisConfidence`
 - **Tiered comparable queries** in `packages/db/src/queries/comparables.ts` — `findNearbyComparables()` (Tier 1: 500m radius, geocode-quality-gated) and `findDistrictComparables()` (Tier 2)
 - **Analysis API endpoint** — `GET /v1/listings/:id/analysis` in `apps/api/src/routes/analysis.ts` (400+ lines, fully integrated)
@@ -382,7 +382,7 @@ Audit confirmed:
 ## Phase 7 — Legal-Rent Assessment (DONE)
 
 ### What was built
-- **`@rei/legal-rent` package** with conservative rules engine
+- **`@immoradar/legal-rent` package** with conservative rules engine
 - **Rules engine** — `assessLegalRent()` with 5 output states (`likely_capped`, `likely_uncapped`, `likely_capped_missing_critical_proof`, `unclear`, `needs_human_legal_review`), strong/weak/missing signal separation, conservative decision tree (post-2001 → exempt, pre-1945 → full MRG, 1945-2001 → subsidy-dependent, no-year → unclear)
 - **Migration 016** — `legal_rent_assessments` table with status, regime_candidate, confidence, signals, missing facts, indicative band, disclaimer
 - **Query module** — `upsertAssessment()`, `findByListingId()`
@@ -402,7 +402,7 @@ Audit confirmed:
 ### What was built
 - **Migration 017** — `listing_documents`, `document_extractions`, `document_fact_spans` tables with full provenance fields
 - **Query module** — `packages/db/src/queries/documents.ts` with `upsertDocument()`, `findByListingId()`, `updateStatus()`, `findPendingDocuments()`, `findFactsByDocumentId()`, `insertExtraction()`, `insertFactSpan()`
-- **`@rei/documents` package** — `extractPdfText()` (regex-based PDF text extraction) and `parseRealEstateFacts()` (20+ German real estate regex patterns)
+- **`@immoradar/documents` package** — `extractPdfText()` (regex-based PDF text extraction) and `parseRealEstateFacts()` (20+ German real estate regex patterns)
 - **Full document worker** — `apps/worker-processing/src/workers/document-worker.ts` (214 lines): fetch → download → SHA-256 hash → PDF detect → text extract → fact parse → persist extraction + fact spans → status update
 - **Document API routes** — `GET /v1/listings/:id/documents` and `GET /v1/documents/:id/facts` in `apps/api/src/routes/documents.ts`
 - **Attachment URL detection** — `extractAttachmentUrls()` in willhaben + immoscout24 detail parsers, detects PDF/document links
@@ -471,9 +471,9 @@ Audit confirmed:
 - `017-documents.sql` — listing_documents + document_extractions + document_fact_spans
 
 ## New packages created
-- `@rei/analysis` — market-rent estimation, investor metrics, risk/upside flags, confidence model
-- `@rei/legal-rent` — conservative MRG rules engine
-- `@rei/documents` — PDF text extraction, German real estate fact parsing
+- `@immoradar/analysis` — market-rent estimation, investor metrics, risk/upside flags, confidence model
+- `@immoradar/legal-rent` — conservative MRG rules engine
+- `@immoradar/documents` — PDF text extraction, German real estate fact parsing
 
 ## Tests added
 - `tests/unit/keyword-equivalence.test.ts` — 43 tests proving JS/SQL keyword parity

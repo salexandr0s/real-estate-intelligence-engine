@@ -1,5 +1,5 @@
 import { query } from '../client.js';
-import type { SourceRow, SourceHealthStatus, ScrapeMode, LegalStatus } from '@rei/contracts';
+import type { SourceRow, SourceHealthStatus, ScrapeMode, LegalStatus } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 

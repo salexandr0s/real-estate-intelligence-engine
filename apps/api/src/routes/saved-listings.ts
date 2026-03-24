@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { savedListings } from '@rei/db';
+import { savedListings } from '@immoradar/db';
 import { parseOrThrow, idParamSchema, paginationQuerySchema } from '../schemas.js';
 import { z } from 'zod';
 

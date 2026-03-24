@@ -5,8 +5,8 @@
  * Usage: npx tsx scripts/backfill-listing-pois.ts
  */
 
-import { query } from '@rei/db';
-import { listingPois } from '@rei/db';
+import { query } from '@immoradar/db';
+import { listingPois } from '@immoradar/db';
 
 interface ListingCoord {
   id: string;

@@ -6,10 +6,10 @@
 import { createHash } from 'node:crypto';
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { ClusterJobData } from '@rei/scraper-core';
-import { query, clusters } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { ClusterJobData } from '@immoradar/scraper-core';
+import { query, clusters } from '@immoradar/db';
 
 const log = createLogger('worker:cluster');
 

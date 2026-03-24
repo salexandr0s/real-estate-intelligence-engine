@@ -1,4 +1,4 @@
-import { query } from '@rei/db';
+import { query } from '@immoradar/db';
 
 async function main() {
   const pois = await query(

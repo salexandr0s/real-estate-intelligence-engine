@@ -1,6 +1,9 @@
-import type { FilterCriteria, FilterCreateInput } from '@rei/contracts';
+import type { FilterCriteria, FilterCreateInput } from '@immoradar/contracts';
 
-interface ValidationError { field: string; message: string; }
+interface ValidationError {
+  field: string;
+  message: string;
+}
 
 const VALID_PROPERTY_TYPES = ['apartment', 'house', 'land', 'commercial', 'parking', 'other'];
 const VALID_SORT_BY = ['score_desc', 'newest', 'price_asc', 'price_desc', 'sqm_desc'];
@@ -26,10 +29,10 @@ function validateCriteria(c: FilterCriteria): ValidationError[] {
   if (c.minScore != null && (c.minScore < 0 || c.minScore > 100)) {
     errors.push({ field: 'minScore', message: 'Must be 0-100' });
   }
-  c.districts?.forEach(d => {
+  c.districts?.forEach((d) => {
     if (d < 1 || d > 23) errors.push({ field: 'districts', message: `Invalid district: ${d}` });
   });
-  c.propertyTypes?.forEach(pt => {
+  c.propertyTypes?.forEach((pt) => {
     if (!VALID_PROPERTY_TYPES.includes(pt)) {
       errors.push({ field: 'propertyTypes', message: `Invalid: ${pt}` });
     }

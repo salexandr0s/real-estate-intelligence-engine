@@ -1,4 +1,4 @@
-import type { BaselineLookup, ScoreInput, ScoreResult } from '@rei/contracts';
+import type { BaselineLookup, ScoreInput, ScoreResult } from '@immoradar/contracts';
 import { mapDistrictDiscountToScore } from './district-price.js';
 import { mapBucketDiscountToScore } from './undervaluation.js';
 import { computeKeywordSignalScore } from './keyword-signal.js';

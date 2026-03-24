@@ -1,4 +1,4 @@
-import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { WohnnetDiscoveryItem } from './dto.js';
 
 /**
@@ -48,10 +48,7 @@ export function parseDiscoveryPage(
  * The regex captures the full opening tag (to get href, data-id, data-title)
  * and the inner content (to extract area, rooms, price, location, features).
  */
-function parseHtmlCards(
-  html: string,
-  sourceCode: string,
-): DiscoveryItem<WohnnetDiscoveryItem>[] {
+function parseHtmlCards(html: string, sourceCode: string): DiscoveryItem<WohnnetDiscoveryItem>[] {
   const items: DiscoveryItem<WohnnetDiscoveryItem>[] = [];
 
   // Match <a ... data-id="..." ...> ... </a> blocks
@@ -72,7 +69,8 @@ function parseHtmlCards(
     const titleFromAttr = fullTag.match(/data-title="([^"]*)"/)?.[1] ?? null;
 
     // Extract title from <p class="h4"> inside the card
-    const titleFromH4 = cardBody.match(/<p\s+class="h4"[^>]*>([\s\S]*?)<\/p>/i)?.[1]?.trim() ?? null;
+    const titleFromH4 =
+      cardBody.match(/<p\s+class="h4"[^>]*>([\s\S]*?)<\/p>/i)?.[1]?.trim() ?? null;
     const titleRaw = titleFromH4 ?? titleFromAttr;
 
     // Extract area: <b ...>NUMBER</b> followed by " m" (handles m2, m&sup2;, etc.)
@@ -151,9 +149,10 @@ function buildNextPageUrl(currentUrl: string, currentPage: number): string {
  * Looks for patterns like "1.247 Ergebnisse" or "1.247 Objekte".
  */
 function extractTotalEstimate(html: string): number | null {
-  const match = html.match(/([\d.]+)\s*Ergebnisse/i)
-    ?? html.match(/([\d.]+)\s*Objekte/i)
-    ?? html.match(/([\d.]+)\s*Treffer/i);
+  const match =
+    html.match(/([\d.]+)\s*Ergebnisse/i) ??
+    html.match(/([\d.]+)\s*Objekte/i) ??
+    html.match(/([\d.]+)\s*Treffer/i);
   if (!match?.[1]) return null;
   const num = parseInt(match[1].replace(/\./g, ''), 10);
   return Number.isFinite(num) ? num : null;

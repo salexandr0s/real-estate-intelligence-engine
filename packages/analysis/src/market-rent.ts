@@ -3,7 +3,7 @@ import type {
   ComparableFallbackLevel,
   ConfidenceLevel,
   MarketRentEstimate,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 
 /**
  * Estimate market rent from rent-type comparables.

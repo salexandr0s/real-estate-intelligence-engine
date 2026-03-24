@@ -5,7 +5,7 @@
 
 import { Worker, Queue } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
   getRedisConnection,
@@ -19,10 +19,10 @@ import {
   dismissCookieConsent,
   setupRequestInterception,
   DEFAULT_JOB_RETRY_OPTS,
-} from '@rei/scraper-core';
-import type { DiscoveryJobData, DetailJobData } from '@rei/scraper-core';
-import type { CrawlProfile, RequestPlan } from '@rei/contracts';
-import { scrapeRuns, sources, deadLetter } from '@rei/db';
+} from '@immoradar/scraper-core';
+import type { DiscoveryJobData, DetailJobData } from '@immoradar/scraper-core';
+import type { CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import { scrapeRuns, sources, deadLetter } from '@immoradar/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
 

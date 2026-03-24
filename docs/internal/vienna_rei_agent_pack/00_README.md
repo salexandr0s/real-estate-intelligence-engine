@@ -1,4 +1,4 @@
-# Vienna Real Estate Intelligence Engine — Agent Pack
+# Vienna ImmoRadar — Agent Pack
 
 This pack converts the audit into implementation-grade markdown documents for a coding agent.
 

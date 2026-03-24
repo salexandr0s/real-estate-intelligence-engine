@@ -12,7 +12,7 @@ import {
   OperationalWarning,
   TransientError,
   FatalError,
-} from '@rei/observability';
+} from '@immoradar/observability';
 
 describe('Prometheus metrics', () => {
   it('registry exposes metrics in text format', async () => {
@@ -28,21 +28,21 @@ describe('Prometheus metrics', () => {
   it('counter increments', async () => {
     scrapeRunsTotal.inc({ source: 'test', status: 'ok' });
     const output = await registry.metrics();
-    expect(output).toContain('rei_scrape_runs_total');
+    expect(output).toContain('immoradar_scrape_runs_total');
   });
 
   it('histogram observes values', async () => {
     apiRequestDuration.observe({ method: 'GET', route: '/test', status_code: '200' }, 0.05);
     const output = await registry.metrics();
-    expect(output).toContain('rei_api_request_duration_seconds');
+    expect(output).toContain('immoradar_api_request_duration_seconds');
   });
 
   it('gauge sets values', async () => {
     queueDepth.set({ queue: 'ingestion' }, 5);
     sourceHealthGauge.set({ source: 'willhaben' }, 1);
     const output = await registry.metrics();
-    expect(output).toContain('rei_queue_depth');
-    expect(output).toContain('rei_source_health');
+    expect(output).toContain('immoradar_queue_depth');
+    expect(output).toContain('immoradar_source_health');
   });
 });
 

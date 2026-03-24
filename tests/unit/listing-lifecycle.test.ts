@@ -1,10 +1,10 @@
 /**
  * Listing lifecycle tests.
  * Tests source status → canonical listing status mapping
- * via the resolveListingStatus utility from @rei/normalization.
+ * via the resolveListingStatus utility from @immoradar/normalization.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveListingStatus } from '@rei/normalization';
+import { resolveListingStatus } from '@immoradar/normalization';
 
 describe('resolveListingStatus', () => {
   it('maps "sold" to listing status "sold"', () => {

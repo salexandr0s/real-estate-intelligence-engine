@@ -5,16 +5,16 @@
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
   getRedisConnection,
   getQueuePrefix,
   classifyScraperError,
-} from '@rei/scraper-core';
-import type { ProcessingJobData } from '@rei/scraper-core';
-import type { FullIngestionPipeline } from '@rei/ingestion';
-import { deadLetter } from '@rei/db';
+} from '@immoradar/scraper-core';
+import type { ProcessingJobData } from '@immoradar/scraper-core';
+import type { FullIngestionPipeline } from '@immoradar/ingestion';
+import { deadLetter } from '@immoradar/db';
 import { createPipeline } from '../pipeline-factory.js';
 
 const log = createLogger('worker:ingestion');

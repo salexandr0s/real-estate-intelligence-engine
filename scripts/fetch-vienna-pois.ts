@@ -15,7 +15,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { geocodeAddress } from '@rei/geocoding';
+import { geocodeAddress } from '@immoradar/geocoding';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

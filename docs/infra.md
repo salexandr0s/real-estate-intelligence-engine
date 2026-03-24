@@ -201,7 +201,7 @@ Stores:
 Bucket structure example:
 
 ```text
-real-estate-intel/
+immoradar/
   raw-html/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.html.gz
   screenshots/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.png
   har/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.har.gz

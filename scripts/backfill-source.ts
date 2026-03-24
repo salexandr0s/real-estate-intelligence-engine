@@ -13,8 +13,8 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 import {
   PerDomainRateLimiter,
   SourceCircuitBreaker,
@@ -27,17 +27,17 @@ import {
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
-} from '@rei/scraper-core';
-import type { SourceAdapter, CrawlProfile, RequestPlan } from '@rei/contracts';
-import { WillhabenAdapter } from '@rei/source-willhaben';
-import { Immoscout24Adapter } from '@rei/source-immoscout24';
-import { WohnnetAdapter } from '@rei/source-wohnnet';
-import { DerStandardAdapter } from '@rei/source-derstandard';
-import { FindMyHomeAdapter } from '@rei/source-findmyhome';
-import { OpenImmoAdapter } from '@rei/source-openimmo';
-import { RemaxAdapter } from '@rei/source-remax';
+} from '@immoradar/scraper-core';
+import type { SourceAdapter, CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import { WillhabenAdapter } from '@immoradar/source-willhaben';
+import { Immoscout24Adapter } from '@immoradar/source-immoscout24';
+import { WohnnetAdapter } from '@immoradar/source-wohnnet';
+import { DerStandardAdapter } from '@immoradar/source-derstandard';
+import { FindMyHomeAdapter } from '@immoradar/source-findmyhome';
+import { OpenImmoAdapter } from '@immoradar/source-openimmo';
+import { RemaxAdapter } from '@immoradar/source-remax';
 import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
-import { sources, scrapeRuns, rawListings, closePool } from '@rei/db';
+import { sources, scrapeRuns, rawListings, closePool } from '@immoradar/db';
 
 // Inline adapter registry to avoid cross-package relative imports
 const adapters = new Map<string, SourceAdapter<unknown, unknown>>([

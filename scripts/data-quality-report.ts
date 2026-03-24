@@ -12,9 +12,9 @@
  *   npx tsx scripts/data-quality-report.ts [--source <code>] [--gate]
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { query, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { query, closePool } from '@immoradar/db';
 
 const log = createLogger('data-quality');
 

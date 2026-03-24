@@ -156,18 +156,18 @@ export function loadConfig(): AppConfig {
       docsPublic: envBool('API_DOCS_PUBLIC', nodeEnv !== 'production'),
     },
     database: {
-      url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/real_estate_intel'),
+      url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/immoradar'),
       poolMax: envInt('DATABASE_POOL_MAX', 20),
       statementTimeoutMs: envInt('DATABASE_STATEMENT_TIMEOUT_MS', 10000),
     },
     redis: {
       url: envStr('REDIS_URL', 'redis://localhost:6379'),
-      prefix: envStr('BULLMQ_PREFIX', 'rei'),
+      prefix: envStr('BULLMQ_PREFIX', 'immoradar'),
     },
     s3: {
       endpoint: envStr('S3_ENDPOINT', 'http://localhost:9000'),
       region: envStr('S3_REGION', 'eu-central-1'),
-      bucket: envStr('S3_BUCKET', 'real-estate-intel'),
+      bucket: envStr('S3_BUCKET', 'immoradar'),
       accessKey: envStr('S3_ACCESS_KEY', 'minioadmin'),
       secretKey: envStr('S3_SECRET_KEY', 'minioadmin'),
       forcePathStyle: envBool('S3_FORCE_PATH_STYLE', true),

@@ -5,8 +5,8 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { loadConfig } from '@rei/config';
-import { apiRequestDuration } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { apiRequestDuration } from '@immoradar/observability';
 import { registerAuth } from './middleware/auth.js';
 import { registerAuditLog } from './middleware/audit-log.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
@@ -67,9 +67,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'Real Estate Intelligence Engine API',
+        title: 'ImmoRadar API',
         version: '1.0.0',
-        description: 'Austrian real estate intelligence platform API',
+        description: 'Austrian property intelligence platform API',
       },
       servers: [{ url: config.api.baseUrl }],
       components: {

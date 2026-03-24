@@ -1,5 +1,5 @@
 import { query } from '../client.js';
-import type { ScoreResult } from '@rei/contracts';
+import type { ScoreResult } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 

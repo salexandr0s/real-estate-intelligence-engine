@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
-import { loadConfig } from '@rei/config';
-import { createLogger, ValidationError } from '@rei/observability';
-import { streamCopilotChat } from '@rei/copilot';
-import type { CopilotStreamEvent } from '@rei/copilot';
+import { loadConfig } from '@immoradar/config';
+import { createLogger, ValidationError } from '@immoradar/observability';
+import { streamCopilotChat } from '@immoradar/copilot';
+import type { CopilotStreamEvent } from '@immoradar/copilot';
 
 const logger = createLogger('api:copilot');
 
@@ -147,7 +147,7 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
         const stream = streamCopilotChat({
           messages: body.messages.map((m) => ({
             role: m.role,
-            content: m.content as string | import('@rei/contracts').ContentBlock[],
+            content: m.content as string | import('@immoradar/contracts').ContentBlock[],
           })),
           context: body.context,
           provider,

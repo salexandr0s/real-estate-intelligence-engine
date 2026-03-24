@@ -3,8 +3,8 @@
 // provider abstraction, intercepts tool calls, executes them against
 // the DB, and resumes the conversation.  Supports Anthropic and OpenAI.
 
-import { createLogger } from '@rei/observability';
-import type { ContentBlock, CopilotRequestMessage } from '@rei/contracts';
+import { createLogger } from '@immoradar/observability';
+import type { ContentBlock, CopilotRequestMessage } from '@immoradar/contracts';
 import type { CopilotStreamEvent } from './types.js';
 import { SYSTEM_PROMPT } from './system-prompt.js';
 import { COPILOT_TOOLS } from './tools.js';

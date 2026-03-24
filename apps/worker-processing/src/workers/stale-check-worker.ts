@@ -10,13 +10,13 @@
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import { Queue } from 'bullmq';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { StaleCheckJobData, AlertDeliveryJobData } from '@rei/scraper-core';
-import { listings, listingVersions, userFilters, alerts } from '@rei/db';
-import type { AlertChannel } from '@rei/contracts';
-import { buildAlertDedupeKey } from '@rei/contracts';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { StaleCheckJobData, AlertDeliveryJobData } from '@immoradar/scraper-core';
+import { listings, listingVersions, userFilters, alerts } from '@immoradar/db';
+import type { AlertChannel } from '@immoradar/contracts';
+import { buildAlertDedupeKey } from '@immoradar/contracts';
 
 const log = createLogger('worker:stale-check');
 

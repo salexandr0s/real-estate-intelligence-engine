@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { Immoscout24DetailDTO, IS24Product, IS24RealEstateAgent } from './dto.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';

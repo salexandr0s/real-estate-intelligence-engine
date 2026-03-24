@@ -14,8 +14,8 @@
  *   npx tsx scripts/backfill-documents.ts --limit 500
  */
 
-import { createLogger } from '@rei/observability';
-import { query, documents, closePool } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { query, documents, closePool } from '@immoradar/db';
 import { createHash } from 'node:crypto';
 
 const log = createLogger('backfill-documents');

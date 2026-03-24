@@ -1,4 +1,4 @@
-import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { DerStandardDiscoveryItem } from './dto.js';
 
 const BASE_URL = 'https://immobilien.derstandard.at';

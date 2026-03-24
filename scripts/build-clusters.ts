@@ -12,8 +12,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { createLogger } from '@rei/observability';
-import { query, clusters, closePool } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { query, clusters, closePool } from '@immoradar/db';
 
 const log = createLogger('clusters-cli');
 const isDryRun = process.argv.includes('--dry-run');

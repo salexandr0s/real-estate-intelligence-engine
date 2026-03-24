@@ -1,4 +1,4 @@
-import type { ErrorClass } from '@rei/contracts';
+import type { ErrorClass } from '@immoradar/contracts';
 
 /** Strings that typically indicate an anti-bot challenge page. */
 const CHALLENGE_INDICATORS = [
@@ -115,8 +115,7 @@ function isTransientNetwork(message: string, name: string): boolean {
   const networkNames = ['timeouterror', 'aborterror', 'fetcherror'];
 
   return (
-    networkPatterns.some((p) => message.includes(p)) ||
-    networkNames.some((n) => name.includes(n))
+    networkPatterns.some((p) => message.includes(p)) || networkNames.some((n) => name.includes(n))
   );
 }
 
@@ -135,10 +134,7 @@ function isParseFailure(message: string, name: string): boolean {
 
   const parseNames = ['parseerror', 'validationerror'];
 
-  return (
-    parsePatterns.some((p) => message.includes(p)) ||
-    parseNames.some((n) => name.includes(n))
-  );
+  return parsePatterns.some((p) => message.includes(p)) || parseNames.some((n) => name.includes(n));
 }
 
 function hasHttpStatus(error: Error, statusCodes: Set<number>): boolean {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getAreaBucket, getRoomBucket } from '@rei/contracts';
+import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
 
 describe('getAreaBucket', () => {
   it('returns <40 for small areas', () => {

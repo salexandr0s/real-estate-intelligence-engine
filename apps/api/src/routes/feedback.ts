@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { feedback } from '@rei/db';
+import { feedback } from '@immoradar/db';
 import { parseOrThrow, feedbackCreateSchema, idParamSchema } from '../schemas.js';
 
 export async function feedbackRoutes(app: FastifyInstance): Promise<void> {

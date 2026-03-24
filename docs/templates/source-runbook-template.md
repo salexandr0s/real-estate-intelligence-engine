@@ -96,7 +96,7 @@
    ```bash
    npx tsx scripts/capture-site-html.ts --source {source_code}
    ```
-   Output lands in `/tmp/rei-captures/{source_code}/`.
+   Output lands in `/tmp/immoradar-captures/{source_code}/`.
 
 2. **Review the captured HTML** for structural changes vs existing fixtures.
 

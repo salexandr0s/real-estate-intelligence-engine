@@ -1,10 +1,10 @@
 {
   "dashboard": {
     "id": null,
-    "uid": "rei-api-performance",
-    "title": "REI - API Performance",
+    "uid": "immoradar-api-performance",
+    "title": "ImmoRadar - API Performance",
     "description": "Fastify API request latency, throughput, and error rates by route.",
-    "tags": ["rei", "api", "performance"],
+    "tags": ["immoradar", "api", "performance"],
     "timezone": "Europe/Vienna",
     "editable": true,
     "refresh": "15s",
@@ -17,7 +17,7 @@
         {
           "name": "route",
           "type": "query",
-          "query": "label_values(rei_api_request_duration_seconds_count, route)",
+          "query": "label_values(immoradar_api_request_duration_seconds_count, route)",
           "multi": true,
           "includeAll": true,
           "current": {
@@ -28,7 +28,7 @@
         {
           "name": "method",
           "type": "query",
-          "query": "label_values(rei_api_request_duration_seconds_count, method)",
+          "query": "label_values(immoradar_api_request_duration_seconds_count, method)",
           "multi": true,
           "includeAll": true,
           "current": {
@@ -47,15 +47,15 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "expr": "histogram_quantile(0.50, sum(rate(immoradar_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
             "legendFormat": "{{route}} p50"
           },
           {
-            "expr": "histogram_quantile(0.90, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "expr": "histogram_quantile(0.90, sum(rate(immoradar_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
             "legendFormat": "{{route}} p90"
           },
           {
-            "expr": "histogram_quantile(0.99, sum(rate(rei_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
+            "expr": "histogram_quantile(0.99, sum(rate(immoradar_api_request_duration_seconds_bucket{route=~\"$route\", method=~\"$method\"}[5m])) by (le, route))",
             "legendFormat": "{{route}} p99"
           }
         ],
@@ -75,7 +75,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\", method=~\"$method\"}[5m])) by (route, status_code)",
+            "expr": "sum(rate(immoradar_api_request_duration_seconds_count{route=~\"$route\", method=~\"$method\"}[5m])) by (route, status_code)",
             "legendFormat": "{{route}} [{{status_code}}]"
           }
         ],
@@ -94,7 +94,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\", status_code=~\"4..\"}[5m])) by (route, status_code)",
+            "expr": "sum(rate(immoradar_api_request_duration_seconds_count{route=~\"$route\", status_code=~\"4..\"}[5m])) by (route, status_code)",
             "legendFormat": "{{route}} [{{status_code}}]"
           }
         ],
@@ -116,7 +116,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "sum(rate(rei_api_request_duration_seconds_count{status_code=~\"5..\"}[5m])) by (route)",
+            "expr": "sum(rate(immoradar_api_request_duration_seconds_count{status_code=~\"5..\"}[5m])) by (route)",
             "legendFormat": "{{route}}"
           }
         ],
@@ -142,7 +142,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "sum(rate(rei_api_request_duration_seconds_count{route=~\"$route\"}[5m]))",
+            "expr": "sum(rate(immoradar_api_request_duration_seconds_count{route=~\"$route\"}[5m]))",
             "legendFormat": "Total req/s"
           }
         ],

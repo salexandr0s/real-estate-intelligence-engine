@@ -1,10 +1,10 @@
 {
   "dashboard": {
     "id": null,
-    "uid": "rei-source-health",
-    "title": "REI - Source Health",
+    "uid": "immoradar-source-health",
+    "title": "ImmoRadar - Source Health",
     "description": "Source-level scraping health: success rates, parse rates, block detection, and circuit breaker state.",
-    "tags": ["rei", "scraping", "sources"],
+    "tags": ["immoradar", "scraping", "sources"],
     "timezone": "Europe/Vienna",
     "editable": true,
     "refresh": "30s",
@@ -17,7 +17,7 @@
         {
           "name": "source",
           "type": "query",
-          "query": "label_values(rei_scrape_runs_total, source)",
+          "query": "label_values(immoradar_scrape_runs_total, source)",
           "multi": true,
           "includeAll": true,
           "current": {
@@ -36,7 +36,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_runs_total{source=~\"$source\", status=\"succeeded\"}[5m]) / (rate(rei_scrape_runs_total{source=~\"$source\"}[5m]) > 0) * 100",
+            "expr": "rate(immoradar_scrape_runs_total{source=~\"$source\", status=\"succeeded\"}[5m]) / (rate(immoradar_scrape_runs_total{source=~\"$source\"}[5m]) > 0) * 100",
             "legendFormat": "{{source}}"
           }
         ],
@@ -65,7 +65,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "1 - (rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"parse_failure\"}[5m]) / (rate(rei_scrape_runs_total{source=~\"$source\"}[5m]) > 0)) * 100",
+            "expr": "1 - (rate(immoradar_scrape_errors_total{source=~\"$source\", error_class=\"parse_failure\"}[5m]) / (rate(immoradar_scrape_runs_total{source=~\"$source\"}[5m]) > 0)) * 100",
             "legendFormat": "{{source}}"
           }
         ],
@@ -86,11 +86,11 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"soft_anti_bot\"}[5m])",
+            "expr": "rate(immoradar_scrape_errors_total{source=~\"$source\", error_class=\"soft_anti_bot\"}[5m])",
             "legendFormat": "{{source}} blocks/s"
           },
           {
-            "expr": "rate(rei_scrape_errors_total{source=~\"$source\", error_class=\"hard_anti_bot\"}[5m])",
+            "expr": "rate(immoradar_scrape_errors_total{source=~\"$source\", error_class=\"hard_anti_bot\"}[5m])",
             "legendFormat": "{{source}} hard blocks/s"
           }
         ],
@@ -109,7 +109,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rei_source_health{source=~\"$source\"}",
+            "expr": "immoradar_source_health{source=~\"$source\"}",
             "legendFormat": "{{source}}"
           }
         ],
@@ -138,7 +138,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_listings_discovered_total{source=~\"$source\"}[5m])",
+            "expr": "rate(immoradar_scrape_listings_discovered_total{source=~\"$source\"}[5m])",
             "legendFormat": "{{source}}"
           }
         ],
@@ -157,7 +157,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_pages_total{source=~\"$source\"}[5m])",
+            "expr": "rate(immoradar_scrape_pages_total{source=~\"$source\"}[5m])",
             "legendFormat": "{{source}}"
           }
         ],

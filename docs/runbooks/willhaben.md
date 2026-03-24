@@ -238,7 +238,7 @@ willhaben **blocks automated HTTP requests** — a real browser with JavaScript 
    ```bash
    npx tsx scripts/capture-site-html.ts --source willhaben
    ```
-   Output: `/tmp/rei-captures/willhaben/`
+   Output: `/tmp/immoradar-captures/willhaben/`
 
 2. **Compare** old vs new HTML structure, focusing on:
    - `__NEXT_DATA__` JSON schema changes

@@ -1,7 +1,7 @@
 /**
  * Normalization coercion tests.
- * Tests the field parsing utilities from @rei/normalization.
- * Imports from @rei/normalization — no inline re-implementations.
+ * Tests the field parsing utilities from @immoradar/normalization.
+ * Imports from @immoradar/normalization — no inline re-implementations.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -10,7 +10,7 @@ import {
   parseRooms,
   parseBoolean,
   normalizeWhitespace,
-} from '@rei/normalization';
+} from '@immoradar/normalization';
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 

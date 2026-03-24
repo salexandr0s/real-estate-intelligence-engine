@@ -5,10 +5,10 @@
 
 import { Worker, Queue } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { GeocodeEnqueueJobData, GeocodingJobData } from '@rei/scraper-core';
-import { listings } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { GeocodeEnqueueJobData, GeocodingJobData } from '@immoradar/scraper-core';
+import { listings } from '@immoradar/db';
 
 const log = createLogger('worker:geocode-enqueue');
 

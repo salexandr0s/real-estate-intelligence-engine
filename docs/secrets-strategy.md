@@ -3,7 +3,7 @@
 ## Development
 - Secrets stored in `.env` file (git-ignored)
 - Template in `example.env` with placeholder values
-- Loaded via `@rei/config` `envStr()` / `envBool()` / `envInt()`
+- Loaded via `@immoradar/config` `envStr()` / `envBool()` / `envInt()`
 
 ## Mac Mini Production
 - Secrets stored in macOS Keychain via `claudecodex-vault.sh`
@@ -26,6 +26,6 @@
 
 ## Rules
 - Never commit `.env` files
-- Never log secrets (use `redactUrl()` from `@rei/observability`)
+- Never log secrets (use `redactUrl()` from `@immoradar/observability`)
 - Never pass secrets as CLI arguments (visible in `ps`)
 - Store secrets in Keychain, not plain text files

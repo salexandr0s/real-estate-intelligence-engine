@@ -8,7 +8,7 @@ import type {
   RequestPlan,
   SourceAdapter,
   SourceAvailability,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import type { Immoscout24DiscoveryItem, Immoscout24DetailDTO } from './dto.js';
 import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';

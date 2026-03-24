@@ -15,11 +15,11 @@
 import { createHash } from 'node:crypto';
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { DocumentProcessingJobData } from '@rei/scraper-core';
-import { documents } from '@rei/db';
-import { extractPdfText, parseRealEstateFacts } from '@rei/documents';
+import { createLogger } from '@immoradar/observability';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { DocumentProcessingJobData } from '@immoradar/scraper-core';
+import { documents } from '@immoradar/db';
+import { extractPdfText, parseRealEstateFacts } from '@immoradar/documents';
 
 const log = createLogger('worker:document');
 

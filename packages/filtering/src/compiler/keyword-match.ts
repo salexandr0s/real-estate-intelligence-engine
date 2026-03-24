@@ -1,7 +1,7 @@
 /**
- * Re-export keyword matching from @rei/contracts.
+ * Re-export keyword matching from @immoradar/contracts.
  * The canonical implementation lives in contracts to avoid circular dependencies.
- * This re-export preserves the @rei/filtering API surface.
+ * This re-export preserves the @immoradar/filtering API surface.
  */
 export {
   passesKeywordFilter,
@@ -10,4 +10,4 @@ export {
   allRequiredKeywordsMatch,
   anyExcludedKeywordMatches,
   escapeForIlike,
-} from '@rei/contracts';
+} from '@immoradar/contracts';

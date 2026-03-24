@@ -21,7 +21,7 @@
 ## Global Policies
 
 ### Rate Limiting
-- Default RPM: 12 (per `@rei/config`)
+- Default RPM: 12 (per `@immoradar/config`)
 - Default concurrency per source: 1
 - Jitter range: 2000–7000 ms between page requests
 - Maximum pages per discovery run: 5

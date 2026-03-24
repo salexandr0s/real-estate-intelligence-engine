@@ -1,5 +1,5 @@
 {
-  "name": "@rei/filtering",
+  "name": "@immoradar/filtering",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -13,7 +13,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@rei/contracts": "*"
+    "@immoradar/contracts": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.0"

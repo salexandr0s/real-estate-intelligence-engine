@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { TemplateDetailDTO } from './dto.js';
 
 /**
@@ -13,7 +13,10 @@ export function parseDetailPage(
   html: string,
   canonicalUrl: string,
   sourceCode: string,
-): Omit<DetailCapture<TemplateDetailDTO>, 'sourceCode' | 'extractedAt' | 'parserVersion' | 'extractionStatus'> {
+): Omit<
+  DetailCapture<TemplateDetailDTO>,
+  'sourceCode' | 'extractedAt' | 'parserVersion' | 'extractionStatus'
+> {
   // TODO: Parse listing details from the HTML
   // Extract: title, price, area, rooms, address, coordinates, images, etc.
 

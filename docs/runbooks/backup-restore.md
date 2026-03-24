@@ -4,7 +4,7 @@ How to restore PostgreSQL from a local backup.
 
 ## Prerequisites
 
-- Backup files exist in `~/.rei-backups/postgres/` (created by `infrastructure/backup/backup-postgres.sh`)
+- Backup files exist in `~/.immoradar-backups/postgres/` (created by `infrastructure/backup/backup-postgres.sh`)
 - `pg_dump` and `psql` are available on PATH
 - `DATABASE_URL` environment variable is set
 - Sufficient disk space for the uncompressed dump
@@ -23,14 +23,14 @@ How to restore PostgreSQL from a local backup.
 
 2. **Identify the backup to restore**:
    ```bash
-   ls -lht ~/.rei-backups/postgres/rei_*.sql.gz | head -5
+   ls -lht ~/.immoradar-backups/postgres/immoradar_*.sql.gz | head -5
    ```
    The most recent file is the default choice. For point-in-time recovery, select the appropriate timestamp.
 
 3. **Restore the backup**:
    ```bash
    # Drop and recreate the database (or restore to a fresh database)
-   gunzip -c ~/.rei-backups/postgres/rei_YYYYMMDD_HHMMSS.sql.gz | psql "$DATABASE_URL"
+   gunzip -c ~/.immoradar-backups/postgres/immoradar_YYYYMMDD_HHMMSS.sql.gz | psql "$DATABASE_URL"
    ```
 
 4. **Verify table counts**:

@@ -1,4 +1,4 @@
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('rate-limiter');
 

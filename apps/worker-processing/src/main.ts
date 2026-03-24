@@ -1,17 +1,17 @@
 // Register source adapters before any worker is created (canary needs them)
 import './adapter-registry.js';
 
-import { loadConfig } from '@rei/config';
+import { loadConfig } from '@immoradar/config';
 import {
   createLogger,
   setLogLevel,
   redactUrl,
   initTracing,
   shutdownTracing,
-} from '@rei/observability';
-import type { LogLevel } from '@rei/observability';
-import { closeRedisConnection } from '@rei/scraper-core';
-import { closePool } from '@rei/db';
+} from '@immoradar/observability';
+import type { LogLevel } from '@immoradar/observability';
+import { closeRedisConnection } from '@immoradar/scraper-core';
+import { closePool } from '@immoradar/db';
 import { createIngestionWorker } from './workers/ingestion-worker.js';
 import { createBaselineWorker } from './workers/baseline-worker.js';
 import { createGeocodingWorker } from './workers/geocoding-worker.js';
@@ -21,14 +21,14 @@ import { createStaleCheckWorker } from './workers/stale-check-worker.js';
 import { createCanaryWorker } from './workers/canary-worker.js';
 import { createDeliveryWorker } from './workers/delivery-worker.js';
 import { createDocumentWorker } from './workers/document-worker.js';
-import { closePushSession } from '@rei/alerts';
+import { closePushSession } from '@immoradar/alerts';
 
 const logger = createLogger('worker-processing');
 
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
-  initTracing('rei-worker-processing');
+  initTracing('immoradar-worker-processing');
 
   logger.info('Processing worker starting', {
     nodeEnv: config.nodeEnv,

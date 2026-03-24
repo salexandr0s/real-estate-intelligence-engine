@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CanonicalListingInput } from '@rei/contracts';
+import type { CanonicalListingInput } from '@immoradar/contracts';
 
 // ── Cross-Source Fingerprint ─────────────────────────────────────────────────
 

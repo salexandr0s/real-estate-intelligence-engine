@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ComparableEntry } from '@rei/contracts';
+import type { ComparableEntry } from '@immoradar/contracts';
 import { estimateMarketRent, deriveConfidence } from '../market-rent.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────

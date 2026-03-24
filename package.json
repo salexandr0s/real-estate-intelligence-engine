@@ -1,9 +1,9 @@
 {
-  "name": "real-estate-intelligence-engine",
+  "name": "immoradar",
   "private": true,
   "version": "0.1.0",
   "packageManager": "npm@10.9.4",
-  "description": "Always-on real estate intelligence platform for Austrian property investment",
+  "description": "Always-on Austrian property intelligence platform",
   "workspaces": [
     "packages/*",
     "apps/*"

@@ -1,5 +1,11 @@
 import { query } from '../client.js';
-import type { AlertCreate, AlertRow, AlertStatus, AlertType, AlertChannel } from '@rei/contracts';
+import type {
+  AlertCreate,
+  AlertRow,
+  AlertStatus,
+  AlertType,
+  AlertChannel,
+} from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 {
-  "name": "@rei/contracts",
+  "name": "@immoradar/contracts",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",

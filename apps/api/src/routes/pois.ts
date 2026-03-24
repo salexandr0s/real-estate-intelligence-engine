@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { pois, wienDevelopments } from '@rei/db';
+import { pois, wienDevelopments } from '@immoradar/db';
 import { z } from 'zod';
 import { parseOrThrow } from '../schemas.js';
 

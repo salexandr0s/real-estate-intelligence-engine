@@ -8,8 +8,8 @@
  *   npx tsx scripts/system-health.ts
  */
 
-import { loadConfig } from '@rei/config';
-import { query, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { query, closePool } from '@immoradar/db';
 
 interface HealthCheck {
   name: string;

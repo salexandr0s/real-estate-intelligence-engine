@@ -1,4 +1,4 @@
-import type { ScrapeRunMetrics } from '@rei/contracts';
+import type { ScrapeRunMetrics } from '@immoradar/contracts';
 
 type MetricName = keyof ScrapeRunMetrics;
 

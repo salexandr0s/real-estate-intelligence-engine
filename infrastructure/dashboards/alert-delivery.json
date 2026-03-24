@@ -1,10 +1,10 @@
 {
   "dashboard": {
     "id": null,
-    "uid": "rei-alert-delivery",
-    "title": "REI - Alert Delivery",
+    "uid": "immoradar-alert-delivery",
+    "title": "ImmoRadar - Alert Delivery",
     "description": "Alert creation, delivery lag, and unread alert monitoring.",
-    "tags": ["rei", "alerts"],
+    "tags": ["immoradar", "alerts"],
     "timezone": "Europe/Vienna",
     "editable": true,
     "refresh": "30s",
@@ -17,7 +17,7 @@
         {
           "name": "alert_type",
           "type": "query",
-          "query": "label_values(rei_alerts_created_total, alert_type)",
+          "query": "label_values(immoradar_alerts_created_total, alert_type)",
           "multi": true,
           "includeAll": true,
           "current": {
@@ -36,7 +36,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_alerts_created_total{alert_type=~\"$alert_type\"}[5m])",
+            "expr": "rate(immoradar_alerts_created_total{alert_type=~\"$alert_type\"}[5m])",
             "legendFormat": "{{alert_type}}"
           }
         ],
@@ -55,7 +55,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "sum(rei_alerts_created_total) by (alert_type)",
+            "expr": "sum(immoradar_alerts_created_total) by (alert_type)",
             "legendFormat": "{{alert_type}}"
           }
         ],
@@ -69,20 +69,20 @@
       {
         "id": 3,
         "title": "Alert Delivery Lag (P50 / P90 / P99)",
-        "description": "Time from listing score computation to alert creation. Histogram percentiles from rei_alert_lag_seconds.",
+        "description": "Time from listing score computation to alert creation. Histogram percentiles from immoradar_alert_lag_seconds.",
         "type": "timeseries",
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "expr": "histogram_quantile(0.50, sum(rate(immoradar_alert_lag_seconds_bucket[5m])) by (le))",
             "legendFormat": "p50"
           },
           {
-            "expr": "histogram_quantile(0.90, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "expr": "histogram_quantile(0.90, sum(rate(immoradar_alert_lag_seconds_bucket[5m])) by (le))",
             "legendFormat": "p90"
           },
           {
-            "expr": "histogram_quantile(0.99, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le))",
+            "expr": "histogram_quantile(0.99, sum(rate(immoradar_alert_lag_seconds_bucket[5m])) by (le))",
             "legendFormat": "p99"
           }
         ],
@@ -102,7 +102,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "histogram_quantile(0.90, sum(rate(rei_alert_lag_seconds_bucket[5m])) by (le, alert_type))",
+            "expr": "histogram_quantile(0.90, sum(rate(immoradar_alert_lag_seconds_bucket[5m])) by (le, alert_type))",
             "legendFormat": "{{alert_type}} p90"
           }
         ],

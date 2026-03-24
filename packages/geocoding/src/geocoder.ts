@@ -13,7 +13,7 @@
  * 8. City only → city centroid (precision: city)
  */
 
-import type { GeocodePrecision } from '@rei/contracts';
+import type { GeocodePrecision } from '@immoradar/contracts';
 import { geocodeAddress, type GeocodingResult } from './nominatim-client.js';
 import {
   VIENNA_CENTER,

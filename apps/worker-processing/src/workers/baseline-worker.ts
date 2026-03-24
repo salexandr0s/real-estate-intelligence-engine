@@ -5,15 +5,11 @@
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import {
-  QUEUE_NAMES,
-  getRedisConnection,
-  getQueuePrefix,
-} from '@rei/scraper-core';
-import type { BaselineJobData } from '@rei/scraper-core';
-import { getAreaBucket, getRoomBucket } from '@rei/contracts';
-import { query, marketBaselines } from '@rei/db';
+import { createLogger } from '@immoradar/observability';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { BaselineJobData } from '@immoradar/scraper-core';
+import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
+import { query, marketBaselines } from '@immoradar/db';
 
 const log = createLogger('worker:baseline');
 
@@ -39,9 +35,7 @@ interface BucketGroup {
 
 function median(sorted: number[]): number {
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]!
-    : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return sorted.length % 2 !== 0 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -100,22 +94,44 @@ export function createBaselineWorker(): Worker<BaselineJobData> {
         const areaBucket = getAreaBucket(areaSqm);
         const roomBucket = getRoomBucket(roomCount);
 
-        const dKey = groupKey(row.city, row.district_no, row.operation_type, row.property_type, areaBucket, roomBucket);
+        const dKey = groupKey(
+          row.city,
+          row.district_no,
+          row.operation_type,
+          row.property_type,
+          areaBucket,
+          roomBucket,
+        );
         if (!districtGroups.has(dKey)) {
           districtGroups.set(dKey, {
-            city: row.city, districtNo: row.district_no,
-            operationType: row.operation_type, propertyType: row.property_type,
-            areaBucket, roomBucket, values: [],
+            city: row.city,
+            districtNo: row.district_no,
+            operationType: row.operation_type,
+            propertyType: row.property_type,
+            areaBucket,
+            roomBucket,
+            values: [],
           });
         }
         districtGroups.get(dKey)!.values.push(ppsqm);
 
-        const cKey = groupKey(row.city, null, row.operation_type, row.property_type, areaBucket, roomBucket);
+        const cKey = groupKey(
+          row.city,
+          null,
+          row.operation_type,
+          row.property_type,
+          areaBucket,
+          roomBucket,
+        );
         if (!cityGroups.has(cKey)) {
           cityGroups.set(cKey, {
-            city: row.city, districtNo: null,
-            operationType: row.operation_type, propertyType: row.property_type,
-            areaBucket, roomBucket, values: [],
+            city: row.city,
+            districtNo: null,
+            operationType: row.operation_type,
+            propertyType: row.property_type,
+            areaBucket,
+            roomBucket,
+            values: [],
           });
         }
         cityGroups.get(cKey)!.values.push(ppsqm);
@@ -136,9 +152,8 @@ export function createBaselineWorker(): Worker<BaselineJobData> {
 
         const trimCount = Math.floor(sorted.length * 0.1);
         const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-        const trimmedMean = trimmed.length > 0
-          ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length
-          : mean;
+        const trimmedMean =
+          trimmed.length > 0 ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length : mean;
 
         await marketBaselines.upsertBaseline({
           baselineDate,

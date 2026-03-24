@@ -1,4 +1,4 @@
-import type { CompiledFilter } from '@rei/contracts';
+import type { CompiledFilter } from '@immoradar/contracts';
 
 interface CursorData {
   sortValue: number | string;

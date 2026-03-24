@@ -1,5 +1,5 @@
 import { z, ZodError, type ZodSchema } from 'zod';
-import { ValidationError } from '@rei/observability';
+import { ValidationError } from '@immoradar/observability';
 
 // ── Parse helper ─────────────────────────────────────────────────────────────
 

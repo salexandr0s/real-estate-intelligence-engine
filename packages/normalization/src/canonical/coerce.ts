@@ -1,4 +1,4 @@
-import type { NormalizationWarning } from '@rei/contracts';
+import type { NormalizationWarning } from '@immoradar/contracts';
 
 // ── Price Parsing ──────────────────────────────────────────────────────────
 
@@ -242,7 +242,17 @@ export function parseRooms(raw: string | number | null | undefined): {
 
 // ── Boolean Parsing ────────────────────────────────────────────────────────
 
-const TRUE_PATTERNS = ['ja', 'yes', 'vorhanden', 'mit', 'true', '1', 'inkl', 'inklusive', 'verfügbar'];
+const TRUE_PATTERNS = [
+  'ja',
+  'yes',
+  'vorhanden',
+  'mit',
+  'true',
+  '1',
+  'inkl',
+  'inklusive',
+  'verfügbar',
+];
 const FALSE_PATTERNS = ['nein', 'no', 'ohne', 'false', '0', 'nicht vorhanden', 'nicht verfügbar'];
 
 /**

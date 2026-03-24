@@ -1,5 +1,5 @@
 // ── Anthropic tool definitions for the copilot ─────────────────────────────
-// Each tool maps to an existing @rei/db query function. The input_schema
+// Each tool maps to an existing @immoradar/db query function. The input_schema
 // follows JSON Schema (Anthropic's format).
 
 export interface CopilotToolDefinition {

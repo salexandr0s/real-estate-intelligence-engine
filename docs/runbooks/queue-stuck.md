@@ -7,21 +7,21 @@ When BullMQ processing queues stop making progress.
 - Queue depth is growing with no jobs completing
 - No new `scrape_runs` completing in the database
 - Worker processes are silent in logs (no new log entries)
-- Alert lag metrics (`rei_alert_lag_seconds`) increasing
+- Alert lag metrics (`immoradar_alert_lag_seconds`) increasing
 
 ## Detection
 
 ```bash
 # Check Redis queue depth (BullMQ key format: bull:{prefix}:{queue}:wait)
-redis-cli LLEN bull:rei:scrape-detail:wait
-redis-cli LLEN bull:rei:scrape-discovery:wait
-redis-cli LLEN bull:rei:processing-ingest:wait
-redis-cli LLEN bull:rei:processing-baseline:wait
+redis-cli LLEN bull:immoradar:scrape-detail:wait
+redis-cli LLEN bull:immoradar:scrape-discovery:wait
+redis-cli LLEN bull:immoradar:processing-ingest:wait
+redis-cli LLEN bull:immoradar:processing-baseline:wait
 
 # Check for active/waiting/delayed jobs
-redis-cli SCARD bull:rei:scrape-detail:active
-redis-cli ZCARD bull:rei:scrape-detail:delayed
-redis-cli ZCARD bull:rei:scrape-detail:waiting
+redis-cli SCARD bull:immoradar:scrape-detail:active
+redis-cli ZCARD bull:immoradar:scrape-detail:delayed
+redis-cli ZCARD bull:immoradar:scrape-detail:waiting
 
 # Check worker process status
 ps aux | grep worker
@@ -53,13 +53,13 @@ SELECT id, started_at, finished_at, status
 
 3. **Check for dead-letter jobs**: Inspect failed jobs that exhausted retries:
    ```bash
-   redis-cli LRANGE bull:rei:scrape-detail:failed 0 5
+   redis-cli LRANGE bull:immoradar:scrape-detail:failed 0 5
    ```
 
 4. **Clear stuck jobs if needed**: If jobs are stuck in active state with no worker processing them:
    ```bash
    # Move stale active jobs back to waiting (use with caution)
-   redis-cli DEL bull:rei:scrape-detail:active
+   redis-cli DEL bull:immoradar:scrape-detail:active
    ```
 
 5. **Check for resource exhaustion**: Verify the system has sufficient memory and file descriptors for Playwright browser instances.
@@ -69,4 +69,4 @@ SELECT id, started_at, finished_at, status
 1. Queue depth is decreasing after worker restart
 2. New scrape runs are completing in the database
 3. Worker logs show active job processing
-4. `rei_alert_lag_seconds` metric is returning to normal levels
+4. `immoradar_alert_lag_seconds` metric is returning to normal levels

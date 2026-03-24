@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { FindMyHomeDetailDTO, JsonLdApartmentDetail } from './dto.js';
 
 const JSON_LD_REGEX = /<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;

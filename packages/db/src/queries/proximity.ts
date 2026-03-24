@@ -1,4 +1,4 @@
-import type { ProximityInput } from '@rei/contracts';
+import type { ProximityInput } from '@immoradar/contracts';
 import { findNearby } from './pois.js';
 
 /**

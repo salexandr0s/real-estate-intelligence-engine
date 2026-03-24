@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
-import { runMigrations, closePool } from '@rei/db';
-import { resetConfig } from '@rei/config';
+import { runMigrations, closePool } from '@immoradar/db';
+import { resetConfig } from '@immoradar/config';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -94,7 +94,7 @@ describe('migration rollback strategy', () => {
   // ── DB-dependent idempotency test ──────────────────────────────────────────
 
   describe('schema idempotent application', () => {
-    const TEST_DB_NAME = `rei_test_rollback_${process.pid}`;
+    const TEST_DB_NAME = `immoradar_test_rollback_${process.pid}`;
     let adminClient: pg.Client;
     let originalDatabaseUrl: string | undefined;
 

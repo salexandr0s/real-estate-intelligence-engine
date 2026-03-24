@@ -1,4 +1,4 @@
-import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { WillhabenDiscoveryItem, WillhabenSearchResult } from './dto.js';
 import { getAttr } from './dto.js';
 
@@ -61,7 +61,8 @@ export function parseDiscoveryPage(
 
   const pageNum = Number(requestPlan.metadata?.page) || 1;
   const totalEstimate = searchResult.rowsFound ?? null;
-  const hasMore = items.length > 0 && (totalEstimate === null || pageNum * items.length < totalEstimate);
+  const hasMore =
+    items.length > 0 && (totalEstimate === null || pageNum * items.length < totalEstimate);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {

@@ -26,6 +26,6 @@
 ### Security Rules
 
 1. Screenshots and HTML snapshots are **internal debugging tools** — they must never be exposed to app users.
-2. Service account credentials are stored in environment variables (`S3_ACCESS_KEY`, `S3_SECRET_KEY`) and loaded via `@rei/config`.
+2. Service account credentials are stored in environment variables (`S3_ACCESS_KEY`, `S3_SECRET_KEY`) and loaded via `@immoradar/config`.
 3. Credentials must never appear in logs — the observability package redacts secret-like keys automatically.
 4. Bucket lifecycle policies handle automatic cleanup of old artifacts (see `infrastructure/storage/lifecycle-policy.json`).

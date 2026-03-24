@@ -1,9 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError } from '@rei/observability';
-import type { FilterKind, AlertFrequency, FilterCriteria, FilterUpdateInput } from '@rei/contracts';
-import type { ListingSearchFilter } from '@rei/db';
-import { userFilters, listings } from '@rei/db';
-import { compileFilter } from '@rei/filtering';
+import { NotFoundError } from '@immoradar/observability';
+import type {
+  FilterKind,
+  AlertFrequency,
+  FilterCriteria,
+  FilterUpdateInput,
+} from '@immoradar/contracts';
+import type { ListingSearchFilter } from '@immoradar/db';
+import { userFilters, listings } from '@immoradar/db';
+import { compileFilter } from '@immoradar/filtering';
 import { parseOrThrow, idParamSchema, filterCreateSchema, filterUpdateSchema } from '../schemas.js';
 
 function centsToEur(cents: number | null): number | null {

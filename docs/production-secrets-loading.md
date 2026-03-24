@@ -15,7 +15,7 @@ Secrets flow through three layers:
 Use `claudecodex-vault.sh` to store each secret:
 
 ```bash
-~/.claude/claudecodex-vault.sh set DATABASE_URL "postgres://rei:PASSWORD@localhost:5432/rei_production"
+~/.claude/claudecodex-vault.sh set DATABASE_URL "postgres://immoradar:PASSWORD@localhost:5432/immoradar"
 ~/.claude/claudecodex-vault.sh set REDIS_URL "redis://localhost:6379/0"
 ~/.claude/claudecodex-vault.sh set API_BEARER_TOKEN "GENERATE_A_SECURE_TOKEN_HERE"
 ~/.claude/claudecodex-vault.sh set S3_ACCESS_KEY "minioadmin"

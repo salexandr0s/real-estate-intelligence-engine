@@ -1,4 +1,4 @@
-import type { DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { TemplateDiscoveryItem } from './dto.js';
 
 /**

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError } from '@rei/observability';
-import type { LegalRentSummary, BuildingContext } from '@rei/contracts';
-import { listings, buildingFacts } from '@rei/db';
-import { assessLegalRent } from '@rei/legal-rent';
+import { NotFoundError } from '@immoradar/observability';
+import type { LegalRentSummary, BuildingContext } from '@immoradar/contracts';
+import { listings, buildingFacts } from '@immoradar/db';
+import { assessLegalRent } from '@immoradar/legal-rent';
 import { parseOrThrow, idParamSchema } from '../schemas.js';
 
 export async function legalRentRoutes(app: FastifyInstance): Promise<void> {

@@ -1,5 +1,5 @@
 {
-  "name": "@rei/geocoding",
+  "name": "@immoradar/geocoding",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -13,8 +13,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@rei/contracts": "*",
-    "@rei/config": "*"
+    "@immoradar/contracts": "*",
+    "@immoradar/config": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.0"

@@ -2,7 +2,7 @@ import type {
   NormalizationContext,
   NormalizationResult,
   SourceRawListingBase,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import { BaseSourceMapper } from './base-mapper.js';
 
 /**
@@ -59,7 +59,11 @@ export class OpenImmoMapper extends BaseSourceMapper {
           result.listing.propertyType = 'house';
         } else if (oLower.includes('grundstück') || oLower.includes('grundstueck')) {
           result.listing.propertyType = 'land';
-        } else if (oLower.includes('gewerbe') || oLower.includes('büro') || oLower.includes('buero')) {
+        } else if (
+          oLower.includes('gewerbe') ||
+          oLower.includes('büro') ||
+          oLower.includes('buero')
+        ) {
           result.listing.propertyType = 'commercial';
         }
       }

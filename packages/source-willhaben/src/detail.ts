@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { WillhabenDetailDTO, WillhabenAdvertDetails } from './dto.js';
 import { getAttr, getAllAttrValues } from './dto.js';
 

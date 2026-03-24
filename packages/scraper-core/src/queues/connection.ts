@@ -6,7 +6,7 @@
  * Callers cast via `as ConnectionOptions` from 'bullmq'.
  */
 
-import { loadConfig } from '@rei/config';
+import { loadConfig } from '@immoradar/config';
 import IORedis from 'ioredis';
 
 let _connection: IORedis | null = null;

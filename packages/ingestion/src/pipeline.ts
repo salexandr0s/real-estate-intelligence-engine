@@ -1,12 +1,12 @@
-import type { DetailCapture, SourceRawListingBase, VersionReason } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+import type { DetailCapture, SourceRawListingBase, VersionReason } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 import type { IngestRawResult, RawIngestionDeps } from './ingest-raw.js';
 import { IngestRawListing } from './ingest-raw.js';
 import type { NormalizationDeps, NormalizeAndUpsertResult } from './normalize-and-upsert.js';
 import { NormalizeAndUpsert } from './normalize-and-upsert.js';
 import type { ScoreAndAlertDeps, ScoreAndAlertResult } from './score-and-alert.js';
 import { ScoreAndAlert } from './score-and-alert.js';
-import type { SourceNormalizer } from '@rei/contracts';
+import type { SourceNormalizer } from '@immoradar/contracts';
 
 const log = createLogger('ingestion:pipeline');
 

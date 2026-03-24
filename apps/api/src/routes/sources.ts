@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
-import { NotFoundError } from '@rei/observability';
-import { sources, scrapeRuns, canaryResults } from '@rei/db';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { DiscoveryJobData } from '@rei/scraper-core';
+import { NotFoundError } from '@immoradar/observability';
+import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { DiscoveryJobData } from '@immoradar/scraper-core';
 import {
   parseOrThrow,
   idParamSchema,

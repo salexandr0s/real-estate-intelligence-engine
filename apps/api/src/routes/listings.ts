@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError } from '@rei/observability';
-import type { ListingSearchFilter } from '@rei/db';
-import { listings, listingScores, listingVersions, clusters } from '@rei/db';
+import { NotFoundError } from '@immoradar/observability';
+import type { ListingSearchFilter } from '@immoradar/db';
+import { listings, listingScores, listingVersions, clusters } from '@immoradar/db';
 import {
   parseOrThrow,
   listingSearchQuerySchema,

@@ -1,4 +1,4 @@
-import type { AnalysisConfidence, ConfidenceLevel } from '@rei/contracts';
+import type { AnalysisConfidence, ConfidenceLevel } from '@immoradar/contracts';
 
 /**
  * Compute overall analysis confidence based on data quality signals.

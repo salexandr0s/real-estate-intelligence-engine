@@ -1,4 +1,4 @@
-import type { SourceRawListingBase } from '@rei/contracts';
+import type { SourceRawListingBase } from '@immoradar/contracts';
 
 // ── Embedded JSON shape from <script id="listing-detail-data"> ──────────────
 

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { documents } from '@rei/db';
+import { documents } from '@immoradar/db';
 import { parseOrThrow, idParamSchema } from '../schemas.js';
 
 export async function documentRoutes(app: FastifyInstance): Promise<void> {

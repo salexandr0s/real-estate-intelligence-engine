@@ -8,7 +8,7 @@ import type {
   RequestPlan,
   SourceAdapter,
   SourceAvailability,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import type { TemplateDiscoveryItem, TemplateDetailDTO } from './dto.js';
 import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
@@ -41,11 +41,13 @@ export class TemplateAdapter implements SourceAdapter<TemplateDiscoveryItem, Tem
   async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
     // TODO: Build paginated search URLs based on the crawl profile
     // Example: return [{ url: `${BASE_URL}/search?page=1`, waitForSelector: '#results' }];
-    return [{
-      url: `${BASE_URL}/search`,
-      waitForSelector: 'body',
-      metadata: { profile: profile.name },
-    }];
+    return [
+      {
+        url: `${BASE_URL}/search`,
+        waitForSelector: 'body',
+        metadata: { profile: profile.name },
+      },
+    ];
   }
 
   /**
@@ -65,18 +67,14 @@ export class TemplateAdapter implements SourceAdapter<TemplateDiscoveryItem, Tem
   async buildDetailRequest(
     item: DiscoveryItem<TemplateDiscoveryItem>,
   ): Promise<RequestPlan | null> {
-    const url = item.detailUrl.startsWith('http')
-      ? item.detailUrl
-      : `${BASE_URL}${item.detailUrl}`;
+    const url = item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`;
     return { url, waitForSelector: 'body' };
   }
 
   /**
    * Extracts structured data from a listing detail page.
    */
-  async extractDetailPage(
-    ctx: DetailContext,
-  ): Promise<DetailCapture<TemplateDetailDTO>> {
+  async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<TemplateDetailDTO>> {
     const html = (ctx.requestPlan.metadata?.['html'] as string) ?? '';
     const canonicalUrl = this.canonicalizeUrl(ctx.requestPlan.url);
     const parsed = parseDetailPage(html, canonicalUrl, this.sourceCode);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BaseSourceMapper } from '@rei/normalization';
+import { BaseSourceMapper } from '@immoradar/normalization';
 
 describe('normalization replay', () => {
   const mapper = new BaseSourceMapper('test');

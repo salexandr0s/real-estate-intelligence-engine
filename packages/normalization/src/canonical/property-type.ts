@@ -1,4 +1,4 @@
-import type { PropertyType } from '@rei/contracts';
+import type { PropertyType } from '@immoradar/contracts';
 
 // ── Property Type Mapping ──────────────────────────────────────────────────
 
@@ -11,7 +11,10 @@ interface PropertyTypeResult {
  * Mapping from German property type strings to canonical PropertyType.
  * Keys are lowercase for case-insensitive matching.
  */
-const PROPERTY_TYPE_MAP: ReadonlyMap<string, PropertyTypeResult> = new Map<string, PropertyTypeResult>([
+const PROPERTY_TYPE_MAP: ReadonlyMap<string, PropertyTypeResult> = new Map<
+  string,
+  PropertyTypeResult
+>([
   // Apartment types
   ['eigentumswohnung', { propertyType: 'apartment', propertySubtype: null }],
   ['wohnung', { propertyType: 'apartment', propertySubtype: null }],

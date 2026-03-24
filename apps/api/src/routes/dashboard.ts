@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { dashboard, query } from '@rei/db';
+import { dashboard, query } from '@immoradar/db';
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/dashboard/stats', async (_request, reply) => {

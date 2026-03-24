@@ -8,9 +8,9 @@
  *   npx tsx scripts/geocode-missing.ts --limit 10
  */
 
-import { createLogger } from '@rei/observability';
-import { listings, closePool } from '@rei/db';
-import { geocodeListing } from '@rei/geocoding';
+import { createLogger } from '@immoradar/observability';
+import { listings, closePool } from '@immoradar/db';
+import { geocodeListing } from '@immoradar/geocoding';
 
 const log = createLogger('geocode-cli');
 const isDryRun = process.argv.includes('--dry-run');

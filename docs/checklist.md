@@ -504,15 +504,15 @@
 ## 14. Observability and operations
 
 ### Metrics
-- [x] Crawl success rate by source (`rei_crawl_success_total` in app-metrics.ts)
-- [x] Parse success rate by source (`rei_parse_success_total` in app-metrics.ts)
-- [x] Block/captcha rate (`rei_block_captcha_total` in app-metrics.ts)
-- [x] Raw snapshot rate (`rei_raw_snapshots_total`, wired in pipeline-factory)
-- [x] Normalization rate (`rei_normalizations_total`, wired in pipeline-factory)
-- [x] Version creation rate (`rei_versions_created_total`, wired in pipeline-factory)
-- [x] Score latency (`rei_score_duration_seconds`, wired in pipeline-factory)
-- [x] Alert lag (`rei_alert_lag_seconds`, wired in pipeline-factory)
-- [x] API latency (`rei_api_request_duration_seconds`, onResponse hook in main.ts)
+- [x] Crawl success rate by source (`immoradar_crawl_success_total` in app-metrics.ts)
+- [x] Parse success rate by source (`immoradar_parse_success_total` in app-metrics.ts)
+- [x] Block/captcha rate (`immoradar_block_captcha_total` in app-metrics.ts)
+- [x] Raw snapshot rate (`immoradar_raw_snapshots_total`, wired in pipeline-factory)
+- [x] Normalization rate (`immoradar_normalizations_total`, wired in pipeline-factory)
+- [x] Version creation rate (`immoradar_versions_created_total`, wired in pipeline-factory)
+- [x] Score latency (`immoradar_score_duration_seconds`, wired in pipeline-factory)
+- [x] Alert lag (`immoradar_alert_lag_seconds`, wired in pipeline-factory)
+- [x] API latency (`immoradar_api_request_duration_seconds`, onResponse hook in main.ts)
 - [x] App sync latency (`GET /metrics` endpoint serves all metrics for monitoring)
 
 ### Logging
@@ -542,7 +542,7 @@
 ## 15. Security and compliance
 
 - [x] Secrets removed from source control (`.env` in `.gitignore`, 4 rules)
-- [x] Environment secret loading verified (`@rei/config` envStr/envBool/envInt)
+- [x] Environment secret loading verified (`@immoradar/config` envStr/envBool/envInt)
 - [x] Object storage access policy restricted (`docs/storage-access-policy.md`)
 - [x] Keychain storage for app secrets (`KeychainHelper.swift`)
 - [x] Auth token rotation path defined (`docs/secrets-strategy.md`)

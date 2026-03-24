@@ -1,4 +1,4 @@
-import type { SourceRawListingBase } from '@rei/contracts';
+import type { SourceRawListingBase } from '@immoradar/contracts';
 
 // ── JSON-LD schema types for findmyhome.at detail pages ─────────────────────
 // Discovery parsing no longer uses JSON-LD (site serves HTML cards).

@@ -14,9 +14,9 @@ import {
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   pickRandomViewport,
   pickRandomUserAgent,
-} from '@rei/scraper-core';
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+} from '@immoradar/scraper-core';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('browser-pool');
 

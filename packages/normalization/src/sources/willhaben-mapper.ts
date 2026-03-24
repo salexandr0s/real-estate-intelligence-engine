@@ -2,7 +2,7 @@ import type {
   NormalizationContext,
   NormalizationResult,
   SourceRawListingBase,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import { BaseSourceMapper } from './base-mapper.js';
 
 // ── Willhaben-specific DTO extension ───────────────────────────────────────
@@ -74,7 +74,11 @@ export class WillhabenMapper extends BaseSourceMapper {
           result.listing.propertyType = 'house';
         } else if (categoryLower.includes('grundstück') || categoryLower.includes('grundstueck')) {
           result.listing.propertyType = 'land';
-        } else if (categoryLower.includes('gewerbe') || categoryLower.includes('büro') || categoryLower.includes('buero')) {
+        } else if (
+          categoryLower.includes('gewerbe') ||
+          categoryLower.includes('büro') ||
+          categoryLower.includes('buero')
+        ) {
           result.listing.propertyType = 'commercial';
         } else if (categoryLower.includes('garage') || categoryLower.includes('stellplatz')) {
           result.listing.propertyType = 'parking';
@@ -113,17 +117,28 @@ export class WillhabenMapper extends BaseSourceMapper {
       if (enriched.floorRaw == null && attrs['FLOOR'] != null) {
         enriched.floorRaw = String(attrs['FLOOR']);
       }
-      if (enriched.yearBuiltRaw == null && (attrs['CONSTRUCTION_YEAR'] ?? attrs['YEAR_BUILT']) != null) {
+      if (
+        enriched.yearBuiltRaw == null &&
+        (attrs['CONSTRUCTION_YEAR'] ?? attrs['YEAR_BUILT']) != null
+      ) {
         enriched.yearBuiltRaw = String(attrs['CONSTRUCTION_YEAR'] ?? attrs['YEAR_BUILT']);
       }
       if (enriched.heatingTypeRaw == null && attrs['HEATING'] != null) {
         enriched.heatingTypeRaw = String(attrs['HEATING']);
       }
-      if (enriched.conditionRaw == null && (attrs['BUILDING_CONDITION'] ?? attrs['CONDITION']) != null) {
+      if (
+        enriched.conditionRaw == null &&
+        (attrs['BUILDING_CONDITION'] ?? attrs['CONDITION']) != null
+      ) {
         enriched.conditionRaw = String(attrs['BUILDING_CONDITION'] ?? attrs['CONDITION']);
       }
-      if (enriched.energyCertificateRaw == null && (attrs['ENERGY_HWB_CLASS'] ?? attrs['ENERGY_CERTIFICATE']) != null) {
-        enriched.energyCertificateRaw = String(attrs['ENERGY_HWB_CLASS'] ?? attrs['ENERGY_CERTIFICATE']);
+      if (
+        enriched.energyCertificateRaw == null &&
+        (attrs['ENERGY_HWB_CLASS'] ?? attrs['ENERGY_CERTIFICATE']) != null
+      ) {
+        enriched.energyCertificateRaw = String(
+          attrs['ENERGY_HWB_CLASS'] ?? attrs['ENERGY_CERTIFICATE'],
+        );
       }
       if (enriched.balconyAreaRaw == null && attrs['BALCONY_AREA'] != null) {
         enriched.balconyAreaRaw = String(attrs['BALCONY_AREA']);

@@ -1,7 +1,7 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { AppError } from '@rei/observability';
-import { createLogger } from '@rei/observability';
-import { API_ERROR_CODES } from '@rei/contracts';
+import { AppError } from '@immoradar/observability';
+import { createLogger } from '@immoradar/observability';
+import { API_ERROR_CODES } from '@immoradar/contracts';
 
 const logger = createLogger('api:error-handler');
 

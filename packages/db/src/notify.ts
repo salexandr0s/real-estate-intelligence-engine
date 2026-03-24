@@ -10,8 +10,8 @@
  */
 
 import pg from 'pg';
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('db:notify');
 

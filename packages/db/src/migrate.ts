@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getPool, closePool, transaction, queryWithClient } from './client.js';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('db:migrate');
 
@@ -33,7 +33,8 @@ function readMigrationFiles(): Array<{ filename: string; content: string }> {
     return [];
   }
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
@@ -83,8 +84,8 @@ export async function runMigrations(): Promise<void> {
       if (existingChecksum !== checksum) {
         throw new Error(
           `Migration ${migration.filename} has been modified after being applied. ` +
-          `Expected checksum ${existingChecksum}, got ${checksum}. ` +
-          'Migrations are forward-only and must not be altered once applied.',
+            `Expected checksum ${existingChecksum}, got ${checksum}. ` +
+            'Migrations are forward-only and must not be altered once applied.',
         );
       }
       logger.debug(`Skipping already-applied migration: ${migration.filename}`);

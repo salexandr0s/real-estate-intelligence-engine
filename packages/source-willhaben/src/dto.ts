@@ -1,4 +1,4 @@
-import type { SourceRawListingBase } from '@rei/contracts';
+import type { SourceRawListingBase } from '@immoradar/contracts';
 
 // ── Shared willhaben __NEXT_DATA__ types ─────────────────────────────────────
 

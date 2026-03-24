@@ -6,14 +6,18 @@
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import { alertDeliveryTotal, alertDeliveryDuration, pushTokensActive } from '@rei/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { AlertDeliveryJobData } from '@rei/scraper-core';
-import { alerts, deadLetter, deviceTokens, appUsers } from '@rei/db';
-import { sendAlertEmail, sendAlertPush, sendAlertWebhook } from '@rei/alerts';
-import type { PushConfig } from '@rei/alerts';
-import { loadConfig } from '@rei/config';
+import { createLogger } from '@immoradar/observability';
+import {
+  alertDeliveryTotal,
+  alertDeliveryDuration,
+  pushTokensActive,
+} from '@immoradar/observability';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { AlertDeliveryJobData } from '@immoradar/scraper-core';
+import { alerts, deadLetter, deviceTokens, appUsers } from '@immoradar/db';
+import { sendAlertEmail, sendAlertPush, sendAlertWebhook } from '@immoradar/alerts';
+import type { PushConfig } from '@immoradar/alerts';
+import { loadConfig } from '@immoradar/config';
 
 const log = createLogger('worker:delivery');
 

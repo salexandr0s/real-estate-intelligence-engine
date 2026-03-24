@@ -2,7 +2,7 @@
 
 ## Goal
 
-Execute the next product phase for the Vienna Real Estate Intelligence Engine by strengthening trust in the existing system and then adding the highest-value investor features:
+Execute the next product phase for the Vienna ImmoRadar by strengthening trust in the existing system and then adding the highest-value investor features:
 
 1. unified search/filter/alert truth,
 2. source/parser resilience,

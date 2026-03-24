@@ -10,9 +10,9 @@
  *   npx tsx scripts/replay-normalization.ts [--source <code>] [--limit N] [--dry-run]
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { query, sources, listings, listingVersions, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { query, sources, listings, listingVersions, closePool } from '@immoradar/db';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -22,8 +22,12 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
-} from '@rei/normalization';
-import type { SourceRawListingBase, NormalizationContext, ListingStatus } from '@rei/contracts';
+} from '@immoradar/normalization';
+import type {
+  SourceRawListingBase,
+  NormalizationContext,
+  ListingStatus,
+} from '@immoradar/contracts';
 
 const log = createLogger('replay-normalize');
 

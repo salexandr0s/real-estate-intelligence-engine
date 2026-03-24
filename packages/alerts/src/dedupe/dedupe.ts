@@ -1,4 +1,4 @@
-import type { AlertType } from '@rei/contracts';
+import type { AlertType } from '@immoradar/contracts';
 
 /**
  * Determines whether a new alert should be created for this event.

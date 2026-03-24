@@ -11,10 +11,10 @@
  *   npx tsx scripts/reparse-raw.ts [--source <code>] [--limit N] [--dry-run]
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { query, sources, closePool, execute } from '@rei/db';
-import { computeContentHash } from '@rei/scraper-core';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { query, sources, closePool, execute } from '@immoradar/db';
+import { computeContentHash } from '@immoradar/scraper-core';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -24,8 +24,8 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
-} from '@rei/normalization';
-import type { SourceRawListingBase, NormalizationContext } from '@rei/contracts';
+} from '@immoradar/normalization';
+import type { SourceRawListingBase, NormalizationContext } from '@immoradar/contracts';
 
 const log = createLogger('reparse-raw');
 

@@ -11,9 +11,9 @@
 
 import { readFile } from 'node:fs/promises';
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { buildingFacts, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { buildingFacts, closePool } from '@immoradar/db';
 
 const log = createLogger('import-buildings-cli');
 

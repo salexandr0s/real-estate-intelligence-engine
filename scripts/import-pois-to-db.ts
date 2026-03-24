@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pois } from '@rei/db';
+import { pois } from '@immoradar/db';
 
 interface PoiJson {
   id: string;

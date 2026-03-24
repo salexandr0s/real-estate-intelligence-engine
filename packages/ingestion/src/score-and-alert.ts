@@ -8,9 +8,9 @@ import type {
   ScoreInput,
   ScoreResult,
   VersionReason,
-} from '@rei/contracts';
-import { buildAlertDedupeKey, getAreaBucket, getRoomBucket } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+} from '@immoradar/contracts';
+import { buildAlertDedupeKey, getAreaBucket, getRoomBucket } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('ingestion:score-alert');
 

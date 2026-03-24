@@ -1,6 +1,6 @@
 import pg from 'pg';
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('db');
 
@@ -8,7 +8,7 @@ let pool: pg.Pool | null = null;
 
 /**
  * Returns (and lazily creates) the shared connection pool.
- * Uses DATABASE_URL and pool settings from @rei/config.
+ * Uses DATABASE_URL and pool settings from @immoradar/config.
  */
 export function getPool(): pg.Pool {
   if (pool) return pool;
@@ -23,7 +23,10 @@ export function getPool(): pg.Pool {
   });
 
   pool.on('error', (err) => {
-    logger.error('Unexpected pool error', { errorClass: err.name, message: err.message } as Record<string, unknown>);
+    logger.error('Unexpected pool error', { errorClass: err.name, message: err.message } as Record<
+      string,
+      unknown
+    >);
   });
 
   pool.on('connect', () => {
@@ -51,10 +54,7 @@ export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
  * Execute a single parameterized statement, returning the full QueryResult
  * (useful when you need rowCount).
  */
-export async function execute(
-  sql: string,
-  params?: unknown[],
-): Promise<pg.QueryResult> {
+export async function execute(sql: string, params?: unknown[]): Promise<pg.QueryResult> {
   const p = getPool();
   return p.query(sql, params);
 }
@@ -63,9 +63,7 @@ export async function execute(
  * Run a callback inside a database transaction.
  * The transaction is committed on success, rolled back on error.
  */
-export async function transaction<T>(
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
+export async function transaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const p = getPool();
   const client = await p.connect();
   try {

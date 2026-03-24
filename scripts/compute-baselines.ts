@@ -10,10 +10,10 @@
  *   npx tsx scripts/compute-baselines.ts
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { getAreaBucket, getRoomBucket } from '@rei/contracts';
-import { query, marketBaselines, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
+import { query, marketBaselines, closePool } from '@immoradar/db';
 
 const log = createLogger('baselines-cli');
 
@@ -43,9 +43,7 @@ interface BucketGroup {
 
 function median(sorted: number[]): number {
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]!
-    : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return sorted.length % 2 !== 0 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -100,7 +98,8 @@ async function main(): Promise<void> {
     propertyType: string,
     areaBucket: string,
     roomBucket: string,
-  ): string => `${city}|${districtNo ?? 'NULL'}|${operationType}|${propertyType}|${areaBucket}|${roomBucket}`;
+  ): string =>
+    `${city}|${districtNo ?? 'NULL'}|${operationType}|${propertyType}|${areaBucket}|${roomBucket}`;
 
   const districtGroups = new Map<string, BucketGroup>();
   const cityGroups = new Map<string, BucketGroup>();
@@ -115,7 +114,14 @@ async function main(): Promise<void> {
     const roomBucket = getRoomBucket(rooms);
 
     // District-level group
-    const dKey = groupKey(row.city, row.district_no, row.operation_type, row.property_type, areaBucket, roomBucket);
+    const dKey = groupKey(
+      row.city,
+      row.district_no,
+      row.operation_type,
+      row.property_type,
+      areaBucket,
+      roomBucket,
+    );
     if (!districtGroups.has(dKey)) {
       districtGroups.set(dKey, {
         city: row.city,
@@ -130,7 +136,14 @@ async function main(): Promise<void> {
     districtGroups.get(dKey)!.values.push(ppsqm);
 
     // City-wide group (district_no = null)
-    const cKey = groupKey(row.city, null, row.operation_type, row.property_type, areaBucket, roomBucket);
+    const cKey = groupKey(
+      row.city,
+      null,
+      row.operation_type,
+      row.property_type,
+      areaBucket,
+      roomBucket,
+    );
     if (!cityGroups.has(cKey)) {
       cityGroups.set(cKey, {
         city: row.city,
@@ -169,9 +182,8 @@ async function main(): Promise<void> {
     // Trimmed mean (10% trim)
     const trimCount = Math.floor(sorted.length * 0.1);
     const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-    const trimmedMean = trimmed.length > 0
-      ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length
-      : mean;
+    const trimmedMean =
+      trimmed.length > 0 ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length : mean;
 
     await marketBaselines.upsertBaseline({
       baselineDate,

@@ -14,8 +14,8 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 import {
   PerDomainRateLimiter,
   SourceCircuitBreaker,
@@ -28,11 +28,11 @@ import {
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
-} from '@rei/scraper-core';
+} from '@immoradar/scraper-core';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
 import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
-import type { CrawlProfile, RequestPlan } from '@rei/contracts';
-import { sources, scrapeRuns, closePool } from '@rei/db';
+import type { CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import { sources, scrapeRuns, closePool } from '@immoradar/db';
 
 const log = createLogger('scrape-cli');
 

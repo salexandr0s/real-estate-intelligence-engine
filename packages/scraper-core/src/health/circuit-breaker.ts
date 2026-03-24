@@ -1,5 +1,5 @@
-import type { ErrorClass } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+import type { ErrorClass } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('circuit-breaker');
 

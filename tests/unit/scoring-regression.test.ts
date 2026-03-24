@@ -5,8 +5,8 @@
  * score and component scores fall within expected ranges.
  */
 import { describe, it, expect } from 'vitest';
-import { scoreListing } from '@rei/scoring';
-import type { ScoreInput, BaselineLookup } from '@rei/contracts';
+import { scoreListing } from '@immoradar/scoring';
+import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Production foundation initialized for the Real Estate Intelligence Engine.
+Production foundation initialized for ImmoRadar.
 **159 files created** across 14 TypeScript packages/apps and 1 Swift macOS app.
 **108 tests pass** covering normalization, scoring, filtering, ingestion deduplication, and scraper parsing.
 
@@ -19,12 +19,12 @@ Production foundation initialized for the Real Estate Intelligence Engine.
 - Docker Compose for local PostgreSQL, Redis, MinIO
 
 ### Phase C — Backend Foundation
-- **@rei/config** — Environment-based configuration loading for all services
-- **@rei/observability** — Structured JSON logging with correlation IDs, error taxonomy (AppError, ValidationError, NotFoundError, etc.)
-- **@rei/contracts** — Shared TypeScript types for all domain entities, scraper interfaces, normalization DTOs, filtering, scoring, alerts, and API contracts
+- **@immoradar/config** — Environment-based configuration loading for all services
+- **@immoradar/observability** — Structured JSON logging with correlation IDs, error taxonomy (AppError, ValidationError, NotFoundError, etc.)
+- **@immoradar/contracts** — Shared TypeScript types for all domain entities, scraper interfaces, normalization DTOs, filtering, scoring, alerts, and API contracts
 
 ### Phase D — Database Layer
-- **@rei/db** — Complete database package with:
+- **@immoradar/db** — Complete database package with:
   - Migration runner tracking applied migrations in `_migrations` table
   - Migration file: `001-initial-schema.sql` (canonical schema.sql)
   - Typed `pg` connection pool with transaction support
@@ -33,7 +33,7 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - Listing search uses SARGable predicates matching schema indexes
 
 ### Phase E — Scraper Core
-- **@rei/scraper-core** — Reusable scraping framework with:
+- **@immoradar/scraper-core** — Reusable scraping framework with:
   - SourceAdapter interface contract
   - Per-domain rate limiter (token bucket)
   - Retry with exponential backoff and jitter
@@ -45,7 +45,7 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - Scrape run context with metrics tracking
 
 ### Phase F — First Source Module
-- **@rei/source-willhaben** — Willhaben.at source adapter with:
+- **@immoradar/source-willhaben** — Willhaben.at source adapter with:
   - Full SourceAdapter implementation
   - Discovery page parser (extracts listing cards from HTML)
   - Detail page parser (extracts all fields from structured attributes + JSON-LD)
@@ -55,7 +55,7 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - 9 parser tests using fixtures
 
 ### Phase G — Normalization Layer
-- **@rei/normalization** — Complete normalization pipeline with:
+- **@immoradar/normalization** — Complete normalization pipeline with:
   - EUR price parsing (handles €299.000, 299.000,00, etc.)
   - SQM and rooms parsing with European number format support
   - Boolean coercion from German text (ja/nein/vorhanden/ohne)
@@ -67,14 +67,14 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - Base normalizer with provenance tracking and warnings
 
 ### Phase H — Ingestion Flow
-- **@rei/ingestion** — End-to-end pipeline with:
+- **@immoradar/ingestion** — End-to-end pipeline with:
   - IngestRawListing: raw snapshot persistence with idempotent upsert
   - NormalizeAndUpsert: normalization + change detection + version creation
   - ScoreAndAlert: scoring + filter reverse-match + alert creation
   - FullIngestionPipeline: orchestrates all three stages
 
 ### Phase I — Filtering Engine
-- **@rei/filtering** — Filter engine with:
+- **@immoradar/filtering** — Filter engine with:
   - Filter compilation (EUR→cents, dedupe districts, normalize keywords)
   - Filter validation (range checks, valid districts/types, non-negative prices)
   - Listing search query builder (parameterized SQL, cursor pagination, 5 sort modes)
@@ -82,7 +82,7 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - SQL matches the pattern from filtering_engine.md with all indexes
 
 ### Phase J — Scoring Engine
-- **@rei/scoring** — Full scoring implementation with:
+- **@immoradar/scoring** — Full scoring implementation with:
   - District price score (piecewise linear, 40 at baseline, 100 at 20%+ below)
   - Undervaluation score with sample-size confidence multiplier
   - Keyword signal score with quality/risk/opportunity categories
@@ -93,7 +93,7 @@ Production foundation initialized for the Real Estate Intelligence Engine.
   - SCORE_VERSION = 1, versioned for replay
 
 ### Phase K — Alerting Foundation
-- **@rei/alerts** — Alert matching and deduplication with:
+- **@immoradar/alerts** — Alert matching and deduplication with:
   - matchListingToFilters: generates AlertCreate records with dedupe keys
   - shouldCreateAlert: prevents duplicate alerts, requires meaningful changes
   - Alert title/body generation in German

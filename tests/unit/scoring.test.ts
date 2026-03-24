@@ -1,7 +1,7 @@
 /**
  * Scoring engine tests.
  * Tests all score components and the weighted final score.
- * Imports from @rei/scoring — no inline re-implementations.
+ * Imports from @immoradar/scoring — no inline re-implementations.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -9,10 +9,10 @@ import {
   mapBucketDiscountToScore,
   computeKeywordSignalScore,
   computeTimeOnMarketScore,
-  computeConfidenceScore,
+  _computeConfidenceScore,
   scoreListing,
-} from '@rei/scoring';
-import type { ScoreInput, BaselineLookup } from '@rei/contracts';
+} from '@immoradar/scoring';
+import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';
 
 // ── Helper: build ScoreInput with sensible defaults ──────────────────────
 
@@ -85,8 +85,8 @@ describe('mapBucketDiscountToScore', () => {
   });
 
   it('applies sample size multiplier for small samples', () => {
-    const full = mapBucketDiscountToScore(0.10, 25);
-    const small = mapBucketDiscountToScore(0.10, 8);
+    const full = mapBucketDiscountToScore(0.1, 25);
+    const small = mapBucketDiscountToScore(0.1, 8);
     expect(small).toBeLessThan(full);
     expect(small).toBeCloseTo(full * 0.65, 0);
   });
@@ -110,7 +110,7 @@ describe('computeKeywordSignalScore', () => {
   });
 
   it('rewards renovation with sufficient discount', () => {
-    const result = computeKeywordSignalScore('Sanierungsbedürftig', null, 0.10);
+    const result = computeKeywordSignalScore('Sanierungsbedürftig', null, 0.1);
     expect(result.score).toBe(60); // 50 + 10
     expect(result.matchedPositive).toContain('renovation_opportunity');
   });
@@ -124,7 +124,7 @@ describe('computeKeywordSignalScore', () => {
 
 describe('computeTimeOnMarketScore', () => {
   it('gives high score for fresh listings', () => {
-    expect(computeTimeOnMarketScore(1, 0.10, 0, false)).toBe(95);
+    expect(computeTimeOnMarketScore(1, 0.1, 0, false)).toBe(95);
   });
 
   it('penalizes old listings without discount', () => {
@@ -139,8 +139,8 @@ describe('computeTimeOnMarketScore', () => {
   });
 
   it('penalizes relist', () => {
-    const normal = computeTimeOnMarketScore(5, 0.10, 0, false);
-    const relist = computeTimeOnMarketScore(5, 0.10, 0, true);
+    const normal = computeTimeOnMarketScore(5, 0.1, 0, false);
+    const relist = computeTimeOnMarketScore(5, 0.1, 0, true);
     expect(relist).toBe(normal - 10);
   });
 });

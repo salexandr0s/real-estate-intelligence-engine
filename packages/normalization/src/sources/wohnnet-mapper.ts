@@ -2,7 +2,7 @@ import type {
   NormalizationContext,
   NormalizationResult,
   SourceRawListingBase,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import { BaseSourceMapper } from './base-mapper.js';
 
 /**
@@ -43,9 +43,19 @@ export class WohnnetMapper extends BaseSourceMapper {
       // Infer property type from wohnnet category
       if (result.listing.propertyType === 'other' && rawPayload.categoryRaw != null) {
         const catLower = rawPayload.categoryRaw.toLowerCase();
-        if (catLower.includes('wohnung') || catLower.includes('altbau') || catLower.includes('neubau') || catLower.includes('dachgeschoss') || catLower.includes('penthouse')) {
+        if (
+          catLower.includes('wohnung') ||
+          catLower.includes('altbau') ||
+          catLower.includes('neubau') ||
+          catLower.includes('dachgeschoss') ||
+          catLower.includes('penthouse')
+        ) {
           result.listing.propertyType = 'apartment';
-        } else if (catLower.includes('haus') || catLower.includes('villa') || catLower.includes('reihenhaus')) {
+        } else if (
+          catLower.includes('haus') ||
+          catLower.includes('villa') ||
+          catLower.includes('reihenhaus')
+        ) {
           result.listing.propertyType = 'house';
         } else if (catLower.includes('grundstück')) {
           result.listing.propertyType = 'land';

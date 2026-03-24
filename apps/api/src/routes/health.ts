@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { sources, scrapeRuns, marketBaselines, deadLetter, canaryResults } from '@rei/db';
+import { sources, scrapeRuns, marketBaselines, deadLetter, canaryResults } from '@immoradar/db';
 
 const APP_VERSION = process.env['npm_package_version'] ?? '0.1.0';
 

@@ -1,7 +1,7 @@
 /**
  * Vienna district normalization tests.
  * Tests postal code inference, name matching, and contradiction handling.
- * Imports from @rei/normalization — no inline re-implementations.
+ * Imports from @immoradar/normalization — no inline re-implementations.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -9,7 +9,7 @@ import {
   districtNameToNumber,
   districtTextToNumber,
   resolveDistrict,
-} from '@rei/normalization';
+} from '@immoradar/normalization';
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ describe('resolveDistrict', () => {
       cityRaw: 'Wien',
     });
     // Should have a warning about conflicting districts
-    expect(result.warnings.some(w => w.includes('district_conflict'))).toBe(true);
+    expect(result.warnings.some((w) => w.includes('district_conflict'))).toBe(true);
     // Structured address (districtRaw) wins over postal inference
     expect(result.districtNo).toBe(2);
   });

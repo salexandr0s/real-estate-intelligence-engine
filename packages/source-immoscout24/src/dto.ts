@@ -1,4 +1,4 @@
-import type { SourceRawListingBase } from '@rei/contracts';
+import type { SourceRawListingBase } from '@immoradar/contracts';
 
 // -- IS24 JSON-LD types (CollectionPage / Product / RealEstateAgent) ----------
 

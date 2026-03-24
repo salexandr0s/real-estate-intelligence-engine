@@ -1,5 +1,5 @@
 import { getPool, closePool } from '../src/client.js';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('db:seed');
 

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
   getRedisConnection,
@@ -23,15 +23,15 @@ import {
   ArtifactWriter,
   setupRequestInterception,
   DEFAULT_JOB_RETRY_OPTS,
-} from '@rei/scraper-core';
+} from '@immoradar/scraper-core';
 import type {
   DetailJobData,
   ProcessingJobData,
   DocumentProcessingJobData,
-} from '@rei/scraper-core';
-import type { DetailCapture } from '@rei/contracts';
-import { loadConfig } from '@rei/config';
-import { sources, deadLetter, documents, listings } from '@rei/db';
+} from '@immoradar/scraper-core';
+import type { DetailCapture } from '@immoradar/contracts';
+import { loadConfig } from '@immoradar/config';
+import { sources, deadLetter, documents, listings } from '@immoradar/db';
 import { createScrapeContext } from '../browser-pool.js';
 import { getAdapter } from '../adapter-registry.js';
 
@@ -84,7 +84,9 @@ export function createDetailWorker(): Worker<DetailJobData> {
       // When HAR capture is enabled, record to a temp file so we can save
       // the HAR on failure. On success, the temp file is cleaned up.
       const harEnabled = config.playwright.captureHarOnFailure;
-      const harTempPath = harEnabled ? join(tmpdir(), `rei-har-${randomUUID()}.har`) : undefined;
+      const harTempPath = harEnabled
+        ? join(tmpdir(), `immoradar-har-${randomUUID()}.har`)
+        : undefined;
 
       const context = await createScrapeContext(
         harTempPath ? { recordHarPath: harTempPath } : undefined,

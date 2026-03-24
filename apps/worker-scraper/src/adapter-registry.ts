@@ -3,14 +3,14 @@
  * Re-exports getAdapter for convenience.
  */
 
-import { registerAdapters, getAdapter } from '@rei/scraper-core';
-import { WillhabenAdapter } from '@rei/source-willhaben';
-import { Immoscout24Adapter } from '@rei/source-immoscout24';
-import { WohnnetAdapter } from '@rei/source-wohnnet';
-import { DerStandardAdapter } from '@rei/source-derstandard';
-import { FindMyHomeAdapter } from '@rei/source-findmyhome';
-import { OpenImmoAdapter } from '@rei/source-openimmo';
-import { RemaxAdapter } from '@rei/source-remax';
+import { registerAdapters, getAdapter } from '@immoradar/scraper-core';
+import { WillhabenAdapter } from '@immoradar/source-willhaben';
+import { Immoscout24Adapter } from '@immoradar/source-immoscout24';
+import { WohnnetAdapter } from '@immoradar/source-wohnnet';
+import { DerStandardAdapter } from '@immoradar/source-derstandard';
+import { FindMyHomeAdapter } from '@immoradar/source-findmyhome';
+import { OpenImmoAdapter } from '@immoradar/source-openimmo';
+import { RemaxAdapter } from '@immoradar/source-remax';
 
 registerAdapters([
   new WillhabenAdapter(),

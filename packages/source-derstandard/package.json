@@ -1,5 +1,5 @@
 {
-  "name": "@rei/source-derstandard",
+  "name": "@immoradar/source-derstandard",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -13,8 +13,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@rei/contracts": "*",
-    "@rei/scraper-core": "*"
+    "@immoradar/contracts": "*",
+    "@immoradar/scraper-core": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.0"

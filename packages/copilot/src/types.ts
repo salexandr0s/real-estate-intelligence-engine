@@ -17,14 +17,14 @@ export type {
   ContentBlock,
   CopilotRequestMessage,
   CopilotChatRequest,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 
 // ── Internal types ──────────────────────────────────────────────────────────
 
 /** Result returned by each tool executor — includes the rich block for the
  *  client AND a textual summary for Claude to reason about. */
 export interface ToolResult {
-  contentBlock: import('@rei/contracts').ContentBlock;
+  contentBlock: import('@immoradar/contracts').ContentBlock;
   rawForClaude: string;
 }
 
@@ -32,6 +32,6 @@ export interface ToolResult {
 export type CopilotStreamEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'tool_use'; toolName: string }
-  | { type: 'content_block'; block: import('@rei/contracts').ContentBlock }
+  | { type: 'content_block'; block: import('@immoradar/contracts').ContentBlock }
   | { type: 'done' }
   | { type: 'error'; message: string };

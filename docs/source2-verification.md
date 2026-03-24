@@ -11,7 +11,7 @@ ImmobilienScout24.at (`immoscout24`) has been fully onboarded as source 2 using 
 ## 1. Adapter Verification
 
 ### `packages/source-immoscout24/src/adapter.ts`
-- **Implements**: `SourceAdapter<Immoscout24DiscoveryItem, Immoscout24DetailDTO>` from `@rei/contracts`
+- **Implements**: `SourceAdapter<Immoscout24DiscoveryItem, Immoscout24DetailDTO>` from `@immoradar/contracts`
 - **sourceCode**: `'immoscout24'`
 - **sourceName**: `'ImmobilienScout24.at'`
 - **parserVersion**: `2`
@@ -73,13 +73,13 @@ ImmobilienScout24.at (`immoscout24`) has been fully onboarded as source 2 using 
 ## 3. Registry and Pipeline Integration
 
 ### Adapter Registry (`apps/worker-scraper/src/adapter-registry.ts`)
-- `Immoscout24Adapter` imported from `@rei/source-immoscout24`
+- `Immoscout24Adapter` imported from `@immoradar/source-immoscout24`
 - Registered as `registry.set('immoscout24', new Immoscout24Adapter())`
 
 **Status**: PASS -- registered alongside willhaben and 5 other sources.
 
 ### Pipeline Factory (`apps/worker-processing/src/pipeline-factory.ts`)
-- `Immoscout24Mapper` imported from `@rei/normalization`
+- `Immoscout24Mapper` imported from `@immoradar/normalization`
 - Added to normalizers map: `['immoscout24', new Immoscout24Mapper()]`
 
 **Status**: PASS -- normalization pipeline fully wired.
@@ -175,7 +175,7 @@ The base mapper handles all common operations:
 
 **Scoring uses only canonical fields -- no source-specific logic in score-engine.ts.**
 
-The `ScoreInput` interface (from `@rei/contracts/scoring.ts`) uses exclusively canonical fields:
+The `ScoreInput` interface (from `@immoradar/contracts/scoring.ts`) uses exclusively canonical fields:
 - `pricePerSqmEur`, `districtNo`, `operationType`, `propertyType` -- from canonical listing
 - `livingAreaSqm`, `rooms`, `city` -- from canonical listing
 - `title`, `description` -- from canonical listing

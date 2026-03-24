@@ -1,4 +1,4 @@
-import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { OpenImmoDiscoveryItem, OpenImmoSearchData } from './dto.js';
 
 /**
@@ -70,7 +70,8 @@ export function parseDiscoveryPage(
   const pageNum = Number(requestPlan.metadata?.page) || searchData.meta.page || 1;
   const totalEstimate = searchData.meta.totalCount ?? null;
   const pageSize = searchData.meta.pageSize || 20;
-  const hasMore = items.length > 0 && (totalEstimate === null || pageNum * pageSize < totalEstimate);
+  const hasMore =
+    items.length > 0 && (totalEstimate === null || pageNum * pageSize < totalEstimate);
 
   const nextPagePlan: RequestPlan | null = hasMore
     ? {
@@ -91,9 +92,5 @@ export function parseDiscoveryPage(
 function isSearchData(data: unknown): data is OpenImmoSearchData {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
-  return (
-    typeof obj['meta'] === 'object' &&
-    obj['meta'] !== null &&
-    Array.isArray(obj['results'])
-  );
+  return typeof obj['meta'] === 'object' && obj['meta'] !== null && Array.isArray(obj['results']);
 }

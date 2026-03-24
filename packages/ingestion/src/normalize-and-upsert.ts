@@ -5,9 +5,9 @@ import type {
   SourceNormalizer,
   SourceRawListingBase,
   VersionReason,
-} from '@rei/contracts';
-import { CURRENT_NORMALIZATION_VERSION } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+} from '@immoradar/contracts';
+import { CURRENT_NORMALIZATION_VERSION } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('ingestion:normalize');
 

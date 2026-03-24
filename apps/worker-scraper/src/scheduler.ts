@@ -8,14 +8,14 @@
 
 import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
-import { createLogger } from '@rei/observability';
-import { loadConfig } from '@rei/config';
+import { createLogger } from '@immoradar/observability';
+import { loadConfig } from '@immoradar/config';
 import {
   QUEUE_NAMES,
   getRedisConnection,
   getQueuePrefix,
   DEFAULT_JOB_RETRY_OPTS,
-} from '@rei/scraper-core';
+} from '@immoradar/scraper-core';
 import type {
   DiscoveryJobData,
   BaselineJobData,
@@ -23,8 +23,8 @@ import type {
   GeocodeEnqueueJobData,
   StaleCheckJobData,
   CanaryJobData,
-} from '@rei/scraper-core';
-import { sources, scrapeRuns } from '@rei/db';
+} from '@immoradar/scraper-core';
+import { sources, scrapeRuns } from '@immoradar/db';
 
 const log = createLogger('scheduler');
 

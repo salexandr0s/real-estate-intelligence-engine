@@ -1,5 +1,5 @@
-import type { ErrorClass, RetryPolicy } from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+import type { ErrorClass, RetryPolicy } from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('retry');
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MarketRentEstimate } from '@rei/contracts';
+import type { MarketRentEstimate } from '@immoradar/contracts';
 import { computeInvestorMetrics } from '../investor-metrics.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────

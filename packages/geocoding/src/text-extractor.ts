@@ -266,7 +266,7 @@ function lookupStation(name: string, allowAmbiguous: boolean): StationExtraction
  * Extract district number from text.
  * Matches: "7. Bezirk", "10. Bez", "Wien 3", "Vienna 12"
  *
- * Reuses the same regex patterns as @rei/normalization's districtTextToNumber.
+ * Reuses the same regex patterns as @immoradar/normalization's districtTextToNumber.
  */
 export function extractDistrictFromText(text: string): DistrictExtraction | null {
   if (!text || text.trim().length === 0) return null;

@@ -1,4 +1,4 @@
-import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@rei/contracts';
+import type { DiscoveryItem, DiscoveryPageResult, RequestPlan } from '@immoradar/contracts';
 import type { RemaxDiscoveryItem } from './dto.js';
 
 const BASE_URL = 'https://www.remax.at';

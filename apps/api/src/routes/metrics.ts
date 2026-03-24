@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { registry } from '@rei/observability';
+import { registry } from '@immoradar/observability';
 import { constantTimeEquals } from '../middleware/auth.js';
 
 export async function metricsRoutes(app: FastifyInstance): Promise<void> {

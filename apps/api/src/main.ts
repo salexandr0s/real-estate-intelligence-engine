@@ -1,7 +1,7 @@
-import { loadConfig } from '@rei/config';
-import { getPool, closePool } from '@rei/db';
-import { createLogger, setLogLevel, initTracing, shutdownTracing } from '@rei/observability';
-import type { LogLevel } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { getPool, closePool } from '@immoradar/db';
+import { createLogger, setLogLevel, initTracing, shutdownTracing } from '@immoradar/observability';
+import type { LogLevel } from '@immoradar/observability';
 import { buildApp } from './app.js';
 
 const logger = createLogger('api');
@@ -9,7 +9,7 @@ const logger = createLogger('api');
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
-  initTracing('rei-api');
+  initTracing('immoradar-api');
 
   logger.info('Starting API server', {
     nodeEnv: config.nodeEnv,

@@ -34,7 +34,7 @@ SELECT id, title_raw, price_raw, living_area_raw, rooms_raw, extraction_status
    ```bash
    npx tsx scripts/capture-site-html.ts --source <source_code>
    ```
-   Output lands in `/tmp/rei-captures/<source_code>/`.
+   Output lands in `/tmp/immoradar-captures/<source_code>/`.
 
 2. **Compare with stored fixtures**: Diff old vs new HTML to identify structural changes (selector names, JSON paths, attribute renames).
 

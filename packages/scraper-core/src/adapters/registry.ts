@@ -9,7 +9,7 @@
  * circular dependencies between scraper-core and source packages.
  */
 
-import type { SourceAdapter } from '@rei/contracts';
+import type { SourceAdapter } from '@immoradar/contracts';
 
 const registry = new Map<string, SourceAdapter<unknown, unknown>>();
 

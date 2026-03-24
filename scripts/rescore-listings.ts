@@ -4,8 +4,8 @@
  * Usage: npx tsx scripts/rescore-listings.ts [--source <code>] [--limit N] [--dry-run]
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 import {
   query,
   sources,
@@ -15,10 +15,10 @@ import {
   marketBaselines,
   proximity,
   closePool,
-} from '@rei/db';
-import { scoreListing, SCORE_VERSION } from '@rei/scoring';
-import { getAreaBucket, getRoomBucket } from '@rei/contracts';
-import type { ScoreInput, BaselineLookup } from '@rei/contracts';
+} from '@immoradar/db';
+import { scoreListing, SCORE_VERSION } from '@immoradar/scoring';
+import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
+import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';
 
 const log = createLogger('rescore');
 

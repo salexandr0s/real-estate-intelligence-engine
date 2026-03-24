@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createSign } from 'node:crypto';
 import http2 from 'node:http2';
 
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('alert:push');
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Real Estate Intelligence Engine - Dev Setup ==="
+echo "=== ImmoRadar - Dev Setup ==="
 
 # Check prerequisites
 command -v node >/dev/null 2>&1 || { echo "Error: node >= 20 required"; exit 1; }

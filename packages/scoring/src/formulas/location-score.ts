@@ -1,4 +1,4 @@
-import type { ProximityInput } from '@rei/contracts';
+import type { ProximityInput } from '@immoradar/contracts';
 import { piecewiseLinear, clamp } from './util.js';
 
 export function computeLocationScore(input: ProximityInput | null | undefined): number {

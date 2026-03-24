@@ -1,10 +1,10 @@
 {
   "dashboard": {
     "id": null,
-    "uid": "rei-queue-depth",
-    "title": "REI - Queue Depth",
+    "uid": "immoradar-queue-depth",
+    "title": "ImmoRadar - Queue Depth",
     "description": "BullMQ job queue monitoring: depth, processing rate, and failure counts.",
-    "tags": ["rei", "queues", "bullmq"],
+    "tags": ["immoradar", "queues", "bullmq"],
     "timezone": "Europe/Vienna",
     "editable": true,
     "refresh": "15s",
@@ -17,7 +17,7 @@
         {
           "name": "queue",
           "type": "query",
-          "query": "label_values(rei_queue_depth, queue)",
+          "query": "label_values(immoradar_queue_depth, queue)",
           "multi": true,
           "includeAll": true,
           "current": {
@@ -36,7 +36,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rei_queue_depth{queue=~\"$queue\"}",
+            "expr": "immoradar_queue_depth{queue=~\"$queue\"}",
             "legendFormat": "{{queue}}"
           }
         ],
@@ -64,7 +64,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rei_queue_depth{queue=~\"$queue\"}",
+            "expr": "immoradar_queue_depth{queue=~\"$queue\"}",
             "legendFormat": "{{queue}}"
           }
         ],
@@ -94,11 +94,11 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_runs_total{status=\"succeeded\"}[5m])",
+            "expr": "rate(immoradar_scrape_runs_total{status=\"succeeded\"}[5m])",
             "legendFormat": "{{source}} succeeded/s"
           },
           {
-            "expr": "rate(rei_scrape_runs_total{status=\"failed\"}[5m])",
+            "expr": "rate(immoradar_scrape_runs_total{status=\"failed\"}[5m])",
             "legendFormat": "{{source}} failed/s"
           }
         ],
@@ -117,7 +117,7 @@
         "datasource": "Prometheus",
         "targets": [
           {
-            "expr": "rate(rei_scrape_errors_total[5m])",
+            "expr": "rate(immoradar_scrape_errors_total[5m])",
             "legendFormat": "{{source}} - {{error_class}}"
           }
         ],

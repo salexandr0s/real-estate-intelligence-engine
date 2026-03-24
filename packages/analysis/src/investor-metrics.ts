@@ -1,4 +1,4 @@
-import type { InvestorMetrics, MarketRentEstimate } from '@rei/contracts';
+import type { InvestorMetrics, MarketRentEstimate } from '@immoradar/contracts';
 
 /**
  * Compute investor metrics from listing price and market rent estimate.

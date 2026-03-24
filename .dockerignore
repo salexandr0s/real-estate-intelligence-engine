@@ -3,5 +3,5 @@ node_modules
 *.md
 apps/macos
 assets
-real-estate-intel
+immoradar
 .env*

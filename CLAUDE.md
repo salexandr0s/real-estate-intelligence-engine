@@ -1,7 +1,7 @@
-# Real Estate Intelligence Engine
+# ImmoRadar
 
 ## Project Overview
-Always-on Austrian real estate intelligence platform. Backend-first TypeScript services with native macOS SwiftUI client.
+Always-on Austrian property intelligence platform. Backend-first TypeScript services with native macOS SwiftUI client.
 
 ## Stack
 - **Backend**: TypeScript (strict), Fastify, PostgreSQL, Redis + BullMQ

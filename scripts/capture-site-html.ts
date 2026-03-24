@@ -5,7 +5,7 @@
  * Usage:
  *   npx tsx scripts/capture-site-html.ts [--source <code>] [--all]
  *
- * Saves to: /tmp/rei-captures/<sourceCode>/
+ * Saves to: /tmp/immoradar-captures/<sourceCode>/
  */
 
 import { chromium } from 'playwright';
@@ -51,7 +51,9 @@ const COOKIE_SELECTORS = [
   '#onetrust-accept-btn-handler',
 ];
 
-async function dismissCookies(page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>['newPage']>>): Promise<void> {
+async function dismissCookies(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>['newPage']>>,
+): Promise<void> {
   await page.waitForTimeout(2000);
   for (const sel of COOKIE_SELECTORS) {
     try {
@@ -62,7 +64,9 @@ async function dismissCookies(page: Awaited<ReturnType<Awaited<ReturnType<typeof
         console.log(`  Cookie consent dismissed via: ${sel}`);
         return;
       }
-    } catch { /* next */ }
+    } catch {
+      /* next */
+    }
   }
   console.log('  No cookie consent banner found');
 }
@@ -79,7 +83,7 @@ async function captureSource(sourceCode: string): Promise<void> {
     return;
   }
 
-  const outDir = `/tmp/rei-captures/${sourceCode}`;
+  const outDir = `/tmp/immoradar-captures/${sourceCode}`;
   mkdirSync(outDir, { recursive: true });
 
   console.log(`\n=== Capturing: ${site.name} (${sourceCode}) ===`);
@@ -89,7 +93,8 @@ async function captureSource(sourceCode: string): Promise<void> {
     viewport: { width: 1366, height: 768 },
     locale: 'de-AT',
     timezoneId: 'Europe/Vienna',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   });
 
   try {
@@ -127,18 +132,16 @@ async function captureSource(sourceCode: string): Promise<void> {
       // 3. Extract JSON-LD and embedded data
       const jsonLd = await page.evaluate(() => {
         const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-        return Array.from(scripts).map(s => s.textContent);
+        return Array.from(scripts).map((s) => s.textContent);
       });
       if (jsonLd.length > 0) {
         writeFileSync(join(outDir, 'json-ld.json'), JSON.stringify(jsonLd, null, 2), 'utf-8');
         console.log(`  Saved: json-ld.json (${jsonLd.length} blocks)`);
       }
-
     } catch (err) {
       console.error(`  FAILED: ${err instanceof Error ? err.message : String(err)}`);
       saveHtml(outDir, 'error.txt', String(err));
     }
-
   } finally {
     await context.close();
     await browser.close();
@@ -206,7 +209,9 @@ async function main(): Promise<void> {
   }
 
   if (sourceCodes.length === 0) {
-    console.log('Usage: npx tsx scripts/capture-site-html.ts --source <code> [--source <code2>] | --all');
+    console.log(
+      'Usage: npx tsx scripts/capture-site-html.ts --source <code> [--source <code2>] | --all',
+    );
     console.log('Available sources:', Object.keys(SITES).join(', '));
     process.exit(1);
   }
@@ -215,7 +220,7 @@ async function main(): Promise<void> {
     await captureSource(code);
   }
 
-  console.log('\nDone. Check /tmp/rei-captures/ for output.');
+  console.log('\nDone. Check /tmp/immoradar-captures/ for output.');
 }
 
 main().catch((err) => {

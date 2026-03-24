@@ -6,7 +6,7 @@
  * and silently ignored so scraping continues even if consent can't be dismissed.
  */
 
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import { interactionDelay } from './delay.js';
 
 const log = createLogger('cookie-consent');
@@ -49,17 +49,10 @@ const SOURCE_CONSENT_CONFIG: Record<string, CookieConsentConfig> = {
     ],
   },
   findmyhome: {
-    acceptSelectors: [
-      '.cookie-accept',
-      'button.consent-accept-all',
-      '#cookie-accept-btn',
-    ],
+    acceptSelectors: ['.cookie-accept', 'button.consent-accept-all', '#cookie-accept-btn'],
   },
   openimmo: {
-    acceptSelectors: [
-      '.cookie-accept-all',
-      'button.consent-accept',
-    ],
+    acceptSelectors: ['.cookie-accept-all', 'button.consent-accept'],
   },
   remax: {
     acceptSelectors: [
@@ -91,20 +84,16 @@ const GENERIC_SELECTORS = [
  * @param page - Playwright Page object (typed as unknown to avoid Playwright dep in contracts)
  * @param sourceCode - Source identifier for source-specific selector lookup
  */
-export async function dismissCookieConsent(
-  page: unknown,
-  sourceCode: string,
-): Promise<boolean> {
+export async function dismissCookieConsent(page: unknown, sourceCode: string): Promise<boolean> {
   const p = page as {
-    locator(selector: string): { first(): { isVisible(): Promise<boolean>; click(): Promise<void> } };
+    locator(selector: string): {
+      first(): { isVisible(): Promise<boolean>; click(): Promise<void> };
+    };
     waitForTimeout(ms: number): Promise<void>;
   };
 
   const sourceConfig = SOURCE_CONSENT_CONFIG[sourceCode];
-  const selectors = [
-    ...(sourceConfig?.acceptSelectors ?? []),
-    ...GENERIC_SELECTORS,
-  ];
+  const selectors = [...(sourceConfig?.acceptSelectors ?? []), ...GENERIC_SELECTORS];
 
   const timeoutMs = sourceConfig?.timeoutMs ?? 3000;
 

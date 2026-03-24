@@ -8,8 +8,8 @@ import type {
   SourceRawListingBase,
   OperationType,
   PropertyType,
-} from '@rei/contracts';
-import { createLogger } from '@rei/observability';
+} from '@immoradar/contracts';
+import { createLogger } from '@immoradar/observability';
 import {
   parseEurPrice,
   parseSqm,

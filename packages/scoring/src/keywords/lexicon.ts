@@ -1,4 +1,4 @@
-import type { KeywordEntry } from '@rei/contracts';
+import type { KeywordEntry } from '@immoradar/contracts';
 
 export const KEYWORD_LEXICON: KeywordEntry[] = [
   // Quality keywords
@@ -31,8 +31,12 @@ export const KEYWORD_LEXICON: KeywordEntry[] = [
 ];
 
 function normalizeForMatching(text: string): string {
-  return text.toLowerCase()
-    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
+  return text
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss');
 }
 
 export function matchKeywords(text: string): {

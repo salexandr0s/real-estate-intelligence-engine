@@ -1,5 +1,5 @@
-import type { AlertChannel, AlertCreate, AlertType } from '@rei/contracts';
-import { buildAlertDedupeKey } from '@rei/contracts';
+import type { AlertChannel, AlertCreate, AlertType } from '@immoradar/contracts';
+import { buildAlertDedupeKey } from '@immoradar/contracts';
 
 interface MatchInput {
   listingId: number;

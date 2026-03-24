@@ -66,7 +66,7 @@ actor APIClient {
             Error: \(error)
             Response (\(data.count) bytes): \(preview)
             """
-            try? msg.write(toFile: "/tmp/rei-decode-error.txt", atomically: true, encoding: .utf8)
+            try? msg.write(toFile: "/tmp/immoradar-decode-error.txt", atomically: true, encoding: .utf8)
             throw error
         }
     }

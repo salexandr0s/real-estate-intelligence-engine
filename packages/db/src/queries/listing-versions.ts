@@ -1,5 +1,5 @@
 import { query } from '../client.js';
-import type { VersionReason, ListingStatus } from '@rei/contracts';
+import type { VersionReason, ListingStatus } from '@immoradar/contracts';
 
 // ── Row types ───────────────────────────────────────────────────────────────
 
@@ -124,10 +124,7 @@ export async function findPreviousPrice(listingId: number): Promise<number | nul
 /**
  * Find version history for a listing, most recent first.
  */
-export async function findByListingId(
-  listingId: number,
-  limit = 50,
-): Promise<ListingVersionRow[]> {
+export async function findByListingId(listingId: number, limit = 50): Promise<ListingVersionRow[]> {
   const rows = await query<ListingVersionDbRow>(
     `SELECT * FROM listing_versions
      WHERE listing_id = $1

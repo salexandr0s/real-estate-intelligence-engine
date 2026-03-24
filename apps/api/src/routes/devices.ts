@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { deviceTokens } from '@rei/db';
+import { deviceTokens } from '@immoradar/db';
 import { parseOrThrow } from '../schemas.js';
 
 const deviceTokenSchema = z.object({

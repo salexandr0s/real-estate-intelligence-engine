@@ -2,11 +2,11 @@
 # Verify the most recent backup can be restored to a temp database.
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-$HOME/.rei-backups/postgres}"
+BACKUP_DIR="${BACKUP_DIR:-$HOME/.immoradar-backups/postgres}"
 DATABASE_URL="${DATABASE_URL:?DATABASE_URL must be set}"
-VERIFY_DB="rei_backup_verify_$$"
+VERIFY_DB="immoradar_backup_verify_$$"
 
-LATEST=$(ls -t "$BACKUP_DIR"/rei_*.sql.gz 2>/dev/null | head -1)
+LATEST=$(ls -t "$BACKUP_DIR"/immoradar_*.sql.gz 2>/dev/null | head -1)
 if [ -z "$LATEST" ]; then
   echo "[verify] ERROR: No backups found in $BACKUP_DIR"
   exit 1

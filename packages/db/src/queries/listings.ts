@@ -6,9 +6,9 @@ import type {
   ListingStatus,
   GeocodePrecision,
   SortBy,
-} from '@rei/contracts';
-import type { CanonicalListingInput } from '@rei/contracts';
-import type { ListingSearchResult, PaginatedResult } from '@rei/contracts';
+} from '@immoradar/contracts';
+import type { CanonicalListingInput } from '@immoradar/contracts';
+import type { ListingSearchResult, PaginatedResult } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 

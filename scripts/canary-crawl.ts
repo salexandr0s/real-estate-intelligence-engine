@@ -17,8 +17,8 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
 import {
   PerDomainRateLimiter,
   pageNavigationDelay,
@@ -28,8 +28,8 @@ import {
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
-} from '@rei/scraper-core';
-import type { CrawlProfile } from '@rei/contracts';
+} from '@immoradar/scraper-core';
+import type { CrawlProfile } from '@immoradar/contracts';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
 
 const log = createLogger('canary-crawl');

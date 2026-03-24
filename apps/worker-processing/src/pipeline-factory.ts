@@ -3,9 +3,9 @@
  * Extracted from scripts/scrape-and-ingest.ts for reuse in workers.
  */
 
-import { FullIngestionPipeline } from '@rei/ingestion';
-import type { FullIngestionPipelineDeps } from '@rei/ingestion';
-import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@rei/contracts';
+import { FullIngestionPipeline } from '@immoradar/ingestion';
+import type { FullIngestionPipelineDeps } from '@immoradar/ingestion';
+import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@immoradar/contracts';
 import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import {
@@ -13,8 +13,8 @@ import {
   QUEUE_NAMES,
   getRedisConnection,
   getQueuePrefix,
-} from '@rei/scraper-core';
-import type { AlertDeliveryJobData } from '@rei/scraper-core';
+} from '@immoradar/scraper-core';
+import type { AlertDeliveryJobData } from '@immoradar/scraper-core';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -24,8 +24,8 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
-} from '@rei/normalization';
-import { scoreListing } from '@rei/scoring';
+} from '@immoradar/normalization';
+import { scoreListing } from '@immoradar/scoring';
 import {
   rawListings,
   scrapeRuns,
@@ -39,14 +39,14 @@ import {
   listingPois,
   sources,
   clusters,
-} from '@rei/db';
+} from '@immoradar/db';
 import {
   rawSnapshotRate,
   normalizationTotal,
   versionCreationRate,
   scoringDuration,
   alertLagSeconds,
-} from '@rei/observability';
+} from '@immoradar/observability';
 
 const HEALTH_STATUS_SCORES: Record<string, number> = {
   healthy: 100,

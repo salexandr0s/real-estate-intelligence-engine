@@ -1,4 +1,4 @@
-import type { CanonicalListingInput } from '@rei/contracts';
+import type { CanonicalListingInput } from '@immoradar/contracts';
 
 /**
  * Computes a 0-100 completeness score reflecting data quality.
@@ -38,7 +38,10 @@ export function computeCompletenessScore(listing: Partial<CanonicalListingInput>
   if (listing.postalCode != null && listing.postalCode.trim() !== '') {
     locationPoints += 7;
   }
-  if (listing.districtNo != null || (listing.districtName != null && listing.districtName.trim() !== '')) {
+  if (
+    listing.districtNo != null ||
+    (listing.districtName != null && listing.districtName.trim() !== '')
+  ) {
     locationPoints += 6;
   }
   score += Math.min(locationPoints, 20);

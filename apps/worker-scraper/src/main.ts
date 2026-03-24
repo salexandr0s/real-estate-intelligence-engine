@@ -1,14 +1,14 @@
-import { loadConfig } from '@rei/config';
+import { loadConfig } from '@immoradar/config';
 import {
   createLogger,
   setLogLevel,
   redactUrl,
   initTracing,
   shutdownTracing,
-} from '@rei/observability';
-import type { LogLevel } from '@rei/observability';
-import { closeRedisConnection } from '@rei/scraper-core';
-import { closePool } from '@rei/db';
+} from '@immoradar/observability';
+import type { LogLevel } from '@immoradar/observability';
+import { closeRedisConnection } from '@immoradar/scraper-core';
+import { closePool } from '@immoradar/db';
 import { createDiscoveryWorker } from './workers/discovery-worker.js';
 import { createDetailWorker } from './workers/detail-worker.js';
 import { closeBrowser } from './browser-pool.js';
@@ -19,7 +19,7 @@ const logger = createLogger('worker-scraper');
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
-  initTracing('rei-worker-scraper');
+  initTracing('immoradar-worker-scraper');
 
   logger.info('Scraper worker starting', {
     nodeEnv: config.nodeEnv,

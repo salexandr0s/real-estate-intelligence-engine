@@ -6,9 +6,9 @@
  *   npx tsx scripts/mark-stale-listings.ts [--dry-run]
  */
 
-import { loadConfig } from '@rei/config';
-import { createLogger } from '@rei/observability';
-import { query, closePool } from '@rei/db';
+import { loadConfig } from '@immoradar/config';
+import { createLogger } from '@immoradar/observability';
+import { query, closePool } from '@immoradar/db';
 
 const log = createLogger('stale-listings');
 
@@ -46,7 +46,9 @@ async function main(): Promise<void> {
     log.info(`Marked ${result[0]!.count} listing(s) as inactive`);
   } else {
     for (const listing of staleListings) {
-      const daysAgo = Math.round((Date.now() - new Date(listing.last_seen_at).getTime()) / 86400000);
+      const daysAgo = Math.round(
+        (Date.now() - new Date(listing.last_seen_at).getTime()) / 86400000,
+      );
       log.info(`[DRY RUN] Would mark inactive: ${listing.title} (${daysAgo} days stale)`);
     }
   }

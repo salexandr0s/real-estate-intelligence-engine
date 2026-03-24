@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
-import { runMigrations, query, closePool } from '@rei/db';
+import { runMigrations, query, closePool } from '@immoradar/db';
 import { seed } from '../../packages/db/seeds/seed.js';
-import { resetConfig } from '@rei/config';
+import { resetConfig } from '@immoradar/config';
 
-const TEST_DB_NAME = `rei_test_migrations_${process.pid}`;
+const TEST_DB_NAME = `immoradar_test_migrations_${process.pid}`;
 
 let adminClient: pg.Client;
 let originalDatabaseUrl: string | undefined;

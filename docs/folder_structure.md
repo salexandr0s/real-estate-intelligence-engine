@@ -4,7 +4,7 @@
 ## Recommended monorepo layout
 
 ```text
-real-estate-intelligence-engine/
+immoradar/
 ├── apps/
 │   ├── api/
 │   │   ├── src/

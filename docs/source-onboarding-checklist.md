@@ -14,7 +14,7 @@ Copy this checklist into a new issue or document when starting source onboarding
 1. [ ] Create source package from template (`packages/source-template/`)
    ```bash
    cp -r packages/source-template packages/source-<code>
-   # Update package.json name to @rei/source-<code>
+   # Update package.json name to @immoradar/source-<code>
    ```
 
 2. [ ] Implement `SourceAdapter` interface (discovery + detail + availability)

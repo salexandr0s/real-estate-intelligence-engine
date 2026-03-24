@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { resetConfig } from '@rei/config';
+import { resetConfig } from '@immoradar/config';
 import { buildApp } from '../../apps/api/src/app.js';
 
 const AUTH_HEADER = { authorization: 'Bearer dev-token' };
@@ -116,7 +116,7 @@ describe('API endpoints', () => {
       expect(res.statusCode).toBe(200);
       const spec = res.json<{ openapi: string; info: { title: string } }>();
       expect(spec.openapi).toMatch(/^3\./);
-      expect(spec.info.title).toBe('Real Estate Intelligence Engine API');
+      expect(spec.info.title).toBe('ImmoRadar API');
     });
   });
 

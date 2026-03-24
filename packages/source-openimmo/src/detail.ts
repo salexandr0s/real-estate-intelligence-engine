@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { OpenImmoDetailDTO, OpenImmoListingData } from './dto.js';
 
 const BASE_URL = 'https://www.openimmo.at';
@@ -53,8 +53,12 @@ export function parseDetailPage(
     titleRaw: listing.titel ?? null,
     descriptionRaw: listing.beschreibung ? stripHtml(listing.beschreibung) : null,
     priceRaw: listing.kaufpreis != null ? String(listing.kaufpreis) : null,
-    livingAreaRaw: normalizeDecimal(listing.wohnflaeche != null ? String(listing.wohnflaeche) : null),
-    usableAreaRaw: normalizeDecimal(listing.nutzflaeche != null ? String(listing.nutzflaeche) : null),
+    livingAreaRaw: normalizeDecimal(
+      listing.wohnflaeche != null ? String(listing.wohnflaeche) : null,
+    ),
+    usableAreaRaw: normalizeDecimal(
+      listing.nutzflaeche != null ? String(listing.nutzflaeche) : null,
+    ),
     roomsRaw: listing.anzahlZimmer != null ? String(listing.anzahlZimmer) : null,
     addressRaw: addressDisplay,
     postalCodeRaw: listing.plz ?? null,
@@ -70,7 +74,9 @@ export function parseDetailPage(
     heatingTypeRaw: listing.heizungsart ?? null,
     conditionRaw: listing.zustand ?? null,
     energyCertificateRaw: listing.energieausweis ?? null,
-    balconyAreaRaw: normalizeDecimal(listing.balkonFlaeche != null ? String(listing.balkonFlaeche) : null),
+    balconyAreaRaw: normalizeDecimal(
+      listing.balkonFlaeche != null ? String(listing.balkonFlaeche) : null,
+    ),
     terraceAreaRaw: null,
     gardenAreaRaw: null,
     commissionRaw: null,
@@ -180,7 +186,10 @@ export function normalizeDecimal(value: string | null): string | null {
 }
 
 export function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function extractIdFromUrl(url: string): string | null {

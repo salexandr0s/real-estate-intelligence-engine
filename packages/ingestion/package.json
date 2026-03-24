@@ -1,5 +1,5 @@
 {
-  "name": "@rei/ingestion",
+  "name": "@immoradar/ingestion",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -13,15 +13,15 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@rei/contracts": "*",
-    "@rei/config": "*",
-    "@rei/db": "*",
-    "@rei/normalization": "*",
-    "@rei/scoring": "*",
-    "@rei/filtering": "*",
-    "@rei/alerts": "*",
-    "@rei/scraper-core": "*",
-    "@rei/observability": "*"
+    "@immoradar/contracts": "*",
+    "@immoradar/config": "*",
+    "@immoradar/db": "*",
+    "@immoradar/normalization": "*",
+    "@immoradar/scoring": "*",
+    "@immoradar/filtering": "*",
+    "@immoradar/alerts": "*",
+    "@immoradar/scraper-core": "*",
+    "@immoradar/observability": "*"
   },
   "devDependencies": {
     "vitest": "^3.0.0"

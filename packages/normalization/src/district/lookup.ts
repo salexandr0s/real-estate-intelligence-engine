@@ -1,4 +1,4 @@
-import { VIENNA_DISTRICTS } from '@rei/contracts';
+import { VIENNA_DISTRICTS } from '@immoradar/contracts';
 
 // ── Pre-built lookup maps ──────────────────────────────────────────────────
 
@@ -162,7 +162,11 @@ interface DistrictResolution {
  */
 export function resolveDistrict(inputs: DistrictInputs): DistrictResolution {
   const warnings: string[] = [];
-  const candidates: Array<{ districtNo: number; source: string; confidence: 'high' | 'medium' | 'low' }> = [];
+  const candidates: Array<{
+    districtNo: number;
+    source: string;
+    confidence: 'high' | 'medium' | 'low';
+  }> = [];
 
   // Check if city suggests Vienna
   const isVienna = isViennaCity(inputs.cityRaw);
@@ -215,19 +219,19 @@ export function resolveDistrict(inputs: DistrictInputs): DistrictResolution {
   }
 
   // Check for contradictions among high-confidence candidates
-  const highConfidence = candidates.filter(c => c.confidence === 'high');
-  const uniqueHighDistricts = new Set(highConfidence.map(c => c.districtNo));
+  const highConfidence = candidates.filter((c) => c.confidence === 'high');
+  const uniqueHighDistricts = new Set(highConfidence.map((c) => c.districtNo));
 
   if (uniqueHighDistricts.size > 1) {
     warnings.push(
-      `district_conflict: high-confidence sources disagree: ${highConfidence.map(c => `${c.source}=${c.districtNo}`).join(', ')}`
+      `district_conflict: high-confidence sources disagree: ${highConfidence.map((c) => `${c.source}=${c.districtNo}`).join(', ')}`,
     );
   }
 
   // Check for contradiction between high and medium confidence
-  const allDistricts = new Set(candidates.map(c => c.districtNo));
+  const allDistricts = new Set(candidates.map((c) => c.districtNo));
   if (allDistricts.size > 1) {
-    const sources = candidates.map(c => `${c.source}=${c.districtNo}`).join(', ');
+    const sources = candidates.map((c) => `${c.source}=${c.districtNo}`).join(', ');
     warnings.push(`district_conflict_multi_source: ${sources}`);
   }
 

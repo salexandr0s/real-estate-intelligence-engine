@@ -1,5 +1,5 @@
 import { lookup } from 'node:dns/promises';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('alert:webhook');
 

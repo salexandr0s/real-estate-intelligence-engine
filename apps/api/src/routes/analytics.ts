@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
-import { query } from '@rei/db';
-import { velocityToTemperature } from '@rei/contracts';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@rei/scraper-core';
-import type { RescoreJobData } from '@rei/scraper-core';
+import { query } from '@immoradar/db';
+import { velocityToTemperature } from '@immoradar/contracts';
+import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import type { RescoreJobData } from '@immoradar/scraper-core';
 import { parseOrThrow, districtTrendQuerySchema } from '../schemas.js';
 import { z } from 'zod';
 

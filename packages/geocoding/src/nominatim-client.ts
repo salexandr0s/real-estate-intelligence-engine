@@ -4,7 +4,7 @@
  * https://nominatim.org/release-docs/develop/api/Search/
  */
 
-import type { GeocodePrecision } from '@rei/contracts';
+import type { GeocodePrecision } from '@immoradar/contracts';
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const USER_AGENT = 'ImmoRadar/0.1 (geocoding)';

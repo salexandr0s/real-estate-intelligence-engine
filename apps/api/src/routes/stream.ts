@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { alerts, subscribeToAlerts } from '@rei/db';
-import type { AlertNotification } from '@rei/db';
-import { createLogger } from '@rei/observability';
+import { alerts, subscribeToAlerts } from '@immoradar/db';
+import type { AlertNotification } from '@immoradar/db';
+import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('api:stream');
 

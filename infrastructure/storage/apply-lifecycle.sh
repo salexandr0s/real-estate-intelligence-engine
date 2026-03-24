@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Apply lifecycle policy to MinIO bucket.
-# Requires: mc (MinIO client) configured with alias 'rei'
+# Requires: mc (MinIO client) configured with alias 'immoradar'
 set -euo pipefail
 
-BUCKET="${S3_BUCKET:-real-estate-intel}"
-ALIAS="${MINIO_ALIAS:-rei}"
+BUCKET="${S3_BUCKET:-immoradar}"
+ALIAS="${MINIO_ALIAS:-immoradar}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Applying lifecycle policy to ${ALIAS}/${BUCKET}..."

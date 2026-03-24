@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { NotFoundError } from '@rei/observability';
-import type { AlertStatus } from '@rei/contracts';
-import { alerts } from '@rei/db';
+import { NotFoundError } from '@immoradar/observability';
+import type { AlertStatus } from '@immoradar/contracts';
+import { alerts } from '@immoradar/db';
 import {
   parseOrThrow,
   idParamSchema,

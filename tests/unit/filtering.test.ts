@@ -1,11 +1,11 @@
 /**
  * Filtering engine tests.
  * Tests filter compilation and validation.
- * Imports from @rei/filtering — no inline re-implementations.
+ * Imports from @immoradar/filtering — no inline re-implementations.
  */
 import { describe, it, expect } from 'vitest';
-import { compileFilter, validateFilterCreate, validateFilterUpdate } from '@rei/filtering';
-import type { FilterCriteria, FilterCreateInput } from '@rei/contracts';
+import { compileFilter, validateFilterCreate, validateFilterUpdate } from '@immoradar/filtering';
+import type { FilterCriteria, FilterCreateInput } from '@immoradar/contracts';
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 
@@ -56,44 +56,54 @@ describe('compileFilter', () => {
 
 describe('validateFilterCreate', () => {
   it('accepts valid filter', () => {
-    const errors = validateFilterCreate(makeFilterCreateInput({
-      operationType: 'sale',
-      propertyTypes: ['apartment'],
-      districts: [2, 3],
-      maxPriceEur: 300000,
-      minAreaSqm: 50,
-      minScore: 70,
-    }));
+    const errors = validateFilterCreate(
+      makeFilterCreateInput({
+        operationType: 'sale',
+        propertyTypes: ['apartment'],
+        districts: [2, 3],
+        maxPriceEur: 300000,
+        minAreaSqm: 50,
+        minScore: 70,
+      }),
+    );
     expect(errors).toEqual([]);
   });
 
   it('rejects minPrice > maxPrice', () => {
-    const errors = validateFilterCreate(makeFilterCreateInput({
-      minPriceEur: 400000,
-      maxPriceEur: 300000,
-    }));
-    expect(errors.some(e => e.field === 'price')).toBe(true);
+    const errors = validateFilterCreate(
+      makeFilterCreateInput({
+        minPriceEur: 400000,
+        maxPriceEur: 300000,
+      }),
+    );
+    expect(errors.some((e) => e.field === 'price')).toBe(true);
   });
 
   it('rejects invalid district', () => {
-    const errors = validateFilterCreate(makeFilterCreateInput({
-      districts: [0, 24],
-    }));
-    expect(errors.filter(e => e.field === 'districts')).toHaveLength(2);
+    const errors = validateFilterCreate(
+      makeFilterCreateInput({
+        districts: [0, 24],
+      }),
+    );
+    expect(errors.filter((e) => e.field === 'districts')).toHaveLength(2);
   });
 
   it('rejects negative price', () => {
-    const errors = validateFilterCreate(makeFilterCreateInput({
-      minPriceEur: -100,
-    }));
-    expect(errors.some(e => e.field === 'minPriceEur')).toBe(true);
+    const errors = validateFilterCreate(
+      makeFilterCreateInput({
+        minPriceEur: -100,
+      }),
+    );
+    expect(errors.some((e) => e.field === 'minPriceEur')).toBe(true);
   });
 
   it('rejects score out of range', () => {
-    const errors = validateFilterCreate(makeFilterCreateInput({
-      minScore: 150,
-    }));
-    expect(errors.some(e => e.field === 'minScore')).toBe(true);
+    const errors = validateFilterCreate(
+      makeFilterCreateInput({
+        minScore: 150,
+      }),
+    );
+    expect(errors.some((e) => e.field === 'minScore')).toBe(true);
   });
 
   it('accepts empty filter (no constraints)', () => {
@@ -106,7 +116,7 @@ describe('validateFilterCreate', () => {
       ...makeFilterCreateInput(),
       name: '',
     });
-    expect(errors.some(e => e.field === 'name')).toBe(true);
+    expect(errors.some((e) => e.field === 'name')).toBe(true);
   });
 
   it('requires userId', () => {
@@ -114,7 +124,7 @@ describe('validateFilterCreate', () => {
       ...makeFilterCreateInput(),
       userId: 0,
     });
-    expect(errors.some(e => e.field === 'userId')).toBe(true);
+    expect(errors.some((e) => e.field === 'userId')).toBe(true);
   });
 });
 
@@ -126,6 +136,6 @@ describe('validateFilterUpdate', () => {
 
   it('rejects minRooms > maxRooms', () => {
     const errors = validateFilterUpdate({ minRooms: 5, maxRooms: 2 });
-    expect(errors.some(e => e.field === 'rooms')).toBe(true);
+    expect(errors.some((e) => e.field === 'rooms')).toBe(true);
   });
 });

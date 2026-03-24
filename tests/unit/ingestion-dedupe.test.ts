@@ -5,16 +5,20 @@
  * business-rule concepts not exported from packages.
  */
 import { describe, it, expect } from 'vitest';
-import { computeContentHash } from '@rei/scraper-core';
-import { computeContentFingerprint } from '@rei/normalization';
-import type { CanonicalListingInput } from '@rei/contracts';
+import { computeContentHash } from '@immoradar/scraper-core';
+import { computeContentFingerprint } from '@immoradar/normalization';
+import type { CanonicalListingInput } from '@immoradar/contracts';
 
 // ── Business rule helpers (not exported from packages) ──────────────────────
 
 type VersionReason = 'first_seen' | 'price_change' | 'content_change' | 'status_change' | null;
 
 function detectVersionReason(
-  existing: { contentFingerprint: string; listPriceEurCents: number | null; listingStatus: string } | null,
+  existing: {
+    contentFingerprint: string;
+    listPriceEurCents: number | null;
+    listingStatus: string;
+  } | null,
   incoming: { contentFingerprint: string; listPriceEurCents: number | null; listingStatus: string },
 ): VersionReason {
   if (!existing) return 'first_seen';
@@ -24,7 +28,12 @@ function detectVersionReason(
   return 'content_change';
 }
 
-function buildDedupeKey(filterId: number, listingId: number, alertType: string, scoreVersion?: number): string {
+function buildDedupeKey(
+  filterId: number,
+  listingId: number,
+  alertType: string,
+  scoreVersion?: number,
+): string {
   const parts = [`filter:${filterId}`, `listing:${listingId}`, `type:${alertType}`];
   if (scoreVersion != null) parts.push(`sv:${scoreVersion}`);
   return parts.join(':');
@@ -32,7 +41,9 @@ function buildDedupeKey(filterId: number, listingId: number, alertType: string, 
 
 // ── Helper: build listing data for fingerprinting ──────────────────────────
 
-function makeListing(overrides: Partial<CanonicalListingInput> = {}): Partial<CanonicalListingInput> {
+function makeListing(
+  overrides: Partial<CanonicalListingInput> = {},
+): Partial<CanonicalListingInput> {
   return {
     title: '3-Zimmer Wohnung',
     description: 'Schöne Wohnung',
@@ -116,9 +127,13 @@ describe('computeContentFingerprint', () => {
 
 describe('detectVersionReason', () => {
   it('returns first_seen when no existing listing', () => {
-    expect(detectVersionReason(null, {
-      contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active',
-    })).toBe('first_seen');
+    expect(
+      detectVersionReason(null, {
+        contentFingerprint: 'abc',
+        listPriceEurCents: 100,
+        listingStatus: 'active',
+      }),
+    ).toBe('first_seen');
   });
 
   it('returns null when fingerprint unchanged', () => {
@@ -127,24 +142,30 @@ describe('detectVersionReason', () => {
   });
 
   it('returns price_change when price changed', () => {
-    expect(detectVersionReason(
-      { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
-      { contentFingerprint: 'def', listPriceEurCents: 90, listingStatus: 'active' },
-    )).toBe('price_change');
+    expect(
+      detectVersionReason(
+        { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
+        { contentFingerprint: 'def', listPriceEurCents: 90, listingStatus: 'active' },
+      ),
+    ).toBe('price_change');
   });
 
   it('returns status_change when status changed', () => {
-    expect(detectVersionReason(
-      { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
-      { contentFingerprint: 'def', listPriceEurCents: 100, listingStatus: 'sold' },
-    )).toBe('status_change');
+    expect(
+      detectVersionReason(
+        { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
+        { contentFingerprint: 'def', listPriceEurCents: 100, listingStatus: 'sold' },
+      ),
+    ).toBe('status_change');
   });
 
   it('returns content_change for other changes', () => {
-    expect(detectVersionReason(
-      { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
-      { contentFingerprint: 'def', listPriceEurCents: 100, listingStatus: 'active' },
-    )).toBe('content_change');
+    expect(
+      detectVersionReason(
+        { contentFingerprint: 'abc', listPriceEurCents: 100, listingStatus: 'active' },
+        { contentFingerprint: 'def', listPriceEurCents: 100, listingStatus: 'active' },
+      ),
+    ).toBe('content_change');
   });
 });
 
@@ -178,10 +199,12 @@ describe('idempotency scenarios', () => {
     const fp2 = computeContentFingerprint(listing);
 
     expect(fp1).toBe(fp2);
-    expect(detectVersionReason(
-      { contentFingerprint: fp1, listPriceEurCents: 29900000, listingStatus: 'active' },
-      { contentFingerprint: fp2, listPriceEurCents: 29900000, listingStatus: 'active' },
-    )).toBe(null);
+    expect(
+      detectVersionReason(
+        { contentFingerprint: fp1, listPriceEurCents: 29900000, listingStatus: 'active' },
+        { contentFingerprint: fp2, listPriceEurCents: 29900000, listingStatus: 'active' },
+      ),
+    ).toBe(null);
   });
 
   it('price change creates new version and different hash', () => {
@@ -189,10 +212,12 @@ describe('idempotency scenarios', () => {
     const fp2 = computeContentFingerprint(makeListing({ listPriceEurCents: 28000000 }));
 
     expect(fp1).not.toBe(fp2);
-    expect(detectVersionReason(
-      { contentFingerprint: fp1, listPriceEurCents: 29900000, listingStatus: 'active' },
-      { contentFingerprint: fp2, listPriceEurCents: 28000000, listingStatus: 'active' },
-    )).toBe('price_change');
+    expect(
+      detectVersionReason(
+        { contentFingerprint: fp1, listPriceEurCents: 29900000, listingStatus: 'active' },
+        { contentFingerprint: fp2, listPriceEurCents: 28000000, listingStatus: 'active' },
+      ),
+    ).toBe('price_change');
   });
 
   it('alert dedupe prevents duplicate alerts for same event', () => {

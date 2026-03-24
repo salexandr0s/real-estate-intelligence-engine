@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { DerStandardDetailDTO, DerStandardDetailData } from './dto.js';
 
 /**
@@ -14,9 +14,7 @@ export function parseDetailPage(
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
   // ── Primary path: embedded JSON ──────────────────────────────────────────
-  const scriptMatch = html.match(
-    /<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/,
-  );
+  const scriptMatch = html.match(/<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/);
 
   if (scriptMatch?.[1]) {
     try {
@@ -44,14 +42,12 @@ function buildCaptureFromJson(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
-  const standardId = detailData.id != null ? String(detailData.id) : extractIdFromUrl(url) ?? '';
+  const standardId = detailData.id != null ? String(detailData.id) : (extractIdFromUrl(url) ?? '');
   const addr = detailData.address;
   const coords = detailData.coordinates;
   const contact = detailData.contact;
 
-  const districtRaw = addr?.district
-    ? extractDistrictLabel(addr.district)
-    : null;
+  const districtRaw = addr?.district ? extractDistrictLabel(addr.district) : null;
 
   const features = detailData.features ?? [];
   const hasBalcony = features.some((f) => /balkon|loggia/i.test(f));
@@ -85,8 +81,7 @@ function buildCaptureFromJson(
     heatingTypeRaw: detailData.heatingType ?? null,
     conditionRaw: detailData.condition ?? null,
     energyCertificateRaw: detailData.energyCertificate ?? null,
-    operatingCostRaw:
-      detailData.operatingCosts != null ? String(detailData.operatingCosts) : null,
+    operatingCostRaw: detailData.operatingCosts != null ? String(detailData.operatingCosts) : null,
     latRaw: coords?.lat != null ? String(coords.lat) : null,
     lonRaw: coords?.lng != null ? String(coords.lng) : null,
     balconyAreaRaw: null, // derstandard does not provide typed area breakdowns
@@ -171,9 +166,7 @@ function decodeHtmlEntities(text: string): string {
   }
 
   // Numeric entities: &#123; or &#x1F;
-  result = result.replace(/&#(\d+);/g, (_, code: string) =>
-    String.fromCharCode(Number(code)),
-  );
+  result = result.replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
   result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) =>
     String.fromCharCode(parseInt(hex, 16)),
   );
@@ -185,7 +178,9 @@ function decodeHtmlEntities(text: string): string {
  * Strip HTML tags, decode entities, and collapse whitespace.
  */
 function stripTags(html: string): string {
-  return decodeHtmlEntities(html.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+  return decodeHtmlEntities(html.replace(/<[^>]*>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -239,11 +234,15 @@ function extractFromDom(html: string): DomExtracted | null {
 
   // Heating type
   let heatingType: string | null = null;
-  const heatingMatch = decoded.match(/Heizungsart[\s\S]{0,80}?<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/);
+  const heatingMatch = decoded.match(
+    /Heizungsart[\s\S]{0,80}?<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/,
+  );
   if (heatingMatch?.[1]) {
     heatingType = stripTags(heatingMatch[1]);
   } else {
-    const heatingFallback = decoded.match(/Heizungsart[\s\S]{0,50}?([A-Z\u00C0-\u00FF][a-z\u00E0-\u00FF\u00C0-\u00FF]+(?:\s+[a-z\u00E0-\u00FF]+)*)/);
+    const heatingFallback = decoded.match(
+      /Heizungsart[\s\S]{0,50}?([A-Z\u00C0-\u00FF][a-z\u00E0-\u00FF\u00C0-\u00FF]+(?:\s+[a-z\u00E0-\u00FF]+)*)/,
+    );
     if (heatingFallback?.[1]) {
       heatingType = heatingFallback[1].trim();
     }
@@ -261,7 +260,9 @@ function extractFromDom(html: string): DomExtracted | null {
 
   // Street: from location section — look for the second span in .location
   let street: string | null = null;
-  const locationSection = decoded.match(/<div[^>]*class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+  const locationSection = decoded.match(
+    /<div[^>]*class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+  );
   if (locationSection?.[1]) {
     const spans = locationSection[1].match(/<span[^>]*>([\s\S]*?)<\/span>/g);
     if (spans && spans.length >= 2) {
@@ -275,14 +276,18 @@ function extractFromDom(html: string): DomExtracted | null {
 
   // Description
   let description: string | null = null;
-  const descSection = decoded.match(/<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+  const descSection = decoded.match(
+    /<div[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+  );
   if (descSection?.[1]) {
     description = stripTags(descSection[1]);
   }
 
   // Contact name
   let contactName: string | null = null;
-  const contactSection = decoded.match(/<span[^>]*class="[^"]*agent-name[^"]*"[^>]*>([\s\S]*?)<\/span>/);
+  const contactSection = decoded.match(
+    /<span[^>]*class="[^"]*agent-name[^"]*"[^>]*>([\s\S]*?)<\/span>/,
+  );
   if (contactSection?.[1]) {
     contactName = stripTags(contactSection[1]);
   }
@@ -299,7 +304,9 @@ function extractFromDom(html: string): DomExtracted | null {
 
   // Features: spans inside .features div
   const features: string[] = [];
-  const featuresSection = decoded.match(/<div[^>]*class="[^"]*features[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+  const featuresSection = decoded.match(
+    /<div[^>]*class="[^"]*features[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+  );
   if (featuresSection?.[1]) {
     const featureSpans = featuresSection[1].match(/<span[^>]*>([\s\S]*?)<\/span>/g);
     if (featureSpans) {
@@ -346,9 +353,7 @@ function buildCaptureFromDom(
 ): DetailCapture<DerStandardDetailDTO> {
   const standardId = extractIdFromUrl(url) ?? '';
 
-  const districtRaw = dom.district
-    ? extractDistrictLabel(dom.district)
-    : null;
+  const districtRaw = dom.district ? extractDistrictLabel(dom.district) : null;
 
   const features = dom.features;
   const hasBalcony = features.some((f) => /balkon|loggia/i.test(f));
@@ -473,9 +478,7 @@ function buildFailedCapture(
 
 export function detectDetailAvailability(html: string): SourceAvailability {
   // Check for embedded detail data first
-  const scriptMatch = html.match(
-    /<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/,
-  );
+  const scriptMatch = html.match(/<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/);
   if (scriptMatch?.[1]) {
     try {
       const data = JSON.parse(scriptMatch[1]) as DerStandardDetailData;
@@ -557,7 +560,9 @@ function normalizeDecimal(value: string | null): string | null {
 }
 
 function formatAddress(
-  addr: { postalCode?: string; city?: string; district?: string; street?: string | null } | undefined,
+  addr:
+    | { postalCode?: string; city?: string; district?: string; street?: string | null }
+    | undefined,
 ): string | null {
   if (!addr) return null;
   const parts: string[] = [];
@@ -576,32 +581,32 @@ function formatAddress(
 function extractDistrictLabel(district: string): string {
   const viennaDistricts: Record<string, number> = {
     'innere stadt': 1,
-    'leopoldstadt': 2,
+    leopoldstadt: 2,
     'landstra\u00DFe': 3,
-    'landstrasse': 3,
-    'wieden': 4,
-    'margareten': 5,
-    'mariahilf': 6,
-    'neubau': 7,
-    'josefstadt': 8,
-    'alsergrund': 9,
-    'favoriten': 10,
-    'simmering': 11,
-    'meidling': 12,
-    'hietzing': 13,
-    'penzing': 14,
+    landstrasse: 3,
+    wieden: 4,
+    margareten: 5,
+    mariahilf: 6,
+    neubau: 7,
+    josefstadt: 8,
+    alsergrund: 9,
+    favoriten: 10,
+    simmering: 11,
+    meidling: 12,
+    hietzing: 13,
+    penzing: 14,
     'rudolfsheim-f\u00FCnfhaus': 15,
     'rudolfsheim-fuenfhaus': 15,
-    'ottakring': 16,
-    'hernals': 17,
+    ottakring: 16,
+    hernals: 17,
     'w\u00E4hring': 18,
-    'waehring': 18,
+    waehring: 18,
     'd\u00F6bling': 19,
-    'doebling': 19,
-    'brigittenau': 20,
-    'floridsdorf': 21,
-    'donaustadt': 22,
-    'liesing': 23,
+    doebling: 19,
+    brigittenau: 20,
+    floridsdorf: 21,
+    donaustadt: 22,
+    liesing: 23,
   };
 
   const num = viennaDistricts[district.toLowerCase()];

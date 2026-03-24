@@ -15,7 +15,7 @@ import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
-import { createLogger } from '@rei/observability';
+import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
   getRedisConnection,
@@ -29,11 +29,11 @@ import {
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
-} from '@rei/scraper-core';
-import type { CanaryJobData } from '@rei/scraper-core';
-import type { CrawlProfile, BaselineLookup, SourceRawListingBase } from '@rei/contracts';
-import { getAreaBucket, getRoomBucket } from '@rei/contracts';
-import { sources, canaryResults, marketBaselines } from '@rei/db';
+} from '@immoradar/scraper-core';
+import type { CanaryJobData } from '@immoradar/scraper-core';
+import type { CrawlProfile, BaselineLookup, SourceRawListingBase } from '@immoradar/contracts';
+import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
+import { sources, canaryResults, marketBaselines } from '@immoradar/db';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -43,8 +43,8 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
-} from '@rei/normalization';
-import { scoreListing } from '@rei/scoring';
+} from '@immoradar/normalization';
+import { scoreListing } from '@immoradar/scoring';
 
 const log = createLogger('worker:canary');
 

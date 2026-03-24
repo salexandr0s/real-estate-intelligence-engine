@@ -1,4 +1,4 @@
-import type { DetailCapture, SourceAvailability } from '@rei/contracts';
+import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import type { WohnnetDetailDTO, JsonLdProduct, WohnnetDataLayer } from './dto.js';
 import { extractIdFromUrl } from './discovery.js';
 
@@ -30,43 +30,28 @@ export function parseDetailPage(
 
   // -- ID resolution: var realtyId > data-id attr > URL extraction
   const wohnnetId =
-    extractRealtyIdVar(html)
-    ?? extractDataIdAttr(html)
-    ?? extractIdFromUrl(url)
-    ?? '';
+    extractRealtyIdVar(html) ?? extractDataIdAttr(html) ?? extractIdFromUrl(url) ?? '';
 
   // -- Title: JSON-LD > HTML h1
-  const titleRaw =
-    jsonLd?.name
-    ?? extractHtmlTitle(html)
-    ?? null;
+  const titleRaw = jsonLd?.name ?? extractHtmlTitle(html) ?? null;
 
   // -- Description: JSON-LD > HTML paragraph
   const descriptionRaw =
-    (jsonLd?.description ? stripHtml(jsonLd.description) : null)
-    ?? extractHtmlDescription(html);
+    (jsonLd?.description ? stripHtml(jsonLd.description) : null) ?? extractHtmlDescription(html);
 
   // -- Price: JSON-LD offers > dataLayer dL-preis
-  const priceRaw =
-    jsonLd?.offers?.price
-    ?? dataLayer?.['dL-preis']
-    ?? null;
+  const priceRaw = jsonLd?.offers?.price ?? dataLayer?.['dL-preis'] ?? null;
 
   // -- Area: dataLayer dL-flaeche (Austrian decimal)
-  const livingAreaRaw = normalizeDecimal(dataLayer?.['dL-flaeche'] ?? null)
-    ?? extractEckdatenValue(html, 'Wohnfl');
+  const livingAreaRaw =
+    normalizeDecimal(dataLayer?.['dL-flaeche'] ?? null) ?? extractEckdatenValue(html, 'Wohnfl');
 
   // -- Rooms: dataLayer dL-zimmer
-  const roomsRaw =
-    dataLayer?.['dL-zimmer']
-    ?? extractEckdatenValue(html, 'Zimmer')
-    ?? null;
+  const roomsRaw = dataLayer?.['dL-zimmer'] ?? extractEckdatenValue(html, 'Zimmer') ?? null;
 
   // -- Property type: dataLayer dL-objektart
   const propertyTypeRaw =
-    dataLayer?.['dL-objektart']
-    ?? extractEckdatenValue(html, 'Objekttyp')
-    ?? null;
+    dataLayer?.['dL-objektart'] ?? extractEckdatenValue(html, 'Objekttyp') ?? null;
 
   // -- Operation type: dataLayer dL-angebot > URL heuristic
   const angebot = dataLayer?.['dL-angebot'];
@@ -100,10 +85,7 @@ export function parseDetailPage(
   const images = extractImages(html);
 
   // -- Broker from JSON-LD brand or HTML contact section
-  const brokerCompany =
-    jsonLd?.brand?.name
-    ?? extractBrokerName(html)
-    ?? null;
+  const brokerCompany = jsonLd?.brand?.name ?? extractBrokerName(html) ?? null;
 
   // -- Coordinates from map element
   const { lat, lon } = extractCoordinates(html);
@@ -163,7 +145,7 @@ export function parseDetailPage(
     sourceCode,
     sourceListingKeyCandidate: wohnnetId,
     externalId: wohnnetId,
-    canonicalUrl: (url.split('?')[0]) ?? url,
+    canonicalUrl: url.split('?')[0] ?? url,
     detailUrl: url,
     extractedAt: new Date().toISOString(),
     payload,
@@ -181,7 +163,7 @@ function buildFailedCapture(
     sourceCode,
     sourceListingKeyCandidate: extractIdFromUrl(url) ?? '',
     externalId: extractIdFromUrl(url),
-    canonicalUrl: (url.split('?')[0]) ?? url,
+    canonicalUrl: url.split('?')[0] ?? url,
     detailUrl: url,
     extractedAt: new Date().toISOString(),
     payload: {
@@ -320,10 +302,7 @@ function extractStreetFromAddress(address: string | null): string | null {
  */
 function extractEckdatenValue(html: string, label: string): string | null {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(
-    `<th>[^<]*${escapedLabel}[^<]*<\\/th>\\s*<td>([^<]+)<\\/td>`,
-    'i',
-  );
+  const pattern = new RegExp(`<th>[^<]*${escapedLabel}[^<]*<\\/th>\\s*<td>([^<]+)<\\/td>`, 'i');
   const match = html.match(pattern);
   return match?.[1]?.trim() ?? null;
 }
@@ -342,10 +321,7 @@ function extractEnergyClass(html: string): string | null {
  */
 function extractFeatureArea(html: string, featureName: string): string | null {
   const escapedName = featureName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(
-    `<li>[^<]*${escapedName}\\s*\\(\\s*(\\d+[,.]?\\d*)\\s*m`,
-    'i',
-  );
+  const pattern = new RegExp(`<li>[^<]*${escapedName}\\s*\\(\\s*(\\d+[,.]?\\d*)\\s*m`, 'i');
   const match = html.match(pattern);
   if (!match?.[1]) return null;
   return normalizeDecimal(match[1]);
@@ -406,10 +382,7 @@ function extractCoordinates(html: string): { lat: string | null; lon: string | n
  */
 function extractContactField(html: string, iconClass: string): string | null {
   const escapedIcon = iconClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(
-    `fa-${escapedIcon}[^<]*<\\/i>\\s*<a[^>]*>([^<]+)<\\/a>`,
-    'i',
-  );
+  const pattern = new RegExp(`fa-${escapedIcon}[^<]*<\\/i>\\s*<a[^>]*>([^<]+)<\\/a>`, 'i');
   const match = html.match(pattern);
   return match?.[1]?.trim() ?? null;
 }
@@ -417,9 +390,11 @@ function extractContactField(html: string, iconClass: string): string | null {
 /**
  * Parse "Region4.Name" value like "1050 Wien, Margareten".
  */
-function parseRegionName(
-  regionName: string | null,
-): { postalCodeRaw: string | null; cityRaw: string | null; districtRaw: string | null } {
+function parseRegionName(regionName: string | null): {
+  postalCodeRaw: string | null;
+  cityRaw: string | null;
+  districtRaw: string | null;
+} {
   if (!regionName) return { postalCodeRaw: null, cityRaw: null, districtRaw: null };
 
   const match = regionName.match(/^(\d{4})\s+(Wien)(?:\s*,\s*(.+))?$/i);
@@ -435,7 +410,10 @@ function parseRegionName(
 // -- Helpers ------------------------------------------------------------------
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

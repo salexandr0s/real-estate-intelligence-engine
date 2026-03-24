@@ -1,7 +1,7 @@
 
 -- schema.sql
 -- PostgreSQL 15+
--- System of record for the Real Estate Intelligence Engine.
+-- System of record for ImmoRadar.
 -- Design goals:
 --   * raw data preservation
 --   * idempotent upserts

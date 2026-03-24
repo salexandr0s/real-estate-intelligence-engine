@@ -7,8 +7,8 @@ import type {
   AlertFrequency,
   SortBy,
   OperationType,
-} from '@rei/contracts';
-import { passesKeywordFilter } from '@rei/contracts';
+} from '@immoradar/contracts';
+import { passesKeywordFilter } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 
@@ -277,7 +277,7 @@ export async function findActiveFilters(): Promise<UserFilterRow[]> {
  */
 /**
  * Pure keyword post-filter for reverse-match results.
- * Delegates to the shared keyword matching module in @rei/filtering
+ * Delegates to the shared keyword matching module in @immoradar/filtering
  * to guarantee identical semantics with the SQL search path.
  * Exported for unit testing without DB access.
  */

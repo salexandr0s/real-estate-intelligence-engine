@@ -2,7 +2,7 @@ import type {
   NormalizationContext,
   NormalizationResult,
   SourceRawListingBase,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import { BaseSourceMapper } from './base-mapper.js';
 
 /**

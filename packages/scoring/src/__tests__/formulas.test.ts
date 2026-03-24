@@ -7,7 +7,7 @@ import {
   computeConfidenceScore,
   scoreListing,
 } from '../index.js';
-import type { ScoreInput, BaselineLookup } from '@rei/contracts';
+import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';
 
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 86_400_000);

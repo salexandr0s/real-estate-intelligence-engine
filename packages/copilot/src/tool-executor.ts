@@ -1,5 +1,5 @@
 // ── Tool executor ────────────────────────────────────────────────────────────
-// Routes tool calls to existing @rei/db query functions and formats results
+// Routes tool calls to existing @immoradar/db query functions and formats results
 // into ContentBlock types for the Swift client + text summaries for Claude.
 
 import {
@@ -10,8 +10,8 @@ import {
   pois,
   listingPois,
   dashboard,
-} from '@rei/db';
-import { VIENNA_DISTRICTS } from '@rei/contracts';
+} from '@immoradar/db';
+import { VIENNA_DISTRICTS } from '@immoradar/contracts';
 import type {
   ContentBlock,
   ListingCardDTO,
@@ -20,7 +20,7 @@ import type {
   PropertyType,
   SortBy,
   ListingRow,
-} from '@rei/contracts';
+} from '@immoradar/contracts';
 import type { ToolResult } from './types.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

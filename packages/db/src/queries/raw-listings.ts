@@ -1,5 +1,5 @@
 import { query } from '../client.js';
-import type { RawListingUpsert, RawListingRow, ExtractionStatus } from '@rei/contracts';
+import type { RawListingUpsert, RawListingRow, ExtractionStatus } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 
