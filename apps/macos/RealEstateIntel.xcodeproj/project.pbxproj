@@ -125,6 +125,9 @@
 		ACA823D2471AE1DDF25997F3 /* ProximityCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC0AC8DEE277F05B6652D9D /* ProximityCell.swift */; };
 		ACBCE6FD69B678381029B172 /* RealEstateIntelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7B48FC773CBD385E781D80 /* RealEstateIntelApp.swift */; };
 		AD52D9CD2089226D1A320491 /* DashboardStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */; };
+		BB1C2D3E4F5A6B7C8D9E0F1A /* ListingVelocityPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0E1F /* ListingVelocityPoint.swift */; };
+		DD3E4F5A6B7C8D9E0F1A2B3C /* ScoreDistributionBucket.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2D3E4F5A6B7C8D9E0F1A2B /* ScoreDistributionBucket.swift */; };
+		FF5A6B7C8D9E0F1A2B3C4D5E /* DistrictComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE4F5A6B7C8D9E0F1A2B3C4D /* DistrictComparison.swift */; };
 		AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE95FFC3DF5D5037B7C4CF46 /* DashboardViewModel.swift */; };
 		AF64E595A6CAE616BECFCEDA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0B6225CB1B10E9C769B8C7 /* ContentView.swift */; };
 		B012246AE7DE163BD4AD4E43 /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F418C5EE14B80F9ECF134C /* PriceHistoryView.swift */; };
@@ -185,6 +188,14 @@
 		FD1345AA660F1A42DE100D75 /* SourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC4382030D952996A1816CD /* SourcesView.swift */; };
 		FE2E99985C92AE414A3F9B32 /* DocumentFactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A618704E1686A2D441266B23 /* DocumentFactsView.swift */; };
 		FF4BDBAA5DA2AE0BC4046A36 /* POI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC5A26E37EBE261AADA3F64 /* POI.swift */; };
+		EAC8CFD8D15AC3D631065742 /* SparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D546831475F23893D5E463EC /* SparklineView.swift */; };
+		D4B9E7E732F60EF67B4839C2 /* ScoreDistributionChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F97D6E6AB9ED9B23FA59CF2 /* ScoreDistributionChart.swift */; };
+		2174ED0CDC6895F2FB545B5C /* DistrictComparisonChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = F285DA9264F63C84F4BDB87A /* DistrictComparisonChart.swift */; };
+		E19825022D9C0223F40C0C80 /* DashboardPriceTrendChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBCDB4F77D47C31FE41577A /* DashboardPriceTrendChart.swift */; };
+		DCBFBC7C22A6AB6CA89557AB /* OpportunityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0068C57EBDAF490907761C3 /* OpportunityCard.swift */; };
+		E6F73C6A6984DF2F0A5DD56C /* TopOpportunitiesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 245AB37049292999D72145EB /* TopOpportunitiesSection.swift */; };
+		A2A8203A73E2A2B1DF9143B6 /* PipelineHealthGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797FF1B70DD4E402F75A5C10 /* PipelineHealthGrid.swift */; };
+		24B6AA291C26FD6EA3A8428C /* MarketHeatGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50393059D22823B542AAA16 /* MarketHeatGrid.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -220,6 +231,17 @@
 		2BACA80919296C348976501D /* ListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingRow.swift; sourceTree = "<group>"; };
 		2C68CA156ED9C05D6B98062A /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsView.swift; sourceTree = "<group>"; };
 		2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardStats.swift; sourceTree = "<group>"; };
+		AA1B2C3D4E5F6A7B8C9D0E1F /* ListingVelocityPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingVelocityPoint.swift; sourceTree = "<group>"; };
+		CC2D3E4F5A6B7C8D9E0F1A2B /* ScoreDistributionBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreDistributionBucket.swift; sourceTree = "<group>"; };
+		EE4F5A6B7C8D9E0F1A2B3C4D /* DistrictComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictComparison.swift; sourceTree = "<group>"; };
+		D546831475F23893D5E463EC /* SparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparklineView.swift; sourceTree = "<group>"; };
+		0F97D6E6AB9ED9B23FA59CF2 /* ScoreDistributionChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreDistributionChart.swift; sourceTree = "<group>"; };
+		F285DA9264F63C84F4BDB87A /* DistrictComparisonChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictComparisonChart.swift; sourceTree = "<group>"; };
+		0EBCDB4F77D47C31FE41577A /* DashboardPriceTrendChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPriceTrendChart.swift; sourceTree = "<group>"; };
+		A0068C57EBDAF490907761C3 /* OpportunityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpportunityCard.swift; sourceTree = "<group>"; };
+		245AB37049292999D72145EB /* TopOpportunitiesSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopOpportunitiesSection.swift; sourceTree = "<group>"; };
+		797FF1B70DD4E402F75A5C10 /* PipelineHealthGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineHealthGrid.swift; sourceTree = "<group>"; };
+		F50393059D22823B542AAA16 /* MarketHeatGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketHeatGrid.swift; sourceTree = "<group>"; };
 		2DD4867A12512695480D93CB /* ScoreBreakdownBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBreakdownBlock.swift; sourceTree = "<group>"; };
 		2FC67168F3316F4DB345FFA5 /* AlertType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertType.swift; sourceTree = "<group>"; };
 		311F18B1C1946EACB5B22D28 /* TextContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentBlock.swift; sourceTree = "<group>"; };
@@ -645,6 +667,7 @@
 				5DB333860614B60D651AC033 /* ScoreBar.swift */,
 				2B13D6E8A00391FC3945AD4C /* ScoreIndicator.swift */,
 				A08A51A009403A46B1345BCC /* SourceLogo.swift */,
+				D546831475F23893D5E463EC /* SparklineView.swift */,
 				EC52E69C8BBE6F1E40E74836 /* StatusBadge.swift */,
 				C6FD0F993F20CA5DF23DE907 /* Theme.swift */,
 			);
@@ -656,14 +679,21 @@
 			children = (
 				D00B6C48740072BB50DF60A6 /* DashboardHeader.swift */,
 				1DCFB35EB4F8124FC29BECDB /* DashboardListingRow.swift */,
+				0EBCDB4F77D47C31FE41577A /* DashboardPriceTrendChart.swift */,
 				71FCE478C964B36CF4F6B450 /* DashboardView.swift */,
 				AE95FFC3DF5D5037B7C4CF46 /* DashboardViewModel.swift */,
+				F285DA9264F63C84F4BDB87A /* DistrictComparisonChart.swift */,
+				F50393059D22823B542AAA16 /* MarketHeatGrid.swift */,
 				EDCEED8D48E1C9DC00FD28F0 /* MarketTemperatureCard.swift */,
+				A0068C57EBDAF490907761C3 /* OpportunityCard.swift */,
+				797FF1B70DD4E402F75A5C10 /* PipelineHealthGrid.swift */,
 				34E51B33E12A58C199C0AD47 /* RecentListingsSection.swift */,
+				0F97D6E6AB9ED9B23FA59CF2 /* ScoreDistributionChart.swift */,
 				88AEEC9CD1E5B54B167D8D43 /* SourceHealthRow.swift */,
 				C5A7B3A87C4DCA501C4D2FF4 /* SourceHealthSection.swift */,
 				EEB6D9C2CF87776E903E47C3 /* SummaryCardView.swift */,
 				FCF0648575C722574142118A /* SummaryGridView.swift */,
+				245AB37049292999D72145EB /* TopOpportunitiesSection.swift */,
 			);
 			path = Dashboard;
 			sourceTree = "<group>";
@@ -707,6 +737,9 @@
 				324B0F5720E11230B1B00DE9 /* CopilotMessage.swift */,
 				04ED2EA32B9562957A1EFF30 /* CopilotProvider.swift */,
 				2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */,
+				AA1B2C3D4E5F6A7B8C9D0E1F /* ListingVelocityPoint.swift */,
+				CC2D3E4F5A6B7C8D9E0F1A2B /* ScoreDistributionBucket.swift */,
+				EE4F5A6B7C8D9E0F1A2B3C4D /* DistrictComparison.swift */,
 				03BB91778F6D94C664B5CE8F /* DistrictSummary.swift */,
 				9337ADB045B0DF74AB97F7B4 /* DistrictTrend.swift */,
 				EC7D490D99D3B81D05FDB20C /* Document.swift */,
@@ -869,7 +902,18 @@
 				386AB82E6D14EC5DFE3645F5 /* CrossSourceComparisonView.swift in Sources */,
 				ABAD42BCCD756B71FF5CD864 /* DashboardHeader.swift in Sources */,
 				59E95B052E006F43C89A7A9E /* DashboardListingRow.swift in Sources */,
+				EAC8CFD8D15AC3D631065742 /* SparklineView.swift in Sources */,
+				D4B9E7E732F60EF67B4839C2 /* ScoreDistributionChart.swift in Sources */,
+				2174ED0CDC6895F2FB545B5C /* DistrictComparisonChart.swift in Sources */,
+				DCBFBC7C22A6AB6CA89557AB /* OpportunityCard.swift in Sources */,
+				E6F73C6A6984DF2F0A5DD56C /* TopOpportunitiesSection.swift in Sources */,
+				A2A8203A73E2A2B1DF9143B6 /* PipelineHealthGrid.swift in Sources */,
+				24B6AA291C26FD6EA3A8428C /* MarketHeatGrid.swift in Sources */,
+				E19825022D9C0223F40C0C80 /* DashboardPriceTrendChart.swift in Sources */,
 				AD52D9CD2089226D1A320491 /* DashboardStats.swift in Sources */,
+				BB1C2D3E4F5A6B7C8D9E0F1A /* ListingVelocityPoint.swift in Sources */,
+				DD3E4F5A6B7C8D9E0F1A2B3C /* ScoreDistributionBucket.swift in Sources */,
+				FF5A6B7C8D9E0F1A2B3C4D5E /* DistrictComparison.swift in Sources */,
 				DF2BF36CFAE1F46DBD1F2E4D /* DashboardView.swift in Sources */,
 				AF493A8B47E18A76D6FCF4A0 /* DashboardViewModel.swift in Sources */,
 				A958DFF959BF2BE0C0F14428 /* DetailContentView.swift in Sources */,

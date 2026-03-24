@@ -1,32 +1,74 @@
 import SwiftUI
 
-/// Dashboard overview with summary cards, recent high-score listings, and source health.
-/// Uses a fixed single-page layout where cards fill available space and scroll internally.
+/// Dashboard overview — dense, single-screen layout with weighted rows.
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-            DashboardHeader(isLoading: viewModel.isLoading) {
-                Task { await viewModel.refresh(using: appState.apiClient) }
-            }
-            SummaryGridView(cards: viewModel.summaryCards)
-            HStack(alignment: .top, spacing: Theme.Spacing.xl) {
-                RecentListingsSection(listings: viewModel.recentHighScoreListings)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                MarketTemperatureCard(data: viewModel.temperatureData)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                SourceHealthSection(
-                    sources: viewModel.sources,
-                    healthyCount: viewModel.healthySources,
-                    activeCount: viewModel.activeSources
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        GeometryReader { geo in
+            let contentWidth = geo.size.width - Theme.Spacing.lg * 2
+            let gap = Theme.Spacing.md
+            let primaryHeight = max(260, min(340, (geo.size.height - 300) * 0.48))
+            let actionHeight = max(300, min(420, (geo.size.height - 300) * 0.48))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: gap) {
+                    // Header
+                    DashboardHeader(
+                        lastRefresh: viewModel.lastRefreshDate,
+                        isLoading: viewModel.isLoading
+                    ) {
+                        Task { await viewModel.refresh(using: appState.apiClient) }
+                    }
+
+                    // Tier 1: Compact summary metrics
+                    SummaryGridView(
+                        cards: viewModel.enhancedSummaryCards(
+                            unreadAlertCount: appState.unreadAlertCount
+                        )
+                    )
+
+                    // Tier 2: Primary analytics — 55% district | 45% trends
+                    HStack(alignment: .top, spacing: gap) {
+                        DistrictComparisonChart(data: viewModel.districtComparison)
+                            .frame(width: (contentWidth - gap) * 0.55,
+                                   height: primaryHeight)
+
+                        DashboardPriceTrendChart(data: viewModel.districtTrends)
+                            .frame(width: (contentWidth - gap) * 0.45,
+                                   height: primaryHeight)
+                    }
+
+                    // Tier 3: 40% opportunities | 30% scores+sources | 30% temperature
+                    HStack(alignment: .top, spacing: gap) {
+                        TopOpportunitiesSection(
+                            listings: viewModel.topOpportunities,
+                            districtComparison: viewModel.districtComparison,
+                            onListingTap: { id in
+                                appState.deepLinkListingId = id
+                                appState.selectedNavItem = .listings
+                            }
+                        )
+                        .frame(width: (contentWidth - gap * 2) * 0.40,
+                               height: actionHeight)
+
+                        VStack(spacing: gap) {
+                            ScoreDistributionChart(data: viewModel.scoreDistribution)
+                            PipelineHealthGrid(sources: viewModel.sources)
+                        }
+                        .frame(width: (contentWidth - gap * 2) * 0.30,
+                               height: actionHeight)
+
+                        MarketHeatGrid(data: viewModel.temperatureData)
+                            .frame(width: (contentWidth - gap * 2) * 0.30,
+                                   height: actionHeight)
+                    }
+                }
+                .padding(Theme.Spacing.lg)
             }
         }
-        .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Dashboard")
         .task {
@@ -38,5 +80,5 @@ struct DashboardView: View {
 #Preview {
     DashboardView()
         .environment(AppState())
-        .frame(width: 900, height: 700)
+        .frame(width: 1100, height: 800)
 }

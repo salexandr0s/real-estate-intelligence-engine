@@ -1,17 +1,12 @@
 import SwiftUI
 
-/// Grid of summary statistic cards.
+/// Adaptive grid of enhanced summary statistic cards.
 struct SummaryGridView: View {
-    let cards: [DashboardViewModel.SummaryCard]
+    let cards: [DashboardViewModel.EnhancedSummaryCard]
 
     var body: some View {
         LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: Theme.Spacing.lg),
-                GridItem(.flexible(), spacing: Theme.Spacing.lg),
-                GridItem(.flexible(), spacing: Theme.Spacing.lg),
-                GridItem(.flexible(), spacing: Theme.Spacing.lg),
-            ],
+            columns: [GridItem(.adaptive(minimum: 180), spacing: Theme.Spacing.lg)],
             spacing: Theme.Spacing.lg
         ) {
             ForEach(cards) { card in

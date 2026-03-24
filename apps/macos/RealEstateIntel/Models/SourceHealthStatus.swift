@@ -16,4 +16,15 @@ enum SourceHealthStatus: String, Codable, CaseIterable, Hashable {
         case .unknown: "Unknown"
         }
     }
+
+    /// Sort order for surfacing problems first: failing < degraded < unknown < healthy < disabled.
+    var sortOrder: Int {
+        switch self {
+        case .failing: 0
+        case .degraded: 1
+        case .unknown: 2
+        case .healthy: 3
+        case .disabled: 4
+        }
+    }
 }

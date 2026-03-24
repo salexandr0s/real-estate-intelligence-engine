@@ -160,6 +160,27 @@ export async function finish(
   return row ? toScrapeRunRow(row) : null;
 }
 
+export async function findById(id: number): Promise<ScrapeRunRow | null> {
+  const rows = await query<ScrapeRunDbRow>(`SELECT * FROM scrape_runs WHERE id = $1`, [id]);
+  const row = rows[0];
+  return row ? toScrapeRunRow(row) : null;
+}
+
+export async function cancel(id: number): Promise<ScrapeRunRow | null> {
+  const rows = await query<ScrapeRunDbRow>(
+    `UPDATE scrape_runs
+     SET status = 'cancelled',
+         finished_at = NOW(),
+         error_code = 'user_cancelled',
+         error_message = 'Cancelled by user'
+     WHERE id = $1 AND status IN ('queued', 'running')
+     RETURNING *`,
+    [id],
+  );
+  const row = rows[0];
+  return row ? toScrapeRunRow(row) : null;
+}
+
 export async function findRecent(sourceId: number, limit = 10): Promise<ScrapeRunRow[]> {
   const rows = await query<ScrapeRunDbRow>(
     `SELECT * FROM scrape_runs

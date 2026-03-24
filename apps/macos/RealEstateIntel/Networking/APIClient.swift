@@ -214,6 +214,24 @@ actor APIClient {
         return try decoder.decode(DashboardStats.self, from: data)
     }
 
+    /// Fetch daily new-listing counts for sparkline charts (last 14 days).
+    func fetchDashboardVelocity() async throws -> [ListingVelocityPoint] {
+        let response: PaginatedResponse<ListingVelocityPoint> = try await requestPaginated(.getDashboardVelocity)
+        return response.data
+    }
+
+    /// Fetch score distribution histogram buckets.
+    func fetchScoreDistribution() async throws -> [ScoreDistributionBucket] {
+        let response: PaginatedResponse<ScoreDistributionBucket> = try await requestPaginated(.getScoreDistribution)
+        return response.data
+    }
+
+    /// Fetch per-district aggregate stats (listing count, avg price, avg score).
+    func fetchDistrictComparison() async throws -> [DistrictComparison] {
+        let response: PaginatedResponse<DistrictComparison> = try await requestPaginated(.getDistrictComparison)
+        return response.data
+    }
+
     func fetchAnalysis(listingId: Int) async throws -> ListingAnalysis {
         let response: APIResponse<ListingAnalysis> = try await request(.getAnalysis(listingId: listingId))
         return response.data
