@@ -22,6 +22,7 @@
     "@immoradar/source-findmyhome": "*",
     "@immoradar/source-openimmo": "*",
     "@immoradar/source-remax": "*",
+    "@immoradar/source-edikte": "*",
     "bullmq": "^5.71.0",
     "playwright": "^1.52.0",
     "ioredis": "^5.10.1"

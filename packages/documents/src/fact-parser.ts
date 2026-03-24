@@ -191,6 +191,79 @@ const FACT_PATTERNS: FactPattern[] = [
     valueGroup: 0,
     confidence: 'high',
   },
+  // ── Auction / Zwangsversteigerung patterns ──
+  {
+    factType: 'appraised_value',
+    pattern: /Schätzwert:?\s*€?\s*([\d.,]+)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'appraised_value',
+    pattern: /Verkehrswert:?\s*€?\s*([\d.,]+)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'appraised_value',
+    pattern: /geschätzt(?:er?)?\s*(?:Wert|auf):?\s*€?\s*([\d.,]+)/gi,
+    valueGroup: 1,
+    confidence: 'medium',
+  },
+  {
+    factType: 'minimum_bid',
+    pattern: /Mindestgebot:?\s*€?\s*([\d.,]+)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'minimum_bid',
+    pattern: /geringstes?\s*Gebot:?\s*€?\s*([\d.,]+)/gi,
+    valueGroup: 1,
+    confidence: 'medium',
+  },
+  {
+    factType: 'land_register',
+    pattern: /Grundbuch:?\s*(.+?)(?:\n|,|;)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'cadastral_number',
+    pattern: /EZ:?\s*(\d+)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'cadastral_number',
+    pattern: /Einlagezahl:?\s*(\d+)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'plot_area',
+    pattern: /Grundstücksfläche:?\s*([\d.,]+)\s*m²/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'plot_area',
+    pattern: /Grundfläche:?\s*([\d.,]+)\s*m²/gi,
+    valueGroup: 1,
+    confidence: 'medium',
+  },
+  {
+    factType: 'auction_date',
+    pattern: /Versteigerungstermin:?\s*(.+?)(?:\n|$)/gi,
+    valueGroup: 1,
+    confidence: 'high',
+  },
+  {
+    factType: 'auction_date',
+    pattern: /Versteigerung\s*(?:am|vom):?\s*(.+?)(?:\n|,|$)/gi,
+    valueGroup: 1,
+    confidence: 'medium',
+  },
 ];
 
 /** Maximum characters around a match to include in sourceSnippet */

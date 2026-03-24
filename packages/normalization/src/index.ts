@@ -40,3 +40,5 @@ export { OpenImmoMapper } from './sources/openimmo-mapper.js';
 export type { OpenImmoRawListing } from './sources/openimmo-mapper.js';
 export { RemaxMapper } from './sources/remax-mapper.js';
 export type { RemaxRawListing } from './sources/remax-mapper.js';
+export { EdikteMapper } from './sources/edikte-mapper.js';
+export type { EdikteRawListing } from './sources/edikte-mapper.js';

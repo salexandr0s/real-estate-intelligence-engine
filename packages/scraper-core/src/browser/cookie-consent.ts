@@ -61,6 +61,10 @@ const SOURCE_CONSENT_CONFIG: Record<string, CookieConsentConfig> = {
       'button[data-cookie-accept-all]',
     ],
   },
+  edikte: {
+    // Government site (edikte.justiz.gv.at) — no cookie consent banner
+    acceptSelectors: [],
+  },
 };
 
 /** Generic German/English consent selectors used as fallback. */

@@ -1,5 +1,5 @@
 {
-  "name": "@immoradar/documents",
+  "name": "@immoradar/source-edikte",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "@immoradar/contracts": "*",
-    "pdf-parse": "^1.1.1"
+    "@immoradar/scraper-core": "*",
+    "@immoradar/documents": "*"
   },
   "devDependencies": {
-    "@types/pdf-parse": "^1.1.4",
     "vitest": "^4.1.0"
   }
 }

@@ -11,6 +11,7 @@ import { DerStandardAdapter } from '@immoradar/source-derstandard';
 import { FindMyHomeAdapter } from '@immoradar/source-findmyhome';
 import { OpenImmoAdapter } from '@immoradar/source-openimmo';
 import { RemaxAdapter } from '@immoradar/source-remax';
+import { EdikteAdapter } from '@immoradar/source-edikte';
 
 registerAdapters([
   new WillhabenAdapter(),
@@ -20,4 +21,5 @@ registerAdapters([
   new FindMyHomeAdapter(),
   new OpenImmoAdapter(),
   new RemaxAdapter(),
+  new EdikteAdapter(),
 ]);

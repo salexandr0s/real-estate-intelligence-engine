@@ -138,6 +138,20 @@ export async function seed(): Promise<void> {
       isActive: true,
       config: { crawlProfile: defaultCrawlProfile },
     },
+    {
+      code: 'edikte',
+      name: 'Ediktsdatei Justiz (Zwangsversteigerungen)',
+      baseUrl: 'https://edikte.justiz.gv.at',
+      scrapeMode: 'browser',
+      rateLimitRpm: 6,
+      crawlIntervalMinutes: 360,
+      priority: 70,
+      concurrencyLimit: 1,
+      parserVersion: 1,
+      legalStatus: 'approved',
+      isActive: true,
+      config: { crawlProfile: defaultCrawlProfile },
+    },
   ];
 
   for (const s of sources) {
