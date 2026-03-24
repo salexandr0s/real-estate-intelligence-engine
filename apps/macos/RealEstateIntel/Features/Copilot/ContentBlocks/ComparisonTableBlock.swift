@@ -9,7 +9,7 @@ struct ComparisonTableBlock: View {
             Text("Comparison")
                 .font(.subheadline.bold())
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 Grid(alignment: .leading, horizontalSpacing: Theme.Spacing.lg, verticalSpacing: Theme.Spacing.sm) {
                     // Header row
                     GridRow {
@@ -44,6 +44,7 @@ struct ComparisonTableBlock: View {
                 }
                 .padding(Theme.Spacing.md)
             }
+            .scrollIndicators(.hidden)
         }
         .padding(Theme.Spacing.md)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))

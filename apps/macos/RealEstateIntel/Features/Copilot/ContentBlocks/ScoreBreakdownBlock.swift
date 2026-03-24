@@ -15,7 +15,7 @@ struct ScoreBreakdownBlock: View {
                         .font(.subheadline.bold())
 
                     if let discount = data.discountToDistrictPct {
-                        Text(String(format: "%.1f%% vs district avg", discount))
+                        Text("\(discount, format: .number.precision(.fractionLength(1)))% vs district avg")
                             .font(.caption)
                             .foregroundStyle(discount < 0 ? .green : .secondary)
                     }

@@ -14,7 +14,7 @@ struct CopilotMessage: Identifiable {
         self.id = UUID()
         self.role = role
         self.contentBlocks = contentBlocks
-        self.timestamp = Date()
+        self.timestamp = Date.now
         self.isStreaming = isStreaming
     }
 
@@ -53,117 +53,4 @@ enum ContentBlockType {
     case chartData(ChartBlockData)
     case marketStats([StatItem])
     case loading(String)
-}
-
-// MARK: - Copilot Listing
-
-/// Listing data returned by the copilot API (snake_case JSON mapped to camelCase Swift).
-struct CopilotListing: Identifiable, Codable, Hashable {
-    let id: Int
-    let title: String
-    let districtNo: Int?
-    let districtName: String?
-    let priceEur: Int
-    let areaSqm: Double?
-    let rooms: Double?
-    let pricePerSqmEur: Double?
-    let score: Double?
-    let canonicalUrl: String?
-    let sourceCode: String?
-    let priceTrendPct: Double?
-}
-
-// MARK: - Comparison Table
-
-struct ComparisonTableData: Codable {
-    let headers: [String]
-    let rows: [ComparisonRow]
-}
-
-struct ComparisonRow: Codable {
-    let label: String
-    let values: [String]
-}
-
-// MARK: - Score Breakdown
-
-struct ScoreBreakdownData: Codable {
-    let listingId: Int
-    let overall: Double
-    let components: [ScoreComponent]
-    let discountToDistrictPct: Double?
-    let discountToBucketPct: Double?
-    let positiveKeywords: [String]?
-    let negativeKeywords: [String]?
-}
-
-struct ScoreComponent: Codable {
-    let name: String
-    let score: Double
-}
-
-// MARK: - Price History
-
-struct PriceHistoryData: Codable {
-    let listingId: Int
-    let dataPoints: [PricePoint]
-}
-
-struct PricePoint: Codable, Identifiable {
-    let date: Date
-    let priceEur: Int
-
-    var id: String { "\(date.timeIntervalSince1970)-\(priceEur)" }
-}
-
-// MARK: - Chart Data
-
-struct ChartBlockData: Codable {
-    let chartType: ChartType
-    let title: String
-    let series: [ChartSeries]
-
-    enum ChartType: String, Codable {
-        case line
-        case bar
-    }
-}
-
-struct ChartSeries: Codable, Identifiable {
-    let label: String
-    let dataPoints: [ChartDataPoint]
-
-    var id: String { label }
-}
-
-struct ChartDataPoint: Codable, Identifiable {
-    let label: String
-    let value: Double
-
-    var id: String { label }
-}
-
-// MARK: - Market Stats
-
-struct StatItem: Codable, Identifiable {
-    let label: String
-    let value: String
-    let trend: Trend?
-
-    var id: String { label }
-
-    enum Trend: String, Codable {
-        case up
-        case down
-        case flat
-    }
-}
-
-// MARK: - Suggested Query
-
-struct SuggestedQuery: Identifiable {
-    let label: String
-    let query: String
-
-    var id: String { label }
 }

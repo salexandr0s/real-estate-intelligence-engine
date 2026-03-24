@@ -49,6 +49,10 @@
 		37E52F66948374CB34BE2A99 /* MenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84CF08562470FC1B57721744 /* MenuBarLabel.swift */; };
 		386AB82E6D14EC5DFE3645F5 /* CrossSourceComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F8BCFD2F83B6A682FAC262E /* CrossSourceComparisonView.swift */; };
 		3F5EF9386AB527E476575519 /* CopilotMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324B0F5720E11230B1B00DE9 /* CopilotMessage.swift */; };
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* CopilotListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* CopilotListing.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* CopilotContentData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F7A8B9C0D1E2F3 /* CopilotContentData.swift */; };
+		B3C4D5E6F7A8B9C0D1E2F3A4 /* SuggestedQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8A9B0C1D2E3F4 /* SuggestedQuery.swift */; };
+		B4C5D6E7F8A9B0C1D2E3F4A5 /* CopilotStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B5C6D7E8F9A0B1C2D3E4F5 /* CopilotStreamEvent.swift */; };
 		3FAFC09541AC1F8477E7F38F /* POILayerMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E520EB1AB4294FB7C713FA9 /* POILayerMenu.swift */; };
 		4068B5F0EB0CDB0062B1CA0D /* SourcesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8A28FF9B105DB6167701CD /* SourcesViewModel.swift */; };
 		40AE88201A0209C7CEBEAE62 /* SourceHealthSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A7B3A87C4DCA501C4D2FF4 /* SourceHealthSection.swift */; };
@@ -247,6 +251,10 @@
 		311F18B1C1946EACB5B22D28 /* TextContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentBlock.swift; sourceTree = "<group>"; };
 		31F781AEF8A2FB7FB01140EF /* ListingMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingMapView.swift; sourceTree = "<group>"; };
 		324B0F5720E11230B1B00DE9 /* CopilotMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotMessage.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* CopilotListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotListing.swift; sourceTree = "<group>"; };
+		A2B3C4D5E6F7A8B9C0D1E2F3 /* CopilotContentData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotContentData.swift; sourceTree = "<group>"; };
+		A3B4C5D6E7F8A9B0C1D2E3F4 /* SuggestedQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedQuery.swift; sourceTree = "<group>"; };
+		A4B5C6D7E8F9A0B1C2D3E4F5 /* CopilotStreamEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotStreamEvent.swift; sourceTree = "<group>"; };
 		32793D877E5516588A16C3C9 /* MetricCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricCell.swift; sourceTree = "<group>"; };
 		347075CA4C302BD2231AD2F5 /* SavedListingItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedListingItem.swift; sourceTree = "<group>"; };
 		3479E0F77578B82138789A50 /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
@@ -734,7 +742,10 @@
 				A0DF2CB64F183CEA895198D0 /* AlertStatus.swift */,
 				2FC67168F3316F4DB345FFA5 /* AlertType.swift */,
 				CB510FB2345209630AC0E799 /* Analysis.swift */,
+				A2B3C4D5E6F7A8B9C0D1E2F3 /* CopilotContentData.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* CopilotListing.swift */,
 				324B0F5720E11230B1B00DE9 /* CopilotMessage.swift */,
+				A4B5C6D7E8F9A0B1C2D3E4F5 /* CopilotStreamEvent.swift */,
 				04ED2EA32B9562957A1EFF30 /* CopilotProvider.swift */,
 				2D9EE6B31507FBC510A3D3F1 /* DashboardStats.swift */,
 				AA1B2C3D4E5F6A7B8C9D0E1F /* ListingVelocityPoint.swift */,
@@ -761,6 +772,7 @@
 				E5CFDC5C21E39B7C8AD908C4 /* ScoreExplanation.swift */,
 				F56EB795242229A02174F42B /* ScrapeRun.swift */,
 				2B1DD318D97B92DEBCB17D13 /* Source.swift */,
+				A3B4C5D6E7F8A9B0C1D2E3F4 /* SuggestedQuery.swift */,
 				70300F90D6EDB8A837EBF773 /* SourceHealthStatus.swift */,
 				4BCBE58392C8BBE55F6947AB /* ViennaDistrictGeometry.swift */,
 				F2E53B187919C34D20662950 /* ViennaPOIStore.swift */,
@@ -890,7 +902,11 @@
 				AF64E595A6CAE616BECFCEDA /* ContentView.swift in Sources */,
 				16475B9882749577F7A11613 /* CopilotEmptyState.swift in Sources */,
 				4E8615FCFEC7E25EEBFAB4DB /* CopilotInputBar.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* CopilotContentData.swift in Sources */,
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* CopilotListing.swift in Sources */,
 				3F5EF9386AB527E476575519 /* CopilotMessage.swift in Sources */,
+				B4C5D6E7F8A9B0C1D2E3F4A5 /* CopilotStreamEvent.swift in Sources */,
+				B3C4D5E6F7A8B9C0D1E2F3A4 /* SuggestedQuery.swift in Sources */,
 				EAA797717703F21D0486FB5E /* CopilotMessageBubble.swift in Sources */,
 				A8FEBFC6AE815B5D40F860A9 /* CopilotMessageList.swift in Sources */,
 				30F3752874CFEDFEEFAFAE44 /* CopilotProvider.swift in Sources */,

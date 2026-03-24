@@ -55,9 +55,6 @@ struct MarketTemperatureCard: View {
                 }
             }
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .cardStyle(padding: Theme.Spacing.md, cornerRadius: Theme.Radius.md)
     }
 }

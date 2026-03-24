@@ -44,7 +44,7 @@ struct MarketHeatGrid: View {
                         VStack(spacing: 1) {
                             Text("\(point.districtNo)")
                                 .font(.system(size: 10, weight: .bold).monospacedDigit())
-                            Text(String(format: "%.1f", point.velocity))
+                            Text(point.velocity, format: .number.precision(.fractionLength(1)))
                                 .font(.system(size: 8, weight: .medium).monospacedDigit())
                                 .foregroundStyle(point.temperatureColor)
                             Text("+\(point.newLast7d)/wk")

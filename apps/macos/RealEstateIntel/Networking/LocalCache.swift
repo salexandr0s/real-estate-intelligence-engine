@@ -12,7 +12,7 @@ final class LocalCache {
     }
 
     func get<T: Decodable>(_ key: String, as type: T.Type) -> T? {
-        guard let entry = store[key], entry.expiry > Date() else {
+        guard let entry = store[key], entry.expiry > Date.now else {
             store.removeValue(forKey: key)
             return nil
         }
@@ -21,7 +21,7 @@ final class LocalCache {
 
     func set<T: Encodable>(_ key: String, value: T) {
         guard let data = try? JSONEncoder().encode(value) else { return }
-        store[key] = CacheEntry(data: data, expiry: Date().addingTimeInterval(ttl))
+        store[key] = CacheEntry(data: data, expiry: Date.now.addingTimeInterval(ttl))
     }
 
     func invalidate(_ key: String) {

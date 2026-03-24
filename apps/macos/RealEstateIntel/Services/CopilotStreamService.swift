@@ -1,17 +1,6 @@
 import Foundation
 import os
 
-// MARK: - Stream Event
-
-/// Events emitted by the copilot SSE stream.
-enum CopilotStreamEvent {
-    case textDelta(String)
-    case toolUse(name: String)
-    case contentBlock(ContentBlock)
-    case done
-    case error(String)
-}
-
 // MARK: - Stream Service
 
 /// SSE client for copilot chat streaming responses.

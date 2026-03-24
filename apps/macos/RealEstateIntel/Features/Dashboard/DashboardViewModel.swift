@@ -1,14 +1,5 @@
 import SwiftUI
 
-/// Server-side dashboard stats returned by GET /v1/dashboard/stats.
-struct DashboardStats: Codable, Sendable {
-    let totalActive: Int
-    let newToday: Int
-    let newThisWeek: Int?
-    let highScore70: Int
-    let avgScore: Double?
-}
-
 /// View model for the Dashboard summary screen.
 @MainActor @Observable
 final class DashboardViewModel {
@@ -150,7 +141,7 @@ final class DashboardViewModel {
                 value: "\(s?.highScore70 ?? 0)",
                 icon: "star.fill",
                 color: .orange,
-                delta: s?.avgScore.map { Delta(value: "Avg \(String(format: "%.0f", $0))", isPositive: $0 >= 50) },
+                delta: s?.avgScore.map { Delta(value: "Avg \($0.formatted(.number.precision(.fractionLength(0))))", isPositive: $0 >= 50) },
                 sparklineData: []
             ),
             EnhancedSummaryCard(
