@@ -19,8 +19,33 @@ final class FilterDraft {
     var excludedKeywordsStr: String = ""
     var alertFrequency: AlertFrequency = .instant
 
+    var nameError: String? {
+        name.trimmingCharacters(in: .whitespaces).isEmpty ? "Filter name is required" : nil
+    }
+
+    var priceRangeError: String? {
+        if let min = Int(minPriceStr), let max = Int(maxPriceStr), min > max {
+            return "Min price must be less than max price"
+        }
+        return nil
+    }
+
+    var areaRangeError: String? {
+        if let min = Double(minAreaStr), let max = Double(maxAreaStr), min > max {
+            return "Min area must be less than max area"
+        }
+        return nil
+    }
+
+    var roomsRangeError: String? {
+        if let min = Int(minRoomsStr), let max = Int(maxRoomsStr), min > max {
+            return "Min rooms must be less than max rooms"
+        }
+        return nil
+    }
+
     var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
+        nameError == nil && priceRangeError == nil && areaRangeError == nil && roomsRangeError == nil
     }
 
     func toCriteria() -> FilterCriteria {

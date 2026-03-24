@@ -42,6 +42,21 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Human-readable shortcut label for sidebar display.
+    var shortcutLabel: String? {
+        switch self {
+        case .dashboard: "⌘1"
+        case .listings: "⌘2"
+        case .filters: "⌘3"
+        case .copilot: "⌘4"
+        case .alerts: "⌘5"
+        case .watchlist: "⌘6"
+        case .sources: "⌘7"
+        case .analytics: "⌘8"
+        case .settings: "⌘9"
+        }
+    }
+
     /// Keyboard shortcut number (Cmd+1 through Cmd+7).
     var shortcutKey: KeyEquivalent? {
         switch self {

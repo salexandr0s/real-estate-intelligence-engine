@@ -10,6 +10,11 @@ struct SidebarRow: View {
             HStack {
                 Text(item.title)
                 Spacer()
+                if let hint = item.shortcutLabel {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.quaternary)
+                }
                 if item == .alerts && unreadAlertCount > 0 {
                     Text("\(unreadAlertCount)")
                         .font(.caption.bold())

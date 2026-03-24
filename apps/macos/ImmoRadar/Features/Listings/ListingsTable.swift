@@ -80,7 +80,7 @@ struct ListingsTable: View {
 
     @ViewBuilder
     private func titleCell(_ listing: Listing, isLast: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: Theme.Spacing.xs) {
                 Text(listing.title)
                     .lineLimit(1)
@@ -92,7 +92,7 @@ struct ListingsTable: View {
                 }
             }
             HStack(spacing: Theme.Spacing.xs) {
-                SourceLogo(sourceCode: listing.sourceCode, size: 12)
+                SourceLogo(sourceCode: listing.sourceCode, size: 14)
                 Text(listing.sourceCode)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -107,7 +107,7 @@ struct ListingsTable: View {
 
     @ViewBuilder
     private func districtCell(_ listing: Listing) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(listing.districtName ?? "\u{2014}")
             Text(listing.postalCode ?? "")
                 .font(.caption)

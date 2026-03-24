@@ -4,12 +4,20 @@ import SwiftUI
 struct StatusBadge: View {
     let label: String
     let color: Color
+    var icon: String?
 
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(color)
+                    .frame(width: 10, height: 10)
+            } else {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+            }
             Text(label)
                 .font(.caption)
                 .fontWeight(.medium)
@@ -26,6 +34,13 @@ extension StatusBadge {
     init(healthStatus: SourceHealthStatus) {
         self.label = healthStatus.displayName
         self.color = Theme.healthColor(for: healthStatus)
+        switch healthStatus {
+        case .healthy: self.icon = "checkmark.circle.fill"
+        case .degraded: self.icon = "exclamationmark.triangle.fill"
+        case .failing: self.icon = "xmark.circle.fill"
+        case .disabled: self.icon = "minus.circle.fill"
+        case .unknown: self.icon = nil
+        }
     }
 
     init(listingStatus: ListingStatus) {

@@ -326,6 +326,7 @@ private struct FilterEditorSheet: View {
     let viewModel: FiltersViewModel
     let editingFilter: Filter?
     @State private var draft: FilterDraft
+    @State private var showsValidation = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
 
@@ -365,6 +366,9 @@ private struct FilterEditorSheet: View {
                             .fontWeight(.medium)
                         TextField("e.g. Vienna Value Apartments", text: $draft.name)
                             .textFieldStyle(.roundedBorder)
+                        if let error = draft.nameError, showsValidation {
+                            Text(error).font(.caption).foregroundStyle(.red)
+                        }
                     }
 
                     // Operation type
@@ -395,56 +399,71 @@ private struct FilterEditorSheet: View {
                     }
 
                     // Price range
-                    HStack(spacing: Theme.Spacing.lg) {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Min Price (EUR)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 100000", text: $draft.minPriceStr)
-                                .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(spacing: Theme.Spacing.lg) {
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Min Price (EUR)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 100000", text: $draft.minPriceStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Max Price (EUR)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 350000", text: $draft.maxPriceStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Max Price (EUR)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 350000", text: $draft.maxPriceStr)
-                                .textFieldStyle(.roundedBorder)
+                        if let error = draft.priceRangeError {
+                            Text(error).font(.caption).foregroundStyle(.red)
                         }
                     }
 
                     // Area range
-                    HStack(spacing: Theme.Spacing.lg) {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Min Area (m\u{00B2})")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 50", text: $draft.minAreaStr)
-                                .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(spacing: Theme.Spacing.lg) {
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Min Area (m\u{00B2})")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 50", text: $draft.minAreaStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Max Area (m\u{00B2})")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 120", text: $draft.maxAreaStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Max Area (m\u{00B2})")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 120", text: $draft.maxAreaStr)
-                                .textFieldStyle(.roundedBorder)
+                        if let error = draft.areaRangeError {
+                            Text(error).font(.caption).foregroundStyle(.red)
                         }
                     }
 
                     // Rooms range
-                    HStack(spacing: Theme.Spacing.lg) {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Min Rooms")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 2", text: $draft.minRoomsStr)
-                                .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(spacing: Theme.Spacing.lg) {
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Min Rooms")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 2", text: $draft.minRoomsStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                Text("Max Rooms")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                TextField("e.g. 5", text: $draft.maxRoomsStr)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text("Max Rooms")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            TextField("e.g. 5", text: $draft.maxRoomsStr)
-                                .textFieldStyle(.roundedBorder)
+                        if let error = draft.roomsRangeError {
+                            Text(error).font(.caption).foregroundStyle(.red)
                         }
                     }
 
@@ -498,16 +517,19 @@ private struct FilterEditorSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    Task {
-                        await viewModel.saveFilter(draft, using: appState.apiClient)
-                        if viewModel.errorMessage == nil {
-                            dismiss()
+                    if draft.isValid {
+                        Task {
+                            await viewModel.saveFilter(draft, using: appState.apiClient)
+                            if viewModel.errorMessage == nil {
+                                dismiss()
+                            }
                         }
+                    } else {
+                        showsValidation = true
                     }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(!draft.isValid)
             }
             .padding(Theme.Spacing.lg)
         }
