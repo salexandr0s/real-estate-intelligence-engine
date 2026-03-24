@@ -49,18 +49,28 @@ struct ScoreIndicator: View {
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(color.opacity(0.2), lineWidth: size.lineWidth)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: size.lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Text(score, format: .number.precision(.fractionLength(0)))
-                .font(size.font)
-                .foregroundStyle(color)
+        VStack(spacing: 2) {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: size.lineWidth)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(color, style: StrokeStyle(lineWidth: size.lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text(score, format: .number.precision(.fractionLength(0)))
+                    .font(size.font)
+                    .foregroundStyle(color)
+            }
+            .frame(width: size.diameter, height: size.diameter)
+
+            if size == .large {
+                Text(Theme.scoreLabel(for: score))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .frame(width: size.diameter, height: size.diameter)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Score \(Int(score)), \(Theme.scoreLabel(for: score))")
     }
 }
 

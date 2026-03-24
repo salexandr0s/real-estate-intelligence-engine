@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Two-row opportunity card with property metadata.
@@ -5,6 +6,8 @@ struct OpportunityCard: View {
     let listing: Listing
     var districtAvgPpsqm: Double?
     var onTap: (() -> Void)?
+    var onAddToWatchlist: (() -> Void)?
+    var isHovered: Bool = false
 
     private var discount: Double? {
         guard let avg = districtAvgPpsqm, avg > 0,
@@ -39,7 +42,7 @@ struct OpportunityCard: View {
 
                     if isNew {
                         Text("NEW")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -49,20 +52,20 @@ struct OpportunityCard: View {
 
                     if let district = listing.districtName {
                         Text(district)
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
 
                     if let rooms = listing.rooms {
                         Text(PriceFormatter.formatRooms(rooms))
-                            .font(.system(size: 10).monospacedDigit())
+                            .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
 
                     if let area = listing.livingAreaSqm {
                         Text(PriceFormatter.formatArea(area))
-                            .font(.system(size: 10).monospacedDigit())
+                            .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
 
@@ -70,7 +73,7 @@ struct OpportunityCard: View {
 
                     if let discount, discount < 0 {
                         Text(PriceFormatter.formatPercent(discount))
-                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(Color.scoreExcellent)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -81,7 +84,43 @@ struct OpportunityCard: View {
             }
             .padding(.horizontal, Theme.Spacing.sm)
             .padding(.vertical, Theme.Spacing.xs)
+            .background(
+                isHovered ? Color(nsColor: .separatorColor).opacity(0.08) : .clear,
+                in: .rect(cornerRadius: Theme.Radius.sm)
+            )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                onTap?()
+            } label: {
+                Label("Open Listing", systemImage: "arrow.right.circle")
+            }
+
+            if let url = URL(string: listing.canonicalUrl) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+            }
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(listing.canonicalUrl, forType: .string)
+            } label: {
+                Label("Copy Link", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            if let onAddToWatchlist {
+                Button {
+                    onAddToWatchlist()
+                } label: {
+                    Label("Add to Watchlist", systemImage: "bookmark")
+                }
+            }
+        }
     }
 }

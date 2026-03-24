@@ -64,25 +64,25 @@ struct ScoreDistributionChart: View {
                     .annotation(position: .top, spacing: 1) {
                         if bucket.count > 0 {
                             Text(percentage(for: bucket.count))
-                                .font(.system(size: 8).monospacedDigit())
+                                .font(Theme.chartAnnotationFont)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
                 .chartXAxis {
-                    AxisMarks { _ in AxisValueLabel().font(.system(size: 9)) }
+                    AxisMarks { _ in AxisValueLabel().font(Theme.chartAxisFont) }
                 }
                 .chartYAxis {
                     AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
                         AxisGridLine()
-                        AxisValueLabel().font(.system(size: 9))
+                        AxisValueLabel().font(Theme.chartAxisFont)
                     }
                 }
+                .accessibilityLabel("Score distribution, \(totalCount) listings")
             }
         }
         .padding(Theme.Spacing.md)
         .background(Theme.cardBackground)
         .clipShape(.rect(cornerRadius: Theme.Radius.lg))
-        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
     }
 }

@@ -81,7 +81,7 @@ struct DashboardPriceTrendChart: View {
                         .symbolSize(20)
                         .annotation(position: .top, spacing: 2) {
                             Text(PriceFormatter.formatCompact(Int(point.avgMedianPpsqm)))
-                                .font(.system(size: 8).monospacedDigit())
+                                .font(Theme.chartAnnotationFont)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -90,7 +90,7 @@ struct DashboardPriceTrendChart: View {
                     AxisMarks(values: .stride(by: .month, count: 2)) { _ in
                         AxisGridLine()
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
-                            .font(.system(size: 9))
+                            .font(Theme.chartAxisFont)
                     }
                 }
                 .chartYAxis {
@@ -99,12 +99,13 @@ struct DashboardPriceTrendChart: View {
                         AxisValueLabel {
                             if let v = value.as(Double.self) {
                                 Text(PriceFormatter.formatCompact(Int(v)))
-                                    .font(.system(size: 9))
+                                    .font(Theme.chartAxisFont)
                             }
                         }
                     }
                 }
                 .chartLegend(position: .bottom, alignment: .leading, spacing: Theme.Spacing.xs)
+                .accessibilityLabel("Price trends over 6 months")
             }
         }
         .padding(Theme.Spacing.md)

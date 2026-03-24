@@ -6,6 +6,8 @@ struct TopOpportunitiesSection: View {
     let districtComparison: [DistrictComparison]
     var onListingTap: ((Int) -> Void)?
 
+    @State private var hoveredListingId: Int?
+
     private func avgPpsqm(for districtNo: Int?) -> Double? {
         guard let d = districtNo else { return nil }
         return districtComparison.first(where: { $0.districtNo == d })?.avgPricePerSqm
@@ -33,8 +35,12 @@ struct TopOpportunitiesSection: View {
                         OpportunityCard(
                             listing: listing,
                             districtAvgPpsqm: avgPpsqm(for: listing.districtNo),
-                            onTap: { onListingTap?(listing.id) }
+                            onTap: { onListingTap?(listing.id) },
+                            isHovered: hoveredListingId == listing.id
                         )
+                        .onHover { isHovered in
+                            hoveredListingId = isHovered ? listing.id : nil
+                        }
                         if index < displayed.count - 1 {
                             Divider().padding(.leading, 40)
                         }

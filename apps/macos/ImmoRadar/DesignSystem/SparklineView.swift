@@ -7,6 +7,14 @@ struct SparklineView: View {
     let data: [Int]
     var color: Color = .blue
 
+    private var accessibilityDescription: String {
+        guard data.count >= 2,
+              let lo = data.min(), let hi = data.max() else {
+            return "Trend chart, no data"
+        }
+        return "\(data.count)-day trend, \(lo) to \(hi)"
+    }
+
     var body: some View {
         if data.count >= 2 {
             Chart(Array(data.enumerated()), id: \.offset) { index, value in
@@ -33,7 +41,9 @@ struct SparklineView: View {
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartLegend(.hidden)
-            .frame(width: 72, height: 24)
+            .frame(width: 88, height: 28)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityDescription)
         }
     }
 }

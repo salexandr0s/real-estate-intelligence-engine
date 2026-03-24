@@ -63,7 +63,7 @@ struct DistrictComparisonChart: View {
                     .cornerRadius(3)
                     .annotation(position: .trailing, spacing: 4) {
                         Text("\(district.listingCount)")
-                            .font(.system(size: 8).monospacedDigit())
+                            .font(Theme.chartAnnotationFont)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -73,7 +73,7 @@ struct DistrictComparisonChart: View {
                         AxisValueLabel {
                             if let v = value.as(Double.self) {
                                 Text(PriceFormatter.formatCompact(Int(v)))
-                                    .font(.system(size: 9))
+                                    .font(Theme.chartAxisFont)
                             }
                         }
                     }
@@ -81,9 +81,10 @@ struct DistrictComparisonChart: View {
                 .chartYAxis {
                     AxisMarks { _ in
                         AxisValueLabel()
-                            .font(.system(size: 9))
+                            .font(Theme.chartAxisFont)
                     }
                 }
+                .accessibilityLabel("District price comparison, \(topData.count) districts")
             }
         }
         .padding(Theme.Spacing.md)

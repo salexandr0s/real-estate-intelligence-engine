@@ -3,6 +3,9 @@ import SwiftUI
 /// Source health panel with success rate bars and error context.
 struct PipelineHealthGrid: View {
     let sources: [Source]
+    var onSourceTap: ((Int) -> Void)?
+
+    @State private var hoveredSourceId: Int?
 
     private var healthyCount: Int {
         sources.count(where: { $0.healthStatus == .healthy })
@@ -56,7 +59,7 @@ struct PipelineHealthGrid: View {
 
                                 if let lastRun = source.lastSuccessfulRun {
                                     Text(PriceFormatter.relativeDate(lastRun))
-                                        .font(.system(size: 9))
+                                        .font(Theme.chartAxisFont)
                                         .foregroundStyle(.tertiary)
                                         .frame(width: 36, alignment: .trailing)
                                 }
@@ -72,6 +75,25 @@ struct PipelineHealthGrid: View {
                                     .padding(.leading, 14)
                             }
                         }
+                        .padding(.vertical, Theme.Spacing.xxs)
+                        .padding(.horizontal, Theme.Spacing.xs)
+                        .background(
+                            hoveredSourceId == source.id
+                                ? Color(nsColor: .separatorColor).opacity(0.06)
+                                : .clear,
+                            in: .rect(cornerRadius: Theme.Radius.sm)
+                        )
+                        .onHover { isHovered in
+                            hoveredSourceId = isHovered ? source.id : nil
+                        }
+                        .accessibilityElement(children: .combine)
+                        .contextMenu {
+                            Button {
+                                onSourceTap?(source.id)
+                            } label: {
+                                Label("View Source", systemImage: "antenna.radiowaves.left.and.right")
+                            }
+                        }
                     }
                 }
             }
@@ -79,7 +101,6 @@ struct PipelineHealthGrid: View {
         .padding(Theme.Spacing.md)
         .background(Theme.cardBackground)
         .clipShape(.rect(cornerRadius: Theme.Radius.lg))
-        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
     }
 }
 
@@ -99,5 +120,6 @@ private struct SuccessRateBar: View {
             }
         }
         .frame(width: 48, height: 4)
+        .accessibilityLabel("\(Int(rate))% success rate")
     }
 }

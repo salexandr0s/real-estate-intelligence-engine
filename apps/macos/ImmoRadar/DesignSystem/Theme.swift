@@ -43,7 +43,7 @@ enum Theme {
     static func alertColor(for alertType: AlertType) -> Color {
         switch alertType {
         case .newMatch: .accentColor
-        case .priceDrop: .scoreExcellent
+        case .priceDrop: .scoreGood
         case .scoreUpgrade: .scoreGood
         case .scoreDowngrade: .sourceDegraded
         case .statusChange: .secondary
@@ -83,6 +83,14 @@ enum Theme {
         static let lg: CGFloat = 12
         static let xl: CGFloat = 24
     }
+
+    // MARK: - Chart Typography
+
+    /// Standard font for chart axis labels — semantic replacement for .system(size: 9).
+    static var chartAxisFont: Font { .caption2 }
+
+    /// Standard font for chart annotations — semantic replacement for .system(size: 8).monospacedDigit().
+    static var chartAnnotationFont: Font { .caption2.monospacedDigit() }
 
     // MARK: - Card Style
 
