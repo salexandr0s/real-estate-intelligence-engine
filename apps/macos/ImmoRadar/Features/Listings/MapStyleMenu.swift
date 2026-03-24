@@ -16,7 +16,7 @@ struct MapStyleMenu: View {
         .foregroundStyle(.primary)
         .menuStyle(.borderlessButton)
         .frame(width: 36, height: 36)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .adaptiveMaterial(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
         .help("Map Style")
     }

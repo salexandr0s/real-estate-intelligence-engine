@@ -1,9 +1,11 @@
+import AppKit
 import SwiftUI
 
 /// A single row in the watchlist showing listing info, notes, and unsave action.
 struct WatchlistRow: View {
     let item: SavedListingItem
     let onUnsave: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
@@ -74,5 +76,31 @@ struct WatchlistRow: View {
                 .help("Remove from watchlist")
         }
         .padding(.vertical, Theme.Spacing.xs)
+        .background(isHovered ? Color(nsColor: .separatorColor).opacity(0.05) : .clear)
+        .onHover { isHovered = $0 }
+        .contextMenu {
+            if let browserURL = URL(string: item.listing.canonicalUrl) {
+                Button {
+                    NSWorkspace.shared.open(browserURL)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+            }
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item.listing.canonicalUrl, forType: .string)
+            } label: {
+                Label("Copy URL", systemImage: "doc.on.doc")
+            }
+            if let url = URL(string: item.listing.canonicalUrl) {
+                ShareLink(item: url) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+            Divider()
+            Button(role: .destructive, action: onUnsave) {
+                Label("Remove from Watchlist", systemImage: "bookmark.slash")
+            }
+        }
     }
 }

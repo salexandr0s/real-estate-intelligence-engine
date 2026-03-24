@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Renders a list of tappable listing cards in the copilot chat.
@@ -72,5 +73,20 @@ private struct CopilotListingCard: View {
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
         .contentShape(Rectangle())
+        .contextMenu {
+            if let urlString = listing.canonicalUrl, let url = URL(string: urlString) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+        }
     }
 }

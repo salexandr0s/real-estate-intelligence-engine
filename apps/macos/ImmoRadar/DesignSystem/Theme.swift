@@ -16,6 +16,17 @@ enum Theme {
         }
     }
 
+    /// Contrast-aware variant for Increase Contrast accessibility setting.
+    static func scoreColor(for score: Double, contrast: ColorSchemeContrast) -> Color {
+        guard contrast == .increased else { return scoreColor(for: score) }
+        switch score {
+        case 80...: return Color.scoreExcellentHC
+        case 60..<80: return Color.scoreGoodHC
+        case 30..<60: return Color.scoreAverageHC
+        default: return Color.scorePoorHC
+        }
+    }
+
     /// Returns a text label for a score range.
     static func scoreLabel(for score: Double) -> String {
         switch score {
@@ -38,6 +49,18 @@ enum Theme {
         }
     }
 
+    /// Contrast-aware variant for Increase Contrast accessibility setting.
+    static func healthColor(for status: SourceHealthStatus, contrast: ColorSchemeContrast) -> Color {
+        guard contrast == .increased else { return healthColor(for: status) }
+        switch status {
+        case .healthy: return Color.sourceHealthyHC
+        case .degraded: return Color.sourceDegradedHC
+        case .failing: return Color.sourceFailingHC
+        case .disabled: return Color(nsColor: .systemGray)
+        case .unknown: return Color.primary
+        }
+    }
+
     // MARK: - Alert Type Colors
 
     static func alertColor(for alertType: AlertType) -> Color {
@@ -47,6 +70,18 @@ enum Theme {
         case .scoreUpgrade: .scoreGood
         case .scoreDowngrade: .sourceDegraded
         case .statusChange: .secondary
+        }
+    }
+
+    /// Contrast-aware variant for Increase Contrast accessibility setting.
+    static func alertColor(for alertType: AlertType, contrast: ColorSchemeContrast) -> Color {
+        guard contrast == .increased else { return alertColor(for: alertType) }
+        switch alertType {
+        case .newMatch: return Color.accentColor
+        case .priceDrop: return Color.scoreGoodHC
+        case .scoreUpgrade: return Color.scoreGoodHC
+        case .scoreDowngrade: return Color.sourceDegradedHC
+        case .statusChange: return Color.primary
         }
     }
 
@@ -116,4 +151,14 @@ extension Color {
     static let sourceDegraded = Color.orange
     static let sourceFailing = Color.red
     static let sourceDisabled = Color.gray
+
+    // High-contrast variants (Increase Contrast accessibility setting)
+    static let scoreExcellentHC = Color(nsColor: .systemBlue)
+    static let scoreGoodHC = Color(nsColor: .systemGreen)
+    static let scoreAverageHC = Color(nsColor: .systemOrange)
+    static let scorePoorHC = Color(nsColor: .systemRed)
+
+    static let sourceHealthyHC = Color(nsColor: .systemGreen)
+    static let sourceDegradedHC = Color(nsColor: .systemOrange)
+    static let sourceFailingHC = Color(nsColor: .systemRed)
 }

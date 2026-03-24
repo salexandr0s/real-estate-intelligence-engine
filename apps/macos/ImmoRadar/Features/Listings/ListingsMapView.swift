@@ -5,6 +5,7 @@ import SwiftUI
 /// Supports district boundary overlays, filter-aware zoom, and draw-to-search.
 struct ListingsMapView: View {
     @Bindable var viewModel: ListingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Vienna center — default camera position.
     private static let viennaCenter = CLLocationCoordinate2D(latitude: 48.2082, longitude: 16.3738)
@@ -187,7 +188,7 @@ struct ListingsMapView: View {
         }
         .onChange(of: viewModel.mapFocusTrigger) {
             if let coord = viewModel.focusedMapCoordinate {
-                withAnimation(.easeInOut(duration: 0.5)) {
+                withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.5)) {
                     position = .region(MKCoordinateRegion(
                         center: coord,
                         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
@@ -199,11 +200,11 @@ struct ListingsMapView: View {
         .onChange(of: viewModel.selectedDistrict) { _, newDistrict in
             if let districtNo = newDistrict,
                let boundary = districtBoundaries.first(where: { $0.id == districtNo }) {
-                withAnimation(.easeInOut(duration: 0.6)) {
+                withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.6)) {
                     position = .region(boundary.boundingBox)
                 }
             } else if newDistrict == nil {
-                withAnimation(.easeInOut(duration: 0.5)) {
+                withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.5)) {
                     position = .region(MKCoordinateRegion(
                         center: Self.viennaCenter,
                         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
@@ -293,7 +294,7 @@ struct ListingsMapView: View {
         VStack(spacing: 0) {
             content()
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .adaptiveMaterial(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
     }
 
@@ -415,7 +416,7 @@ struct ListingsMapView: View {
             longitudeDelta: max((maxLon - minLon) * 1.3, 0.01)
         )
 
-        withAnimation(.easeInOut(duration: 0.5)) {
+        withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.5)) {
             position = .region(MKCoordinateRegion(center: center, span: span))
         }
     }

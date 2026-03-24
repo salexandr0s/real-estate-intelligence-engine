@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Table displaying listings with sortable columns and infinite scroll via sentinel row.
@@ -73,6 +74,36 @@ struct ListingsTable: View {
                     .foregroundStyle(.secondary)
             }
             .width(min: 70, ideal: 80)
+        }
+        .contextMenu(forSelectionType: Int.self) { ids in
+            if let id = ids.first,
+               let listing = viewModel.filteredListings.first(where: { $0.id == id }) {
+                if let browserURL = URL(string: listing.canonicalUrl) {
+                    Button {
+                        NSWorkspace.shared.open(browserURL)
+                    } label: {
+                        Label("Open in Browser", systemImage: "safari")
+                    }
+                }
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(listing.canonicalUrl, forType: .string)
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+                if let url = URL(string: listing.canonicalUrl) {
+                    ShareLink(item: url) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
+                Divider()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(listing.title, forType: .string)
+                } label: {
+                    Label("Copy Title", systemImage: "doc.on.clipboard")
+                }
+            }
         }
     }
 

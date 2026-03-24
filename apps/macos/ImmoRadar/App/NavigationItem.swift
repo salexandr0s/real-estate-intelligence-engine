@@ -53,11 +53,11 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .watchlist: "⌘6"
         case .sources: "⌘7"
         case .analytics: "⌘8"
-        case .settings: "⌘9"
+        case .settings: nil
         }
     }
 
-    /// Keyboard shortcut number (Cmd+1 through Cmd+7).
+    /// Keyboard shortcut number (Cmd+1 through Cmd+8).
     var shortcutKey: KeyEquivalent? {
         switch self {
         case .dashboard: "1"
@@ -68,7 +68,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .watchlist: "6"
         case .sources: "7"
         case .analytics: "8"
-        case .settings: "9"
+        case .settings: nil
         }
     }
 }

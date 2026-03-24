@@ -5,6 +5,11 @@ struct StatusBadge: View {
     let label: String
     let color: Color
     var icon: String?
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var backgroundOpacity: Double {
+        contrast == .increased ? 0.25 : 0.12
+    }
 
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
@@ -20,11 +25,11 @@ struct StatusBadge: View {
             }
             Text(label)
                 .font(.caption)
-                .fontWeight(.medium)
+                .adaptiveFontWeight(.medium)
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(color.opacity(0.12))
+        .background(color.opacity(backgroundOpacity))
         .clipShape(Capsule())
     }
 }

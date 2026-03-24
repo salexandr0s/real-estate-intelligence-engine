@@ -108,24 +108,29 @@ struct DashboardView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Dashboard")
         .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
+            ToolbarItem(placement: .automatic) {
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
-
+            }
+            ToolbarItem(placement: .automatic) {
                 if let date = viewModel.lastRefreshDate {
                     Text("Updated \(PriceFormatter.relativeDate(date))")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-
+            }
+        }
+        .toolbar(id: "dashboard") {
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(viewModel.isLoading)
+                .help("Refresh dashboard")
             }
         }
         .task {

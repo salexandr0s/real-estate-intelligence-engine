@@ -3,6 +3,7 @@ import SwiftUI
 /// Map annotation for Wien development projects with hover popover.
 struct DevelopmentAnnotation: View {
     let development: WienDevelopment
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
 
     var body: some View {
@@ -16,7 +17,7 @@ struct DevelopmentAnnotation: View {
             marker
         }
         .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovered)
     }
 
     private var marker: some View {

@@ -11,12 +11,22 @@ final class AlertsViewModel {
     var errorMessage: String?
     var selectedAlertID: Int?
     var filterStatus: AlertStatus?
+    var searchText: String = ""
 
     // MARK: - Computed
 
     var filteredAlerts: [Alert] {
-        guard let status = filterStatus else { return alerts }
-        return alerts.filter { $0.status == status }
+        var result = alerts
+        if let status = filterStatus {
+            result = result.filter { $0.status == status }
+        }
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.title.localizedStandardContains(searchText)
+                    || $0.body.localizedStandardContains(searchText)
+            }
+        }
+        return result
     }
 
     var unreadCount: Int {
@@ -86,7 +96,8 @@ final class AlertsViewModel {
         alerts.insert(alert, at: 0)
     }
 
-    func dismiss(_ alert: Alert, using client: APIClient) async {
+    func dismiss(_ alert: Alert, using client: APIClient, undoManager: UndoManager? = nil) async {
+        let previousStatus = alert.status
         let body: Data
         do {
             body = try JSONEncoder().encode(APIAlertUpdateRequest(status: "dismissed"))
@@ -100,6 +111,19 @@ final class AlertsViewModel {
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
                 alerts[idx].status = .dismissed
             }
+            // Register undo: revert to previous status
+            undoManager?.registerUndo(withTarget: self) { vm in
+                Task { @MainActor in
+                    let revertBody = try? JSONEncoder().encode(APIAlertUpdateRequest(status: previousStatus.rawValue))
+                    if let revertBody {
+                        try? await client.requestVoid(.updateAlert(id: alert.id, body: revertBody))
+                    }
+                    if let idx = vm.alerts.firstIndex(where: { $0.id == alert.id }) {
+                        vm.alerts[idx].status = previousStatus
+                    }
+                }
+            }
+            undoManager?.setActionName("Dismiss Alert")
         } catch {
             errorMessage = error.localizedDescription
         }

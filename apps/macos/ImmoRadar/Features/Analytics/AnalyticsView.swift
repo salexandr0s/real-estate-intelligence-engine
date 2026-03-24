@@ -45,7 +45,15 @@ struct AnalyticsView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Analytics")
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .automatic) {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+        }
+        .toolbar(id: "analytics") {
+            ToolbarItem(id: "tabPicker", placement: .automatic) {
                 Picker("Tab", selection: $selectedTab) {
                     ForEach(AnalyticsTab.allCases, id: \.self) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -53,12 +61,8 @@ struct AnalyticsView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 280)
-
-                if viewModel.isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
+            }
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
                 } label: {

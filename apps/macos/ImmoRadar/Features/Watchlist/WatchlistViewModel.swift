@@ -25,10 +25,21 @@ final class WatchlistViewModel {
         isLoading = false
     }
 
-    func unsave(listingId: Int, using client: APIClient) async {
+    func unsave(listingId: Int, using client: APIClient, undoManager: UndoManager? = nil) async {
+        let removedItem = savedListings.first { $0.listingId == listingId }
         do {
             try await client.requestVoid(.unsaveListing(listingId: listingId))
             savedListings.removeAll { $0.listingId == listingId }
+            // Register undo: re-save the listing and refresh
+            if removedItem != nil {
+                undoManager?.registerUndo(withTarget: self) { vm in
+                    Task { @MainActor in
+                        try? await client.saveListing(listingId: listingId)
+                        await vm.refresh(using: client)
+                    }
+                }
+                undoManager?.setActionName("Remove from Watchlist")
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

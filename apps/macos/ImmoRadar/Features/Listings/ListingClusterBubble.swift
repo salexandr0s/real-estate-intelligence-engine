@@ -38,7 +38,7 @@ struct ListingClusterBubble: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 3))
+                    .adaptiveMaterial(.regularMaterial, in: RoundedRectangle(cornerRadius: 3))
             }
         }
     }

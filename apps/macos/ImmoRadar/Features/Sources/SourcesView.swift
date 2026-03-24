@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Sources monitoring view showing scraping source health, success rates, and details.
@@ -22,12 +23,15 @@ struct SourcesView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Sources")
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .automatic) {
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
-
+            }
+        }
+        .toolbar(id: "sources") {
+            ToolbarItem(id: "pauseAll", placement: .automatic) {
                 Button {
                     Task { await viewModel.togglePauseAll(using: appState.apiClient) }
                 } label: {
@@ -37,7 +41,8 @@ struct SourcesView: View {
                     )
                 }
                 .disabled(viewModel.sources.isEmpty)
-
+            }
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
                 } label: {
@@ -122,7 +127,7 @@ private struct SourcesSummaryCard: View {
 
             Text(value)
                 .font(.title2)
-                .fontWeight(.semibold)
+                .adaptiveFontWeight(.semibold)
         }
         .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -168,10 +173,12 @@ private struct SourceDetailCard: View {
     let source: Source
     let viewModel: SourcesViewModel
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded: Bool = false
     @State private var scrapeRuns: [ScrapeRun] = []
     @State private var isLoadingRuns: Bool = false
     @State private var selectedInterval: Int = 0
+    @State private var isHovered: Bool = false
 
     /// Preset crawl interval options in minutes.
     private static let intervalPresets = [15, 30, 60, 120]
@@ -197,12 +204,12 @@ private struct SourceDetailCard: View {
                     HStack(spacing: Theme.Spacing.xs) {
                         Text(source.name)
                             .font(.body)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
 
                         if !source.isActive {
                             Text("Paused")
                                 .font(.caption2)
-                                .fontWeight(.medium)
+                                .adaptiveFontWeight(.medium)
                                 .foregroundStyle(.orange)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -228,7 +235,7 @@ private struct SourceDetailCard: View {
                 VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
                     Text("\(source.successRatePct.formatted(.number.precision(.fractionLength(1))))%")
                         .font(.body)
-                        .fontWeight(.semibold)
+                        .adaptiveFontWeight(.semibold)
                         .foregroundStyle(successRateColor)
                     Text("success rate")
                         .font(.caption2)
@@ -240,7 +247,7 @@ private struct SourceDetailCard: View {
 
                 // Expand button
                 Button(isExpanded ? "Collapse" : "Expand", systemImage: "chevron.down") {
-                    withAnimation(.easeInOut(duration: 0.16)) {
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.16)) {
                         isExpanded.toggle()
                     }
                 }
@@ -350,7 +357,7 @@ private struct SourceDetailCard: View {
                         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                             Text("Last Error")
                                 .font(.caption)
-                                .fontWeight(.medium)
+                                .adaptiveFontWeight(.medium)
                                 .foregroundStyle(.secondary)
 
                             Text(errorSummary)
@@ -389,7 +396,28 @@ private struct SourceDetailCard: View {
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .stroke(Color(nsColor: .separatorColor).opacity(isHovered ? 0.3 : 0), lineWidth: 1)
+        )
+        .onHover { isHovered = $0 }
         .onAppear { selectedInterval = source.crawlIntervalMinutes }
+        .contextMenu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(source.code, forType: .string)
+            } label: {
+                Label("Copy Source Code", systemImage: "doc.on.clipboard")
+            }
+            Button {
+                Task { await viewModel.toggleActive(source, using: appState.apiClient) }
+            } label: {
+                Label(
+                    source.isActive ? "Deactivate" : "Activate",
+                    systemImage: source.isActive ? "pause.circle" : "play.circle"
+                )
+            }
+        }
     }
 
     private var successRateColor: Color {
@@ -423,7 +451,7 @@ private struct DetailItem: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.caption)
-                .fontWeight(.medium)
+                .adaptiveFontWeight(.medium)
         }
     }
 }

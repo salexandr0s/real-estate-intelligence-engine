@@ -3,6 +3,7 @@ import SwiftUI
 struct AlertsList: View {
     @Bindable var viewModel: AlertsViewModel
     let appState: AppState
+    var undoManager: UndoManager?
 
     var body: some View {
         List(viewModel.filteredAlerts, selection: $viewModel.selectedAlertID) { alert in
@@ -19,7 +20,7 @@ struct AlertsList: View {
 
                     if alert.status != .dismissed {
                         Button {
-                            Task { await viewModel.dismiss(alert, using: appState.apiClient) }
+                            Task { await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager) }
                         } label: {
                             Label("Dismiss", systemImage: "xmark.circle")
                         }

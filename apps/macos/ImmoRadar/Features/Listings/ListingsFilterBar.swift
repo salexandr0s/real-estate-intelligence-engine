@@ -6,38 +6,6 @@ struct ListingsFilterBar: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            // Search
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 11))
-                TextField("Search...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                if !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 10))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(minWidth: 80, idealWidth: 140, maxWidth: 180)
-
-            Divider()
-                .frame(height: 16)
-
             // Operation type
             Picker("", selection: $viewModel.selectedOperationType) {
                 Text("All Types").tag(nil as OperationType?)

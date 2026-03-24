@@ -31,7 +31,8 @@ struct MarketHeatGrid: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack {
                 Label("Market Temperature", systemImage: "thermometer.medium")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
+                    .adaptiveFontWeight(.semibold)
                 Spacer()
                 Text("\(data.count) districts")
                     .font(.caption)
@@ -46,9 +47,11 @@ struct MarketHeatGrid: View {
                     ForEach(sortedData) { point in
                         VStack(spacing: 2) {
                             Text("\(point.districtNo)")
-                                .font(.caption.weight(.bold).monospacedDigit())
+                                .font(.caption.monospacedDigit())
+                                .adaptiveFontWeight(.bold)
                             Text(point.velocity, format: .number.precision(.fractionLength(1)))
-                                .font(.caption2.weight(.medium).monospacedDigit())
+                                .font(.caption2.monospacedDigit())
+                                .adaptiveFontWeight(.medium)
                                 .foregroundStyle(point.temperatureColor)
                             Text("+\(point.newLast7d)/wk")
                                 .font(Theme.chartAxisFont)

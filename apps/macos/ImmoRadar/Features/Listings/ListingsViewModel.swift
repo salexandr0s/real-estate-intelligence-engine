@@ -1,4 +1,5 @@
 import CoreLocation
+import CoreSpotlight
 import Foundation
 import MapKit
 import os
@@ -177,6 +178,7 @@ final class ListingsViewModel {
             listings = all
             nextCursor = nil
             cache?.set(Self.listingsCacheKey, value: listings)
+            SpotlightIndexer.shared.indexListings(all)
             Log.ui.info("Fetched all \(all.count) listings")
         } catch {
             errorMessage = String(describing: error)

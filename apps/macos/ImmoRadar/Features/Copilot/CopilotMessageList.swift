@@ -5,6 +5,7 @@ struct CopilotMessageList: View {
     let messages: [CopilotMessage]
     let isStreaming: Bool
     let onListingTap: (Int) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -22,13 +23,13 @@ struct CopilotMessageList: View {
             }
             .onChange(of: messages.last?.id) { _, newID in
                 guard let newID else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAdaptiveAnimation(reduceMotion, .easeOut(duration: 0.2)) {
                     proxy.scrollTo(newID, anchor: .bottom)
                 }
             }
             .onChange(of: messages.last?.contentBlocks.count) { _, _ in
                 guard let lastID = messages.last?.id else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAdaptiveAnimation(reduceMotion, .easeOut(duration: 0.2)) {
                     proxy.scrollTo(lastID, anchor: .bottom)
                 }
             }

@@ -81,12 +81,13 @@ struct ListingsView: View {
                     }
                 }
                 .frame(minWidth: 280, idealWidth: 360, maxWidth: 480)
-                .background(.regularMaterial)
+                .adaptiveMaterial(.regularMaterial)
             }
         }
+        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search listings...")
         .navigationTitle("Listings")
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
+        .toolbar(id: "listings") {
+            ToolbarItem(id: "viewMode", placement: .automatic) {
                 Picker("View", selection: $viewModel.isMapMode) {
                     Label("List", systemImage: "list.bullet").tag(false)
                     Label("Map", systemImage: "map").tag(true)
@@ -95,7 +96,7 @@ struct ListingsView: View {
                 .frame(width: 80)
                 .help("Toggle between list and map view")
             }
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
                         if let data = await viewModel.exportCSV(using: appState.apiClient) {
@@ -108,7 +109,7 @@ struct ListingsView: View {
                 .disabled(viewModel.filteredListings.isEmpty)
                 .help("Export filtered listings as CSV")
             }
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
                 } label: {
@@ -117,7 +118,7 @@ struct ListingsView: View {
                 .disabled(viewModel.isLoading)
                 .help("Refresh listings")
             }
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "inspector", placement: .automatic) {
                 Button {
                     showInspector.toggle()
                 } label: {
@@ -163,46 +164,6 @@ struct ListingsView: View {
             } catch {
                 exportError = error.localizedDescription
             }
-        }
-    }
-}
-
-// MARK: - Native macOS Search Field
-
-/// Wraps NSSearchField for a proper native macOS look in the toolbar.
-private struct ToolbarSearchField: NSViewRepresentable {
-    @Binding var text: String
-    let prompt: String
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.placeholderString = prompt
-        field.delegate = context.coordinator
-        field.sendsSearchStringImmediately = true
-        field.sendsWholeSearchString = false
-        return field
-    }
-
-    func updateNSView(_ nsView: NSSearchField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
-        @Binding var text: String
-
-        init(text: Binding<String>) {
-            _text = text
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSSearchField else { return }
-            text = field.stringValue
         }
     }
 }

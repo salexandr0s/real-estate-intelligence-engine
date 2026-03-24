@@ -50,6 +50,15 @@ struct ListingDetailView: View {
                     }
                     .controlSize(.regular)
                     .buttonStyle(.bordered)
+
+                    if let shareURL = URL(string: listing.canonicalUrl) {
+                        ShareLink(item: shareURL) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .controlSize(.regular)
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 FeedbackSection(listingId: listing.id)

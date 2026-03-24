@@ -3,7 +3,10 @@ import SwiftUI
 /// Watchlist view showing user-saved listings with notes and export.
 struct WatchlistView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.undoManager) private var undoManager
     @State private var viewModel = WatchlistViewModel()
+    @State private var searchText = ""
+    @State private var selectedItemID: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,24 +31,40 @@ struct WatchlistView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(viewModel.savedListings) { item in
+                List(viewModel.savedListings.filter { item in
+                    searchText.isEmpty
+                        || item.listing.title.localizedStandardContains(searchText)
+                        || (item.listing.districtName ?? "").localizedStandardContains(searchText)
+                        || (item.notes ?? "").localizedStandardContains(searchText)
+                }, selection: $selectedItemID) { item in
                     WatchlistRow(item: item) {
-                        Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient) }
+                        Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
                     }
+                    .tag(item.listingId)
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
+                .onDeleteCommand {
+                    if let id = selectedItemID {
+                        Task { await viewModel.unsave(listingId: id, using: appState.apiClient, undoManager: undoManager) }
+                        selectedItemID = nil
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search watchlist...")
         .navigationTitle("Watchlist")
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .automatic) {
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
-
+            }
+        }
+        .toolbar(id: "watchlist") {
+            ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
                         if let data = await viewModel.exportCSV(using: appState.apiClient) {
@@ -56,7 +75,8 @@ struct WatchlistView: View {
                     Label("Export CSV", systemImage: "square.and.arrow.up")
                 }
                 .disabled(viewModel.savedListings.isEmpty)
-
+            }
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
                 } label: {

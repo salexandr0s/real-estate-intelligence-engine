@@ -26,10 +26,7 @@ struct CopilotInputBar: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(
-            .thickMaterial,
-            in: RoundedRectangle(cornerRadius: Theme.Radius.xl)
-        )
+        .adaptiveMaterial(.thickMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.xl))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Radius.xl)
                 .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)

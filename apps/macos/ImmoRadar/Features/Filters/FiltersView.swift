@@ -18,23 +18,29 @@ struct FiltersView: View {
         }
         .navigationTitle("Filters")
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .automatic) {
                 if viewModel.isLoading || viewModel.isTestingFilter {
                     ProgressView()
                         .controlSize(.small)
                 }
-
+            }
+        }
+        .toolbar(id: "filters") {
+            ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
                     Task { await viewModel.refresh(using: appState.apiClient) }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-
+                .help("Refresh filters")
+            }
+            ToolbarItem(id: "newFilter", placement: .automatic) {
                 Button {
                     viewModel.startNewFilter()
                 } label: {
                     Label("New Filter", systemImage: "plus")
                 }
+                .help("Create a new filter")
             }
         }
         .sheet(isPresented: $viewModel.showingEditor) {
@@ -85,9 +91,11 @@ private struct FiltersEmptyState: View {
 private struct FiltersList: View {
     @Bindable var viewModel: FiltersViewModel
     let appState: AppState
+    @Environment(\.undoManager) private var undoManager
+    @State private var selectedFilterID: Int?
 
     var body: some View {
-        List {
+        List(selection: $selectedFilterID) {
             ForEach(viewModel.filters) { filter in
                 FilterRow(
                     filter: filter,
@@ -100,7 +108,7 @@ private struct FiltersList: View {
                 )
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
-                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient) }
+                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient, undoManager: undoManager) }
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -144,7 +152,7 @@ private struct FiltersList: View {
                     Divider()
 
                     Button(role: .destructive) {
-                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient) }
+                        Task { await viewModel.deleteFilter(filter, using: appState.apiClient, undoManager: undoManager) }
                     } label: {
                         Label("Delete Filter", systemImage: "trash")
                     }
@@ -152,6 +160,13 @@ private struct FiltersList: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+        .onDeleteCommand {
+            if let id = selectedFilterID,
+               let filter = viewModel.filters.first(where: { $0.id == id }) {
+                Task { await viewModel.deleteFilter(filter, using: appState.apiClient, undoManager: undoManager) }
+                selectedFilterID = nil
+            }
+        }
     }
 }
 
@@ -163,6 +178,7 @@ private struct FilterRow: View {
     let onToggle: () -> Void
     let onEdit: () -> Void
     let onTest: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
@@ -180,7 +196,7 @@ private struct FilterRow: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(filter.name)
                     .font(.body)
-                    .fontWeight(.medium)
+                    .adaptiveFontWeight(.medium)
                     .lineLimit(1)
 
                 HStack(spacing: Theme.Spacing.sm) {
@@ -218,7 +234,7 @@ private struct FilterRow: View {
             if let matchCount = filter.matchCount, matchCount > 0 {
                 Text("\(matchCount)")
                     .font(.caption)
-                    .fontWeight(.semibold)
+                    .adaptiveFontWeight(.semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, Theme.Spacing.sm)
                     .padding(.vertical, Theme.Spacing.xxs)
@@ -233,6 +249,8 @@ private struct FilterRow: View {
                 .frame(width: 50, alignment: .trailing)
         }
         .padding(.vertical, Theme.Spacing.xs)
+        .background(isHovered ? Color(nsColor: .separatorColor).opacity(0.05) : .clear)
+        .onHover { isHovered = $0 }
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onEdit)
         .accessibilityAddTraits(.isButton)
@@ -298,7 +316,7 @@ private struct FilterTestResultsSheet: View {
                         VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
                             Text(PriceFormatter.format(eur: listing.listPriceEur))
                                 .font(.subheadline)
-                                .fontWeight(.semibold)
+                                .adaptiveFontWeight(.semibold)
                             if let score = listing.currentScore {
                                 HStack(spacing: Theme.Spacing.xs) {
                                     Circle()
@@ -306,7 +324,7 @@ private struct FilterTestResultsSheet: View {
                                         .frame(width: 8, height: 8)
                                     Text("\(score.formatted(.number.precision(.fractionLength(1))))")
                                         .font(.caption)
-                                        .fontWeight(.medium)
+                                        .adaptiveFontWeight(.medium)
                                 }
                             }
                         }
@@ -363,7 +381,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Filter Name")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         TextField("e.g. Vienna Value Apartments", text: $draft.name)
                             .textFieldStyle(.roundedBorder)
                         if let error = draft.nameError, showsValidation {
@@ -375,7 +393,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Operation Type")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         Picker("Operation", selection: $draft.operationType) {
                             Text("Any").tag(Optional<OperationType>.none)
                             ForEach(OperationType.allCases, id: \.self) { opType in
@@ -389,7 +407,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Property Types")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         HStack(spacing: Theme.Spacing.sm) {
                             ForEach(PropertyType.allCases) { propType in
                                 Toggle(propType.displayName, isOn: propertyTypeBinding(propType))
@@ -404,14 +422,14 @@ private struct FilterEditorSheet: View {
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Min Price (EUR)")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 100000", text: $draft.minPriceStr)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Price (EUR)")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 350000", text: $draft.maxPriceStr)
                                     .textFieldStyle(.roundedBorder)
                             }
@@ -427,14 +445,14 @@ private struct FilterEditorSheet: View {
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Min Area (m\u{00B2})")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 50", text: $draft.minAreaStr)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Area (m\u{00B2})")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 120", text: $draft.maxAreaStr)
                                     .textFieldStyle(.roundedBorder)
                             }
@@ -450,14 +468,14 @@ private struct FilterEditorSheet: View {
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Min Rooms")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 2", text: $draft.minRoomsStr)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Rooms")
                                     .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .adaptiveFontWeight(.medium)
                                 TextField("e.g. 5", text: $draft.maxRoomsStr)
                                     .textFieldStyle(.roundedBorder)
                             }
@@ -471,7 +489,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Required Keywords (comma-separated)")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         TextField("e.g. provisionsfrei, balkon", text: $draft.keywords)
                             .textFieldStyle(.roundedBorder)
                     }
@@ -479,7 +497,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Excluded Keywords (comma-separated)")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         TextField("e.g. baurecht, vermietet", text: $draft.excludedKeywordsStr)
                             .textFieldStyle(.roundedBorder)
                     }
@@ -488,7 +506,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Alert Frequency")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         Picker("Frequency", selection: $draft.alertFrequency) {
                             ForEach(AlertFrequency.allCases, id: \.self) { freq in
                                 Text(freq.displayName).tag(freq)
@@ -502,7 +520,7 @@ private struct FilterEditorSheet: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text("Vienna Districts")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .adaptiveFontWeight(.medium)
                         DistrictGrid(selected: $draft.selectedDistricts)
                     }
                 }

@@ -5,6 +5,7 @@ struct TextContentBlock: View {
     let text: String
     let isStreaming: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var cursorVisible = true
 
     var body: some View {
@@ -20,12 +21,14 @@ struct TextContentBlock: View {
             if isStreaming {
                 Text("|")
                     .foregroundStyle(.secondary)
-                    .opacity(cursorVisible ? 1 : 0)
+                    .opacity(reduceMotion ? 1 : (cursorVisible ? 1 : 0))
                     .animation(
-                        .easeInOut(duration: 0.5).repeatForever(autoreverses: true),
+                        reduceMotion ? nil : .easeInOut(duration: 0.5).repeatForever(autoreverses: true),
                         value: cursorVisible
                     )
-                    .onAppear { cursorVisible.toggle() }
+                    .onAppear {
+                        if !reduceMotion { cursorVisible.toggle() }
+                    }
             }
         }
     }

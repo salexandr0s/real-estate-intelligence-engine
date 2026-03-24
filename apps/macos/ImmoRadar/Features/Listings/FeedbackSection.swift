@@ -5,6 +5,7 @@ import SwiftUI
 struct FeedbackSection: View {
     let listingId: Int
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentRating: FeedbackRating?
     @State private var notes: String = ""
     @State private var showNotes: Bool = false
@@ -43,7 +44,7 @@ struct FeedbackSection: View {
 
             if currentRating != nil {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.16)) {
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.16)) {
                         showNotes.toggle()
                     }
                 } label: {

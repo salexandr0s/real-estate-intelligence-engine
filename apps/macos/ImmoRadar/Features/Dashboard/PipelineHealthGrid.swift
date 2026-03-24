@@ -26,7 +26,8 @@ struct PipelineHealthGrid: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack {
                 Label("Sources", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
+                    .adaptiveFontWeight(.semibold)
                 Spacer()
                 Text("\(healthyCount)/\(activeCount) healthy")
                     .font(.caption.monospacedDigit())

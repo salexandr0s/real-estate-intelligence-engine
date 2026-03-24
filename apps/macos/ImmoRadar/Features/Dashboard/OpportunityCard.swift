@@ -27,12 +27,14 @@ struct OpportunityCard: View {
                     ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
 
                     Text(listing.title)
-                        .font(.caption.weight(.medium))
+                        .font(.caption)
+                        .adaptiveFontWeight(.medium)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(PriceFormatter.formatCompact(listing.listPriceEur))
-                        .font(.caption.monospacedDigit().weight(.medium))
+                        .font(.caption.monospacedDigit())
+                        .adaptiveFontWeight(.medium)
                 }
 
                 // Row 2: Metadata + Discount
@@ -42,7 +44,8 @@ struct OpportunityCard: View {
 
                     if isNew {
                         Text("NEW")
-                            .font(.caption2.weight(.bold))
+                            .font(.caption2)
+                            .adaptiveFontWeight(.bold)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -73,7 +76,8 @@ struct OpportunityCard: View {
 
                     if let discount, discount < 0 {
                         Text(PriceFormatter.formatPercent(discount))
-                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .font(.caption2.monospacedDigit())
+                            .adaptiveFontWeight(.semibold)
                             .foregroundStyle(Color.scoreExcellent)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)

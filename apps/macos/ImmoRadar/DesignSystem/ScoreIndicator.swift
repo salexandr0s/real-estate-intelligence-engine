@@ -4,6 +4,7 @@ import SwiftUI
 struct ScoreIndicator: View {
     let score: Double
     let size: Size
+    @Environment(\.colorSchemeContrast) private var contrast
 
     enum Size {
         case compact
@@ -45,14 +46,18 @@ struct ScoreIndicator: View {
     }
 
     private var color: Color {
-        Theme.scoreColor(for: score)
+        Theme.scoreColor(for: score, contrast: contrast)
+    }
+
+    private var trackOpacity: Double {
+        contrast == .increased ? 0.4 : 0.2
     }
 
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .stroke(color.opacity(0.2), lineWidth: size.lineWidth)
+                    .stroke(color.opacity(trackOpacity), lineWidth: size.lineWidth)
                 Circle()
                     .trim(from: 0, to: progress)
                     .stroke(color, style: StrokeStyle(lineWidth: size.lineWidth, lineCap: .round))

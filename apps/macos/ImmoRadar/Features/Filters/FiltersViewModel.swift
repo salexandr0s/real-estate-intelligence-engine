@@ -50,11 +50,19 @@ final class FiltersViewModel {
         }
     }
 
-    func deleteFilter(_ filter: Filter, using client: APIClient) async {
+    func deleteFilter(_ filter: Filter, using client: APIClient, undoManager: UndoManager? = nil) async {
         let backup = filters
         filters.removeAll { $0.id == filter.id }
         do {
             try await client.deleteFilter(id: filter.id)
+            // Register undo: re-create the filter via its draft
+            undoManager?.registerUndo(withTarget: self) { vm in
+                Task { @MainActor in
+                    let draft = FilterDraft.from(filter)
+                    await vm.saveFilter(draft, using: client)
+                }
+            }
+            undoManager?.setActionName("Delete Filter")
         } catch {
             // Revert optimistic delete on failure
             filters = backup

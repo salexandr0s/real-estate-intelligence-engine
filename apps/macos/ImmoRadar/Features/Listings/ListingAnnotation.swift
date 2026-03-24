@@ -5,6 +5,7 @@ import SwiftUI
 struct ListingAnnotation: View {
     let listing: Listing
     let isSelected: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 2) {
@@ -44,7 +45,7 @@ struct ListingAnnotation: View {
                 calloutCard
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isSelected)
     }
 
     private var pinSize: CGFloat { isSelected ? 16 : 10 }
@@ -104,7 +105,7 @@ struct ListingAnnotation: View {
             }
         }
         .padding(Theme.Spacing.sm)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .adaptiveMaterial(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
         .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
     }
 }

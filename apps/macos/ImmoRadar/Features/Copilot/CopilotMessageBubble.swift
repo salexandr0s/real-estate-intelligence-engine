@@ -120,6 +120,7 @@ private struct AssistantBubble: View {
 
 /// Three bouncing dots indicating AI processing.
 struct TypingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false
 
     var body: some View {
@@ -131,13 +132,17 @@ struct TypingIndicator: View {
                     .scaleEffect(animate ? 1.0 : 0.5)
                     .opacity(animate ? 1.0 : 0.3)
                     .animation(
-                        .easeInOut(duration: 0.6)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.2),
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.2),
                         value: animate
                     )
             }
         }
-        .onAppear { animate = true }
+        .onAppear {
+            if !reduceMotion { animate = true }
+        }
     }
 }

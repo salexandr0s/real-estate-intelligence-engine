@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 @main
@@ -13,8 +14,21 @@ struct ImmoRadarApp: App {
                 .task {
                     await appState.refreshConnection()
                 }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let listingId = SpotlightIndexer.listingID(from: activity) {
+                        appState.selectedNavItem = .listings
+                        appState.deepLinkListingId = listingId
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .intentNavigate)) { notification in
+                    if let sectionId = notification.object as? String,
+                       let item = NavigationItem(rawValue: sectionId) {
+                        appState.selectedNavItem = item
+                    }
+                }
         }
         .defaultSize(width: 1200, height: 800)
+        .windowToolbarStyle(.unified)
         .commands {
             navigationCommands
             viewCommands
@@ -27,6 +41,13 @@ struct ImmoRadarApp: App {
                 .environment(appState)
         } label: {
             MenuBarLabel(unreadAlertCount: appState.unreadAlertCount)
+        }
+
+        // MARK: - Settings
+
+        Settings {
+            SettingsView()
+                .environment(appState)
         }
     }
 

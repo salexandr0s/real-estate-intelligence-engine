@@ -86,7 +86,7 @@ struct DevelopmentPopover: View {
         }
         .padding(10)
         .frame(width: 280)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .adaptiveMaterial(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
     }
 }

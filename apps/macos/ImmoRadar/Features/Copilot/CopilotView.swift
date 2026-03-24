@@ -34,12 +34,12 @@ struct CopilotView: View {
                     }
                 }
                 .frame(minWidth: 280, idealWidth: 360, maxWidth: 480, maxHeight: .infinity)
-                .background(.regularMaterial)
+                .adaptiveMaterial(.regularMaterial)
             }
         }
         .navigationTitle("Copilot")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+        .toolbar(id: "copilot") {
+            ToolbarItem(id: "newChat", placement: .primaryAction) {
                 Button {
                     viewModel.clearConversation()
                     showInspector = false
@@ -48,7 +48,7 @@ struct CopilotView: View {
                 }
                 .disabled(viewModel.messages.isEmpty)
             }
-            ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "inspector", placement: .automatic) {
                 Button {
                     showInspector.toggle()
                 } label: {
