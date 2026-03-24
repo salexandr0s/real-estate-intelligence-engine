@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Centralized design tokens for the Real Estate Intel app.
+/// Centralized design tokens for the ImmoRadar app.
 /// All colors, spacing, and visual constants live here.
 enum Theme {
 

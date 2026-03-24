@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Actor-based API client for communicating with the Real Estate Intel backend.
+/// Actor-based API client for communicating with the ImmoRadar backend.
 /// Thread-safe by design. Handles auth, request building, and response parsing.
 actor APIClient {
 

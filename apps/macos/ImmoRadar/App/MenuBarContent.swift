@@ -38,7 +38,7 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button("Quit Real Estate Intel") {
+        Button("Quit ImmoRadar") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)

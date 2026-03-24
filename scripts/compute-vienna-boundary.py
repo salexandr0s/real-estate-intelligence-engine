@@ -2,8 +2,8 @@
 """
 Compute the Vienna city boundary by unioning all 23 district polygons.
 
-Reads:  apps/macos/RealEstateIntel/Resources/vienna-districts.geojson
-Writes: apps/macos/RealEstateIntel/Resources/vienna-boundary.geojson
+Reads:  apps/macos/ImmoRadar/Resources/vienna-districts.geojson
+Writes: apps/macos/ImmoRadar/Resources/vienna-boundary.geojson
 """
 
 import json
@@ -18,11 +18,11 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 INPUT_PATH = os.path.join(
     PROJECT_ROOT,
-    "apps", "macos", "RealEstateIntel", "Resources", "vienna-districts.geojson",
+    "apps", "macos", "ImmoRadar", "Resources", "vienna-districts.geojson",
 )
 OUTPUT_PATH = os.path.join(
     PROJECT_ROOT,
-    "apps", "macos", "RealEstateIntel", "Resources", "vienna-boundary.geojson",
+    "apps", "macos", "ImmoRadar", "Resources", "vienna-boundary.geojson",
 )
 
 

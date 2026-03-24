@@ -107,8 +107,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build \
-            -project apps/macos/RealEstateIntel.xcodeproj \
-            -scheme RealEstateIntel \
+            -project apps/macos/ImmoRadar.xcodeproj \
+            -scheme ImmoRadar \
             -destination 'platform=macOS' \
             -configuration Debug \
             CODE_SIGN_IDENTITY=- \

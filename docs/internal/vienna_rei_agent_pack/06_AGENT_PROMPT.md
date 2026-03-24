@@ -436,11 +436,11 @@ Audit confirmed:
 - **ListingDetailView** — analysis section, documents section, and all async loaders wired
 
 ### Files created
-- `apps/macos/RealEstateIntel/Models/Analysis.swift`
-- `apps/macos/RealEstateIntel/Models/Document.swift`
-- `apps/macos/RealEstateIntel/Features/Listings/AnalysisSection.swift`
-- `apps/macos/RealEstateIntel/Features/Listings/DocumentsSection.swift`
-- `apps/macos/RealEstateIntel/DesignSystem/GeocodeBadge.swift`
+- `apps/macos/ImmoRadar/Models/Analysis.swift`
+- `apps/macos/ImmoRadar/Models/Document.swift`
+- `apps/macos/ImmoRadar/Features/Listings/AnalysisSection.swift`
+- `apps/macos/ImmoRadar/Features/Listings/DocumentsSection.swift`
+- `apps/macos/ImmoRadar/DesignSystem/GeocodeBadge.swift`
 
 ## Backfill Scripts (DONE)
 

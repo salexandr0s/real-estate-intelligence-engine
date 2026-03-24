@@ -58,4 +58,4 @@ npm run verify    # lint + typecheck + test
 4. Typography is the design — hierarchy from weight/size/spacing, not borders or backgrounds
 5. Quiet until relevant — functional animation only, respect Reduce Motion
 
-**Tokens:** All values in `apps/macos/RealEstateIntel/DesignSystem/Theme.swift`. Full spec in `.impeccable.md`.
+**Tokens:** All values in `apps/macos/ImmoRadar/DesignSystem/Theme.swift`. Full spec in `.impeccable.md`.

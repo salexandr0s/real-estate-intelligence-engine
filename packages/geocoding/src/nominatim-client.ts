@@ -7,7 +7,7 @@
 import type { GeocodePrecision } from '@rei/contracts';
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
-const USER_AGENT = 'RealEstateIntel/0.1 (geocoding)';
+const USER_AGENT = 'ImmoRadar/0.1 (geocoding)';
 
 interface NominatimResult {
   lat: string;

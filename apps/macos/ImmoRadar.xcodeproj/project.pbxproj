@@ -1,0 +1,1248 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		017B81F637FD4574F194B7D5 /* AlertQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC0A849989332D31F76C344 /* AlertQuery.swift */; };
+		022E759D13D01B72CA5C84B4 /* GeocodeBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262A5805D307A412D594A668 /* GeocodeBadge.swift */; };
+		042D684D7F3967A73E5E5138 /* SavedListingItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B5832E514DFACA1F91BD84 /* SavedListingItem.swift */; };
+		049A5EA76373166184F22692 /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC5C812F1C19D386AC121FC0 /* SidebarRow.swift */; };
+		0528A5254484DF696B1ECC57 /* AnalysisFlagsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB42A62EA6FF75A9E40C22D2 /* AnalysisFlagsSection.swift */; };
+		06BA7030A6DEA233B39BFA45 /* ListingLocationSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403A7373377B31C137AF2A3C /* ListingLocationSection.swift */; };
+		06C6A5F78DED989DB7C6382E /* MenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191B24F560FD4CE112E398B6 /* MenuBarLabel.swift */; };
+		0765E3F47FA2CD775B5AA909 /* TopOpportunitiesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2E3BACED5F6CC00DDC1119 /* TopOpportunitiesSection.swift */; };
+		0799F469A02E3D9310FCF08C /* CopilotStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE509E2262A38FA7B860300 /* CopilotStreamEvent.swift */; };
+		09505EFE9E18867CAD6A4AF3 /* ScoreIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E3F95A7671BD234E2BC2B4 /* ScoreIndicator.swift */; };
+		09C4525F58A67DC344DE9C2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 31A79A472F6256DC8EA62B21 /* Assets.xcassets */; };
+		0B57A25967AB929406487AB9 /* ListingsFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */; };
+		0DD8170EEBD143BC769B7DE3 /* DetailRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1729A9A111EC818DDEC2A28 /* DetailRow.swift */; };
+		0F598CDF1074AF6B832692B8 /* ListingVelocityPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6068E10A8E79C015FBEE5F07 /* ListingVelocityPoint.swift */; };
+		0FBF2B190E7C435EB95C3028 /* AlertType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511EF78F5B1E13207B308FA2 /* AlertType.swift */; };
+		101539866BAF1A15D650E074 /* AnalysisAssumptionsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D247710512DA8313304486A /* AnalysisAssumptionsList.swift */; };
+		1087D86F8F211AD7B699F237 /* CopilotViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826538B566BB5A46A3C79A7D /* CopilotViewModel.swift */; };
+		119DA386DC6D5AB2F4C84385 /* AlertsEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D1829B0B178E18A40CA9DD /* AlertsEmptyState.swift */; };
+		12D34A6997D330D284FBA2A4 /* CopilotMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8EB55800B623BA6590D350 /* CopilotMessageBubble.swift */; };
+		12EF087393CA3CB2371DB782 /* CopilotListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81A4CAC1F79336E952CCF7D /* CopilotListing.swift */; };
+		13EB2A24233AF611579E6598 /* DistrictSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34CFB81B55876E13D150BE98 /* DistrictSummary.swift */; };
+		15D2976F75D9E9091B51B9BD /* ListingVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6219C2CD421E7758F9EDEF9 /* ListingVersion.swift */; };
+		181C14C3E0368CB4C03D1765 /* Listing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F145E2F3BFA43B10607D007 /* Listing.swift */; };
+		1A2CEBDB6AAC8C5C330D0578 /* SourceHealthSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D43E77D2396C28F58D3DC6B /* SourceHealthSection.swift */; };
+		1A9F0659A784C92C55DECF90 /* ListingsMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE5DD424A1D80509F05B8DD /* ListingsMapView.swift */; };
+		1ADB941B2BC48F6EA7D84DCC /* SourcesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C718F8AC07C48F07BA3EEDE6 /* SourcesViewModel.swift */; };
+		1BE117B997588F80621DE3E9 /* InspectorDetailRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 298BE81CEF598B3711653ED7 /* InspectorDetailRow.swift */; };
+		1CC8AF57F148A4AD9F35ADAC /* CopilotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7256BAACE66CBEDC8FD8FAB /* CopilotView.swift */; };
+		1D7D98B79114E85F52FA13F8 /* DevelopmentAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD017C6CA61C8A65028EB5B /* DevelopmentAnnotation.swift */; };
+		1E1C2AC93456A666F724E2C5 /* vienna-pois.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 8768C665FAE0CF6E912CF884 /* vienna-pois.geojson */; };
+		1F0005D47A132A3397963062 /* AlertsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3660DC367B468E0679439937 /* AlertsList.swift */; };
+		208DFF6FEAFD07B11BE22718 /* DistrictComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E4E9A773D4EC534F43342D /* DistrictComparison.swift */; };
+		25E6BCA630EC5254920BD4EB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDAD6406E502F27BCC4F00D /* SidebarView.swift */; };
+		26EA525FA99A4141F2A04AC6 /* ScoreBreakdownBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEA797B61DD3A81E86058CAC /* ScoreBreakdownBlock.swift */; };
+		26EBFA79429C5067994078BE /* AnalysisMissingDataList.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1BD21BC820E16DF96DAA6F9 /* AnalysisMissingDataList.swift */; };
+		2776FA6343F88BBE3BC56052 /* SourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC9865E263D14BE7DEC7865 /* SourcesView.swift */; };
+		29B087FD9AA0C81CB24EB3E1 /* WatchlistRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D1092CAFB73875729BD21D /* WatchlistRow.swift */; };
+		2C30D987AB5C9BD3E0669E94 /* ListingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49734D052D6B1E9596E8FA5 /* ListingsView.swift */; };
+		2E283BD583A89283840840E4 /* CopilotContentData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D9C13C5AC152B80A518A92F /* CopilotContentData.swift */; };
+		2F62E2F980239070E7502E9A /* ComparisonTableBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF152493FD57CCCE68F27D1 /* ComparisonTableBlock.swift */; };
+		32FCF11CBA5C3479E1FAEB1A /* PriceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C4AEE00F2FBE2437F15E73 /* PriceFormatter.swift */; };
+		33583C529183936B9A03CF3E /* SparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F940E7929CF68379339CE2 /* SparklineView.swift */; };
+		33A91DD055685BAEAF1B91BE /* WatchlistViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E767656531D68FF1AA2442 /* WatchlistViewModel.swift */; };
+		372D2214F1F4C7BE6DA71999 /* MarketBaseline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D847102C5DAE893CDD2B4DE5 /* MarketBaseline.swift */; };
+		3C013DAAA599B7651FEB4C57 /* DistrictComparisonChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0D82AF9188A8B9C387B1F96 /* DistrictComparisonChart.swift */; };
+		3C9B42DB522BDDF69363A4EB /* CrossSourceComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE106FFD3E1F47634B154B11 /* CrossSourceComparisonView.swift */; };
+		3CF43A52E303151F57910A9B /* CardModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ABFF7A55FCE122EBC74AA91 /* CardModifier.swift */; };
+		3DA6ADEEBAFCCB9A03580DF1 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D6B2446013B1ED16AD8044 /* WatchlistView.swift */; };
+		3DC1B48DE5DE72090C243507 /* ListingAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 723DA82D367F9ED6473EEFD6 /* ListingAnnotation.swift */; };
+		3E74BF7161F38DE94C8138AF /* CopilotStreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */; };
+		3F527C2310DBD546EC63A75C /* AnalysisLegalRentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF775280027AE27C8EEF7007 /* AnalysisLegalRentCard.swift */; };
+		3F6722B152A363CC448F348F /* ScoreRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE910F19E89A870C5DEA1EC /* ScoreRow.swift */; };
+		40B3888EC09F78D4D24EA267 /* ISO8601.swift in Sources */ = {isa = PBXBuildFile; fileRef = E873B0A342425CE22629C157 /* ISO8601.swift */; };
+		42790050725A2EC62C9EB6A3 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D441B787954106ED54C49791 /* NotificationManager.swift */; };
+		43DC0BC16A907696F52A798A /* ListingsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92CAEDB831FDD801328A3350 /* ListingsTable.swift */; };
+		4660BEE6936CDACF2AA99F6B /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B661280ACA3127AD153F24C /* KeychainHelper.swift */; };
+		472A7C0510D4C27D52493900 /* PriceHistoryPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4741C04E075D5184E2A9BC /* PriceHistoryPlaceholder.swift */; };
+		47CCB465A043BB1422140603 /* ListingsInspectorContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01C52EA2A4951A531777208 /* ListingsInspectorContent.swift */; };
+		4850E2D000C64F711ED6334D /* ListingCardBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DAC7B8CC38D8F59D78A6E64 /* ListingCardBlock.swift */; };
+		493C21E1A30B3AAE88AE9BDF /* APIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A0FA34D98E7246FEC1DDA4 /* APIResponse.swift */; };
+		4BB9F79674F9FB0A296A3E47 /* ScoreDistributionBucket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E269F8BCC5C1AA6691BA3A1 /* ScoreDistributionBucket.swift */; };
+		4D32F5B801EB4C467490B11C /* AlertsFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15BC26B25B4C45BD0CDE1B9 /* AlertsFilterBar.swift */; };
+		4DA6279FC94C80744869541E /* KeyMetricsRibbon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6818CCFEF372FEA1F0AAB235 /* KeyMetricsRibbon.swift */; };
+		50925B183AD7553E155D0A71 /* MarketStatsBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB65BB16EF5C35C5B955729E /* MarketStatsBlock.swift */; };
+		50E6380BC67014FB17B65380 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D956CA5EAA23A0377821351 /* DashboardView.swift */; };
+		51ED1858D3EAADD1171099B2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE657828CBB099E0CE52F4F /* APIClient.swift */; };
+		5935DE6756E8A99D9C3C8C11 /* AnalysisMarketRentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903C4634B492678F18E330B5 /* AnalysisMarketRentCard.swift */; };
+		59687438CC6AE9BB4AD43CAA /* LocalCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DA2B996EFE1C4C008E15F69 /* LocalCache.swift */; };
+		5A81F46B7BA5D259330015AB /* APIEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04519B2A31DBCAE192B0B1F9 /* APIEndpoints.swift */; };
+		5B2DA7BED5F3A00F390B2730 /* vienna-districts.geojson in Resources */ = {isa = PBXBuildFile; fileRef = CE6C448725BAACD07E85B5ED /* vienna-districts.geojson */; };
+		5B54ADC42909CF07E737C06C /* MapKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78D6DCD2B9A5E470C9DEED8F /* MapKit.framework */; };
+		5B841E8E787691D1FAF964A4 /* vienna-developments.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 6FB687332467F61D86E23909 /* vienna-developments.geojson */; };
+		5B9ED3A8BA53D0DF90CC11D3 /* TextContentBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80DC5AE36D9A7299200969A /* TextContentBlock.swift */; };
+		5C05A84B12CA36A023117E86 /* FeedbackSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80D4F072A8A41A3CEE7F196 /* FeedbackSection.swift */; };
+		5DD83184AC993A4ADC1A1B32 /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 196B49096351BBA370869CE2 /* AnalyticsView.swift */; };
+		5F00088974978223EAE0547F /* ClaudeAuthHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */; };
+		5F9D81849CB6EFF9315BFD2D /* AnalysisBuildingContextCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE604F7EA233DB23168C597B /* AnalysisBuildingContextCard.swift */; };
+		64D6D43CC911434A9221799A /* RecentListingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899030D7853562BB050A769A /* RecentListingsSection.swift */; };
+		64D92E9022D9929BDD533CF7 /* AnalysisInvestorMetricsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D508D22F198E1D4F9D1DC322 /* AnalysisInvestorMetricsCard.swift */; };
+		64E1F456EEDFBACF4049F9EA /* AlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C4AC53B009DAE5512A5040 /* AlertsView.swift */; };
+		6545B9DEE4990047D0488699 /* ProximityMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEF569253E7F62FAC6013A6 /* ProximityMetricsView.swift */; };
+		66109CFD11C422B27C2047E6 /* SummaryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008EDA89AC29F1053BE99B84 /* SummaryGridView.swift */; };
+		6766EBC54587899FFF372A78 /* ListingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60E339DC789306AA52674C0 /* ListingStatus.swift */; };
+		688DFBE908624F4BDF08F98E /* PriceVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7117F68FADB4817FA4391BC /* PriceVersion.swift */; };
+		68E925D114C1348A3F232F82 /* DocumentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC1FFCAAA8D9D5EF824AF0B /* DocumentsSection.swift */; };
+		6912FCF137DED271F30A8A1E /* SuggestedQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C747963F1063EBBB2EBCBCE /* SuggestedQuery.swift */; };
+		69DFD5DF9FC40D36EEC32C1F /* FilterCriteria.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA850357A928A7515A15CA24 /* FilterCriteria.swift */; };
+		6A11DDA45BDE4A5D6CE4FC99 /* MarketTemperatureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5B7C574FE15C3F66284F1B /* MarketTemperatureView.swift */; };
+		6AE5DE941A66A56742AC8422 /* Int+Clamped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5578B3F54F794922046CAB28 /* Int+Clamped.swift */; };
+		6B93487268951A3D67393E39 /* APIBaselineResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5136634B939AC3D35288A5B /* APIBaselineResponse.swift */; };
+		6EB834F54870821AC13DB2C0 /* FiltersViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA38BF14EE5A61C932FFBBFC /* FiltersViewModel.swift */; };
+		6EC61471E44C6D3214D55950 /* DocumentRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A234D3BC831F01FBEEB5A9FC /* DocumentRow.swift */; };
+		6F8527104585CAE5876DB651 /* ScoreDistributionChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1DFCAEC053B89B40FD9F6E /* ScoreDistributionChart.swift */; };
+		7243923B2C335897A194598B /* InspectorGridSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FEBB1C3829E2D9420DBCC7 /* InspectorGridSection.swift */; };
+		73D13F4C5E87CC93860D732F /* AnalysisSaleContextCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130BB973934F2DD84A9E71D4 /* AnalysisSaleContextCard.swift */; };
+		748BB7B6788EEB8DC4F0EEA7 /* ScoreBreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 615A3342FBD6E5DB02A4E8F0 /* ScoreBreakdownView.swift */; };
+		74BFF634E2A0856A5E2A38AF /* vienna-boundary.geojson in Resources */ = {isa = PBXBuildFile; fileRef = A629E49B0B0F0EB537CF45CA /* vienna-boundary.geojson */; };
+		768BA3F51E1F9F49CE972268 /* ListingMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15FB85E9328FAF74FFA81537 /* ListingMapView.swift */; };
+		7C4D1D4C7A1195DB88644DB3 /* APIListingResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2978A15DAEAD2524C73EAFD4 /* APIListingResponse.swift */; };
+		7E22BBA5E07190168E8237ED /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57996D89E9D47EBAA6FE9158 /* ContentView.swift */; };
+		81284EC2543CDA7A00ECA1CC /* ProximityCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3983814BD6C105D4E3B328 /* ProximityCell.swift */; };
+		82D3E9ED03F8323828B6A62F /* POI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9729898EA113D00636F846D /* POI.swift */; };
+		82FC65B881156EFDF28AE14C /* MarketTemperatureCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84749F13BA1ACD425F3407EE /* MarketTemperatureCard.swift */; };
+		8583726C3B68750E59A5E1E8 /* MapSelectionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE5DED93D8EEFBD8FC0F159 /* MapSelectionOverlay.swift */; };
+		8B8F2BB296383602E79B578D /* AnalysisConfidenceBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AF44221869C8C8A0D2F7E7 /* AnalysisConfidenceBadge.swift */; };
+		8C353687A1DADC870F649F96 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184845EE523CD30323FDB6D4 /* AppState.swift */; };
+		90145A9AB69C0ADC9208B51D /* DistrictTrend.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE325658ACD086CF42A14B15 /* DistrictTrend.swift */; };
+		920C9609E1EFFCDED899FC22 /* AlertFrequency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C360001C8D219F9B4A0F44D /* AlertFrequency.swift */; };
+		947653CE563EAD586C4D070F /* PipelineHealthGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CD2B204B91BEB418E7FED /* PipelineHealthGrid.swift */; };
+		94DA4B2DBD73B0F87C9DD46B /* ChartBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3284FD5C6047A3E9CB85DC /* ChartBlock.swift */; };
+		952011C4FB32007148816C0F /* ListingQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9528C599E2C324A31D4386E /* ListingQuery.swift */; };
+		965F3C836EE467584D0D62DA /* SourceHealthRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831F2A61CBC774BC0725982E /* SourceHealthRow.swift */; };
+		96C6ED56070D1D8AE7DB3043 /* MapStyleMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10DA1BEAA1ED2E6E62DE0F35 /* MapStyleMenu.swift */; };
+		970E2D1726EDFA425F7155CA /* AlertStreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4697F9A383EBF92F606A4EC /* AlertStreamService.swift */; };
+		97A7936C749979375F684B32 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94B629565BEAF82A7AFD0FE /* Theme.swift */; };
+		97BD51DD4EBF633F5B964ABA /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D622964D11E802D9FDEBB93 /* Logging.swift */; };
+		9A541DE5913CFB66E5A49208 /* ListingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB00B581C085252A8C8645E7 /* ListingDetailView.swift */; };
+		9C26D38350348A0FD0B04562 /* MenuBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA8D1A87DA84720D4B01F9A /* MenuBarContent.swift */; };
+		9DEE1BE3776A7DDC85E9A46B /* OperationType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B909F0C4C6372D6E2B3818 /* OperationType.swift */; };
+		9E849562FF39DCB50DE615F1 /* MarketHeatGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7813E6C2C4DE0EA9C7ADFDD2 /* MarketHeatGrid.swift */; };
+		A054E3454E3164180C8489A2 /* SourceHealthStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629E31FB5762D2B36D4F7963 /* SourceHealthStatus.swift */; };
+		A18901870776B2B24E27EB7B /* APIFilterResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 963BC556601C44A3884C930C /* APIFilterResponse.swift */; };
+		A72CE584C83A70E2060D0DB8 /* ImmoRadarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4647B8EC98172778E6A7A62 /* ImmoRadarApp.swift */; };
+		A84D6031D708C648D0A11646 /* ScrapeRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA1AEC6E1FC6947B91DD83E /* ScrapeRun.swift */; };
+		A8CB8BF897A6DD07A0C6457C /* NavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C6D3F2B5EC59B83BFC5A19 /* NavigationItem.swift */; };
+		A9707B09B266A70C326E2E2F /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADA5F952B634E39ED848DD /* Document.swift */; };
+		AABB4632AE2ADC00822C5C4B /* FilterDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFCB707D11875B9C410516B4 /* FilterDraft.swift */; };
+		AB13EDC10E12FD22BD4828FD /* DashboardPriceTrendChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43B5F87E9E50935F6376A2A /* DashboardPriceTrendChart.swift */; };
+		ACC23D1A3D66FD9A00B5045B /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F98CDF8081F16F1EB0D06A8 /* Alert.swift */; };
+		AE0F9570F9C71F452E302791 /* PriceHistoryBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1681E42AD48BB96EBD37D4C /* PriceHistoryBlock.swift */; };
+		B00A4261C7B75E34EC290C97 /* FilterKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A03E572E197CB96C11F5946 /* FilterKind.swift */; };
+		B0778857C0F6E10136D15EA8 /* POILayerMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D40288F615B5E08C952839 /* POILayerMenu.swift */; };
+		B1B9ACBF841733CA0BA8A57C /* CopilotMessageList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21820F73677614DE8C15A453 /* CopilotMessageList.swift */; };
+		B21105E5C0BB25A835543536 /* LegalRentSignalList.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA57ABDA8D1F11358826A84E /* LegalRentSignalList.swift */; };
+		B23ABA7052857F35184D4A9C /* DashboardListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00AA2B67E94C110C0959D44F /* DashboardListingRow.swift */; };
+		B3DD1627EC34F4889D09818D /* CacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4018BCCA75DE984FC5F4D440 /* CacheManager.swift */; };
+		B503D54456225FD59EC4FEB2 /* PropertyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EBCB81BBDF771A422296D68 /* PropertyType.swift */; };
+		B59D490A7C2421B76211C7D4 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9ABF767BFD17191B4F0932 /* SettingsView.swift */; };
+		B71D52FC104E2271C3E59146 /* APISourceResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981F70F490A7846B815F7A98 /* APISourceResponse.swift */; };
+		B808B60AF5092E1770C7AAF0 /* DistrictTrendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCECD8B42F8AABC1B6F11DF /* DistrictTrendChartView.swift */; };
+		B85FB1AA09E77D6487809625 /* ScoreExplanation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10149918AACAC48C4AB654FB /* ScoreExplanation.swift */; };
+		BB740FE60409A68929DB7A4D /* ScrapeRunsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934C1FCB88DD1A1F5696981D /* ScrapeRunsView.swift */; };
+		BD294602408D3AA9C1543FFF /* AlertStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CA31A22BF1D49BD28FCEEE /* AlertStatus.swift */; };
+		BD2BABD8572BC4791FFCDA2D /* ConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17083A310DD95A8F3B859B4B /* ConnectionStatus.swift */; };
+		BDACCFF82F86770AB8680F5A /* KeychainError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F957EA87802B39B3A0744A /* KeychainError.swift */; };
+		BF1B91BDE0C7A0A20027EAB9 /* Filter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470FEF5295CDD7906F1059D6 /* Filter.swift */; };
+		C01C4EBB705F2FE8DEE311A1 /* APIAlertResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF76CC3920BF1F72795BD24 /* APIAlertResponse.swift */; };
+		C1E9F684D1A2E6A6E6896B2F /* POICategoryGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399C59E62E460853F2C9B3AF /* POICategoryGroup.swift */; };
+		C2174CCEFCECF0C2FB9B42BC /* AlertRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B2596E94F7C0FB0698DDF9 /* AlertRow.swift */; };
+		C2182EBBFB63672BF47406D4 /* ViennaDistricts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA0BCC0357F319D23B896E5 /* ViennaDistricts.swift */; };
+		C3650F5BEC27262D719347FA /* Source.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C130D5FC8F8BCC6C0A7250 /* Source.swift */; };
+		C4EC5A549BA1B51A68D8CF92 /* DashboardHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C56AB62936F48D58DB30C9 /* DashboardHeader.swift */; };
+		C6E181A2E61B7836AFD73C67 /* PriceTrendBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264BC84F1820EC445B5075EF /* PriceTrendBadge.swift */; };
+		C8155A2DF4557CDD92655982 /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D05E317415F3FADCEBC71821 /* CopilotProvider.swift */; };
+		C8F4A042EE092EF1380D392D /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558A4105212B10DEE5A40483 /* PriceHistoryView.swift */; };
+		CA68E3B14CBB57F1F8215558 /* ScoreBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD70C07F84B1256AD4D9E6CA /* ScoreBar.swift */; };
+		CC48D0E77587BBC9F731FFED /* ListingHeaderSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85391B4FF07FD117D5DAE9AE /* ListingHeaderSection.swift */; };
+		CC9F675197908B5D55A069EE /* ViennaPOIStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF8EB43D9646A704597A1B8 /* ViennaPOIStore.swift */; };
+		CCF71822F03FD922B095C8AB /* CopilotMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDB213CB409B04B4A20C371A /* CopilotMessage.swift */; };
+		CFCFFF7B13A11B669648005A /* MapStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B007C09D6BCEEA56C71C31 /* MapStatusBar.swift */; };
+		D0AEC634CAE8B61232093599 /* OpportunityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 137CC2546FE209E7AEF9F09B /* OpportunityCard.swift */; };
+		D1F9585A7088012CE06B87E1 /* MetricCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334236CAFAC8744183551334 /* MetricCell.swift */; };
+		D25304195AABFAFEDD9F3387 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11D365B4CC4845FC963FF740 /* DashboardViewModel.swift */; };
+		D5315D0133D9C5F59F9357CA /* ListingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2E24F4A17DE907ABE0CB41 /* ListingsViewModel.swift */; };
+		D830A42A28ED51CBF42A109D /* WienDevelopment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 639CA0DE0C081D44920738AB /* WienDevelopment.swift */; };
+		D9C898FA8FFF275EC5635945 /* AlertInspectorContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9E8DD19DCBE0B634219FFF /* AlertInspectorContent.swift */; };
+		DA82A5D01C49D6B43E591293 /* ConnectionStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A24AF8DC385A2ACEC789C91 /* ConnectionStatusBar.swift */; };
+		DF09F60534CBA530649BFC44 /* DocumentFactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D03FD1B60CF00676A0A22D3 /* DocumentFactsView.swift */; };
+		DF308F5CD41EADF9831AE105 /* ProximityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BABBD631A72356D230A67207 /* ProximityRow.swift */; };
+		DFD11391ABB95998AA996D4D /* ListingClusterBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AB1A46E512CC3E394AB2B4 /* ListingClusterBubble.swift */; };
+		E11048868859B4174C01AB6F /* CopilotSuggestionChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF47AB0A10EAA15AC191978 /* CopilotSuggestionChips.swift */; };
+		E2FA471D74098B3F85DAFB7F /* FiltersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C307A88D86522DDB3D4EECE9 /* FiltersView.swift */; };
+		E54F2A514245BF5E15092DBB /* ViennaDistrictGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4A3AE40542DB6A4F91D245 /* ViennaDistrictGeometry.swift */; };
+		E553F517DB626672B7E8A2CF /* InvestorFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293B7CCB43ED5148A264D31E /* InvestorFeedback.swift */; };
+		E6580A7F28164E1222839783 /* AlertsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFC64E6C7D38E5E6CED813D /* AlertsViewModel.swift */; };
+		E6A635F2923FF833FAD7BAB0 /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D8E541D3A28A309C7F55449 /* APIError.swift */; };
+		EBB50A0BA7CEC5DF4D03AA7E /* POIAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16469D530FEBC88529B9281F /* POIAnnotation.swift */; };
+		EC3D8B6F1E8D1D5FC2228A4B /* MatchReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31AEF4CFCD9EECADB75664F9 /* MatchReasonsView.swift */; };
+		ED4B5AAECC490DA220AFFD0F /* CrossSourceBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CAB7988649A7762FD0BF9B /* CrossSourceBadge.swift */; };
+		EDB638E1B021D23A92D155FA /* ListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57B6306BA305CEA301D68E46 /* ListingRow.swift */; };
+		F1AB7A6DC39523710B0D570B /* CopilotInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */; };
+		F2B6B2F4CB352BA73A048D9F /* ListingDetailsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB94263E58BA6258D733AA8 /* ListingDetailsSection.swift */; };
+		F33CBA3F3D141771C1113E36 /* Analysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62127BC3383850838D43831D /* Analysis.swift */; };
+		F4B3C363FEBF70A8FAC495C1 /* DashboardStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC219D950CF80D56C236923 /* DashboardStats.swift */; };
+		F72C3918DB8735991AC2FF92 /* SummaryCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B118C2FA7A26723CF2FCE511 /* SummaryCardView.swift */; };
+		F73DAACDC100C02832C750C8 /* ThresholdBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC037F581496D918CB8E6C69 /* ThresholdBadge.swift */; };
+		F797C050C42F0E37C6405725 /* DetailContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C795EA5243808C16B8C72FC /* DetailContentView.swift */; };
+		F7FA3551DEAE80E67AE9845F /* AnalyticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2091D45B8B813D7A166B888 /* AnalyticsViewModel.swift */; };
+		FBF165B5C32079CFF6AD1808 /* ListingCluster.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFBCE29D02CD3DDBDF4F60B1 /* ListingCluster.swift */; };
+		FE8B87940567FC261EC03054 /* CopilotEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE3D24E9F001A6D28091E32 /* CopilotEmptyState.swift */; };
+		FEBC757922B1FFF07F4F5F37 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4288321816CCD148EACEDFC9 /* StatusBadge.swift */; };
+		FEFFC89DFD44ED6DA241A9AA /* SourceLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5921CDE3C75381475CE642F4 /* SourceLogo.swift */; };
+		FF5A72157B40D39EEF79A357 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6457F047481DBE34D3847093 /* FlowLayout.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		008EDA89AC29F1053BE99B84 /* SummaryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryGridView.swift; sourceTree = "<group>"; };
+		00AA2B67E94C110C0959D44F /* DashboardListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardListingRow.swift; sourceTree = "<group>"; };
+		03AB1A46E512CC3E394AB2B4 /* ListingClusterBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingClusterBubble.swift; sourceTree = "<group>"; };
+		03FEBB1C3829E2D9420DBCC7 /* InspectorGridSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorGridSection.swift; sourceTree = "<group>"; };
+		04519B2A31DBCAE192B0B1F9 /* APIEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEndpoints.swift; sourceTree = "<group>"; };
+		0D777E88E46E30A9668E0CB0 /* ImmoRadar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmoRadar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D9C13C5AC152B80A518A92F /* CopilotContentData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotContentData.swift; sourceTree = "<group>"; };
+		0DA2B996EFE1C4C008E15F69 /* LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCache.swift; sourceTree = "<group>"; };
+		0FC1FFCAAA8D9D5EF824AF0B /* DocumentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsSection.swift; sourceTree = "<group>"; };
+		10149918AACAC48C4AB654FB /* ScoreExplanation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreExplanation.swift; sourceTree = "<group>"; };
+		10C4AEE00F2FBE2437F15E73 /* PriceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceFormatter.swift; sourceTree = "<group>"; };
+		10DA1BEAA1ED2E6E62DE0F35 /* MapStyleMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleMenu.swift; sourceTree = "<group>"; };
+		11D365B4CC4845FC963FF740 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+		11E767656531D68FF1AA2442 /* WatchlistViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistViewModel.swift; sourceTree = "<group>"; };
+		130BB973934F2DD84A9E71D4 /* AnalysisSaleContextCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisSaleContextCard.swift; sourceTree = "<group>"; };
+		137CC2546FE209E7AEF9F09B /* OpportunityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpportunityCard.swift; sourceTree = "<group>"; };
+		15FB85E9328FAF74FFA81537 /* ListingMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingMapView.swift; sourceTree = "<group>"; };
+		16469D530FEBC88529B9281F /* POIAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POIAnnotation.swift; sourceTree = "<group>"; };
+		17083A310DD95A8F3B859B4B /* ConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
+		184845EE523CD30323FDB6D4 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		191B24F560FD4CE112E398B6 /* MenuBarLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabel.swift; sourceTree = "<group>"; };
+		196B49096351BBA370869CE2 /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsView.swift; sourceTree = "<group>"; };
+		1CE509E2262A38FA7B860300 /* CopilotStreamEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotStreamEvent.swift; sourceTree = "<group>"; };
+		1DC219D950CF80D56C236923 /* DashboardStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardStats.swift; sourceTree = "<group>"; };
+		1DDAD6406E502F27BCC4F00D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		1DE3D24E9F001A6D28091E32 /* CopilotEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotEmptyState.swift; sourceTree = "<group>"; };
+		1FD017C6CA61C8A65028EB5B /* DevelopmentAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentAnnotation.swift; sourceTree = "<group>"; };
+		21820F73677614DE8C15A453 /* CopilotMessageList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotMessageList.swift; sourceTree = "<group>"; };
+		22B007C09D6BCEEA56C71C31 /* MapStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStatusBar.swift; sourceTree = "<group>"; };
+		256537E5CD43A8920B2626E9 /* ImmoRadar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ImmoRadar.entitlements; sourceTree = "<group>"; };
+		262A5805D307A412D594A668 /* GeocodeBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocodeBadge.swift; sourceTree = "<group>"; };
+		264BC84F1820EC445B5075EF /* PriceTrendBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceTrendBadge.swift; sourceTree = "<group>"; };
+		293B7CCB43ED5148A264D31E /* InvestorFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestorFeedback.swift; sourceTree = "<group>"; };
+		2978A15DAEAD2524C73EAFD4 /* APIListingResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIListingResponse.swift; sourceTree = "<group>"; };
+		298BE81CEF598B3711653ED7 /* InspectorDetailRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDetailRow.swift; sourceTree = "<group>"; };
+		2BF76CC3920BF1F72795BD24 /* APIAlertResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIAlertResponse.swift; sourceTree = "<group>"; };
+		2DA8D1A87DA84720D4B01F9A /* MenuBarContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContent.swift; sourceTree = "<group>"; };
+		2DCECD8B42F8AABC1B6F11DF /* DistrictTrendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictTrendChartView.swift; sourceTree = "<group>"; };
+		2F98CDF8081F16F1EB0D06A8 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
+		31A79A472F6256DC8EA62B21 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		31AEF4CFCD9EECADB75664F9 /* MatchReasonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchReasonsView.swift; sourceTree = "<group>"; };
+		334236CAFAC8744183551334 /* MetricCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricCell.swift; sourceTree = "<group>"; };
+		34CFB81B55876E13D150BE98 /* DistrictSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictSummary.swift; sourceTree = "<group>"; };
+		3660DC367B468E0679439937 /* AlertsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsList.swift; sourceTree = "<group>"; };
+		399C59E62E460853F2C9B3AF /* POICategoryGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POICategoryGroup.swift; sourceTree = "<group>"; };
+		3D2E24F4A17DE907ABE0CB41 /* ListingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsViewModel.swift; sourceTree = "<group>"; };
+		3EE5DED93D8EEFBD8FC0F159 /* MapSelectionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapSelectionOverlay.swift; sourceTree = "<group>"; };
+		3FEF569253E7F62FAC6013A6 /* ProximityMetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityMetricsView.swift; sourceTree = "<group>"; };
+		4018BCCA75DE984FC5F4D440 /* CacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManager.swift; sourceTree = "<group>"; };
+		403A7373377B31C137AF2A3C /* ListingLocationSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingLocationSection.swift; sourceTree = "<group>"; };
+		4288321816CCD148EACEDFC9 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		470FEF5295CDD7906F1059D6 /* Filter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Filter.swift; sourceTree = "<group>"; };
+		4A24AF8DC385A2ACEC789C91 /* ConnectionStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBar.swift; sourceTree = "<group>"; };
+		4ABFF7A55FCE122EBC74AA91 /* CardModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardModifier.swift; sourceTree = "<group>"; };
+		4D622964D11E802D9FDEBB93 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
+		4D8E541D3A28A309C7F55449 /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
+		4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotInputBar.swift; sourceTree = "<group>"; };
+		511EF78F5B1E13207B308FA2 /* AlertType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertType.swift; sourceTree = "<group>"; };
+		54D1092CAFB73875729BD21D /* WatchlistRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistRow.swift; sourceTree = "<group>"; };
+		5578B3F54F794922046CAB28 /* Int+Clamped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+Clamped.swift"; sourceTree = "<group>"; };
+		558A4105212B10DEE5A40483 /* PriceHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryView.swift; sourceTree = "<group>"; };
+		57996D89E9D47EBAA6FE9158 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		57B6306BA305CEA301D68E46 /* ListingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingRow.swift; sourceTree = "<group>"; };
+		5921CDE3C75381475CE642F4 /* SourceLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLogo.swift; sourceTree = "<group>"; };
+		59C56AB62936F48D58DB30C9 /* DashboardHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardHeader.swift; sourceTree = "<group>"; };
+		5D43E77D2396C28F58D3DC6B /* SourceHealthSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthSection.swift; sourceTree = "<group>"; };
+		5F8EB55800B623BA6590D350 /* CopilotMessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotMessageBubble.swift; sourceTree = "<group>"; };
+		5FE657828CBB099E0CE52F4F /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		6068E10A8E79C015FBEE5F07 /* ListingVelocityPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingVelocityPoint.swift; sourceTree = "<group>"; };
+		615A3342FBD6E5DB02A4E8F0 /* ScoreBreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBreakdownView.swift; sourceTree = "<group>"; };
+		62127BC3383850838D43831D /* Analysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Analysis.swift; sourceTree = "<group>"; };
+		629E31FB5762D2B36D4F7963 /* SourceHealthStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthStatus.swift; sourceTree = "<group>"; };
+		639CA0DE0C081D44920738AB /* WienDevelopment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WienDevelopment.swift; sourceTree = "<group>"; };
+		6457F047481DBE34D3847093 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		66AF44221869C8C8A0D2F7E7 /* AnalysisConfidenceBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisConfidenceBadge.swift; sourceTree = "<group>"; };
+		6818CCFEF372FEA1F0AAB235 /* KeyMetricsRibbon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyMetricsRibbon.swift; sourceTree = "<group>"; };
+		6C360001C8D219F9B4A0F44D /* AlertFrequency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertFrequency.swift; sourceTree = "<group>"; };
+		6F145E2F3BFA43B10607D007 /* Listing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listing.swift; sourceTree = "<group>"; };
+		6FB687332467F61D86E23909 /* vienna-developments.geojson */ = {isa = PBXFileReference; path = "vienna-developments.geojson"; sourceTree = "<group>"; };
+		723DA82D367F9ED6473EEFD6 /* ListingAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingAnnotation.swift; sourceTree = "<group>"; };
+		76D1829B0B178E18A40CA9DD /* AlertsEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsEmptyState.swift; sourceTree = "<group>"; };
+		7813E6C2C4DE0EA9C7ADFDD2 /* MarketHeatGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketHeatGrid.swift; sourceTree = "<group>"; };
+		78D6DCD2B9A5E470C9DEED8F /* MapKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MapKit.framework; path = System/Library/Frameworks/MapKit.framework; sourceTree = SDKROOT; };
+		7A03E572E197CB96C11F5946 /* FilterKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterKind.swift; sourceTree = "<group>"; };
+		7A4741C04E075D5184E2A9BC /* PriceHistoryPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryPlaceholder.swift; sourceTree = "<group>"; };
+		7B661280ACA3127AD153F24C /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		7B9ABF767BFD17191B4F0932 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		7F4A3AE40542DB6A4F91D245 /* ViennaDistrictGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViennaDistrictGeometry.swift; sourceTree = "<group>"; };
+		80A0FA34D98E7246FEC1DDA4 /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
+		826538B566BB5A46A3C79A7D /* CopilotViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotViewModel.swift; sourceTree = "<group>"; };
+		831F2A61CBC774BC0725982E /* SourceHealthRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealthRow.swift; sourceTree = "<group>"; };
+		83B5832E514DFACA1F91BD84 /* SavedListingItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedListingItem.swift; sourceTree = "<group>"; };
+		84749F13BA1ACD425F3407EE /* MarketTemperatureCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketTemperatureCard.swift; sourceTree = "<group>"; };
+		85391B4FF07FD117D5DAE9AE /* ListingHeaderSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingHeaderSection.swift; sourceTree = "<group>"; };
+		8768C665FAE0CF6E912CF884 /* vienna-pois.geojson */ = {isa = PBXFileReference; path = "vienna-pois.geojson"; sourceTree = "<group>"; };
+		88B2596E94F7C0FB0698DDF9 /* AlertRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertRow.swift; sourceTree = "<group>"; };
+		899030D7853562BB050A769A /* RecentListingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentListingsSection.swift; sourceTree = "<group>"; };
+		8BFC64E6C7D38E5E6CED813D /* AlertsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsViewModel.swift; sourceTree = "<group>"; };
+		8C747963F1063EBBB2EBCBCE /* SuggestedQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedQuery.swift; sourceTree = "<group>"; };
+		8C795EA5243808C16B8C72FC /* DetailContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailContentView.swift; sourceTree = "<group>"; };
+		8CE910F19E89A870C5DEA1EC /* ScoreRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreRow.swift; sourceTree = "<group>"; };
+		8D247710512DA8313304486A /* AnalysisAssumptionsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisAssumptionsList.swift; sourceTree = "<group>"; };
+		8D2E3BACED5F6CC00DDC1119 /* TopOpportunitiesSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopOpportunitiesSection.swift; sourceTree = "<group>"; };
+		8DAC7B8CC38D8F59D78A6E64 /* ListingCardBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingCardBlock.swift; sourceTree = "<group>"; };
+		8DF152493FD57CCCE68F27D1 /* ComparisonTableBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparisonTableBlock.swift; sourceTree = "<group>"; };
+		8E269F8BCC5C1AA6691BA3A1 /* ScoreDistributionBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreDistributionBucket.swift; sourceTree = "<group>"; };
+		903C4634B492678F18E330B5 /* AnalysisMarketRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisMarketRentCard.swift; sourceTree = "<group>"; };
+		92CAEDB831FDD801328A3350 /* ListingsTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsTable.swift; sourceTree = "<group>"; };
+		934C1FCB88DD1A1F5696981D /* ScrapeRunsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRunsView.swift; sourceTree = "<group>"; };
+		963BC556601C44A3884C930C /* APIFilterResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIFilterResponse.swift; sourceTree = "<group>"; };
+		981F70F490A7846B815F7A98 /* APISourceResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISourceResponse.swift; sourceTree = "<group>"; };
+		9A1DFCAEC053B89B40FD9F6E /* ScoreDistributionChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreDistributionChart.swift; sourceTree = "<group>"; };
+		9BE5DD424A1D80509F05B8DD /* ListingsMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsMapView.swift; sourceTree = "<group>"; };
+		9C3284FD5C6047A3E9CB85DC /* ChartBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartBlock.swift; sourceTree = "<group>"; };
+		9CC0A849989332D31F76C344 /* AlertQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertQuery.swift; sourceTree = "<group>"; };
+		9CF47AB0A10EAA15AC191978 /* CopilotSuggestionChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotSuggestionChips.swift; sourceTree = "<group>"; };
+		9D03FD1B60CF00676A0A22D3 /* DocumentFactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentFactsView.swift; sourceTree = "<group>"; };
+		9D956CA5EAA23A0377821351 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		9EBCB81BBDF771A422296D68 /* PropertyType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyType.swift; sourceTree = "<group>"; };
+		A15BC26B25B4C45BD0CDE1B9 /* AlertsFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsFilterBar.swift; sourceTree = "<group>"; };
+		A1681E42AD48BB96EBD37D4C /* PriceHistoryBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryBlock.swift; sourceTree = "<group>"; };
+		A1729A9A111EC818DDEC2A28 /* DetailRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailRow.swift; sourceTree = "<group>"; };
+		A1D6B2446013B1ED16AD8044 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
+		A234D3BC831F01FBEEB5A9FC /* DocumentRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentRow.swift; sourceTree = "<group>"; };
+		A4697F9A383EBF92F606A4EC /* AlertStreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertStreamService.swift; sourceTree = "<group>"; };
+		A60E339DC789306AA52674C0 /* ListingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingStatus.swift; sourceTree = "<group>"; };
+		A629E49B0B0F0EB537CF45CA /* vienna-boundary.geojson */ = {isa = PBXFileReference; path = "vienna-boundary.geojson"; sourceTree = "<group>"; };
+		A7256BAACE66CBEDC8FD8FAB /* CopilotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotView.swift; sourceTree = "<group>"; };
+		A7F940E7929CF68379339CE2 /* SparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparklineView.swift; sourceTree = "<group>"; };
+		A8F957EA87802B39B3A0744A /* KeychainError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainError.swift; sourceTree = "<group>"; };
+		AA38BF14EE5A61C932FFBBFC /* FiltersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersViewModel.swift; sourceTree = "<group>"; };
+		AFA0BCC0357F319D23B896E5 /* ViennaDistricts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViennaDistricts.swift; sourceTree = "<group>"; };
+		AFBCE29D02CD3DDBDF4F60B1 /* ListingCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingCluster.swift; sourceTree = "<group>"; };
+		B118C2FA7A26723CF2FCE511 /* SummaryCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryCardView.swift; sourceTree = "<group>"; };
+		B2B909F0C4C6372D6E2B3818 /* OperationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationType.swift; sourceTree = "<group>"; };
+		B43B5F87E9E50935F6376A2A /* DashboardPriceTrendChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPriceTrendChart.swift; sourceTree = "<group>"; };
+		B6219C2CD421E7758F9EDEF9 /* ListingVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingVersion.swift; sourceTree = "<group>"; };
+		B6E3F95A7671BD234E2BC2B4 /* ScoreIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreIndicator.swift; sourceTree = "<group>"; };
+		B80D4F072A8A41A3CEE7F196 /* FeedbackSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackSection.swift; sourceTree = "<group>"; };
+		B80DC5AE36D9A7299200969A /* TextContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentBlock.swift; sourceTree = "<group>"; };
+		B8C130D5FC8F8BCC6C0A7250 /* Source.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Source.swift; sourceTree = "<group>"; };
+		BABBD631A72356D230A67207 /* ProximityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityRow.swift; sourceTree = "<group>"; };
+		BD70C07F84B1256AD4D9E6CA /* ScoreBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBar.swift; sourceTree = "<group>"; };
+		BFCB707D11875B9C410516B4 /* FilterDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDraft.swift; sourceTree = "<group>"; };
+		C1BD21BC820E16DF96DAA6F9 /* AnalysisMissingDataList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisMissingDataList.swift; sourceTree = "<group>"; };
+		C307A88D86522DDB3D4EECE9 /* FiltersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiltersView.swift; sourceTree = "<group>"; };
+		C4647B8EC98172778E6A7A62 /* ImmoRadarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmoRadarApp.swift; sourceTree = "<group>"; };
+		C49734D052D6B1E9596E8FA5 /* ListingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsView.swift; sourceTree = "<group>"; };
+		C5136634B939AC3D35288A5B /* APIBaselineResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIBaselineResponse.swift; sourceTree = "<group>"; };
+		C718F8AC07C48F07BA3EEDE6 /* SourcesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesViewModel.swift; sourceTree = "<group>"; };
+		CB42A62EA6FF75A9E40C22D2 /* AnalysisFlagsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisFlagsSection.swift; sourceTree = "<group>"; };
+		CC037F581496D918CB8E6C69 /* ThresholdBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdBadge.swift; sourceTree = "<group>"; };
+		CC9E8DD19DCBE0B634219FFF /* AlertInspectorContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertInspectorContent.swift; sourceTree = "<group>"; };
+		CE6C448725BAACD07E85B5ED /* vienna-districts.geojson */ = {isa = PBXFileReference; path = "vienna-districts.geojson"; sourceTree = "<group>"; };
+		CEA797B61DD3A81E86058CAC /* ScoreBreakdownBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBreakdownBlock.swift; sourceTree = "<group>"; };
+		CF3983814BD6C105D4E3B328 /* ProximityCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityCell.swift; sourceTree = "<group>"; };
+		D01C52EA2A4951A531777208 /* ListingsInspectorContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsInspectorContent.swift; sourceTree = "<group>"; };
+		D05E317415F3FADCEBC71821 /* CopilotProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotProvider.swift; sourceTree = "<group>"; };
+		D0C4AC53B009DAE5512A5040 /* AlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsView.swift; sourceTree = "<group>"; };
+		D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotStreamService.swift; sourceTree = "<group>"; };
+		D1CA31A22BF1D49BD28FCEEE /* AlertStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertStatus.swift; sourceTree = "<group>"; };
+		D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAuthHelper.swift; sourceTree = "<group>"; };
+		D441B787954106ED54C49791 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		D508D22F198E1D4F9D1DC322 /* AnalysisInvestorMetricsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisInvestorMetricsCard.swift; sourceTree = "<group>"; };
+		D847102C5DAE893CDD2B4DE5 /* MarketBaseline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketBaseline.swift; sourceTree = "<group>"; };
+		D9729898EA113D00636F846D /* POI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POI.swift; sourceTree = "<group>"; };
+		DA850357A928A7515A15CA24 /* FilterCriteria.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterCriteria.swift; sourceTree = "<group>"; };
+		DB00B581C085252A8C8645E7 /* ListingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingDetailView.swift; sourceTree = "<group>"; };
+		DB65BB16EF5C35C5B955729E /* MarketStatsBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketStatsBlock.swift; sourceTree = "<group>"; };
+		DE106FFD3E1F47634B154B11 /* CrossSourceComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossSourceComparisonView.swift; sourceTree = "<group>"; };
+		DEADA5F952B634E39ED848DD /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		DEB94263E58BA6258D733AA8 /* ListingDetailsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingDetailsSection.swift; sourceTree = "<group>"; };
+		E0D82AF9188A8B9C387B1F96 /* DistrictComparisonChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictComparisonChart.swift; sourceTree = "<group>"; };
+		E2091D45B8B813D7A166B888 /* AnalyticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsViewModel.swift; sourceTree = "<group>"; };
+		E2D40288F615B5E08C952839 /* POILayerMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POILayerMenu.swift; sourceTree = "<group>"; };
+		E7117F68FADB4817FA4391BC /* PriceVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceVersion.swift; sourceTree = "<group>"; };
+		E873B0A342425CE22629C157 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
+		E94B629565BEAF82A7AFD0FE /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		EE604F7EA233DB23168C597B /* AnalysisBuildingContextCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisBuildingContextCard.swift; sourceTree = "<group>"; };
+		F0CAB7988649A7762FD0BF9B /* CrossSourceBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossSourceBadge.swift; sourceTree = "<group>"; };
+		F75CD2B204B91BEB418E7FED /* PipelineHealthGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineHealthGrid.swift; sourceTree = "<group>"; };
+		F81A4CAC1F79336E952CCF7D /* CopilotListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotListing.swift; sourceTree = "<group>"; };
+		F8E4E9A773D4EC534F43342D /* DistrictComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictComparison.swift; sourceTree = "<group>"; };
+		F9528C599E2C324A31D4386E /* ListingQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingQuery.swift; sourceTree = "<group>"; };
+		F9C6D3F2B5EC59B83BFC5A19 /* NavigationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationItem.swift; sourceTree = "<group>"; };
+		FA57ABDA8D1F11358826A84E /* LegalRentSignalList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalRentSignalList.swift; sourceTree = "<group>"; };
+		FBC9865E263D14BE7DEC7865 /* SourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesView.swift; sourceTree = "<group>"; };
+		FBF8EB43D9646A704597A1B8 /* ViennaPOIStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViennaPOIStore.swift; sourceTree = "<group>"; };
+		FC5C812F1C19D386AC121FC0 /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
+		FDB213CB409B04B4A20C371A /* CopilotMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotMessage.swift; sourceTree = "<group>"; };
+		FE325658ACD086CF42A14B15 /* DistrictTrend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistrictTrend.swift; sourceTree = "<group>"; };
+		FF5B7C574FE15C3F66284F1B /* MarketTemperatureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketTemperatureView.swift; sourceTree = "<group>"; };
+		FF775280027AE27C8EEF7007 /* AnalysisLegalRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisLegalRentCard.swift; sourceTree = "<group>"; };
+		FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsFilterBar.swift; sourceTree = "<group>"; };
+		FFA1AEC6E1FC6947B91DD83E /* ScrapeRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRun.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BD669E4A4B782398C92358AE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B54ADC42909CF07E737C06C /* MapKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0478EBE2C68C542655D8C68F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				7B9ABF767BFD17191B4F0932 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		115894402CAFF1156D6823CA /* Copilot */ = {
+			isa = PBXGroup;
+			children = (
+				1DE3D24E9F001A6D28091E32 /* CopilotEmptyState.swift */,
+				4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */,
+				5F8EB55800B623BA6590D350 /* CopilotMessageBubble.swift */,
+				21820F73677614DE8C15A453 /* CopilotMessageList.swift */,
+				9CF47AB0A10EAA15AC191978 /* CopilotSuggestionChips.swift */,
+				A7256BAACE66CBEDC8FD8FAB /* CopilotView.swift */,
+				826538B566BB5A46A3C79A7D /* CopilotViewModel.swift */,
+				5C7F81D26E88CC93320D50D5 /* ContentBlocks */,
+			);
+			path = Copilot;
+			sourceTree = "<group>";
+		};
+		202B48B0BF7466457435915F /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				4ABFF7A55FCE122EBC74AA91 /* CardModifier.swift */,
+				A1729A9A111EC818DDEC2A28 /* DetailRow.swift */,
+				6457F047481DBE34D3847093 /* FlowLayout.swift */,
+				262A5805D307A412D594A668 /* GeocodeBadge.swift */,
+				298BE81CEF598B3711653ED7 /* InspectorDetailRow.swift */,
+				03FEBB1C3829E2D9420DBCC7 /* InspectorGridSection.swift */,
+				334236CAFAC8744183551334 /* MetricCell.swift */,
+				10C4AEE00F2FBE2437F15E73 /* PriceFormatter.swift */,
+				BD70C07F84B1256AD4D9E6CA /* ScoreBar.swift */,
+				B6E3F95A7671BD234E2BC2B4 /* ScoreIndicator.swift */,
+				5921CDE3C75381475CE642F4 /* SourceLogo.swift */,
+				A7F940E7929CF68379339CE2 /* SparklineView.swift */,
+				4288321816CCD148EACEDFC9 /* StatusBadge.swift */,
+				E94B629565BEAF82A7AFD0FE /* Theme.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		20C22E99D1458B7BD3D9AEC4 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				5578B3F54F794922046CAB28 /* Int+Clamped.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		2DDEDBD319B2944AFEE14516 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				CFF2D7EB6C1C96B7A37E7B5B /* Alerts */,
+				823410390EF596584ADE0053 /* Analytics */,
+				115894402CAFF1156D6823CA /* Copilot */,
+				F9E439A66A5167CA41C29915 /* Dashboard */,
+				33E5D73445CDCC8E73D1E658 /* Filters */,
+				B58D82FC36251598780441F9 /* Listings */,
+				0478EBE2C68C542655D8C68F /* Settings */,
+				61F2D50F9C2BFDB8A34EDA62 /* Sources */,
+				40698DCECDC5ACE5F24674D3 /* Watchlist */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		33E5D73445CDCC8E73D1E658 /* Filters */ = {
+			isa = PBXGroup;
+			children = (
+				BFCB707D11875B9C410516B4 /* FilterDraft.swift */,
+				C307A88D86522DDB3D4EECE9 /* FiltersView.swift */,
+				AA38BF14EE5A61C932FFBBFC /* FiltersViewModel.swift */,
+				AFA0BCC0357F319D23B896E5 /* ViennaDistricts.swift */,
+			);
+			path = Filters;
+			sourceTree = "<group>";
+		};
+		40698DCECDC5ACE5F24674D3 /* Watchlist */ = {
+			isa = PBXGroup;
+			children = (
+				54D1092CAFB73875729BD21D /* WatchlistRow.swift */,
+				A1D6B2446013B1ED16AD8044 /* WatchlistView.swift */,
+				11E767656531D68FF1AA2442 /* WatchlistViewModel.swift */,
+			);
+			path = Watchlist;
+			sourceTree = "<group>";
+		};
+		456914911D5F8EBD8DFB3C4C /* ImmoRadar */ = {
+			isa = PBXGroup;
+			children = (
+				31A79A472F6256DC8EA62B21 /* Assets.xcassets */,
+				256537E5CD43A8920B2626E9 /* ImmoRadar.entitlements */,
+				7F763878D5A4B2756D3AB500 /* App */,
+				202B48B0BF7466457435915F /* DesignSystem */,
+				20C22E99D1458B7BD3D9AEC4 /* Extensions */,
+				2DDEDBD319B2944AFEE14516 /* Features */,
+				780D407F27B4AEB233766C42 /* Models */,
+				9F8B266A9FC43E53CDA56D9B /* Networking */,
+				E1D364681B0DB21CB58D1A49 /* Resources */,
+				C764C161D13EA543CD1A6E34 /* Services */,
+			);
+			path = ImmoRadar;
+			sourceTree = "<group>";
+		};
+		497E693C0D0D447610BEFFFB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0D777E88E46E30A9668E0CB0 /* ImmoRadar.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5683FDC3C542A0B1910DA5D1 = {
+			isa = PBXGroup;
+			children = (
+				456914911D5F8EBD8DFB3C4C /* ImmoRadar */,
+				5DD728733F645FEA9F581086 /* Frameworks */,
+				497E693C0D0D447610BEFFFB /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5C7F81D26E88CC93320D50D5 /* ContentBlocks */ = {
+			isa = PBXGroup;
+			children = (
+				9C3284FD5C6047A3E9CB85DC /* ChartBlock.swift */,
+				8DF152493FD57CCCE68F27D1 /* ComparisonTableBlock.swift */,
+				8DAC7B8CC38D8F59D78A6E64 /* ListingCardBlock.swift */,
+				DB65BB16EF5C35C5B955729E /* MarketStatsBlock.swift */,
+				A1681E42AD48BB96EBD37D4C /* PriceHistoryBlock.swift */,
+				CEA797B61DD3A81E86058CAC /* ScoreBreakdownBlock.swift */,
+				B80DC5AE36D9A7299200969A /* TextContentBlock.swift */,
+			);
+			path = ContentBlocks;
+			sourceTree = "<group>";
+		};
+		5DD728733F645FEA9F581086 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				78D6DCD2B9A5E470C9DEED8F /* MapKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		61F2D50F9C2BFDB8A34EDA62 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				934C1FCB88DD1A1F5696981D /* ScrapeRunsView.swift */,
+				FBC9865E263D14BE7DEC7865 /* SourcesView.swift */,
+				C718F8AC07C48F07BA3EEDE6 /* SourcesViewModel.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		780D407F27B4AEB233766C42 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2F98CDF8081F16F1EB0D06A8 /* Alert.swift */,
+				6C360001C8D219F9B4A0F44D /* AlertFrequency.swift */,
+				D1CA31A22BF1D49BD28FCEEE /* AlertStatus.swift */,
+				511EF78F5B1E13207B308FA2 /* AlertType.swift */,
+				62127BC3383850838D43831D /* Analysis.swift */,
+				0D9C13C5AC152B80A518A92F /* CopilotContentData.swift */,
+				F81A4CAC1F79336E952CCF7D /* CopilotListing.swift */,
+				FDB213CB409B04B4A20C371A /* CopilotMessage.swift */,
+				D05E317415F3FADCEBC71821 /* CopilotProvider.swift */,
+				1CE509E2262A38FA7B860300 /* CopilotStreamEvent.swift */,
+				1DC219D950CF80D56C236923 /* DashboardStats.swift */,
+				F8E4E9A773D4EC534F43342D /* DistrictComparison.swift */,
+				34CFB81B55876E13D150BE98 /* DistrictSummary.swift */,
+				FE325658ACD086CF42A14B15 /* DistrictTrend.swift */,
+				DEADA5F952B634E39ED848DD /* Document.swift */,
+				470FEF5295CDD7906F1059D6 /* Filter.swift */,
+				DA850357A928A7515A15CA24 /* FilterCriteria.swift */,
+				7A03E572E197CB96C11F5946 /* FilterKind.swift */,
+				293B7CCB43ED5148A264D31E /* InvestorFeedback.swift */,
+				6F145E2F3BFA43B10607D007 /* Listing.swift */,
+				AFBCE29D02CD3DDBDF4F60B1 /* ListingCluster.swift */,
+				A60E339DC789306AA52674C0 /* ListingStatus.swift */,
+				6068E10A8E79C015FBEE5F07 /* ListingVelocityPoint.swift */,
+				B6219C2CD421E7758F9EDEF9 /* ListingVersion.swift */,
+				D847102C5DAE893CDD2B4DE5 /* MarketBaseline.swift */,
+				B2B909F0C4C6372D6E2B3818 /* OperationType.swift */,
+				D9729898EA113D00636F846D /* POI.swift */,
+				399C59E62E460853F2C9B3AF /* POICategoryGroup.swift */,
+				E7117F68FADB4817FA4391BC /* PriceVersion.swift */,
+				9EBCB81BBDF771A422296D68 /* PropertyType.swift */,
+				83B5832E514DFACA1F91BD84 /* SavedListingItem.swift */,
+				8E269F8BCC5C1AA6691BA3A1 /* ScoreDistributionBucket.swift */,
+				10149918AACAC48C4AB654FB /* ScoreExplanation.swift */,
+				FFA1AEC6E1FC6947B91DD83E /* ScrapeRun.swift */,
+				B8C130D5FC8F8BCC6C0A7250 /* Source.swift */,
+				629E31FB5762D2B36D4F7963 /* SourceHealthStatus.swift */,
+				8C747963F1063EBBB2EBCBCE /* SuggestedQuery.swift */,
+				7F4A3AE40542DB6A4F91D245 /* ViennaDistrictGeometry.swift */,
+				FBF8EB43D9646A704597A1B8 /* ViennaPOIStore.swift */,
+				639CA0DE0C081D44920738AB /* WienDevelopment.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		7F763878D5A4B2756D3AB500 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				184845EE523CD30323FDB6D4 /* AppState.swift */,
+				17083A310DD95A8F3B859B4B /* ConnectionStatus.swift */,
+				4A24AF8DC385A2ACEC789C91 /* ConnectionStatusBar.swift */,
+				57996D89E9D47EBAA6FE9158 /* ContentView.swift */,
+				8C795EA5243808C16B8C72FC /* DetailContentView.swift */,
+				C4647B8EC98172778E6A7A62 /* ImmoRadarApp.swift */,
+				4D622964D11E802D9FDEBB93 /* Logging.swift */,
+				2DA8D1A87DA84720D4B01F9A /* MenuBarContent.swift */,
+				191B24F560FD4CE112E398B6 /* MenuBarLabel.swift */,
+				F9C6D3F2B5EC59B83BFC5A19 /* NavigationItem.swift */,
+				FC5C812F1C19D386AC121FC0 /* SidebarRow.swift */,
+				1DDAD6406E502F27BCC4F00D /* SidebarView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		823410390EF596584ADE0053 /* Analytics */ = {
+			isa = PBXGroup;
+			children = (
+				196B49096351BBA370869CE2 /* AnalyticsView.swift */,
+				E2091D45B8B813D7A166B888 /* AnalyticsViewModel.swift */,
+				2DCECD8B42F8AABC1B6F11DF /* DistrictTrendChartView.swift */,
+				FF5B7C574FE15C3F66284F1B /* MarketTemperatureView.swift */,
+			);
+			path = Analytics;
+			sourceTree = "<group>";
+		};
+		9F8B266A9FC43E53CDA56D9B /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				9CC0A849989332D31F76C344 /* AlertQuery.swift */,
+				2BF76CC3920BF1F72795BD24 /* APIAlertResponse.swift */,
+				C5136634B939AC3D35288A5B /* APIBaselineResponse.swift */,
+				5FE657828CBB099E0CE52F4F /* APIClient.swift */,
+				04519B2A31DBCAE192B0B1F9 /* APIEndpoints.swift */,
+				4D8E541D3A28A309C7F55449 /* APIError.swift */,
+				963BC556601C44A3884C930C /* APIFilterResponse.swift */,
+				2978A15DAEAD2524C73EAFD4 /* APIListingResponse.swift */,
+				80A0FA34D98E7246FEC1DDA4 /* APIResponse.swift */,
+				981F70F490A7846B815F7A98 /* APISourceResponse.swift */,
+				D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */,
+				E873B0A342425CE22629C157 /* ISO8601.swift */,
+				A8F957EA87802B39B3A0744A /* KeychainError.swift */,
+				7B661280ACA3127AD153F24C /* KeychainHelper.swift */,
+				F9528C599E2C324A31D4386E /* ListingQuery.swift */,
+				0DA2B996EFE1C4C008E15F69 /* LocalCache.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		B58D82FC36251598780441F9 /* Listings */ = {
+			isa = PBXGroup;
+			children = (
+				8D247710512DA8313304486A /* AnalysisAssumptionsList.swift */,
+				EE604F7EA233DB23168C597B /* AnalysisBuildingContextCard.swift */,
+				66AF44221869C8C8A0D2F7E7 /* AnalysisConfidenceBadge.swift */,
+				CB42A62EA6FF75A9E40C22D2 /* AnalysisFlagsSection.swift */,
+				D508D22F198E1D4F9D1DC322 /* AnalysisInvestorMetricsCard.swift */,
+				FF775280027AE27C8EEF7007 /* AnalysisLegalRentCard.swift */,
+				903C4634B492678F18E330B5 /* AnalysisMarketRentCard.swift */,
+				C1BD21BC820E16DF96DAA6F9 /* AnalysisMissingDataList.swift */,
+				130BB973934F2DD84A9E71D4 /* AnalysisSaleContextCard.swift */,
+				F0CAB7988649A7762FD0BF9B /* CrossSourceBadge.swift */,
+				DE106FFD3E1F47634B154B11 /* CrossSourceComparisonView.swift */,
+				1FD017C6CA61C8A65028EB5B /* DevelopmentAnnotation.swift */,
+				9D03FD1B60CF00676A0A22D3 /* DocumentFactsView.swift */,
+				A234D3BC831F01FBEEB5A9FC /* DocumentRow.swift */,
+				0FC1FFCAAA8D9D5EF824AF0B /* DocumentsSection.swift */,
+				B80D4F072A8A41A3CEE7F196 /* FeedbackSection.swift */,
+				6818CCFEF372FEA1F0AAB235 /* KeyMetricsRibbon.swift */,
+				FA57ABDA8D1F11358826A84E /* LegalRentSignalList.swift */,
+				723DA82D367F9ED6473EEFD6 /* ListingAnnotation.swift */,
+				03AB1A46E512CC3E394AB2B4 /* ListingClusterBubble.swift */,
+				DEB94263E58BA6258D733AA8 /* ListingDetailsSection.swift */,
+				DB00B581C085252A8C8645E7 /* ListingDetailView.swift */,
+				85391B4FF07FD117D5DAE9AE /* ListingHeaderSection.swift */,
+				403A7373377B31C137AF2A3C /* ListingLocationSection.swift */,
+				15FB85E9328FAF74FFA81537 /* ListingMapView.swift */,
+				57B6306BA305CEA301D68E46 /* ListingRow.swift */,
+				FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */,
+				D01C52EA2A4951A531777208 /* ListingsInspectorContent.swift */,
+				9BE5DD424A1D80509F05B8DD /* ListingsMapView.swift */,
+				92CAEDB831FDD801328A3350 /* ListingsTable.swift */,
+				C49734D052D6B1E9596E8FA5 /* ListingsView.swift */,
+				3D2E24F4A17DE907ABE0CB41 /* ListingsViewModel.swift */,
+				3EE5DED93D8EEFBD8FC0F159 /* MapSelectionOverlay.swift */,
+				22B007C09D6BCEEA56C71C31 /* MapStatusBar.swift */,
+				10DA1BEAA1ED2E6E62DE0F35 /* MapStyleMenu.swift */,
+				16469D530FEBC88529B9281F /* POIAnnotation.swift */,
+				E2D40288F615B5E08C952839 /* POILayerMenu.swift */,
+				7A4741C04E075D5184E2A9BC /* PriceHistoryPlaceholder.swift */,
+				558A4105212B10DEE5A40483 /* PriceHistoryView.swift */,
+				264BC84F1820EC445B5075EF /* PriceTrendBadge.swift */,
+				CF3983814BD6C105D4E3B328 /* ProximityCell.swift */,
+				3FEF569253E7F62FAC6013A6 /* ProximityMetricsView.swift */,
+				BABBD631A72356D230A67207 /* ProximityRow.swift */,
+				615A3342FBD6E5DB02A4E8F0 /* ScoreBreakdownView.swift */,
+				8CE910F19E89A870C5DEA1EC /* ScoreRow.swift */,
+			);
+			path = Listings;
+			sourceTree = "<group>";
+		};
+		C764C161D13EA543CD1A6E34 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A4697F9A383EBF92F606A4EC /* AlertStreamService.swift */,
+				4018BCCA75DE984FC5F4D440 /* CacheManager.swift */,
+				D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */,
+				D441B787954106ED54C49791 /* NotificationManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		CFF2D7EB6C1C96B7A37E7B5B /* Alerts */ = {
+			isa = PBXGroup;
+			children = (
+				CC9E8DD19DCBE0B634219FFF /* AlertInspectorContent.swift */,
+				88B2596E94F7C0FB0698DDF9 /* AlertRow.swift */,
+				76D1829B0B178E18A40CA9DD /* AlertsEmptyState.swift */,
+				A15BC26B25B4C45BD0CDE1B9 /* AlertsFilterBar.swift */,
+				3660DC367B468E0679439937 /* AlertsList.swift */,
+				D0C4AC53B009DAE5512A5040 /* AlertsView.swift */,
+				8BFC64E6C7D38E5E6CED813D /* AlertsViewModel.swift */,
+				31AEF4CFCD9EECADB75664F9 /* MatchReasonsView.swift */,
+				CC037F581496D918CB8E6C69 /* ThresholdBadge.swift */,
+			);
+			path = Alerts;
+			sourceTree = "<group>";
+		};
+		E1D364681B0DB21CB58D1A49 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A629E49B0B0F0EB537CF45CA /* vienna-boundary.geojson */,
+				6FB687332467F61D86E23909 /* vienna-developments.geojson */,
+				CE6C448725BAACD07E85B5ED /* vienna-districts.geojson */,
+				8768C665FAE0CF6E912CF884 /* vienna-pois.geojson */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		F9E439A66A5167CA41C29915 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				59C56AB62936F48D58DB30C9 /* DashboardHeader.swift */,
+				00AA2B67E94C110C0959D44F /* DashboardListingRow.swift */,
+				B43B5F87E9E50935F6376A2A /* DashboardPriceTrendChart.swift */,
+				9D956CA5EAA23A0377821351 /* DashboardView.swift */,
+				11D365B4CC4845FC963FF740 /* DashboardViewModel.swift */,
+				E0D82AF9188A8B9C387B1F96 /* DistrictComparisonChart.swift */,
+				7813E6C2C4DE0EA9C7ADFDD2 /* MarketHeatGrid.swift */,
+				84749F13BA1ACD425F3407EE /* MarketTemperatureCard.swift */,
+				137CC2546FE209E7AEF9F09B /* OpportunityCard.swift */,
+				F75CD2B204B91BEB418E7FED /* PipelineHealthGrid.swift */,
+				899030D7853562BB050A769A /* RecentListingsSection.swift */,
+				9A1DFCAEC053B89B40FD9F6E /* ScoreDistributionChart.swift */,
+				831F2A61CBC774BC0725982E /* SourceHealthRow.swift */,
+				5D43E77D2396C28F58D3DC6B /* SourceHealthSection.swift */,
+				B118C2FA7A26723CF2FCE511 /* SummaryCardView.swift */,
+				008EDA89AC29F1053BE99B84 /* SummaryGridView.swift */,
+				8D2E3BACED5F6CC00DDC1119 /* TopOpportunitiesSection.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		70FF8B76102F8E820C191D48 /* ImmoRadar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 91B13094FFACD89B869EC517 /* Build configuration list for PBXNativeTarget "ImmoRadar" */;
+			buildPhases = (
+				6B20DAA106966E3F558C3970 /* Sources */,
+				5EF6E76A576599FA645533BC /* Resources */,
+				BD669E4A4B782398C92358AE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ImmoRadar;
+			packageProductDependencies = (
+			);
+			productName = ImmoRadar;
+			productReference = 0D777E88E46E30A9668E0CB0 /* ImmoRadar.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A2930C862545CA77D285A40F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					70FF8B76102F8E820C191D48 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 2CC2DA44C87D64651C639FF1 /* Build configuration list for PBXProject "ImmoRadar" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5683FDC3C542A0B1910DA5D1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 497E693C0D0D447610BEFFFB /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				70FF8B76102F8E820C191D48 /* ImmoRadar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5EF6E76A576599FA645533BC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09C4525F58A67DC344DE9C2A /* Assets.xcassets in Resources */,
+				74BFF634E2A0856A5E2A38AF /* vienna-boundary.geojson in Resources */,
+				5B841E8E787691D1FAF964A4 /* vienna-developments.geojson in Resources */,
+				5B2DA7BED5F3A00F390B2730 /* vienna-districts.geojson in Resources */,
+				1E1C2AC93456A666F724E2C5 /* vienna-pois.geojson in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6B20DAA106966E3F558C3970 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C01C4EBB705F2FE8DEE311A1 /* APIAlertResponse.swift in Sources */,
+				6B93487268951A3D67393E39 /* APIBaselineResponse.swift in Sources */,
+				51ED1858D3EAADD1171099B2 /* APIClient.swift in Sources */,
+				5A81F46B7BA5D259330015AB /* APIEndpoints.swift in Sources */,
+				E6A635F2923FF833FAD7BAB0 /* APIError.swift in Sources */,
+				A18901870776B2B24E27EB7B /* APIFilterResponse.swift in Sources */,
+				7C4D1D4C7A1195DB88644DB3 /* APIListingResponse.swift in Sources */,
+				493C21E1A30B3AAE88AE9BDF /* APIResponse.swift in Sources */,
+				B71D52FC104E2271C3E59146 /* APISourceResponse.swift in Sources */,
+				ACC23D1A3D66FD9A00B5045B /* Alert.swift in Sources */,
+				920C9609E1EFFCDED899FC22 /* AlertFrequency.swift in Sources */,
+				D9C898FA8FFF275EC5635945 /* AlertInspectorContent.swift in Sources */,
+				017B81F637FD4574F194B7D5 /* AlertQuery.swift in Sources */,
+				C2174CCEFCECF0C2FB9B42BC /* AlertRow.swift in Sources */,
+				BD294602408D3AA9C1543FFF /* AlertStatus.swift in Sources */,
+				970E2D1726EDFA425F7155CA /* AlertStreamService.swift in Sources */,
+				0FBF2B190E7C435EB95C3028 /* AlertType.swift in Sources */,
+				119DA386DC6D5AB2F4C84385 /* AlertsEmptyState.swift in Sources */,
+				4D32F5B801EB4C467490B11C /* AlertsFilterBar.swift in Sources */,
+				1F0005D47A132A3397963062 /* AlertsList.swift in Sources */,
+				64E1F456EEDFBACF4049F9EA /* AlertsView.swift in Sources */,
+				E6580A7F28164E1222839783 /* AlertsViewModel.swift in Sources */,
+				F33CBA3F3D141771C1113E36 /* Analysis.swift in Sources */,
+				101539866BAF1A15D650E074 /* AnalysisAssumptionsList.swift in Sources */,
+				5F9D81849CB6EFF9315BFD2D /* AnalysisBuildingContextCard.swift in Sources */,
+				8B8F2BB296383602E79B578D /* AnalysisConfidenceBadge.swift in Sources */,
+				0528A5254484DF696B1ECC57 /* AnalysisFlagsSection.swift in Sources */,
+				64D92E9022D9929BDD533CF7 /* AnalysisInvestorMetricsCard.swift in Sources */,
+				3F527C2310DBD546EC63A75C /* AnalysisLegalRentCard.swift in Sources */,
+				5935DE6756E8A99D9C3C8C11 /* AnalysisMarketRentCard.swift in Sources */,
+				26EBFA79429C5067994078BE /* AnalysisMissingDataList.swift in Sources */,
+				73D13F4C5E87CC93860D732F /* AnalysisSaleContextCard.swift in Sources */,
+				5DD83184AC993A4ADC1A1B32 /* AnalyticsView.swift in Sources */,
+				F7FA3551DEAE80E67AE9845F /* AnalyticsViewModel.swift in Sources */,
+				8C353687A1DADC870F649F96 /* AppState.swift in Sources */,
+				B3DD1627EC34F4889D09818D /* CacheManager.swift in Sources */,
+				3CF43A52E303151F57910A9B /* CardModifier.swift in Sources */,
+				94DA4B2DBD73B0F87C9DD46B /* ChartBlock.swift in Sources */,
+				5F00088974978223EAE0547F /* ClaudeAuthHelper.swift in Sources */,
+				2F62E2F980239070E7502E9A /* ComparisonTableBlock.swift in Sources */,
+				BD2BABD8572BC4791FFCDA2D /* ConnectionStatus.swift in Sources */,
+				DA82A5D01C49D6B43E591293 /* ConnectionStatusBar.swift in Sources */,
+				7E22BBA5E07190168E8237ED /* ContentView.swift in Sources */,
+				2E283BD583A89283840840E4 /* CopilotContentData.swift in Sources */,
+				FE8B87940567FC261EC03054 /* CopilotEmptyState.swift in Sources */,
+				F1AB7A6DC39523710B0D570B /* CopilotInputBar.swift in Sources */,
+				12EF087393CA3CB2371DB782 /* CopilotListing.swift in Sources */,
+				CCF71822F03FD922B095C8AB /* CopilotMessage.swift in Sources */,
+				12D34A6997D330D284FBA2A4 /* CopilotMessageBubble.swift in Sources */,
+				B1B9ACBF841733CA0BA8A57C /* CopilotMessageList.swift in Sources */,
+				C8155A2DF4557CDD92655982 /* CopilotProvider.swift in Sources */,
+				0799F469A02E3D9310FCF08C /* CopilotStreamEvent.swift in Sources */,
+				3E74BF7161F38DE94C8138AF /* CopilotStreamService.swift in Sources */,
+				E11048868859B4174C01AB6F /* CopilotSuggestionChips.swift in Sources */,
+				1CC8AF57F148A4AD9F35ADAC /* CopilotView.swift in Sources */,
+				1087D86F8F211AD7B699F237 /* CopilotViewModel.swift in Sources */,
+				ED4B5AAECC490DA220AFFD0F /* CrossSourceBadge.swift in Sources */,
+				3C9B42DB522BDDF69363A4EB /* CrossSourceComparisonView.swift in Sources */,
+				C4EC5A549BA1B51A68D8CF92 /* DashboardHeader.swift in Sources */,
+				B23ABA7052857F35184D4A9C /* DashboardListingRow.swift in Sources */,
+				AB13EDC10E12FD22BD4828FD /* DashboardPriceTrendChart.swift in Sources */,
+				F4B3C363FEBF70A8FAC495C1 /* DashboardStats.swift in Sources */,
+				50E6380BC67014FB17B65380 /* DashboardView.swift in Sources */,
+				D25304195AABFAFEDD9F3387 /* DashboardViewModel.swift in Sources */,
+				F797C050C42F0E37C6405725 /* DetailContentView.swift in Sources */,
+				0DD8170EEBD143BC769B7DE3 /* DetailRow.swift in Sources */,
+				1D7D98B79114E85F52FA13F8 /* DevelopmentAnnotation.swift in Sources */,
+				208DFF6FEAFD07B11BE22718 /* DistrictComparison.swift in Sources */,
+				3C013DAAA599B7651FEB4C57 /* DistrictComparisonChart.swift in Sources */,
+				13EB2A24233AF611579E6598 /* DistrictSummary.swift in Sources */,
+				90145A9AB69C0ADC9208B51D /* DistrictTrend.swift in Sources */,
+				B808B60AF5092E1770C7AAF0 /* DistrictTrendChartView.swift in Sources */,
+				A9707B09B266A70C326E2E2F /* Document.swift in Sources */,
+				DF09F60534CBA530649BFC44 /* DocumentFactsView.swift in Sources */,
+				6EC61471E44C6D3214D55950 /* DocumentRow.swift in Sources */,
+				68E925D114C1348A3F232F82 /* DocumentsSection.swift in Sources */,
+				5C05A84B12CA36A023117E86 /* FeedbackSection.swift in Sources */,
+				BF1B91BDE0C7A0A20027EAB9 /* Filter.swift in Sources */,
+				69DFD5DF9FC40D36EEC32C1F /* FilterCriteria.swift in Sources */,
+				AABB4632AE2ADC00822C5C4B /* FilterDraft.swift in Sources */,
+				B00A4261C7B75E34EC290C97 /* FilterKind.swift in Sources */,
+				E2FA471D74098B3F85DAFB7F /* FiltersView.swift in Sources */,
+				6EB834F54870821AC13DB2C0 /* FiltersViewModel.swift in Sources */,
+				FF5A72157B40D39EEF79A357 /* FlowLayout.swift in Sources */,
+				022E759D13D01B72CA5C84B4 /* GeocodeBadge.swift in Sources */,
+				40B3888EC09F78D4D24EA267 /* ISO8601.swift in Sources */,
+				A72CE584C83A70E2060D0DB8 /* ImmoRadarApp.swift in Sources */,
+				1BE117B997588F80621DE3E9 /* InspectorDetailRow.swift in Sources */,
+				7243923B2C335897A194598B /* InspectorGridSection.swift in Sources */,
+				6AE5DE941A66A56742AC8422 /* Int+Clamped.swift in Sources */,
+				E553F517DB626672B7E8A2CF /* InvestorFeedback.swift in Sources */,
+				4DA6279FC94C80744869541E /* KeyMetricsRibbon.swift in Sources */,
+				BDACCFF82F86770AB8680F5A /* KeychainError.swift in Sources */,
+				4660BEE6936CDACF2AA99F6B /* KeychainHelper.swift in Sources */,
+				B21105E5C0BB25A835543536 /* LegalRentSignalList.swift in Sources */,
+				181C14C3E0368CB4C03D1765 /* Listing.swift in Sources */,
+				3DC1B48DE5DE72090C243507 /* ListingAnnotation.swift in Sources */,
+				4850E2D000C64F711ED6334D /* ListingCardBlock.swift in Sources */,
+				FBF165B5C32079CFF6AD1808 /* ListingCluster.swift in Sources */,
+				DFD11391ABB95998AA996D4D /* ListingClusterBubble.swift in Sources */,
+				9A541DE5913CFB66E5A49208 /* ListingDetailView.swift in Sources */,
+				F2B6B2F4CB352BA73A048D9F /* ListingDetailsSection.swift in Sources */,
+				CC48D0E77587BBC9F731FFED /* ListingHeaderSection.swift in Sources */,
+				06BA7030A6DEA233B39BFA45 /* ListingLocationSection.swift in Sources */,
+				768BA3F51E1F9F49CE972268 /* ListingMapView.swift in Sources */,
+				952011C4FB32007148816C0F /* ListingQuery.swift in Sources */,
+				EDB638E1B021D23A92D155FA /* ListingRow.swift in Sources */,
+				6766EBC54587899FFF372A78 /* ListingStatus.swift in Sources */,
+				0F598CDF1074AF6B832692B8 /* ListingVelocityPoint.swift in Sources */,
+				15D2976F75D9E9091B51B9BD /* ListingVersion.swift in Sources */,
+				0B57A25967AB929406487AB9 /* ListingsFilterBar.swift in Sources */,
+				47CCB465A043BB1422140603 /* ListingsInspectorContent.swift in Sources */,
+				1A9F0659A784C92C55DECF90 /* ListingsMapView.swift in Sources */,
+				43DC0BC16A907696F52A798A /* ListingsTable.swift in Sources */,
+				2C30D987AB5C9BD3E0669E94 /* ListingsView.swift in Sources */,
+				D5315D0133D9C5F59F9357CA /* ListingsViewModel.swift in Sources */,
+				59687438CC6AE9BB4AD43CAA /* LocalCache.swift in Sources */,
+				97BD51DD4EBF633F5B964ABA /* Logging.swift in Sources */,
+				8583726C3B68750E59A5E1E8 /* MapSelectionOverlay.swift in Sources */,
+				CFCFFF7B13A11B669648005A /* MapStatusBar.swift in Sources */,
+				96C6ED56070D1D8AE7DB3043 /* MapStyleMenu.swift in Sources */,
+				372D2214F1F4C7BE6DA71999 /* MarketBaseline.swift in Sources */,
+				9E849562FF39DCB50DE615F1 /* MarketHeatGrid.swift in Sources */,
+				50925B183AD7553E155D0A71 /* MarketStatsBlock.swift in Sources */,
+				82FC65B881156EFDF28AE14C /* MarketTemperatureCard.swift in Sources */,
+				6A11DDA45BDE4A5D6CE4FC99 /* MarketTemperatureView.swift in Sources */,
+				EC3D8B6F1E8D1D5FC2228A4B /* MatchReasonsView.swift in Sources */,
+				9C26D38350348A0FD0B04562 /* MenuBarContent.swift in Sources */,
+				06C6A5F78DED989DB7C6382E /* MenuBarLabel.swift in Sources */,
+				D1F9585A7088012CE06B87E1 /* MetricCell.swift in Sources */,
+				A8CB8BF897A6DD07A0C6457C /* NavigationItem.swift in Sources */,
+				42790050725A2EC62C9EB6A3 /* NotificationManager.swift in Sources */,
+				9DEE1BE3776A7DDC85E9A46B /* OperationType.swift in Sources */,
+				D0AEC634CAE8B61232093599 /* OpportunityCard.swift in Sources */,
+				82D3E9ED03F8323828B6A62F /* POI.swift in Sources */,
+				EBB50A0BA7CEC5DF4D03AA7E /* POIAnnotation.swift in Sources */,
+				C1E9F684D1A2E6A6E6896B2F /* POICategoryGroup.swift in Sources */,
+				B0778857C0F6E10136D15EA8 /* POILayerMenu.swift in Sources */,
+				947653CE563EAD586C4D070F /* PipelineHealthGrid.swift in Sources */,
+				32FCF11CBA5C3479E1FAEB1A /* PriceFormatter.swift in Sources */,
+				AE0F9570F9C71F452E302791 /* PriceHistoryBlock.swift in Sources */,
+				472A7C0510D4C27D52493900 /* PriceHistoryPlaceholder.swift in Sources */,
+				C8F4A042EE092EF1380D392D /* PriceHistoryView.swift in Sources */,
+				C6E181A2E61B7836AFD73C67 /* PriceTrendBadge.swift in Sources */,
+				688DFBE908624F4BDF08F98E /* PriceVersion.swift in Sources */,
+				B503D54456225FD59EC4FEB2 /* PropertyType.swift in Sources */,
+				81284EC2543CDA7A00ECA1CC /* ProximityCell.swift in Sources */,
+				6545B9DEE4990047D0488699 /* ProximityMetricsView.swift in Sources */,
+				DF308F5CD41EADF9831AE105 /* ProximityRow.swift in Sources */,
+				64D6D43CC911434A9221799A /* RecentListingsSection.swift in Sources */,
+				042D684D7F3967A73E5E5138 /* SavedListingItem.swift in Sources */,
+				CA68E3B14CBB57F1F8215558 /* ScoreBar.swift in Sources */,
+				26EA525FA99A4141F2A04AC6 /* ScoreBreakdownBlock.swift in Sources */,
+				748BB7B6788EEB8DC4F0EEA7 /* ScoreBreakdownView.swift in Sources */,
+				4BB9F79674F9FB0A296A3E47 /* ScoreDistributionBucket.swift in Sources */,
+				6F8527104585CAE5876DB651 /* ScoreDistributionChart.swift in Sources */,
+				B85FB1AA09E77D6487809625 /* ScoreExplanation.swift in Sources */,
+				09505EFE9E18867CAD6A4AF3 /* ScoreIndicator.swift in Sources */,
+				3F6722B152A363CC448F348F /* ScoreRow.swift in Sources */,
+				A84D6031D708C648D0A11646 /* ScrapeRun.swift in Sources */,
+				BB740FE60409A68929DB7A4D /* ScrapeRunsView.swift in Sources */,
+				B59D490A7C2421B76211C7D4 /* SettingsView.swift in Sources */,
+				049A5EA76373166184F22692 /* SidebarRow.swift in Sources */,
+				25E6BCA630EC5254920BD4EB /* SidebarView.swift in Sources */,
+				C3650F5BEC27262D719347FA /* Source.swift in Sources */,
+				965F3C836EE467584D0D62DA /* SourceHealthRow.swift in Sources */,
+				1A2CEBDB6AAC8C5C330D0578 /* SourceHealthSection.swift in Sources */,
+				A054E3454E3164180C8489A2 /* SourceHealthStatus.swift in Sources */,
+				FEFFC89DFD44ED6DA241A9AA /* SourceLogo.swift in Sources */,
+				2776FA6343F88BBE3BC56052 /* SourcesView.swift in Sources */,
+				1ADB941B2BC48F6EA7D84DCC /* SourcesViewModel.swift in Sources */,
+				33583C529183936B9A03CF3E /* SparklineView.swift in Sources */,
+				FEBC757922B1FFF07F4F5F37 /* StatusBadge.swift in Sources */,
+				6912FCF137DED271F30A8A1E /* SuggestedQuery.swift in Sources */,
+				F72C3918DB8735991AC2FF92 /* SummaryCardView.swift in Sources */,
+				66109CFD11C422B27C2047E6 /* SummaryGridView.swift in Sources */,
+				5B9ED3A8BA53D0DF90CC11D3 /* TextContentBlock.swift in Sources */,
+				97A7936C749979375F684B32 /* Theme.swift in Sources */,
+				F73DAACDC100C02832C750C8 /* ThresholdBadge.swift in Sources */,
+				0765E3F47FA2CD775B5AA909 /* TopOpportunitiesSection.swift in Sources */,
+				E54F2A514245BF5E15092DBB /* ViennaDistrictGeometry.swift in Sources */,
+				C2182EBBFB63672BF47406D4 /* ViennaDistricts.swift in Sources */,
+				CC9F675197908B5D55A069EE /* ViennaPOIStore.swift in Sources */,
+				29B087FD9AA0C81CB24EB3E1 /* WatchlistRow.swift in Sources */,
+				3DA6ADEEBAFCCB9A03580DF1 /* WatchlistView.swift in Sources */,
+				33A91DD055685BAEAF1B91BE /* WatchlistViewModel.swift in Sources */,
+				D830A42A28ED51CBF42A109D /* WienDevelopment.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		07E1E4F859C4BA01FF84B42E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ImmoRadar/ImmoRadar.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ImmoRadar;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_NAME = ImmoRadar;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		69FE3C5A960EB5FB0CA19991 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.immoradar.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A5F9C85A76897560F4A2229E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.immoradar.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		CEAEB310AE06D2A6F6E7BBB3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ImmoRadar/ImmoRadar.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ImmoRadar;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_NAME = ImmoRadar;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2CC2DA44C87D64651C639FF1 /* Build configuration list for PBXProject "ImmoRadar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				69FE3C5A960EB5FB0CA19991 /* Debug */,
+				A5F9C85A76897560F4A2229E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		91B13094FFACD89B869EC517 /* Build configuration list for PBXNativeTarget "ImmoRadar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				07E1E4F859C4BA01FF84B42E /* Debug */,
+				CEAEB310AE06D2A6F6E7BBB3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A2930C862545CA77D285A40F /* Project object */;
+}

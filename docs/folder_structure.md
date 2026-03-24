@@ -39,8 +39,8 @@ real-estate-intelligence-engine/
 │   │   └── package.json
 │   │
 │   └── macos/
-│       ├── RealEstateIntel.xcodeproj
-│       ├── RealEstateIntel/
+│       ├── ImmoRadar.xcodeproj
+│       ├── ImmoRadar/
 │       │   ├── App/
 │       │   ├── Features/
 │       │   │   ├── Dashboard/

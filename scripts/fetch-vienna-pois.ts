@@ -7,7 +7,7 @@
  *
  * Outputs:
  *   - scripts/data/vienna-pois.json          (flat JSON array)
- *   - apps/macos/RealEstateIntel/Resources/vienna-pois.geojson  (GeoJSON FeatureCollection)
+ *   - apps/macos/ImmoRadar/Resources/vienna-pois.geojson  (GeoJSON FeatureCollection)
  *
  * Usage:
  *   npx tsx scripts/fetch-vienna-pois.ts
@@ -89,7 +89,7 @@ const GEOJSON_OUTPUT = join(
   process.cwd(),
   'apps',
   'macos',
-  'RealEstateIntel',
+  'ImmoRadar',
   'Resources',
   'vienna-pois.geojson',
 );
@@ -99,7 +99,7 @@ const WIEN_OGD_WFS =
   'https://data.wien.gv.at/daten/geo?service=WFS&request=GetFeature&version=1.1.0&typeName=ogdwien:ARZTOGD&outputFormat=json&srsName=EPSG:4326';
 const TAXI_PAGE_URL = 'https://www.wien.gv.at/en/transportation/taxistands';
 
-const USER_AGENT = 'RealEstateIntel/0.1 (poi-fetch)';
+const USER_AGENT = 'ImmoRadar/0.1 (poi-fetch)';
 
 const OVERPASS_DELAY_MS = 12_000;
 const OVERPASS_MAX_RETRIES = 4;

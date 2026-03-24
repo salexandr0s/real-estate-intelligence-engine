@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct RealEstateIntelApp: App {
+struct ImmoRadarApp: App {
     @State private var appState = AppState()
 
     var body: some Scene {

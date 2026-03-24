@@ -4,7 +4,7 @@ import Security
 /// Lightweight wrapper around the macOS Keychain for storing sensitive strings.
 enum KeychainHelper {
 
-    private static let serviceName = "com.realestateIntel.api"
+    private static let serviceName = "com.immoradar.api"
 
     // MARK: - Read
 

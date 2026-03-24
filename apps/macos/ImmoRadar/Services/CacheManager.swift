@@ -15,7 +15,7 @@ actor CacheManager {
     nonisolated private var cacheDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let cacheDir = appSupport
-            .appendingPathComponent("RealEstateIntel", isDirectory: true)
+            .appendingPathComponent("ImmoRadar", isDirectory: true)
             .appendingPathComponent("Cache", isDirectory: true)
         return cacheDir
     }
