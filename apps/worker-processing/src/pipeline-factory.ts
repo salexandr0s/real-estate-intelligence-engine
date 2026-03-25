@@ -24,6 +24,7 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
+  EdikteMapper,
 } from '@immoradar/normalization';
 import { scoreListing } from '@immoradar/scoring';
 import {
@@ -240,6 +241,7 @@ export function createPipeline(): FullIngestionPipeline {
     ['findmyhome', new FindMyHomeMapper()],
     ['openimmo', new OpenImmoMapper()],
     ['remax', new RemaxMapper()],
+    ['edikte', new EdikteMapper()],
   ]);
   const deps = buildPipelineDeps();
   const pipeline = new FullIngestionPipeline(normalizers, deps);

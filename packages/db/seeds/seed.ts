@@ -150,7 +150,15 @@ export async function seed(): Promise<void> {
       parserVersion: 1,
       legalStatus: 'approved',
       isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
+      config: {
+        crawlProfile: {
+          operationType: 'sale',
+          propertyType: null, // forced auctions cover all property types
+          regions: ['wien'],
+          maxPagesPerRun: 20, // ~160 total results for Wien, conservative cap
+          sortOrder: 'published_desc',
+        },
+      },
     },
   ];
 
