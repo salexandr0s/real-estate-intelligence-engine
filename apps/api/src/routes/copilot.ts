@@ -198,5 +198,7 @@ function eventPayload(event: CopilotStreamEvent): unknown {
       return {};
     case 'error':
       return { message: event.message };
+    default:
+      return {};
   }
 }
