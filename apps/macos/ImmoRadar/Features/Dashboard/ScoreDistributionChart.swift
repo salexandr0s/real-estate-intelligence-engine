@@ -60,7 +60,7 @@ struct ScoreDistributionChart: View {
                         y: .value("Count", bucket.count)
                     )
                     .foregroundStyle(barColor(for: bucket.bucket))
-                    .cornerRadius(3)
+                    .clipShape(.rect(cornerRadius: 3))
                     .annotation(position: .top, spacing: 1) {
                         if bucket.count > 0 {
                             Text(percentage(for: bucket.count))

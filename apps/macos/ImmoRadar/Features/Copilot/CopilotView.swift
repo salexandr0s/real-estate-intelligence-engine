@@ -131,6 +131,7 @@ private struct CopilotHistorySidebar: View {
     let onSelectConversation: (UUID) -> Void
     let onRenameConversation: (CopilotConversationSummary) -> Void
     let onDeleteConversation: (CopilotConversationSummary) -> Void
+    @State private var selectedConversationID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -165,14 +166,7 @@ private struct CopilotHistorySidebar: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, Theme.Spacing.md)
             } else {
-                List(selection: Binding(
-                    get: { viewModel.activeConversationID },
-                    set: { newValue in
-                        if let id = newValue {
-                            onSelectConversation(id)
-                        }
-                    }
-                )) {
+                List(selection: $selectedConversationID) {
                     ForEach(viewModel.conversations) { summary in
                         ConversationHistoryRow(
                             summary: summary,
@@ -195,6 +189,17 @@ private struct CopilotHistorySidebar: View {
                     }
                 }
                 .listStyle(.sidebar)
+            }
+        }
+        .onAppear {
+            selectedConversationID = viewModel.activeConversationID
+        }
+        .onChange(of: viewModel.activeConversationID) { _, newValue in
+            selectedConversationID = newValue
+        }
+        .onChange(of: selectedConversationID) { _, newValue in
+            if let id = newValue, id != viewModel.activeConversationID {
+                onSelectConversation(id)
             }
         }
     }

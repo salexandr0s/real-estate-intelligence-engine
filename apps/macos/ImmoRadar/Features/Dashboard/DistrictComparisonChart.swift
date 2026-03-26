@@ -60,7 +60,7 @@ struct DistrictComparisonChart: View {
                         y: .value("District", districtLabel(district.districtNo))
                     )
                     .foregroundStyle(barColor(for: district.avgPricePerSqm))
-                    .cornerRadius(3)
+                    .clipShape(.rect(cornerRadius: 3))
                     .annotation(position: .trailing, spacing: 4) {
                         Text("\(district.listingCount)")
                             .font(Theme.chartAnnotationFont)
