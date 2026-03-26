@@ -29,6 +29,47 @@ struct CardModifier: ViewModifier {
     }
 }
 
+struct DashboardPanelModifier: ViewModifier {
+    var padding: CGFloat = Theme.Spacing.lg
+    var cornerRadius: CGFloat = Theme.Dashboard.panelRadius
+    var tint: Color? = nil
+    var elevated: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.cardBackground)
+                    .overlay {
+                        if let tint {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            tint.opacity(0.22),
+                                            tint.opacity(0.08),
+                                            .clear,
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 0.5)
+            }
+            .shadow(
+                color: .black.opacity(elevated ? 0.12 : 0.05),
+                radius: elevated ? 18 : 8,
+                y: elevated ? 10 : 4
+            )
+    }
+}
+
 extension View {
     func cardStyle(padding: CGFloat = Theme.Spacing.lg, cornerRadius: CGFloat = Theme.Radius.lg) -> some View {
         modifier(CardModifier(padding: padding, cornerRadius: cornerRadius))
@@ -36,5 +77,21 @@ extension View {
 
     func cardStyle(_ variant: CardVariant, padding: CGFloat = Theme.Spacing.lg, cornerRadius: CGFloat = Theme.Radius.lg) -> some View {
         modifier(CardModifier(variant: variant, padding: padding, cornerRadius: cornerRadius))
+    }
+
+    func dashboardPanelStyle(
+        padding: CGFloat = Theme.Spacing.lg,
+        cornerRadius: CGFloat = Theme.Dashboard.panelRadius,
+        tint: Color? = nil,
+        elevated: Bool = false
+    ) -> some View {
+        modifier(
+            DashboardPanelModifier(
+                padding: padding,
+                cornerRadius: cornerRadius,
+                tint: tint,
+                elevated: elevated
+            )
+        )
     }
 }

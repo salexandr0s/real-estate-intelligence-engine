@@ -1,56 +1,69 @@
 import SwiftUI
 
-/// Compact list of top-scoring listings.
+/// Ranked queue of the strongest live matches across active filters.
 struct TopOpportunitiesSection: View {
     let listings: [Listing]
-    let districtComparison: [DistrictComparison]
+    let totalMatches: Int
     var onListingTap: ((Int) -> Void)?
 
     @State private var hoveredListingId: Int?
 
-    private func avgPpsqm(for districtNo: Int?) -> Double? {
-        guard let d = districtNo else { return nil }
-        return districtComparison.first(where: { $0.districtNo == d })?.avgPricePerSqm
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack {
-                Label("Top Opportunities", systemImage: "star.fill")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(listings.count) scored 70+")
-                    .font(.caption)
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("Investor queue")
+                        .font(.title3)
+                        .adaptiveFontWeight(.semibold)
+
+                    Text("Highest-scoring current matches across your active filters.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: Theme.Spacing.md)
+
+                Text("\(totalMatches) live matches")
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.08), in: Capsule())
             }
 
+            Divider()
+
             if listings.isEmpty {
-                Text("No high-scoring listings")
-                    .font(.caption).foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, minHeight: 80)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("No ranked opportunities yet")
+                        .font(.subheadline)
+                        .adaptiveFontWeight(.medium)
+                    Text("As active filters start returning matches, the strongest listings will surface here first.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 176, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    let displayed = Array(listings.prefix(7))
-                    ForEach(Array(displayed.enumerated()), id: \.element.id) { index, listing in
+                VStack(spacing: Theme.Spacing.xs) {
+                    ForEach(Array(listings.enumerated()), id: \.element.id) { index, listing in
                         OpportunityCard(
                             listing: listing,
-                            districtAvgPpsqm: avgPpsqm(for: listing.districtNo),
+                            rank: index + 1,
                             onTap: { onListingTap?(listing.id) },
                             isHovered: hoveredListingId == listing.id
                         )
                         .onHover { isHovered in
                             hoveredListingId = isHovered ? listing.id : nil
                         }
-                        if index < displayed.count - 1 {
-                            Divider().padding(.leading, 40)
+
+                        if index < listings.count - 1 {
+                            Divider()
+                                .padding(.leading, 68)
                         }
                     }
                 }
             }
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground)
-        .clipShape(.rect(cornerRadius: Theme.Radius.lg))
-        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+        .dashboardPanelStyle(tint: .blue, elevated: true)
     }
 }

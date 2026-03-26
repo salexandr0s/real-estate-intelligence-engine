@@ -126,5 +126,5 @@ struct ImmoRadarShortcuts: AppShortcutsProvider {
 // MARK: - Notification Name
 
 extension Notification.Name {
-    nonisolated(unsafe) static let intentNavigate = Notification.Name("com.immoradar.intentNavigate")
+    static let intentNavigate = Notification.Name("com.immoradar.intentNavigate")
 }

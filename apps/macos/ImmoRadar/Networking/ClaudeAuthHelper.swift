@@ -123,6 +123,10 @@ enum ClaudeAuthHelper {
 
     /// Refresh the OAuth token synchronously and update stored credentials.
     private static func refreshTokenSync(refreshToken: String) -> String? {
+        final class RefreshedTokenBox: @unchecked Sendable {
+            var value: String?
+        }
+
         guard let url = URL(string: tokenEndpoint) else { return nil }
 
         var request = URLRequest(url: url)
@@ -134,7 +138,7 @@ enum ClaudeAuthHelper {
         request.httpBody = body.data(using: .utf8)
 
         let semaphore = DispatchSemaphore(value: 0)
-        var newToken: String?
+        let refreshedToken = RefreshedTokenBox()
 
         let task = URLSession.shared.dataTask(with: request) { data, _, error in
             defer { semaphore.signal() }
@@ -154,7 +158,7 @@ enum ClaudeAuthHelper {
                 return
             }
 
-            newToken = accessToken
+            refreshedToken.value = accessToken
 
             // Update stored credentials
             updateStoredCredentials(accessToken: accessToken, json: json)
@@ -162,7 +166,7 @@ enum ClaudeAuthHelper {
         task.resume()
         semaphore.wait()
 
-        return newToken
+        return refreshedToken.value
     }
 
     private static func updateStoredCredentials(accessToken: String, json: [String: Any]) {

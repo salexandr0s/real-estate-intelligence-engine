@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "For You" section — listings grouped by the user's active filters.
+/// Tracked filter overview — matched listings grouped into secondary dashboard panels.
 struct ForYouSection: View {
     let activeFilters: [Filter]
     let filterListings: [Int: [Listing]]
@@ -10,23 +10,45 @@ struct ForYouSection: View {
     var onNavigateToFilters: (() -> Void)?
     var onNavigateToListings: (() -> Void)?
 
+    private let columns = [
+        GridItem(.adaptive(minimum: Theme.Dashboard.trackedFilterMinWidth, maximum: 520), spacing: Theme.Dashboard.gridSpacing, alignment: .top),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-            Text("For You")
-                .font(.title3)
-                .adaptiveFontWeight(.semibold)
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("Tracked filters")
+                        .font(.title3)
+                        .adaptiveFontWeight(.semibold)
+
+                    Text("Filter-level detail, kept secondary to the live overview above.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: Theme.Spacing.md)
+
+                if let onNavigateToFilters {
+                    Button("Manage Filters", action: onNavigateToFilters)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
 
             if activeFilters.isEmpty && !isLoading {
                 ForYouEmptyState(onSetUpFilters: onNavigateToFilters)
             } else {
-                ForEach(activeFilters) { filter in
-                    ForYouFilterGroup(
-                        filter: filter,
-                        listings: filterListings[filter.id] ?? [],
-                        isLoading: filterLoadingStates[filter.id] ?? false,
-                        onListingTap: onListingTap,
-                        onShowAll: onNavigateToListings
-                    )
+                LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Dashboard.gridSpacing) {
+                    ForEach(activeFilters) { filter in
+                        ForYouFilterGroup(
+                            filter: filter,
+                            listings: filterListings[filter.id] ?? [],
+                            isLoading: filterLoadingStates[filter.id] ?? false,
+                            onListingTap: onListingTap,
+                            onShowAll: onNavigateToListings
+                        )
+                    }
                 }
             }
         }
@@ -35,7 +57,7 @@ struct ForYouSection: View {
 
 // MARK: - Filter Group
 
-/// A single filter's matched listings, shown as a card with header and listing rows.
+/// A single filter's matched listings, shown as a compact panel.
 struct ForYouFilterGroup: View {
     let filter: Filter
     let listings: [Listing]
@@ -49,45 +71,63 @@ struct ForYouFilterGroup: View {
         Array(
             listings
                 .sorted { ($0.currentScore ?? 0) > ($1.currentScore ?? 0) }
-                .prefix(5)
+                .prefix(4)
         )
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            // Header
-            HStack {
-                Text(filter.name)
-                    .font(.subheadline)
-                    .adaptiveFontWeight(.semibold)
+    private var accentColor: Color {
+        filter.filterKind == .alert ? .purple : .blue
+    }
 
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.mini)
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(filter.name)
+                        .font(.subheadline)
+                        .adaptiveFontWeight(.semibold)
+                        .lineLimit(2)
+
+                    Label {
+                        Text(filter.filterKind == .alert ? "Alert filter" : "Saved filter")
+                    } icon: {
+                        Circle()
+                            .fill(filter.filterKind == .alert ? Color.purple : Color.blue)
+                            .frame(width: 6, height: 6)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: Theme.Spacing.md)
 
-                if listings.count > 5 {
-                    Button {
-                        onShowAll?()
-                    } label: {
-                        Text("Show all \(listings.count)")
-                            .font(.caption)
+                HStack(spacing: Theme.Spacing.xs) {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.mini)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
+
+                    Text("\(listings.count) matches")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.Spacing.sm)
+                        .padding(.vertical, 5)
+                        .background(Color.secondary.opacity(0.08), in: Capsule())
                 }
             }
 
-            // Listings
             if displayedListings.isEmpty && !isLoading {
-                Text("No matches")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.vertical, Theme.Spacing.sm)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("No current matches")
+                        .font(.subheadline)
+                        .adaptiveFontWeight(.medium)
+                    Text("This filter is active, but nothing currently qualifies.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
+                VStack(spacing: Theme.Spacing.xs) {
                     ForEach(Array(displayedListings.enumerated()), id: \.element.id) { index, listing in
                         ForYouListingCard(
                             listing: listing,
@@ -100,13 +140,25 @@ struct ForYouFilterGroup: View {
 
                         if index < displayedListings.count - 1 {
                             Divider()
-                                .padding(.leading, 40)
+                                .padding(.leading, 44)
                         }
                     }
                 }
             }
+
+            if listings.count > displayedListings.count {
+                Button {
+                    onShowAll?()
+                } label: {
+                    Label("Show all \(listings.count)", systemImage: "arrow.right")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+            }
         }
-        .cardStyle(padding: Theme.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dashboardPanelStyle(tint: accentColor)
     }
 }
 
@@ -119,7 +171,7 @@ private struct ForYouEmptyState: View {
         ContentUnavailableView {
             Label("No Active Filters", systemImage: "line.3.horizontal.decrease.circle")
         } description: {
-            Text("Set up filters to see matching properties here.")
+            Text("Create active filters to turn this dashboard into a real investor command center.")
         } actions: {
             if let onSetUpFilters {
                 Button("Set Up Filters") {
@@ -129,7 +181,8 @@ private struct ForYouEmptyState: View {
                 .controlSize(.small)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .dashboardPanelStyle(tint: .purple)
     }
 }
 
@@ -141,5 +194,5 @@ private struct ForYouEmptyState: View {
         isLoading: false
     )
     .padding()
-    .frame(width: 600)
+    .frame(width: 860)
 }

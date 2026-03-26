@@ -150,6 +150,17 @@ enum Theme {
         static let toolbarChipMaxWidth: CGFloat = 360
         static let toolbarChipRadius: CGFloat = 18
     }
+
+    enum Dashboard {
+        static let contentMaxWidth: CGFloat = 1380
+        static let sectionSpacing: CGFloat = 24
+        static let gridSpacing: CGFloat = 18
+        static let sideColumnWidth: CGFloat = 360
+        static let singleColumnBreakpoint: CGFloat = 1180
+        static let panelRadius: CGFloat = 24
+        static let metricMinWidth: CGFloat = 156
+        static let trackedFilterMinWidth: CGFloat = 300
+    }
 }
 
 // MARK: - Custom Colors
