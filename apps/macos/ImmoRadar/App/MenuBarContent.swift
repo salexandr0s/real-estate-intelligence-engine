@@ -25,7 +25,7 @@ struct MenuBarContent: View {
             appState.navigateTo(.alerts)
             NSApp.activate(ignoringOtherApps: true)
         }
-        .keyboardShortcut("4", modifiers: .command)
+        .keyboardShortcut("5", modifiers: .command)
 
         Divider()
 

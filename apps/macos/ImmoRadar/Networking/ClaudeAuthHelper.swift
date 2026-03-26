@@ -1,7 +1,9 @@
 import Foundation
 import os
 
-/// Reads and refreshes OAuth credentials from the Claude CLI credentials file (~/.claude/.credentials.json).
+/// Reads and refreshes OAuth credentials from Claude Code's storage.
+/// Supports both the legacy JSON file (~/.claude/.credentials.json) and
+/// the newer macOS Keychain entry ("Claude Code-credentials").
 enum ClaudeAuthHelper {
 
     private static let credPath: URL = {
@@ -12,30 +14,40 @@ enum ClaudeAuthHelper {
     /// Claude Code's OAuth client ID (used for token refresh).
     private static let oauthClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     private static let tokenEndpoint = "https://console.anthropic.com/v1/oauth/token"
+    private static let keychainService = "Claude Code-credentials"
 
     // MARK: - Public API
 
-    /// Reads the OAuth access token, refreshing if expired.
+    /// Reads the OAuth access token, refreshing if expired or close to expiry.
     static func loadOAuthToken() -> String? {
         guard let creds = readCredentials() else { return nil }
 
-        // If token is still valid, return it directly
+        // Refresh if expired OR within 5 minutes of expiry.
+        let needsRefresh: Bool
         if let expiresAt = creds.expiresAt {
             let expiryDate = Date(timeIntervalSince1970: expiresAt / 1000.0)
-            if expiryDate > Date() {
-                return creds.accessToken
+            let buffer: TimeInterval = 5 * 60 // 5 minutes
+            needsRefresh = expiryDate.timeIntervalSinceNow < buffer
+        } else {
+            needsRefresh = true
+        }
+
+        if needsRefresh {
+            Log.stream.info("Claude OAuth token expired or near expiry, refreshing...")
+            if let refreshed = refreshTokenSync(refreshToken: creds.refreshToken) {
+                return refreshed
             }
+            Log.stream.warning("Token refresh failed, using existing token")
         }
 
-        // Token expired — try to refresh synchronously
-        Log.stream.info("Claude OAuth token expired, attempting refresh...")
-        if let refreshed = refreshTokenSync(refreshToken: creds.refreshToken) {
-            return refreshed
-        }
-
-        // Refresh failed — return the stale token anyway (API will reject if truly expired)
-        Log.stream.warning("Token refresh failed, using stale token")
         return creds.accessToken
+    }
+
+    /// Force-refresh the token. Call this when the API rejects a seemingly-valid token.
+    static func forceRefresh() -> String? {
+        guard let creds = readCredentials() else { return nil }
+        Log.stream.info("Force-refreshing Claude OAuth token...")
+        return refreshTokenSync(refreshToken: creds.refreshToken)
     }
 
     /// Check if a Claude subscription is available.
@@ -58,30 +70,58 @@ enum ClaudeAuthHelper {
     }
 
     private static func readCredentials() -> Credentials? {
+        // Try Keychain first (newer Claude Code versions), then fall back to JSON file
+        if let creds = readFromKeychain() { return creds }
+        return readFromFile()
+    }
+
+    private static func readFromKeychain() -> Credentials? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+
+        return parseCredentialData(data)
+    }
+
+    private static func readFromFile() -> Credentials? {
         guard FileManager.default.fileExists(atPath: credPath.path) else { return nil }
 
         do {
             let data = try Data(contentsOf: credPath)
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let oauth = json["claudeAiOauth"] as? [String: Any],
-                  let accessToken = oauth["accessToken"] as? String,
-                  let refreshToken = oauth["refreshToken"] as? String else {
-                return nil
-            }
-
-            return Credentials(
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-                expiresAt: oauth["expiresAt"] as? Double,
-                subscriptionType: oauth["subscriptionType"] as? String
-            )
+            return parseCredentialData(data)
         } catch {
-            Log.stream.error("Failed to read Claude credentials: \(error, privacy: .public)")
+            Log.stream.error("Failed to read Claude credentials file: \(error, privacy: .public)")
             return nil
         }
     }
 
-    /// Refresh the OAuth token synchronously and update the credentials file.
+    private static func parseCredentialData(_ data: Data) -> Credentials? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let oauth = json["claudeAiOauth"] as? [String: Any],
+              let accessToken = oauth["accessToken"] as? String,
+              let refreshToken = oauth["refreshToken"] as? String else {
+            return nil
+        }
+
+        return Credentials(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: oauth["expiresAt"] as? Double,
+            subscriptionType: oauth["subscriptionType"] as? String
+        )
+    }
+
+    /// Refresh the OAuth token synchronously and update stored credentials.
     private static func refreshTokenSync(refreshToken: String) -> String? {
         guard let url = URL(string: tokenEndpoint) else { return nil }
 
@@ -116,31 +156,83 @@ enum ClaudeAuthHelper {
 
             newToken = accessToken
 
-            // Update the credentials file with the new token
-            do {
-                var fileData = try Data(contentsOf: credPath)
-                guard var fileJson = try JSONSerialization.jsonObject(with: fileData) as? [String: Any],
-                      var oauth = fileJson["claudeAiOauth"] as? [String: Any] else { return }
-
-                oauth["accessToken"] = accessToken
-                if let expiresIn = json["expires_in"] as? Double {
-                    oauth["expiresAt"] = (Date().timeIntervalSince1970 + expiresIn) * 1000.0
-                }
-                if let newRefresh = json["refresh_token"] as? String {
-                    oauth["refreshToken"] = newRefresh
-                }
-                fileJson["claudeAiOauth"] = oauth
-
-                fileData = try JSONSerialization.data(withJSONObject: fileJson)
-                try fileData.write(to: credPath, options: .atomic)
-                Log.stream.info("Claude OAuth token refreshed and saved")
-            } catch {
-                Log.stream.error("Failed to save refreshed token: \(error, privacy: .public)")
-            }
+            // Update stored credentials
+            updateStoredCredentials(accessToken: accessToken, json: json)
         }
         task.resume()
         semaphore.wait()
 
         return newToken
+    }
+
+    private static func updateStoredCredentials(accessToken: String, json: [String: Any]) {
+        // Try updating Keychain first, then file
+        if updateKeychain(accessToken: accessToken, json: json) { return }
+        updateFile(accessToken: accessToken, json: json)
+    }
+
+    private static func updateKeychain(accessToken: String, json: [String: Any]) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let existingData = result as? Data else { return false }
+
+        guard var fileJson = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any],
+              var oauth = fileJson["claudeAiOauth"] as? [String: Any] else { return false }
+
+        oauth["accessToken"] = accessToken
+        if let expiresIn = json["expires_in"] as? Double {
+            oauth["expiresAt"] = (Date().timeIntervalSince1970 + expiresIn) * 1000.0
+        }
+        if let newRefresh = json["refresh_token"] as? String {
+            oauth["refreshToken"] = newRefresh
+        }
+        fileJson["claudeAiOauth"] = oauth
+
+        guard let updatedData = try? JSONSerialization.data(withJSONObject: fileJson) else { return false }
+
+        let updateQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+        ]
+        let updateAttrs: [String: Any] = [
+            kSecValueData as String: updatedData,
+        ]
+
+        let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
+        if updateStatus == errSecSuccess {
+            Log.stream.info("Claude OAuth token refreshed and saved to Keychain")
+            return true
+        }
+        return false
+    }
+
+    private static func updateFile(accessToken: String, json: [String: Any]) {
+        do {
+            var fileData = try Data(contentsOf: credPath)
+            guard var fileJson = try JSONSerialization.jsonObject(with: fileData) as? [String: Any],
+                  var oauth = fileJson["claudeAiOauth"] as? [String: Any] else { return }
+
+            oauth["accessToken"] = accessToken
+            if let expiresIn = json["expires_in"] as? Double {
+                oauth["expiresAt"] = (Date().timeIntervalSince1970 + expiresIn) * 1000.0
+            }
+            if let newRefresh = json["refresh_token"] as? String {
+                oauth["refreshToken"] = newRefresh
+            }
+            fileJson["claudeAiOauth"] = oauth
+
+            fileData = try JSONSerialization.data(withJSONObject: fileJson)
+            try fileData.write(to: credPath, options: .atomic)
+            Log.stream.info("Claude OAuth token refreshed and saved to file")
+        } catch {
+            Log.stream.error("Failed to save refreshed token: \(error, privacy: .public)")
+        }
     }
 }

@@ -1,108 +1,69 @@
 import SwiftUI
 
-/// Dashboard overview — 4-tier layout grouped by cognitive purpose.
+/// Dashboard — summary metrics + focused investor brief + filter-matched listings.
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
-        GeometryReader { geo in
-            let contentWidth = geo.size.width - Theme.Spacing.lg * 2
-            let gap = Theme.Spacing.md
-            let isNarrow = contentWidth < 700
-            let primaryHeight = max(260, min(340, (geo.size.height - 300) * 0.48))
-            let actionHeight = max(300, min(420, (geo.size.height - 300) * 0.48))
-            let operationalHeight = max(200, min(280, (geo.size.height - 300) * 0.30))
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: gap) {
-                    // Tier 1: Compact summary metrics
-                    SummaryGridView(
-                        cards: viewModel.enhancedSummaryCards(
-                            unreadAlertCount: appState.unreadAlertCount
-                        ),
-                        onCardNavigate: { cardId in
-                            switch cardId {
-                            case "active-listings", "new-this-week", "high-score":
-                                appState.navigateTo(.listings)
-                            case "pipeline":
-                                appState.navigateTo(.sources)
-                            case "active-filters":
-                                appState.navigateTo(.filters)
-                            case "unread-alerts":
-                                appState.navigateTo(.alerts)
-                            default:
-                                break
-                            }
-                        }
-                    )
-
-                    // Tier 2: Primary analytics — 50/50 split
-                    adaptiveRow(isNarrow: isNarrow, spacing: gap) {
-                        DistrictComparisonChart(data: viewModel.districtComparison)
-                            .frame(
-                                width: isNarrow ? nil : (contentWidth - gap) * 0.50,
-                                height: isNarrow ? nil : primaryHeight
-                            )
-                            .frame(maxWidth: isNarrow ? .infinity : nil)
-
-                        DashboardPriceTrendChart(data: viewModel.districtTrends)
-                            .frame(
-                                width: isNarrow ? nil : (contentWidth - gap) * 0.50,
-                                height: isNarrow ? nil : primaryHeight
-                            )
-                            .frame(maxWidth: isNarrow ? .infinity : nil)
-                    }
-
-                    // Tier 3: Actionable intelligence — 55/45 split
-                    adaptiveRow(isNarrow: isNarrow, spacing: gap) {
-                        TopOpportunitiesSection(
-                            listings: viewModel.topOpportunities,
-                            districtComparison: viewModel.districtComparison,
-                            onListingTap: { id in
-                                appState.deepLinkListingId = id
-                                appState.selectedNavItem = .listings
-                            }
-                        )
-                        .frame(
-                            width: isNarrow ? nil : (contentWidth - gap) * 0.55,
-                            height: isNarrow ? nil : actionHeight
-                        )
-                        .frame(maxWidth: isNarrow ? .infinity : nil)
-
-                        MarketHeatGrid(
-                            data: viewModel.temperatureData,
-                            onDistrictTap: { _ in appState.navigateTo(.listings) }
-                        )
-                        .frame(
-                            width: isNarrow ? nil : (contentWidth - gap) * 0.45,
-                            height: isNarrow ? nil : actionHeight
-                        )
-                        .frame(maxWidth: isNarrow ? .infinity : nil)
-                    }
-
-                    // Tier 4: Operational — 50/50 split, subtle cards
-                    adaptiveRow(isNarrow: isNarrow, spacing: gap) {
-                        ScoreDistributionChart(data: viewModel.scoreDistribution)
-                            .frame(
-                                width: isNarrow ? nil : (contentWidth - gap) * 0.50,
-                                height: isNarrow ? nil : operationalHeight
-                            )
-                            .frame(maxWidth: isNarrow ? .infinity : nil)
-
-                        PipelineHealthGrid(
-                            sources: viewModel.sources,
-                            onSourceTap: { _ in appState.navigateTo(.sources) }
-                        )
-                        .frame(
-                            width: isNarrow ? nil : (contentWidth - gap) * 0.50,
-                            height: isNarrow ? nil : operationalHeight
-                        )
-                        .frame(maxWidth: isNarrow ? .infinity : nil)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                if let error = viewModel.errorMessage {
+                    DashboardErrorBanner(message: error) {
+                        Task { await viewModel.refresh(using: appState.apiClient) }
                     }
                 }
-                .padding(Theme.Spacing.lg)
+
+                if let priorityListing = viewModel.priorityListing {
+                    PriorityBriefingCard(
+                        listing: priorityListing,
+                        matchedFilterCount: viewModel.matchedFilterCount,
+                        onOpenListing: {
+                            appState.deepLinkListingId = priorityListing.id
+                            appState.selectedNavItem = .listings
+                        },
+                        onOpenFilters: {
+                            appState.navigateTo(.filters)
+                        }
+                    )
+                }
+
+                SummaryStripView(
+                    cards: viewModel.summaryCards(
+                        unreadAlertCount: appState.unreadAlertCount
+                    ),
+                    onCardNavigate: { cardId in
+                        switch cardId {
+                        case "active-listings", "new-this-week", "high-score":
+                            appState.navigateTo(.listings)
+                        case "active-filters":
+                            appState.navigateTo(.filters)
+                        case "unread-alerts":
+                            appState.navigateTo(.alerts)
+                        default:
+                            break
+                        }
+                    }
+                )
+
+                ForYouSection(
+                    activeFilters: viewModel.activeFilters,
+                    filterListings: viewModel.filterListings,
+                    filterLoadingStates: viewModel.filterLoadingStates,
+                    isLoading: viewModel.isLoading,
+                    onListingTap: { id in
+                        appState.deepLinkListingId = id
+                        appState.selectedNavItem = .listings
+                    },
+                    onNavigateToFilters: {
+                        appState.navigateTo(.filters)
+                    },
+                    onNavigateToListings: {
+                        appState.navigateTo(.listings)
+                    }
+                )
             }
+            .padding(Theme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -112,13 +73,6 @@ struct DashboardView: View {
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                if let date = viewModel.lastRefreshDate {
-                    Text("Updated \(PriceFormatter.relativeDate(date))")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             }
         }
@@ -137,25 +91,69 @@ struct DashboardView: View {
             await viewModel.refresh(using: appState.apiClient)
         }
     }
+}
 
-    // MARK: - Responsive Layout
+private struct PriorityBriefingCard: View {
+    let listing: Listing
+    let matchedFilterCount: Int
+    let onOpenListing: () -> Void
+    let onOpenFilters: () -> Void
 
-    @ViewBuilder
-    private func adaptiveRow<Content: View>(
-        isNarrow: Bool,
-        spacing: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if isNarrow {
-            VStack(spacing: spacing) { content() }
-        } else {
-            HStack(alignment: .top, spacing: spacing) { content() }
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.xl) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Text("Today’s edge")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(listing.title)
+                    .font(.title3)
+                    .adaptiveFontWeight(.semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Highest-priority match across your active filters, surfaced first so your morning scan starts with a concrete opportunity.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: Theme.Spacing.md) {
+                    Label(PriceFormatter.format(eur: listing.listPriceEur), systemImage: "eurosign.circle")
+                    if let district = listing.districtName {
+                        Label(district, systemImage: "mappin")
+                    }
+                    if let area = listing.livingAreaSqm {
+                        Label(PriceFormatter.formatArea(area), systemImage: "ruler")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: Theme.Spacing.sm) {
+                    Button("Open Listing", action: onOpenListing)
+                        .buttonStyle(.borderedProminent)
+                    Button("Review Filters", action: onOpenFilters)
+                        .buttonStyle(.bordered)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: Theme.Spacing.sm) {
+                if let score = listing.currentScore {
+                    ScoreIndicator(score: score, size: .large)
+                }
+                Text("\(matchedFilterCount) filters currently returning matches")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
         }
+        .cardStyle()
     }
 }
 
 #Preview {
     DashboardView()
         .environment(AppState())
-        .frame(width: 1100, height: 800)
+        .frame(width: 900, height: 600)
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Scrollable list of copilot messages with auto-scroll to bottom.
+/// Scrollable list of Copilot research notes with auto-scroll to the latest exchange.
 struct CopilotMessageList: View {
     let messages: [CopilotMessage]
     let isStreaming: Bool
@@ -10,7 +10,7 @@ struct CopilotMessageList: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: Theme.Spacing.lg) {
+                LazyVStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                     ForEach(messages) { message in
                         CopilotMessageBubble(
                             message: message,
@@ -19,8 +19,12 @@ struct CopilotMessageList: View {
                         .id(message.id)
                     }
                 }
-                .padding(Theme.Spacing.xl)
+                .frame(maxWidth: 860, alignment: .leading)
+                .padding(.horizontal, Theme.Spacing.xl)
+                .padding(.vertical, Theme.Spacing.xl)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .background(Color(nsColor: .windowBackgroundColor))
             .onChange(of: messages.last?.id) { _, newID in
                 guard let newID else { return }
                 withAdaptiveAnimation(reduceMotion, .easeOut(duration: 0.2)) {

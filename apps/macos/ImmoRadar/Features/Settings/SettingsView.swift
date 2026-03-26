@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @State private var showSettingsError: Bool = false
 
     var body: some View {
         @Bindable var state = appState
@@ -130,5 +131,17 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .onChange(of: appState.settingsErrorMessage) { _, newValue in
+            showSettingsError = newValue != nil
+        }
+        .alert("Settings Update Failed", isPresented: $showSettingsError) {
+            Button("OK", role: .cancel) {
+                appState.clearSettingsError()
+            }
+        } message: {
+            if let message = appState.settingsErrorMessage {
+                Text(message)
+            }
+        }
     }
 }

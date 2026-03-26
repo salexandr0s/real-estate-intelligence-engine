@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Adaptive grid of enhanced summary statistic cards.
+@available(*, deprecated, message: "Replaced by SummaryStripView")
 struct SummaryGridView: View {
-    let cards: [DashboardViewModel.EnhancedSummaryCard]
+    let cards: [DashboardViewModel.SummaryCard]
     var onCardNavigate: ((String) -> Void)?
 
     var body: some View {

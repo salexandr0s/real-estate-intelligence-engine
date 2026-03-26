@@ -67,9 +67,9 @@ struct CrossSourceComparisonView: View {
         .padding(Theme.Spacing.md)
         .background(Color.blue.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay(
+        .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.md)
                 .stroke(Color.blue.opacity(0.15), lineWidth: 1)
-        )
+        }
     }
 }

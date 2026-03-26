@@ -122,10 +122,10 @@ enum Theme {
     // MARK: - Chart Typography
 
     /// Standard font for chart axis labels — semantic replacement for .system(size: 9).
-    static var chartAxisFont: Font { .caption2 }
+    static var chartAxisFont: Font { .caption }
 
     /// Standard font for chart annotations — semantic replacement for .system(size: 8).monospacedDigit().
-    static var chartAnnotationFont: Font { .caption2.monospacedDigit() }
+    static var chartAnnotationFont: Font { .caption.monospacedDigit() }
 
     // MARK: - Card Style
 

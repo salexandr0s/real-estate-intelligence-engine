@@ -62,12 +62,12 @@ struct MarketHeatGrid: View {
                         .background(point.temperatureColor.opacity(
                             cellOpacity(for: point) + (hoveredDistrictNo == point.districtNo ? 0.08 : 0)
                         ))
-                        .overlay(
-                            hoveredDistrictNo == point.districtNo
-                                ? RoundedRectangle(cornerRadius: 4)
+                        .overlay {
+                            if hoveredDistrictNo == point.districtNo {
+                                RoundedRectangle(cornerRadius: 4)
                                     .strokeBorder(point.temperatureColor.opacity(0.3), lineWidth: 0.5)
-                                : nil
-                        )
+                            }
+                        }
                         .clipShape(.rect(cornerRadius: 4))
                         .onHover { isHovered in
                             hoveredDistrictNo = isHovered ? point.districtNo : nil

@@ -53,17 +53,33 @@ function toAnthropicMessages(messages: ProviderMessage[]): MessageParam[] {
   });
 }
 
+// ── OAuth billing header ─────────────────────────────────────────────────
+// OAuth subscription tokens require a billing header in the system prompt
+// to unlock models beyond Haiku.
+
+const OAUTH_BILLING_HEADER =
+  'x-anthropic-billing-header: cc_version=2.1.81.df2; cc_entrypoint=cli; cch=0f1a3;';
+
 // ── Streaming implementation ─────────────────────────────────────────────
 
 async function* streamAnthropic(
   client: Anthropic,
   model: string,
   params: StreamParams,
+  isOAuth: boolean,
 ): AsyncGenerator<ProviderEvent> {
+  // For OAuth tokens, send system prompt as structured blocks with the billing header
+  const system = isOAuth
+    ? [
+        { type: 'text' as const, text: OAUTH_BILLING_HEADER },
+        { type: 'text' as const, text: params.systemPrompt },
+      ]
+    : params.systemPrompt;
+
   const stream = client.messages.stream({
     model,
     max_tokens: params.maxTokens,
-    system: params.systemPrompt,
+    system,
     messages: toAnthropicMessages(params.messages),
     tools: toAnthropicTools(params.tools),
   });
@@ -149,10 +165,10 @@ export function createAnthropicProvider(apiKey: string, model: string): LLMProvi
 
   return {
     streamChat(params: StreamParams): AsyncGenerator<ProviderEvent> {
-      return streamAnthropic(client, model, params);
+      return streamAnthropic(client, model, params, isOAuth);
     },
     continueWithToolResults(params: StreamParams): AsyncGenerator<ProviderEvent> {
-      return streamAnthropic(client, model, params);
+      return streamAnthropic(client, model, params, isOAuth);
     },
   };
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Row showing a single source's name, last run time, and health badge.
+@available(*, deprecated, message: "Removed from dashboard — use Sources view")
 struct SourceHealthRow: View {
     let source: Source
 

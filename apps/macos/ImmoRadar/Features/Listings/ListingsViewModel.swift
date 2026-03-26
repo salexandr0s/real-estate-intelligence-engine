@@ -10,9 +10,13 @@ final class ListingsViewModel {
 
     // MARK: - State
 
-    var listings: [Listing] = []
+    var listings: [Listing] = [] {
+        didSet { rebuildFilteredListings() }
+    }
     var selectedListingID: Int?
-    var searchText: String = ""
+    var searchText: String = "" {
+        didSet { rebuildFilteredListings() }
+    }
     var isLoading: Bool = false
     var isLoadingMore: Bool = false
     var hasLoaded: Bool = false
@@ -21,12 +25,24 @@ final class ListingsViewModel {
 
     // MARK: - Filters
 
-    var selectedDistrict: Int? = nil
-    var selectedPropertyType: PropertyType? = nil
-    var selectedOperationType: OperationType? = nil
-    var minPrice: String = ""
-    var maxPrice: String = ""
-    var minScore: String = ""
+    var selectedDistrict: Int? = nil {
+        didSet { rebuildFilteredListings() }
+    }
+    var selectedPropertyType: PropertyType? = nil {
+        didSet { rebuildFilteredListings() }
+    }
+    var selectedOperationType: OperationType? = nil {
+        didSet { rebuildFilteredListings() }
+    }
+    var minPrice: String = "" {
+        didSet { rebuildFilteredListings() }
+    }
+    var maxPrice: String = "" {
+        didSet { rebuildFilteredListings() }
+    }
+    var minScore: String = "" {
+        didSet { rebuildFilteredListings() }
+    }
 
     // MARK: - Alert Match Tracking
 
@@ -42,77 +58,23 @@ final class ListingsViewModel {
     // MARK: - Spatial Selection
 
     var isDrawingSelection: Bool = false
-    var selectionRegion: MKCoordinateRegion?
+    var selectionRegion: MKCoordinateRegion? {
+        didSet { rebuildFilteredListings() }
+    }
 
     // MARK: - Sorting
 
     var sortOrder: [KeyPathComparator<Listing>] = [
         KeyPathComparator(\.sortableScore, order: .reverse)
-    ]
+    ] {
+        didSet { rebuildFilteredListings() }
+    }
 
     // MARK: - Computed
 
     var hasMore: Bool { nextCursor != nil }
 
-    var filteredListings: [Listing] {
-        var result = listings
-
-        // Text search
-        if !searchText.isEmpty {
-            result = result.filter { listing in
-                listing.title.localizedStandardContains(searchText)
-                || (listing.districtName ?? "").localizedStandardContains(searchText)
-                || (listing.postalCode ?? "").localizedStandardContains(searchText)
-                || listing.city.localizedStandardContains(searchText)
-            }
-        }
-
-        // District filter
-        if let district = selectedDistrict {
-            result = result.filter { $0.districtNo == district }
-        }
-
-        // Property type filter
-        if let propType = selectedPropertyType {
-            result = result.filter { $0.propertyType == propType }
-        }
-
-        // Operation type filter
-        if let opType = selectedOperationType {
-            result = result.filter { $0.operationType == opType }
-        }
-
-        // Price range
-        if let min = Int(minPrice) {
-            result = result.filter { $0.listPriceEur >= min }
-        }
-        if let max = Int(maxPrice) {
-            result = result.filter { $0.listPriceEur <= max }
-        }
-
-        // Min score
-        if let score = Double(minScore) {
-            result = result.filter { ($0.currentScore ?? 0) >= score }
-        }
-
-        // Spatial selection (draw-to-search)
-        if let region = selectionRegion {
-            let latMin = region.center.latitude - region.span.latitudeDelta / 2
-            let latMax = region.center.latitude + region.span.latitudeDelta / 2
-            let lonMin = region.center.longitude - region.span.longitudeDelta / 2
-            let lonMax = region.center.longitude + region.span.longitudeDelta / 2
-            result = result.filter { listing in
-                guard let c = listing.coordinate else { return false }
-                return c.latitude >= latMin && c.latitude <= latMax
-                    && c.longitude >= lonMin && c.longitude <= lonMax
-            }
-        }
-
-        // Apply sort
-        result.sort(using: sortOrder)
-
-        return result
-    }
+    var filteredListings: [Listing] = []
 
     var selectedListing: Listing? {
         guard let id = selectedListingID else { return nil }
@@ -197,9 +159,11 @@ final class ListingsViewModel {
         do {
             let alerts = try await client.fetchAlerts(query: AlertQuery())
             alertedListingIds = Set(alerts.compactMap(\.listingId))
-            for index in listings.indices {
-                listings[index].hasAlertMatch = alertedListingIds.contains(listings[index].id)
+            var updatedListings = listings
+            for index in updatedListings.indices {
+                updatedListings[index].hasAlertMatch = alertedListingIds.contains(updatedListings[index].id)
             }
+            listings = updatedListings
         } catch {
             // Non-critical: badges simply won't show
         }
@@ -256,5 +220,61 @@ final class ListingsViewModel {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func rebuildFilteredListings() {
+        filteredListings = applyFilters(to: listings)
+    }
+
+    private func applyFilters(to sourceListings: [Listing]) -> [Listing] {
+        var result = sourceListings
+
+        if !searchText.isEmpty {
+            result = result.filter { listing in
+                listing.title.localizedStandardContains(searchText)
+                || (listing.districtName ?? "").localizedStandardContains(searchText)
+                || (listing.postalCode ?? "").localizedStandardContains(searchText)
+                || listing.city.localizedStandardContains(searchText)
+            }
+        }
+
+        if let district = selectedDistrict {
+            result = result.filter { $0.districtNo == district }
+        }
+
+        if let propType = selectedPropertyType {
+            result = result.filter { $0.propertyType == propType }
+        }
+
+        if let opType = selectedOperationType {
+            result = result.filter { $0.operationType == opType }
+        }
+
+        if let min = Int(minPrice) {
+            result = result.filter { $0.listPriceEur >= min }
+        }
+
+        if let max = Int(maxPrice) {
+            result = result.filter { $0.listPriceEur <= max }
+        }
+
+        if let score = Double(minScore) {
+            result = result.filter { ($0.currentScore ?? 0) >= score }
+        }
+
+        if let region = selectionRegion {
+            let latMin = region.center.latitude - region.span.latitudeDelta / 2
+            let latMax = region.center.latitude + region.span.latitudeDelta / 2
+            let lonMin = region.center.longitude - region.span.longitudeDelta / 2
+            let lonMax = region.center.longitude + region.span.longitudeDelta / 2
+            result = result.filter { listing in
+                guard let c = listing.coordinate else { return false }
+                return c.latitude >= latMin && c.latitude <= latMax
+                    && c.longitude >= lonMin && c.longitude <= lonMax
+            }
+        }
+
+        result.sort(using: sortOrder)
+        return result
     }
 }

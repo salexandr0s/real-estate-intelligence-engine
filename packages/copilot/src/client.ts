@@ -233,18 +233,39 @@ export async function* streamCopilotChat(
       ];
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
-      logger.error('Copilot stream error', {
-        errorClass: err instanceof Error ? err.name : 'Unknown',
-        message: errMsg,
-      });
-      // Sanitize error for client — don't leak API keys or internal details
+      const errName = err instanceof Error ? err.name : 'Unknown';
+      logger.error('Copilot stream error', { errorClass: errName, message: errMsg });
+
+      const lower = errMsg.toLowerCase();
       const isAuthError =
-        errMsg.toLowerCase().includes('api key') ||
-        errMsg.toLowerCase().includes('auth') ||
-        errMsg.toLowerCase().includes('unauthorized');
-      const clientMessage = isAuthError
-        ? 'Authentication failed with the AI provider. Please check your API key in Settings.'
-        : 'An error occurred while processing your request. Please try again.';
+        lower.includes('api key') ||
+        lower.includes('auth') ||
+        lower.includes('unauthorized') ||
+        lower.includes('401');
+      // Stale OAuth tokens produce an opaque invalid_request_error with a generic "error" message.
+      // Detect this specifically to surface a clear re-auth message instead of the raw API error.
+      const isStaleOAuth =
+        lower.includes('invalid_request_error') &&
+        (lower.includes('"message":"error"') ||
+          lower.includes("'message':'error'") ||
+          /\bmessage.*:\s*"?error"?\s*[,}]/i.test(errMsg));
+      const isRateLimit = lower.includes('rate') || lower.includes('429');
+      const isOverloaded = lower.includes('overloaded') || lower.includes('529');
+
+      let clientMessage: string;
+      if (isStaleOAuth) {
+        clientMessage =
+          'OAuth token rejected. Your Claude subscription token may be stale — try running "claude auth logout && claude auth login" in Terminal, then restart the app.';
+      } else if (isAuthError) {
+        clientMessage =
+          'Authentication failed with the AI provider. Please check your API key in Settings.';
+      } else if (isRateLimit) {
+        clientMessage = 'Rate limited by the AI provider. Please wait a moment and try again.';
+      } else if (isOverloaded) {
+        clientMessage = 'The AI provider is currently overloaded. Please try again shortly.';
+      } else {
+        clientMessage = `${errName}: ${errMsg.replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]')}`;
+      }
       yield { type: 'error', message: clientMessage };
       return;
     }

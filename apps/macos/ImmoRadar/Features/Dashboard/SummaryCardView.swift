@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Compact summary metric — icon, value, label, and optional delta in a tight card.
+@available(*, deprecated, message: "Replaced by SummaryStripView")
 struct SummaryCardView: View {
-    let card: DashboardViewModel.EnhancedSummaryCard
+    let card: DashboardViewModel.SummaryCard
     var onNavigate: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -36,7 +37,7 @@ struct SummaryCardView: View {
 
             Spacer(minLength: 0)
 
-            SparklineView(data: card.sparklineData, color: card.color)
+            Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
         .padding(.horizontal, Theme.Spacing.md)

@@ -85,10 +85,10 @@ private struct TemperatureCard: View {
         .padding(Theme.Spacing.md)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay(
+        .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.md)
                 .stroke(point.temperatureColor.opacity(0.3), lineWidth: 1)
-        )
+        }
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
     }
 }

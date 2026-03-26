@@ -243,14 +243,14 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        has_balcony, has_terrace, has_garden, has_elevator,
        parking_available, is_furnished,
        normalized_payload, completeness_score, content_fingerprint,
-       normalization_version,
+       cross_source_fingerprint, normalization_version,
        first_seen_at, last_seen_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
        $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
        $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
-       $42, $43, $44, $45, $46, $47, $48, $49, $50,
+       $42, $43, $44, $45, $46, $47, $48, $49, $50, $51,
        NOW(), NOW()
      )
      ON CONFLICT (source_id, source_listing_key) DO UPDATE SET
@@ -300,6 +300,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        normalized_payload = EXCLUDED.normalized_payload,
        completeness_score = EXCLUDED.completeness_score,
        content_fingerprint = EXCLUDED.content_fingerprint,
+       cross_source_fingerprint = COALESCE(EXCLUDED.cross_source_fingerprint, listings.cross_source_fingerprint),
        normalization_version = EXCLUDED.normalization_version,
        last_seen_at = NOW(),
        last_price_change_at = CASE
@@ -368,6 +369,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
       JSON.stringify(input.normalizedPayload),
       input.completenessScore,
       input.contentFingerprint,
+      input.crossSourceFingerprint ?? null,
       input.normalizationVersion,
     ],
   );

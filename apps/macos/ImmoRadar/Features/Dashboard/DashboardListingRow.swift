@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Compact listing row used on the dashboard for recent high-score listings.
+@available(*, deprecated, message: "Replaced by ForYouListingCard")
 struct DashboardListingRow: View {
     let listing: Listing
 

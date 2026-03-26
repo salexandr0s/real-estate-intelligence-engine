@@ -7,7 +7,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: Bindable(appState).selectedNavItem) {
             Section("Workspace") {
-                ForEach([NavigationItem.dashboard, .listings, .filters, .copilot]) { item in
+                ForEach([NavigationItem.dashboard, .listings, .watchlist, .filters, .copilot]) { item in
                     SidebarRow(item: item, unreadAlertCount: appState.unreadAlertCount)
                 }
             }
@@ -26,6 +26,6 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom) {
             ConnectionStatusBar()
         }
-        .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 240)
+        .navigationSplitViewColumnWidth(min: 170, ideal: 210, max: 250)
     }
 }

@@ -7,6 +7,8 @@ struct WatchlistView: View {
     @State private var viewModel = WatchlistViewModel()
     @State private var searchText = ""
     @State private var selectedItemID: Int?
+    @State private var exportError: String?
+    @State private var showExportError: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,12 +33,9 @@ struct WatchlistView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(viewModel.savedListings.filter { item in
-                    searchText.isEmpty
-                        || item.listing.title.localizedStandardContains(searchText)
-                        || (item.listing.districtName ?? "").localizedStandardContains(searchText)
-                        || (item.notes ?? "").localizedStandardContains(searchText)
-                }, selection: $selectedItemID) { item in
+                let filteredItems = viewModel.filteredSavedListings(matching: searchText)
+
+                List(filteredItems, selection: $selectedItemID) { item in
                     WatchlistRow(item: item) {
                         Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
                     }
@@ -87,6 +86,14 @@ struct WatchlistView: View {
         .task {
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: exportError) { _, newValue in
+            showExportError = newValue != nil
+        }
+        .alert("Export Failed", isPresented: $showExportError) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            if let msg = exportError { Text(msg) }
+        }
     }
 
     private func exportToFile(_ data: Data) {
@@ -95,7 +102,11 @@ struct WatchlistView: View {
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.begin { result in
             if result == .OK, let url = panel.url {
-                try? data.write(to: url)
+                do {
+                    try data.write(to: url)
+                } catch {
+                    exportError = error.localizedDescription
+                }
             }
         }
     }

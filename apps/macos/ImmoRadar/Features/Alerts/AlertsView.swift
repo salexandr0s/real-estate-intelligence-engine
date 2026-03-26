@@ -67,6 +67,13 @@ struct AlertsView: View {
                     Label("Dismiss All", systemImage: "xmark.circle")
                 }
                 .disabled(viewModel.alerts.isEmpty)
+                .confirmationDialog("Dismiss All Alerts", isPresented: $showDismissConfirmation) {
+                    Button("Dismiss All", role: .destructive) {
+                        Task { await viewModel.dismissAll(using: appState.apiClient) }
+                    }
+                } message: {
+                    Text("This will dismiss all alerts. This action cannot be undone.")
+                }
             }
             ToolbarItem(id: "inspector", placement: .automatic) {
                 Button {
@@ -106,13 +113,6 @@ struct AlertsView: View {
                let alert = viewModel.alerts.first(where: { $0.id == id }) {
                 Task { await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager) }
             }
-        }
-        .confirmationDialog("Dismiss All Alerts", isPresented: $showDismissConfirmation) {
-            Button("Dismiss All", role: .destructive) {
-                Task { await viewModel.dismissAll(using: appState.apiClient) }
-            }
-        } message: {
-            Text("This will dismiss all alerts. This action cannot be undone.")
         }
     }
 }

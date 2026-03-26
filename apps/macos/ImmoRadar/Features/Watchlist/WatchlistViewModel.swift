@@ -8,6 +8,16 @@ final class WatchlistViewModel {
     var errorMessage: String?
     private var nextCursor: String?
 
+    func filteredSavedListings(matching searchText: String) -> [SavedListingItem] {
+        guard !searchText.isEmpty else { return savedListings }
+
+        return savedListings.filter { item in
+            item.listing.title.localizedStandardContains(searchText)
+            || (item.listing.districtName ?? "").localizedStandardContains(searchText)
+            || (item.notes ?? "").localizedStandardContains(searchText)
+        }
+    }
+
     func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil

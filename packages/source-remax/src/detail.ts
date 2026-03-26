@@ -54,9 +54,8 @@ export function parseDetailPage(
   // Extract ID from URL query param `id=NNNNN`
   const remaxId = extractIdFromUrl(url) ?? '';
 
-  if (!product && !dataLayer) {
-    return buildFailedCapture(url, sourceCode, parserVersion, remaxId);
-  }
+  // Don't bail — HTML fallbacks (H1, factsheet table) may still provide data
+  // even when JSON-LD and dataLayer are absent.
 
   // -- JSON-LD Product data --------------------------------------------------
   const offer = product?.offers?.[0] ?? null;
@@ -178,50 +177,6 @@ export function parseDetailPage(
     payload,
     parserVersion,
     extractionStatus: payload.titleRaw ? 'captured' : 'parse_failed',
-  };
-}
-
-function buildFailedCapture(
-  url: string,
-  sourceCode: string,
-  parserVersion: number,
-  remaxId: string,
-): DetailCapture<RemaxDetailDTO> {
-  return {
-    sourceCode,
-    sourceListingKeyCandidate: remaxId || (extractIdFromUrl(url) ?? ''),
-    externalId: remaxId || extractIdFromUrl(url),
-    canonicalUrl: url.split('?')[0] ?? url,
-    detailUrl: url,
-    extractedAt: new Date().toISOString(),
-    payload: {
-      remaxId: remaxId || (extractIdFromUrl(url) ?? ''),
-      immoId: null,
-      titleRaw: null,
-      descriptionRaw: null,
-      priceRaw: null,
-      livingAreaRaw: null,
-      usableAreaRaw: null,
-      roomsRaw: null,
-      addressRaw: null,
-      postalCodeRaw: null,
-      districtRaw: null,
-      cityRaw: null,
-      propertyTypeRaw: null,
-      operationTypeRaw: null,
-      statusRaw: 'unknown',
-      attributesRaw: {},
-      mediaRaw: [],
-      images: [],
-      contactName: null,
-      agentCompany: null,
-      agentPhone: null,
-      agentEmail: null,
-      commissionRaw: null,
-      features: [],
-    },
-    parserVersion,
-    extractionStatus: 'parse_failed',
   };
 }
 
@@ -449,10 +404,11 @@ function parseCommission(html: string): string | null {
   return pMatch?.[1] ? decodeEntities(pMatch[1].trim()) : null;
 }
 
-/** Extract <h1> text */
+/** Extract <h1> text (handles attributes on the tag) */
 function extractH1(html: string): string | null {
-  const match = html.match(/<h1>([\s\S]*?)<\/h1>/);
-  return match?.[1] ? decodeEntities(match[1].trim()) : null;
+  const match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
+  if (!match?.[1]) return null;
+  return decodeEntities(match[1].replace(/<[^>]+>/g, '').trim()) || null;
 }
 
 /** Parse gallery images from HTML */

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// View model for the copilot chat feature.
+/// View model for the copilot research workspace.
 @MainActor @Observable
 final class CopilotViewModel {
 
@@ -11,6 +11,14 @@ final class CopilotViewModel {
     var inputText: String = ""
     var isStreaming: Bool = false
     var errorMessage: String?
+
+    // MARK: - Conversation History
+
+    var conversations: [CopilotConversationSummary] = []
+    var activeConversationID: UUID?
+    var activeConversationTitle: String?
+    private var activeConversationCreatedAt: Date?
+    private var hasLoadedPersistedState = false
 
     // MARK: - Streaming State
 
@@ -22,6 +30,7 @@ final class CopilotViewModel {
     // MARK: - Services
 
     private let streamService = CopilotStreamService()
+    private let conversationStore = CopilotConversationStore()
 
     // MARK: - Inspector
 
@@ -41,44 +50,121 @@ final class CopilotViewModel {
         guard messages.isEmpty else { return [] }
         return [
             SuggestedQuery(
-                label: "Top deals this week",
-                query: "Show me the highest scoring listings from this week"
+                label: "Morning brief",
+                query: "Summarize the most interesting listings and score changes from this week",
+                subtitle: "Get the fastest overview of what deserves attention right now.",
+                icon: "sun.max"
             ),
             SuggestedQuery(
-                label: "Under \u{20AC}300k, 50+ sqm",
-                query: "Find apartments under 300k with at least 50sqm"
+                label: "Targeted search",
+                query: "Find apartments under 300k with at least 50sqm and strong scores",
+                subtitle: "Use explicit investment criteria instead of open-ended chat.",
+                icon: "line.3.horizontal.decrease.circle"
             ),
             SuggestedQuery(
-                label: "Price drops today",
-                query: "What listings had price drops recently?"
+                label: "District comparison",
+                query: "Compare the real estate market in district 2 vs district 10",
+                subtitle: "Turn market questions into structured side-by-side analysis.",
+                icon: "square.split.2x1"
             ),
             SuggestedQuery(
-                label: "Compare district 2 vs 10",
-                query: "Compare the real estate market in district 2 vs district 10"
+                label: "Recent price drops",
+                query: "Show me listings with recent price drops and explain which are worth a closer look",
+                subtitle: "Surface changes worth acting on, not just raw events.",
+                icon: "arrow.down.circle"
             ),
         ]
     }
 
-    // MARK: - Actions
+    // MARK: - Lifecycle
+
+    func loadSavedStateIfNeeded() async {
+        guard !hasLoadedPersistedState else { return }
+        hasLoadedPersistedState = true
+
+        let storedConversations = await conversationStore.loadAll()
+        conversations = storedConversations.map(\.summary)
+
+        if let latest = storedConversations.first {
+            activateConversation(latest)
+        }
+    }
+
+    // MARK: - Conversation Actions
+
+    func beginNewConversation() {
+        resetEphemeralState()
+        activeConversationID = nil
+        activeConversationTitle = nil
+        activeConversationCreatedAt = nil
+        messages = []
+        inputText = ""
+        errorMessage = nil
+    }
+
+    func clearConversation() {
+        beginNewConversation()
+    }
+
+    func selectConversation(id: UUID) async {
+        guard activeConversationID != id else { return }
+        guard let conversation = await conversationStore.loadConversation(id: id) else { return }
+        activateConversation(conversation)
+    }
+
+    func renameActiveConversation(to newTitle: String) async {
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let id = activeConversationID, !trimmed.isEmpty else { return }
+        activeConversationTitle = trimmed
+        await persistCurrentConversation(forceTitle: trimmed)
+        await refreshConversationSummaries(selecting: id)
+    }
+
+    func deleteConversation(id: UUID) async {
+        await conversationStore.deleteConversation(id: id)
+
+        let storedConversations = await conversationStore.loadAll()
+        conversations = storedConversations.map(\.summary)
+
+        if activeConversationID == id {
+            if let latest = storedConversations.first {
+                activateConversation(latest)
+            } else {
+                beginNewConversation()
+            }
+        }
+    }
+
+    // MARK: - Chat Actions
 
     func send(using appState: AppState) async {
+        await loadSavedStateIfNeeded()
+
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isStreaming else { return }
+
+        if activeConversationID == nil {
+            activeConversationID = UUID()
+            activeConversationCreatedAt = .now
+            activeConversationTitle = Self.defaultConversationTitle(from: text)
+        }
 
         inputText = ""
         errorMessage = nil
 
-        // Add user message
         let userMessage = CopilotMessage(
             role: .user,
             contentBlocks: [ContentBlock(.text(text))]
         )
         messages.append(userMessage)
+        await persistCurrentConversation()
+        if let id = activeConversationID {
+            await refreshConversationSummaries(selecting: id)
+        }
 
-        // Add assistant placeholder
         let assistantMessage = CopilotMessage(
             role: .assistant,
-            contentBlocks: [ContentBlock(.loading("Thinking..."))],
+            contentBlocks: [ContentBlock(.loading("Working through your request…"))],
             isStreaming: true
         )
         messages.append(assistantMessage)
@@ -88,7 +174,6 @@ final class CopilotViewModel {
         streamingTextBlockId = nil
         currentBlocks = []
 
-        // Build serialized messages for the API
         let serializedMessages = messages.dropLast().map { msg -> [String: Any] in
             let content: String
             if let firstText = msg.contentBlocks.compactMap({ block -> String? in
@@ -133,7 +218,20 @@ final class CopilotViewModel {
                         break
                     }
                     if case .error(let message) = event {
-                        errorMessage = message
+                        let lower = message.lowercased()
+                        if lower.contains("oauth token") || lower.contains("token rejected") {
+                            let refreshed = await Task.detached(priority: .userInitiated) {
+                                ClaudeAuthHelper.forceRefresh() != nil
+                            }.value
+                            if refreshed {
+                                Log.stream.info("OAuth token force-refreshed after rejection, user should retry")
+                                errorMessage = "OAuth token was stale — refreshed automatically. Please try again."
+                            } else {
+                                errorMessage = message
+                            }
+                        } else {
+                            errorMessage = message
+                        }
                         finalizeStream()
                         didFinalize = true
                         break
@@ -141,7 +239,7 @@ final class CopilotViewModel {
                     handleStreamEvent(event)
                 }
             } catch is CancellationError {
-                // User cancelled — expected
+                // Expected when user starts a new chat or switches conversations.
             } catch {
                 errorMessage = error.localizedDescription
                 Log.stream.error("Copilot stream error: \(error, privacy: .public)")
@@ -157,23 +255,6 @@ final class CopilotViewModel {
         streamTask?.cancel()
         streamTask = nil
         finalizeStream()
-    }
-
-    func clearConversation() {
-        messages = []
-        inputText = ""
-        isStreaming = false
-        errorMessage = nil
-        streamingText = ""
-        streamingTextBlockId = nil
-        currentBlocks = []
-        streamTask?.cancel()
-        streamTask = nil
-        inspectorTask?.cancel()
-        inspectorTask = nil
-        inspectedListing = nil
-        inspectorError = nil
-        isLoadingInspector = false
     }
 
     func selectListing(id: Int, using appState: AppState) {
@@ -223,7 +304,7 @@ final class CopilotViewModel {
             updateAssistantMessage(at: lastIndex)
 
         case .done, .error:
-            break // handled in send() loop
+            break
         }
     }
 
@@ -231,7 +312,6 @@ final class CopilotViewModel {
         var blocks: [ContentBlock] = []
 
         if !streamingText.isEmpty {
-            // Reuse the same block ID for the streaming text to avoid SwiftUI churn
             let textBlock: ContentBlock
             if let existingId = streamingTextBlockId {
                 textBlock = ContentBlock(id: existingId, content: .text(streamingText))
@@ -245,7 +325,7 @@ final class CopilotViewModel {
         blocks.append(contentsOf: currentBlocks)
 
         if blocks.isEmpty {
-            blocks.append(ContentBlock(.loading("Thinking...")))
+            blocks.append(ContentBlock(.loading("Working through your request…")))
         }
 
         messages[index].contentBlocks = blocks
@@ -273,30 +353,189 @@ final class CopilotViewModel {
                 messages[lastIndex].contentBlocks = [ContentBlock(.text("No response received."))]
             }
         }
+
+        Task {
+            await persistCurrentConversation()
+            if let id = activeConversationID {
+                await refreshConversationSummaries(selecting: id)
+            }
+        }
+    }
+
+    // MARK: - Persistence
+
+    private func activateConversation(_ conversation: CopilotConversation) {
+        resetEphemeralState()
+        activeConversationID = conversation.id
+        activeConversationTitle = conversation.title
+        activeConversationCreatedAt = conversation.createdAt
+        messages = conversation.messages
+        inputText = ""
+        errorMessage = nil
+    }
+
+    private func persistCurrentConversation(forceTitle: String? = nil) async {
+        guard let conversation = makeConversationSnapshot(forceTitle: forceTitle) else { return }
+        await conversationStore.upsertConversation(conversation)
+    }
+
+    private func refreshConversationSummaries(selecting selectedID: UUID?) async {
+        let storedConversations = await conversationStore.loadAll()
+        conversations = storedConversations.map(\.summary)
+
+        if let selectedID,
+           let selected = storedConversations.first(where: { $0.id == selectedID }) {
+            activeConversationTitle = selected.title
+            activeConversationCreatedAt = selected.createdAt
+        }
+    }
+
+    private func makeConversationSnapshot(forceTitle: String? = nil) -> CopilotConversation? {
+        guard let id = activeConversationID else { return nil }
+
+        let cleanedMessages = sanitize(messages)
+        guard !cleanedMessages.isEmpty else { return nil }
+
+        let title = (forceTitle ?? activeConversationTitle ?? Self.defaultConversationTitle(from: cleanedMessages))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return CopilotConversation(
+            id: id,
+            title: title.isEmpty ? "Untitled conversation" : title,
+            createdAt: activeConversationCreatedAt ?? cleanedMessages.first?.timestamp ?? .now,
+            updatedAt: .now,
+            messages: cleanedMessages
+        )
+    }
+
+    private func sanitize(_ sourceMessages: [CopilotMessage]) -> [CopilotMessage] {
+        sourceMessages.compactMap { message in
+            let blocks = message.contentBlocks.filter { block in
+                if case .loading = block.content { return false }
+                return true
+            }
+
+            guard !blocks.isEmpty else { return nil }
+            return CopilotMessage(
+                id: message.id,
+                role: message.role,
+                contentBlocks: blocks,
+                timestamp: message.timestamp,
+                isStreaming: false
+            )
+        }
+    }
+
+    private func resetEphemeralState() {
+        streamTask?.cancel()
+        streamTask = nil
+        inspectorTask?.cancel()
+        inspectorTask = nil
+        inspectedListing = nil
+        inspectorError = nil
+        isLoadingInspector = false
+        isStreaming = false
+        streamingText = ""
+        streamingTextBlockId = nil
+        currentBlocks = []
     }
 
     // MARK: - Helpers
 
+    private static func defaultConversationTitle(from prompt: String) -> String {
+        let singleLine = prompt
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(singleLine.prefix(48)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func defaultConversationTitle(from messages: [CopilotMessage]) -> String {
+        let firstUserText = messages.first(where: { $0.role == .user })?.contentBlocks.compactMap { block -> String? in
+            if case .text(let value) = block.content { return value }
+            return nil
+        }.first
+
+        return defaultConversationTitle(from: firstUserText ?? "Untitled conversation")
+    }
+
     private static func toolDisplayName(_ name: String) -> String {
         switch name {
         case "search_listings":
-            return "Searching listings..."
+            return "Searching listings…"
         case "get_listing_detail":
-            return "Loading listing details..."
+            return "Loading listing details…"
         case "get_score_explanation":
-            return "Analyzing score..."
+            return "Analyzing score…"
         case "compare_listings":
-            return "Comparing listings..."
+            return "Comparing listings…"
         case "get_price_history":
-            return "Loading price history..."
+            return "Loading price history…"
         case "get_market_stats":
-            return "Fetching market data..."
+            return "Fetching market data…"
         case "get_nearby_pois":
-            return "Checking nearby amenities..."
+            return "Checking nearby amenities…"
         case "get_cross_source_cluster":
-            return "Finding cross-source matches..."
+            return "Finding cross-source matches…"
         default:
-            return "Working..."
+            return "Working…"
+        }
+    }
+}
+
+// MARK: - Conversation Store
+
+actor CopilotConversationStore {
+    private let fileManager = FileManager.default
+
+    private var storeURL: URL {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = appSupport
+            .appendingPathComponent("ImmoRadar", isDirectory: true)
+            .appendingPathComponent("Copilot", isDirectory: true)
+        if !fileManager.fileExists(atPath: directory.path) {
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        return directory.appendingPathComponent("conversations.json")
+    }
+
+    func loadAll() -> [CopilotConversation] {
+        guard let data = try? Data(contentsOf: storeURL) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        guard let conversations = try? decoder.decode([CopilotConversation].self, from: data) else {
+            Log.stream.error("Failed to decode persisted copilot conversations")
+            return []
+        }
+
+        return conversations.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    func loadConversation(id: UUID) -> CopilotConversation? {
+        loadAll().first(where: { $0.id == id })
+    }
+
+    func upsertConversation(_ conversation: CopilotConversation) {
+        var conversations = loadAll().filter { $0.id != conversation.id }
+        conversations.append(conversation)
+        saveAll(conversations.sorted { $0.updatedAt > $1.updatedAt })
+    }
+
+    func deleteConversation(id: UUID) {
+        let filtered = loadAll().filter { $0.id != id }
+        saveAll(filtered)
+    }
+
+    private func saveAll(_ conversations: [CopilotConversation]) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+
+        do {
+            let data = try encoder.encode(conversations)
+            try data.write(to: storeURL, options: .atomic)
+        } catch {
+            Log.stream.error("Failed to persist copilot conversations: \(error, privacy: .public)")
         }
     }
 }

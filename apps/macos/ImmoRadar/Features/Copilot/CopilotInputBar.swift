@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Chat input bar styled as a floating rounded card — ChatGPT-style.
+/// Workspace composer for Copilot prompts.
 struct CopilotInputBar: View {
     @Binding var text: String
     let isStreaming: Bool
@@ -10,11 +10,11 @@ struct CopilotInputBar: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: Theme.Spacing.md) {
-            TextField("Ask anything", text: $text, axis: .vertical)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            TextField("Search listings, compare markets, or explain a score change", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.body)
-                .lineLimit(1...5)
+                .lineLimit(2...6)
                 .focused($isFocused)
                 .onSubmit {
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -22,39 +22,43 @@ struct CopilotInputBar: View {
                     }
                 }
 
-            actionButton
+            HStack {
+                Text("Saved locally. Rendered evidence stays with the session.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+
+                actionButton
+            }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .adaptiveMaterial(.thickMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.xl))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.xl)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.md)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
         .onAppear { isFocused = true }
     }
 
     @ViewBuilder
     private var actionButton: some View {
         if isStreaming {
-            Button("Stop generating", systemImage: "stop.circle.fill", action: onStop)
-                .labelStyle(.iconOnly)
-                .font(.system(size: 24, weight: .medium))
+            Button("Stop", systemImage: "stop.circle.fill", action: onStop)
+                .buttonStyle(.borderless)
                 .foregroundStyle(.red)
-                .buttonStyle(.plain)
                 .help("Stop generating")
         } else {
-            Button("Send message", systemImage: "arrow.up.circle.fill", action: onSend)
-                .labelStyle(.iconOnly)
-                .font(.system(size: 24, weight: .medium))
+            Button("Analyze", systemImage: "arrow.up.circle.fill", action: onSend)
+                .buttonStyle(.borderless)
                 .foregroundStyle(
                     text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         ? Color.secondary.opacity(0.4) : Color.accentColor
                 )
-                .buttonStyle(.plain)
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .help("Send message (Return)")
+                .help("Send prompt (Return)")
         }
     }
 }

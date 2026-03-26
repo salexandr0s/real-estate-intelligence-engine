@@ -70,7 +70,7 @@ struct ScoreIndicator: View {
 
             if size == .large {
                 Text(Theme.scoreLabel(for: score))
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }

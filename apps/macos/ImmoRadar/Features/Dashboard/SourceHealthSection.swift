@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Source health overview card with internal scrolling.
+@available(*, deprecated, message: "Removed from dashboard — use Sources view")
 struct SourceHealthSection: View {
     let sources: [Source]
     let healthyCount: Int

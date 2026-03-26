@@ -178,6 +178,7 @@ private struct SourceDetailCard: View {
     @State private var scrapeRuns: [ScrapeRun] = []
     @State private var isLoadingRuns: Bool = false
     @State private var selectedInterval: Int = 0
+    @State private var isActive: Bool = false
     @State private var isHovered: Bool = false
 
     /// Preset crawl interval options in minutes.
@@ -193,9 +194,9 @@ private struct SourceDetailCard: View {
                     Circle()
                         .fill(source.isActive ? Color.green : Color.gray)
                         .frame(width: 8, height: 8)
-                        .overlay(
+                        .overlay {
                             Circle().stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 1.5)
-                        )
+                        }
                         .offset(x: 2, y: 2)
                 }
 
@@ -265,18 +266,15 @@ private struct SourceDetailCard: View {
 
             HStack(spacing: Theme.Spacing.lg) {
                 // Active toggle
-                Toggle(isOn: Binding(
-                    get: { source.isActive },
-                    set: { _ in
+                Toggle("Active", isOn: $isActive)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .onChange(of: isActive) { _, newValue in
+                        guard newValue != source.isActive else { return }
                         Task { await viewModel.toggleActive(source, using: appState.apiClient) }
                     }
-                )) {
-                    Text("Active")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
 
                 Divider()
                     .frame(height: 16)
@@ -396,12 +394,21 @@ private struct SourceDetailCard: View {
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
-        .overlay(
+        .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.md)
                 .stroke(Color(nsColor: .separatorColor).opacity(isHovered ? 0.3 : 0), lineWidth: 1)
-        )
+        }
         .onHover { isHovered = $0 }
-        .onAppear { selectedInterval = source.crawlIntervalMinutes }
+        .onAppear {
+            selectedInterval = source.crawlIntervalMinutes
+            isActive = source.isActive
+        }
+        .onChange(of: source.crawlIntervalMinutes) { _, newValue in
+            selectedInterval = newValue
+        }
+        .onChange(of: source.isActive) { _, newValue in
+            isActive = newValue
+        }
         .contextMenu {
             Button {
                 NSPasteboard.general.clearContents()

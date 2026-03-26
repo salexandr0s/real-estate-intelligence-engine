@@ -1,0 +1,279 @@
+<!DOCTYPE html><html><head>
+<meta http-equiv="Content-Language" content="de-at">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<script src="/edikte/reposit.nsf/JS_Global?OpenJavaScriptLibrary" language="JavaScript" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/JSValidation.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/Messages.js" type="text/javascript"></script>
+<!-- Bootstrap -->
+<link href="/edikte/reposit.nsf/css/bootstrap.min.css" rel="stylesheet">
+<link href="/edikte/reposit.nsf/css/bootstrap-theme.min.css" rel="stylesheet">
+<script src="/edikte/reposit.nsf/js/jquery-3.3.1.slim.min.js" type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/js/bootstrap.min.js" type="text/javascript"></script>
+<!-- Sortierung -->
+<link href="/edikte/reposit.nsf/css/dataTables.bootstrap.min.css" rel="stylesheet">
+<script src="/edikte/reposit.nsf/js/jquery.dataTables.min.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/js/dataTables.bootstrap.min.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/moment.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/sorting/datetime-moment.js" type="text/javascript"></script>
+<!-- Bootstrap Datepicker -->
+<link href="/edikte/reposit.nsf/css/bootstrap-datepicker3.css" rel="stylesheet">
+<script src="/edikte/reposit.nsf/js/bootstrap-datepicker.min.js" type="text/javascript"></script>
+<script src="/edikte/reposit.nsf/js/bootstrap-datepicker.de.min.js" type="text/javascript"></script>
+<!-- Jasny Bootstrap -->
+<link href="/edikte/reposit.nsf/css/jasny-bootstrap.min.css" rel="stylesheet">
+<script src="/edikte/reposit.nsf/js/jasny-bootstrap.min.js" type="text/javascript"></script>
+<!-- Anpassungen für Edikte -->
+<link href="/edikte/reposit.nsf/bootstrap_for_edikte.css" rel="stylesheet">
+<title>Gerichtliche Versteigerungen - Einfache Suche</title>
+
+<meta name="robots" content="nofollow"><meta name="*" content="nofollow">
+<meta name="robots" content="noarchive"><meta name="msnbot" content="nocache">
+<meta name="googlebot" content="nosnippet"><meta name="robots" content="noimageindex,nomediaindex"><meta name="robots" content="noodp"><meta name="robots" content="noydir">
+<script language="JavaScript" type="text/javascript">
+	var djConfig = {
+		isDebug: false,
+		//debugAtAllCosts: true,
+		preventBackButtonFix: false, 
+		dojoIframeHistoryUrl: "/edikte/dojo.nsf$files/dojo/resources/iframe_history.html"
+	}
+</script>
+<script language="JavaScript" type="text/javascript" src="/edikte/dojo.nsf$files/dojo/dojo.js"></script>
+<script language="JavaScript" type="text/javascript" src="/edikte/dojo.nsf$files/dojo/back.js"></script>
+
+<script language="JavaScript" type="text/javascript">
+	dojo.require("dojo.back");
+</script>
+<script language="JavaScript" type="text/javascript" src="/edikte/reposit.nsf/JS_XMLHTTP?OpenJavaScriptLibrary"></script>
+<script src="/edikte/reposit.nsf/Messages.js" type="text/javascript"></script>
+<script language="JavaScript" type="text/javascript" src="/edikte/ediktelog.nsf/OpenLogJavascript?OpenJavaScriptLibrary"></script>
+<script type="text/javascript">
+var openLogUrl = "/edikte/ediktelog.nsf/JavascriptErrorReport?OpenAgent";
+</script>
+<script language="JavaScript" type="text/javascript" src="/edikte/reposit.nsf/JS_SearchLib?OpenJavaScriptLibrary"></script>
+<script language="JavaScript" type="text/javascript" src="/edikte/reposit.nsf/JS_SearchUtilities?OpenJavaScriptLibrary"></script>
+<script language="JavaScript" type="text/javascript" src="/edikte/reposit.nsf/JS_Categories?OpenJavaScriptLibrary"></script>
+<script language="JavaScript" type="text/javascript" src="/edikte/ex/exedi3.nsf/JS_AnwSearchLib?OpenJavaScriptLibrary"></script>
+<!--link href="/edikte/reposit.nsf/eintrag.css" rel="stylesheet" type="text/css"-->
+<!--link href="/edikte/reposit.nsf/suchen.css" rel="stylesheet" type="text/css"-->
+<!--link href="/edikte/reposit.nsf/druck.css" rel="stylesheet" type="text/css" media="print"--><link href="/edikte/reposit.nsf/edikte_screen.css" rel="stylesheet" type="text/css">
+
+
+
+<script language="JavaScript" type="text/javascript">
+<!-- 
+$(function () {
+  $('[data-toggle="tooltip"]').tooltip()
+});
+// -->
+</script>
+</head>
+<body text="#000000" bgcolor="#FFFFFF" onload="initForm(this);
+">
+
+<form onsubmit="// onSubmit Event im Form Main
+return onSubmitSuche(this);
+return true;" method="post" action="/edikte/ex/exedi3.nsf/0dfb3c09cf71cb37c1258744002d8344!CreateDocument" name="_suche"></form><script type="text/javascript"> 
+//aler('dojo')
+    dojo.back.init();
+</script><iframe style="border:0;width:1px;height:1px;position:absolute;visibility:hidden;bottom:0;right:0;" name="dj_history" id="dj_history" src="/edikte/dojo.nsf$files/dojo/resources/iframe_history.html"></iframe><!--div class="idbody"-->
+<form name="Parameters" action="">
+<input type="hidden" name="FieldList" value="VKat~Kategorien~False~SelectDrop~~~~~~~~
+VPLZ~PLZ~False~regSuchPLZ~~~~~~~~
+VOrt~Ort~False~egal~~~~~~~~
+BL~Bundesland~False~SelectDrop~~~~~~~~">
+
+<input name="simQuery" value="" type="hidden" size="80" id="simQuery">
+
+<input name="SearchWv" value="0" type="hidden">
+<input name="SearchThesaurus" value="0" type="hidden">
+<input name="SearchFuzzy" value="0" type="hidden">
+<input name="SearchOrder" value="4" type="hidden" id="SearchOrder">
+<input name="Start" value="" type="hidden">
+<input name="Count" value="" type="hidden">
+<input name="SearchMax" value="4999" type="hidden" id="SearchMax">
+<input name="SearchMessageString" value="" type="hidden">
+</form>
+<form name="AnwParameters" action=""><input type="hidden" name="PKat" value="">
+</form>
+<!-- Header-->
+<a name="top"></a>
+<span class="show_screenreader_only">
+	<a href="#nav" title="zur Navigation springen">zur Navigation</a>
+</span>
+<header class="site-header">
+	<div id="nav_logo">
+		<a href="https://edikte.justiz.gv.at" title="zur Ediktsdatei" style="height:auto;"><img src="/edikte/reposit.nsf/justiz_edikte_2010.gif" title="Ediktsdatei der österreichischen Justiz" alt="Ediktsdatei-Logo der österreichischen Justiz"></a>
+	</div>
+	<div class="edikte-header">
+		<h1 title="Gerichtliche Versteigerungen"><small>Gerichtliche Versteigerungen</small></h1>
+		<span title="Einfache Suche (Server: Edikte161)" class="show_screen_only"><small id="title2">Einfache Suche</small></span>
+	</div>
+</header><!--header-->
+<!--Header-->
+<form class="form-horizontal" method="GET" action="/edikte/ex/exedi3.nsf/submitSuche" name="Main">
+<input name="OpenAgent" type="hidden" value="">
+<input name="subf" type="hidden" value="eex">
+<input name="scope" type="hidden" value="edi">
+
+<input name="Hits" value="" type="hidden">
+<input name="TotalHits" value="" type="hidden"><input name="Anw" type="hidden" value="EX">
+<input name="AnwTitle" type="hidden" value="Gerichtliche Versteigerungen">
+<input name="subfTitle" type="hidden" value="Einfache Suche">
+<div id="spansuche"><div class="bootstrap-padding"><div id="suche" class="">
+	<div id="contentsuche">
+		<!-- Hilfsfeld für Submit durch Enter --><input type="text" style="display:none">
+		<div class="container-fluid">
+			<!--Alert ID/RD -->
+					<!--Keine-->
+					<!--Frei-->
+					<div class="panel panel-default">
+						<div class="panel-heading">
+							<h2 class="show_screenreader_only"><a name="nav">Navigation</a></h2>
+							<ul class="nav nav-tabs">
+								<li role="presentation" class="active"><a href="/edikte/ex/exedi3.nsf/suche!OpenForm&amp;subf=eex" tabindex="90" title="Einfache Suche">Einfache Suche</a></li>
+			<li role="presentation" class="eexa"><a href="/edikte/ex/exedi3.nsf/suche!OpenForm&amp;subf=a" tabindex="90" title="Aktenzeichen">Aktenzeichen</a></li>
+			<li role="presentation" class="eexvex"><a href="/edikte/ex/exedi3.nsf/suche!OpenForm&amp;subf=vex" tabindex="90" title="Erweiterte Suche">Erweiterte Suche</a></li>
+			
+							</ul>
+						</div>
+						<div class="panel-body">
+							<span id="ErrMsg"></span>
+							<div id="ValidationError" class="hide alert alert-danger"></div>
+							<div class="alert alert-danger hide" id="errormsg"></div>
+<div class="form-group">
+	<label class="col-sm-3 control-label text-right" for="VKat">Kategorien <a href="/edikte/ex/edparm3.nsf/hb/ex_liegenschaftskategorien" style="cursor: help;" data-toggle="tooltip" data-placement="right" data-container="body" data-html="true" title="" target="hilfe" tabindex="50" data-original-title="Hier können Sie die Suche nach Kategorien einschränken (Link öffnet in neuem Fenster)"><span class="glyphicon glyphicon-question-sign"></span></a></label>
+	<div class="col-sm-9">
+<input name="%%Surrogate_VKat" type="hidden" value="1">
+<select name="VKat" multiple="" size="4" tabindex="11" id="VKat" class="form-control">
+<option value="NUL" selected="">-Bitte wählen-
+</option><option value="EH">Einfamilienhaus
+</option><option value="ZH">Zweifamilienhaus
+</option><option value="MH">Mehrfamilienhaus
+</option><option value="MW">Mietwohnhaus
+</option><option value="MSH">Mietshaus
+</option><option value="GGH">gemischt genutztes Haus
+</option><option value="RH">Reihenhaus
+</option><option value="HAN">Hausanteil
+</option><option value="WE">Wohnungseigentumsobjekt
+</option><option value="EW">Eigentumswohnung
+</option><option value="MAI">Maisonette
+</option><option value="DTW">Dachterrassenwohnung
+</option><option value="DGW">Dachgeschoßwohnung
+</option><option value="GA">Garconniere
+</option><option value="GW">Gartenwohnung
+</option><option value="UL">unbebaute Liegenschaft
+</option><option value="BBL">bebaubare Liegenschaft
+</option><option value="LF">land- und forstwirtschaftlich genutzte Liegenschaft
+</option><option value="GL">gewerbliche Liegenschaft
+</option><option value="SE">Superädifikat
+</option><option value="BR">Baurecht
+</option><option value="SO">Sonstiges</option></select>
+</div>
+</div>
+<hr class="formsep">
+<fieldset>
+	<div class="form-group">
+		<label class="col-sm-3 control-label text-right" for="VOrt">Ort <a href="/edikte/ex/edparm3.nsf/hb/ex_vvort" style="cursor: help;" data-toggle="tooltip" data-placement="right" data-container="body" data-html="true" title="" target="hilfe" tabindex="50" data-original-title="Hier können Sie die Suche zum Versteigerungsort einschränken. (Link öffnet in neuem Fenster)"><span class="glyphicon glyphicon-question-sign"></span></a></label>
+		<div class="col-sm-9">
+<input name="VOrt" value="" tabindex="12" onchange="var fldarray = new Array(&quot;VOrt&quot;, &quot;VPLZ&quot;, &quot;BL&quot;)
+clearOtherFields(this,fldarray);" id="VOrt" class="form-control"></div>
+	</div>
+	<div class="form-group">
+		<label class="col-sm-3 control-label text-right" for="VPLZ"><strong>oder </strong>PLZ <a href="/edikte/ex/edparm3.nsf/hb/ex_vvort" style="cursor: help;" data-toggle="tooltip" data-placement="right" data-container="body" data-html="true" title="" target="hilfe" tabindex="50" data-original-title="Hier können Sie die Suche zum Versteigerungsort einschränken. (Link öffnet in neuem Fenster)"><span class="glyphicon glyphicon-question-sign"></span></a></label>
+		<div class="col-sm-9">
+<input name="VPLZ" value="" tabindex="13" size="4" maxlength="4" onchange="var fldarray = new Array(&quot;VOrt&quot;, &quot;VPLZ&quot;, &quot;BL&quot;)
+clearOtherFields(this,fldarray);" id="VPLZ" class="form-control"></div>
+	</div>
+	<div class="form-group">
+		<label class="col-sm-3 control-label text-right" for="BL"><strong>oder </strong>Bundesland <a href="/edikte/ex/edparm3.nsf/hb/ex_vvort" style="cursor: help;" data-toggle="tooltip" data-placement="right" data-container="body" data-html="true" title="" target="hilfe" tabindex="50" data-original-title="Hier können Sie die Suche zum Versteigerungsort einschränken. (Link öffnet in neuem Fenster)"><span class="glyphicon glyphicon-question-sign"></span></a></label>
+		<div class="col-sm-9">
+<input name="%%Surrogate_BL" type="hidden" value="1">
+<select name="BL" tabindex="14" onchange="var fldarray = new Array(&quot;VOrt&quot;, &quot;VPLZ&quot;, &quot;BL&quot;)
+clearOtherFields(this,fldarray);" id="BL" class="form-control">
+<option value="NUL" selected="">-Bitte wählen-
+</option><option value="2">Burgenland
+</option><option value="6">Kärnten
+</option><option value="1">Niederösterreich
+</option><option value="3">Oberösterreich
+</option><option value="4">Salzburg
+</option><option value="5">Steiermark
+</option><option value="7">Tirol
+</option><option value="8">Vorarlberg
+</option><option value="0">Wien</option></select>
+</div>
+	</div>
+</fieldset>
+<hr class="formsep">
+<!-- Hilfsfeld für Submit durch Enter --><input type="text" style="display:none">
+<div class="form-group">
+	<label class="col-sm-3 control-label text-right">Veröffentlichungen seit <a href="/edikte/ex/edparm3.nsf/hb/ex_zeitung" style="cursor: help;" data-toggle="tooltip" data-placement="right" data-container="body" data-html="true" title="" target="hilfe" tabindex="50" data-original-title="Klicken Sie auf das gewünschte &lt;b&gt;Datum&lt;/b&gt;, um alle an/ab diesem Tag bekannt gemachten Edikte zu suchen. (Link öffnet in neuem Fenster)"><span class="glyphicon glyphicon-question-sign"></span></a></label>
+	<div class="col-sm-9">
+		<input type="submit" value="Suchen" class="show_screenreader_only" tabindex="-1" name="sebuthide" onclick="submitSuche(this);return false;">
+		<input type="submit" value="24.03.2026" id="datum" class="btn btn-default" tabindex="30" name="datum" onclick="submitSuche(this);return false;"><br>
+		<input type="submit" value="23.03.2026" class="btn btn-default" tabindex="31" name="datum" onclick="submitSuche(this);return false;"><br>
+		<input type="submit" value="18.03.2026" class="btn btn-default" tabindex="32" name="datum" onclick="submitSuche(this);return false;">
+		
+	</div>
+</div>
+							<div class="form-group form-group-sm">
+								<div class="col-sm-9 col-sm-offset-3">
+									<input type="submit" name="sebut" value="   Suchen   " class="btn btn-primary" tabindex="40" onclick="submitSuche(this);return false;">
+								</div>
+							</div><!--form-group-->
+						</div><!--panel-body-->
+					</div><!--panel panel-default-->
+		</div><!--container-fluid-->
+	</div><!--contentsuche-->
+</div><!--suche-->
+</div><!-- bootstrap-padding -->
+</div><!-- spansuche --><div id="divedikt">
+</div><!-- divedikt --><!--
+<input type="submit" value="Dummy">--></form><!-- Footer-->
+<footer class="site-footer hidden-print">
+	<nav class="site-footer__nav">
+		<ul class="breadcrumb">
+			<li><a href="/edikte/ex/edparm3.nsf/hb/ex_glossar" title="Glossar (neues Fenster)" class="static_black" tabindex="101" target="hilfe">Glossar</a></li>
+			<li><a href="mailto:postmaster.edikte@justiz.gv.at" title="Kontakt (öffnet E-Mail Client)" class="static_black" tabindex="102">Kontakt</a></li>
+			<li><a href="https://www.justiz.gv.at/web2013/service_navigation/datenschutz~92.de.html" title="Datenschutz-Erklärung (neues Fenster)" class="static_black" tabindex="103" target="_blank">Datenschutz-Erklärung</a></li>
+			<li><a href="/edikte/ex/edparm3.nsf/hb/allg_impressum" title="Impressum (neues Fenster)" class="static_black" tabindex="104" target="hilfe">Impressum</a></li>
+			<li><a href="/edikte/ex/edparm3.nsf/hb/allg_wai" title="Barrierefreiheit (neues Fenster)" class="static_black" tabindex="105" target="hilfe">Barrierefreiheit</a></li>
+					</ul>
+	</nav>
+</footer><!--footer-->
+<nav class="navbar navbar-default navbar-fixed-bottom">
+	<div class="container-fluid">
+		<ul class="nav" style="text-align: center;">
+			<li class="hide previous" id="linkstop"></li>
+			<li class="hide" id="ajax_erg"><a href="javascript:toSearchXML('B7CAE779832752FCC1258DC4007FE8C4');" onclick="toSearchXML('B7CAE779832752FCC1258DC4007FE8C4'); return false;" title="zurück zur Suchergebnisliste" tabindex="92">zum Suchergebnis</a></li>
+			<li class="hide" id="ajax_link"><a href="0/B7CAE779832752FCC1258DC4007FE8C4" title="Eintrag zum Setzen eines Lesezeichens öffnen (neues Fenster)" target="_blank" tabindex="93">Lesezeichen</a></li>
+			<li class="hide next" id="rechtstop"></li>
+		</ul>
+	</div><!--container-fluid-->
+</nav>
+<a href="#top" title="zum Anfang der Seite springen" class="btn btn-primary btn-lg btn-to-top hidden-print js-to-top" tabindex="107">
+	<span class="glyphicon glyphicon-chevron-up"></span>
+</a>
+<!--Footer-->
+<div class="" id="loaderdiv"></div>
+<!-- printAll-->
+<form method="post" action="printAll!CreateDocument" target="helpwindow" name="_pqsform" class="hidden" style="visibility: visible">
+<input type="hidden" name="Hits">
+<input type="hidden" name="foundUnids" size="180">
+<input type="hidden" name="foundUnids_1">
+<input type="hidden" name="foundUnids_2">
+<input type="hidden" name="foundUnids_3">
+<input type="hidden" name="foundUnids_4">
+<input type="hidden" name="foundUnids_5">
+<input type="hidden" name="Query" value="">
+<input type="hidden" name="expQuery" value="keinem Suchbegriff">
+<input type="hidden" name="rawQuery" value="">
+<input type="hidden" name="saveFields">
+<input type="hidden" name="QueryDat" value="25.03.2026 00:17:06 MEZ">
+<input type="hidden" name="ServerName" value="Edikte161"><!-- printAll-->
+</form>
+
+
+</body></html>

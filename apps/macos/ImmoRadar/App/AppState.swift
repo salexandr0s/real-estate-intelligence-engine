@@ -22,6 +22,10 @@ final class AppState {
 
     var unreadAlertCount: Int = 0
 
+    // MARK: - Settings Errors
+
+    var settingsErrorMessage: String?
+
     // MARK: - Settings
 
     var apiBaseURL: String {
@@ -31,7 +35,13 @@ final class AppState {
 
     var apiToken: String {
         get { KeychainHelper.get(key: "apiToken") ?? "" }
-        set { try? KeychainHelper.set(key: "apiToken", value: newValue) }
+        set {
+            persistSecret(
+                value: newValue,
+                key: "apiToken",
+                label: "API token"
+            )
+        }
     }
 
     var refreshIntervalSeconds: Int {
@@ -71,11 +81,23 @@ final class AppState {
     }
 
     var anthropicApiKey: String = KeychainHelper.get(key: "anthropicApiKey") ?? "" {
-        didSet { try? KeychainHelper.set(key: "anthropicApiKey", value: anthropicApiKey) }
+        didSet {
+            persistSecret(
+                value: anthropicApiKey,
+                key: "anthropicApiKey",
+                label: "Anthropic API key"
+            )
+        }
     }
 
     var openaiApiKey: String = KeychainHelper.get(key: "openaiApiKey") ?? "" {
-        didSet { try? KeychainHelper.set(key: "openaiApiKey", value: openaiApiKey) }
+        didSet {
+            persistSecret(
+                value: openaiApiKey,
+                key: "openaiApiKey",
+                label: "OpenAI API key"
+            )
+        }
     }
 
     var copilotModel: String = UserDefaults.standard.string(forKey: "copilotModel") ?? "" {
@@ -101,6 +123,10 @@ final class AppState {
     func refreshClaudeSubscription() {
         claudeSubscriptionAvailable = ClaudeAuthHelper.isAvailable
         claudeSubscriptionType = ClaudeAuthHelper.subscriptionType
+    }
+
+    func clearSettingsError() {
+        settingsErrorMessage = nil
     }
 
     // MARK: - API Client
@@ -183,6 +209,21 @@ final class AppState {
             unreadAlertCount = try await apiClient.fetchUnreadCount()
         } catch {
             // Silently fail — count stays at last known value
+        }
+    }
+
+    private func persistSecret(value: String, key: String, label: String) {
+        do {
+            try KeychainHelper.set(key: key, value: value)
+            settingsErrorMessage = nil
+
+            if key == "apiToken" {
+                Task {
+                    await apiClient.updateAuthToken(value.isEmpty ? nil : value)
+                }
+            }
+        } catch {
+            settingsErrorMessage = "Couldn’t save \(label). \(error.localizedDescription)"
         }
     }
 }

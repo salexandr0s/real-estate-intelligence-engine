@@ -1,0 +1,338 @@
+[
+  {
+    "action": "https://edikte.justiz.gv.at/edikte/ex/exedi3.nsf/0dfb3c09cf71cb37c1258744002d8344!CreateDocument",
+    "method": "post",
+    "fields": []
+  },
+  {
+    "action": "https://edikte.justiz.gv.at/edikte/ex/exedi3.nsf/suche?OpenForm",
+    "method": "get",
+    "fields": [
+      {
+        "tag": "input",
+        "name": "FieldList",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "simQuery",
+        "type": "hidden",
+        "id": "simQuery"
+      },
+      {
+        "tag": "input",
+        "name": "SearchWv",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "SearchThesaurus",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "SearchFuzzy",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "SearchOrder",
+        "type": "hidden",
+        "id": "SearchOrder"
+      },
+      {
+        "tag": "input",
+        "name": "Start",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "Count",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "SearchMax",
+        "type": "hidden",
+        "id": "SearchMax"
+      },
+      {
+        "tag": "input",
+        "name": "SearchMessageString",
+        "type": "hidden",
+        "id": ""
+      }
+    ]
+  },
+  {
+    "action": "https://edikte.justiz.gv.at/edikte/ex/exedi3.nsf/suche?OpenForm",
+    "method": "get",
+    "fields": [
+      {
+        "tag": "input",
+        "name": "PKat",
+        "type": "hidden",
+        "id": ""
+      }
+    ]
+  },
+  {
+    "action": "https://edikte.justiz.gv.at/edikte/ex/exedi3.nsf/submitSuche",
+    "method": "get",
+    "fields": [
+      {
+        "tag": "input",
+        "name": "OpenAgent",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "subf",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "scope",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "Hits",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "TotalHits",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "Anw",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "AnwTitle",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "subfTitle",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "",
+        "type": "text",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "%%Surrogate_VKat",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "select",
+        "name": "VKat",
+        "type": "select",
+        "id": "VKat",
+        "options": [
+          "NUL: -Bitte wählen-",
+          "EH: Einfamilienhaus",
+          "ZH: Zweifamilienhaus",
+          "MH: Mehrfamilienhaus",
+          "MW: Mietwohnhaus",
+          "MSH: Mietshaus",
+          "GGH: gemischt genutztes Haus",
+          "RH: Reihenhaus",
+          "HAN: Hausanteil",
+          "WE: Wohnungseigentumsobjekt",
+          "EW: Eigentumswohnung",
+          "MAI: Maisonette",
+          "DTW: Dachterrassenwohnung",
+          "DGW: Dachgeschoßwohnung",
+          "GA: Garconniere",
+          "GW: Gartenwohnung",
+          "UL: unbebaute Liegenschaft",
+          "BBL: bebaubare Liegenschaft",
+          "LF: land- und forstwirtschaftlich genutzte Liegenschaft",
+          "GL: gewerbliche Liegenschaft",
+          "SE: Superädifikat",
+          "BR: Baurecht",
+          "SO: Sonstiges"
+        ]
+      },
+      {
+        "tag": "input",
+        "name": "VOrt",
+        "type": "input",
+        "id": "VOrt"
+      },
+      {
+        "tag": "input",
+        "name": "VPLZ",
+        "type": "input",
+        "id": "VPLZ"
+      },
+      {
+        "tag": "input",
+        "name": "%%Surrogate_BL",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "select",
+        "name": "BL",
+        "type": "select",
+        "id": "BL",
+        "options": [
+          "NUL: -Bitte wählen-",
+          "2: Burgenland",
+          "6: Kärnten",
+          "1: Niederösterreich",
+          "3: Oberösterreich",
+          "4: Salzburg",
+          "5: Steiermark",
+          "7: Tirol",
+          "8: Vorarlberg",
+          "0: Wien"
+        ]
+      },
+      {
+        "tag": "input",
+        "name": "",
+        "type": "text",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "sebuthide",
+        "type": "submit",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "datum",
+        "type": "submit",
+        "id": "datum"
+      },
+      {
+        "tag": "input",
+        "name": "datum",
+        "type": "submit",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "datum",
+        "type": "submit",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "sebut",
+        "type": "submit",
+        "id": ""
+      }
+    ]
+  },
+  {
+    "action": "https://edikte.justiz.gv.at/edikte/ex/exedi3.nsf/printAll!CreateDocument",
+    "method": "post",
+    "fields": [
+      {
+        "tag": "input",
+        "name": "Hits",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids_1",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids_2",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids_3",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids_4",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "foundUnids_5",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "Query",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "expQuery",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "rawQuery",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "saveFields",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "QueryDat",
+        "type": "hidden",
+        "id": ""
+      },
+      {
+        "tag": "input",
+        "name": "ServerName",
+        "type": "hidden",
+        "id": ""
+      }
+    ]
+  }
+]

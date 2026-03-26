@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "openai": "^4.73.0",
     "@immoradar/config": "*",
     "@immoradar/contracts": "*",
     "@immoradar/db": "*",
-    "@immoradar/observability": "*"
+    "@immoradar/observability": "*",
+    "openai": "^4.73.0"
   }
 }

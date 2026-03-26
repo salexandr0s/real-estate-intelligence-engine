@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Renders a single copilot message with role-appropriate styling.
+/// Renders a Copilot exchange as research notes rather than chat bubbles.
 struct CopilotMessageBubble: View {
     let message: CopilotMessage
     let onListingTap: (Int) -> Void
@@ -8,117 +8,83 @@ struct CopilotMessageBubble: View {
     var body: some View {
         switch message.role {
         case .user:
-            UserBubble(contentBlocks: message.contentBlocks)
+            UserPromptCard(contentBlocks: message.contentBlocks, timestamp: message.timestamp)
         case .assistant:
-            AssistantBubble(
+            AssistantResearchCard(
                 contentBlocks: message.contentBlocks,
                 isStreaming: message.isStreaming,
+                timestamp: message.timestamp,
                 onListingTap: onListingTap
             )
         }
     }
 }
 
-// MARK: - User Bubble
-
-private struct UserBubble: View {
+private struct UserPromptCard: View {
     let contentBlocks: [ContentBlock]
+    let timestamp: Date
 
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            Spacer(minLength: 80)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack {
+                Label("Prompt", systemImage: "person.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(PriceFormatter.relativeDate(timestamp))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
-            VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
-                ForEach(contentBlocks) { block in
-                    if case .text(let text) = block.content {
-                        Text(text)
-                            .textSelection(.enabled)
-                    }
+            ForEach(contentBlocks) { block in
+                if case .text(let text) = block.content {
+                    Text(text)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.vertical, Theme.Spacing.md)
-            .background(Color.accentColor)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
-
-            // User avatar
-            Circle()
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 28, height: 28)
-                .overlay {
-                    Image(systemName: "person.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        }
+        .padding(Theme.Spacing.lg)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
         }
     }
 }
 
-// MARK: - Assistant Bubble
-
-private struct AssistantBubble: View {
+private struct AssistantResearchCard: View {
     let contentBlocks: [ContentBlock]
     let isStreaming: Bool
+    let timestamp: Date
     let onListingTap: (Int) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            // Agent avatar — app icon
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                ForEach(contentBlocks) { block in
-                    contentBlockView(block)
-                }
-            }
-
-            Spacer(minLength: 40)
-        }
-    }
-
-    @ViewBuilder
-    private func contentBlockView(_ block: ContentBlock) -> some View {
-        switch block.content {
-        case .text(let text):
-            TextContentBlock(text: text, isStreaming: isStreaming)
-
-        case .listingCards(let listings):
-            ListingCardBlock(listings: listings, onTap: onListingTap)
-
-        case .comparisonTable(let data):
-            ComparisonTableBlock(data: data)
-
-        case .scoreBreakdown(let data):
-            ScoreBreakdownBlock(data: data)
-
-        case .priceHistory(let data):
-            PriceHistoryBlock(data: data)
-
-        case .chartData(let data):
-            ChartBlock(data: data)
-
-        case .marketStats(let stats):
-            MarketStatsBlock(stats: stats)
-
-        case .loading(let label):
-            HStack(spacing: Theme.Spacing.sm) {
-                TypingIndicator()
-                Text(label)
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack {
+                Label("ImmoRadar analysis", systemImage: "sparkles.rectangle.stack")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Spacer()
+                Text(PriceFormatter.relativeDate(timestamp))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            ForEach(contentBlocks) { block in
+                ContentBlockView(
+                    block: block,
+                    isStreaming: isStreaming,
+                    onListingTap: onListingTap
+                )
             }
         }
+        .padding(Theme.Spacing.lg)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 }
 
-// MARK: - Typing Indicator
-
-/// Three bouncing dots indicating AI processing.
+/// Three dots indicating work in progress.
 struct TypingIndicator: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false

@@ -167,7 +167,14 @@ async function main(): Promise<void> {
         await pageNavigationDelay();
 
         log.info(`Fetching discovery page ${pagesProcessed + 1}: ${currentPlan.url}`);
-        await page.goto(currentPlan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+        await page.goto(currentPlan.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        if (currentPlan.waitForSelector) {
+          await page
+            .waitForSelector(currentPlan.waitForSelector, {
+              timeout: currentPlan.waitForTimeout ?? 10_000,
+            })
+            .catch(() => {});
+        }
         await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();
@@ -241,7 +248,14 @@ async function main(): Promise<void> {
         const detailUrl = detailRequest?.url ?? item.detailUrl;
 
         log.info(`Fetching detail: ${detailUrl}`);
-        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+        await page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        if (detailRequest?.waitForSelector) {
+          await page
+            .waitForSelector(detailRequest.waitForSelector, {
+              timeout: detailRequest.waitForTimeout ?? 10_000,
+            })
+            .catch(() => {});
+        }
         await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();

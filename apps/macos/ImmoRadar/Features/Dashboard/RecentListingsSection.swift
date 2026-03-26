@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Recent high-score listings card with internal scrolling.
+@available(*, deprecated, message: "Replaced by ForYouSection")
 struct RecentListingsSection: View {
     let listings: [Listing]
 

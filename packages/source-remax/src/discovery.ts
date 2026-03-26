@@ -32,8 +32,8 @@ export function parseDiscoveryPage(
     const dataIdMatch = card.match(/data-id="(\d+)"/);
     const remaxId = dataIdMatch?.[1] ?? null;
 
-    // Extract detail URL from first anchor with id= param
-    const hrefMatch = card.match(/<a\s[^>]*href="([^"]*[?&]id=\d+[^"]*)"/);
+    // Extract detail URL from first anchor with id= param (handles &amp; encoding)
+    const hrefMatch = card.match(/<a\s[^>]*href="([^"]*(?:[?&]|&amp;)id=\d+[^"]*)"/);
     if (!hrefMatch?.[1] || !remaxId) continue;
 
     const href = hrefMatch[1].replace(/&amp;/g, '&');
