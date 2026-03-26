@@ -26,7 +26,23 @@ export class FindMyHomeMapper extends BaseSourceMapper {
     rawPayload: FindMyHomeRawListing,
     context: NormalizationContext,
   ): NormalizationResult {
-    const result = super.normalize(rawPayload, context);
+    const enriched: FindMyHomeRawListing = {
+      ...rawPayload,
+      contactNameRaw:
+        rawPayload.contactNameRaw ??
+        (rawPayload as { contactName?: string | null }).contactName ??
+        null,
+      contactEmailRaw:
+        rawPayload.contactEmailRaw ??
+        (rawPayload as { contactEmail?: string | null }).contactEmail ??
+        null,
+      contactPhoneRaw:
+        rawPayload.contactPhoneRaw ??
+        (rawPayload as { contactPhone?: string | null }).contactPhone ??
+        null,
+    };
+
+    const result = super.normalize(enriched, context);
 
     if (result.success && result.listing) {
       result.listing.normalizedPayload = {

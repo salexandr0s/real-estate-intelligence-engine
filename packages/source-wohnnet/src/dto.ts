@@ -50,5 +50,8 @@ export interface WohnnetDiscoveryItem {
 export interface WohnnetDetailDTO extends SourceRawListingBase {
   wohnnetId: string;
   images: string[];
+  contactName: string | null;
   brokerCompany: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
 }

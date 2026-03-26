@@ -1,14 +1,8 @@
 /**
- * Managed Playwright browser lifecycle.
- * Provides a shared browser instance with context creation for scraping jobs.
- *
- * Features:
- * - Launch mutex prevents concurrent browser starts after a crash
- * - Disconnection handler auto-clears stale reference
- * - Hourly restart limit prevents infinite relaunch loops
+ * Managed browser lifecycle for scraper workers.
+ * Supports default Playwright Chromium with an optional Patchright canary runtime.
  */
 
-import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 import {
   DEFAULT_BROWSER_CONTEXT_CONFIG,
@@ -20,84 +14,118 @@ import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('browser-pool');
 
-let _browser: Browser | null = null;
+type BrowserRuntime = 'playwright' | 'patchright';
 
-// Launch mutex: prevents concurrent getBrowser() calls from spawning multiple browsers
-let _launchPromise: Promise<Browser> | null = null;
+interface BrowserLauncherModule {
+  chromium: {
+    launch(options: { headless: boolean }): Promise<Browser>;
+  };
+}
 
-// Restart rate limiting: max restarts per hour to prevent infinite loops
+const browsers: Partial<Record<BrowserRuntime, Browser | null>> = {};
+const launchPromises: Partial<Record<BrowserRuntime, Promise<Browser> | null>> = {};
+
 const MAX_RESTARTS_PER_HOUR = 5;
-const _restartTimestamps: number[] = [];
+const restartTimestamps: number[] = [];
 
 function recordRestart(): boolean {
   const now = Date.now();
   const oneHourAgo = now - 3_600_000;
 
-  // Prune timestamps older than 1 hour
-  while (_restartTimestamps.length > 0 && _restartTimestamps[0]! < oneHourAgo) {
-    _restartTimestamps.shift();
+  while (restartTimestamps.length > 0 && restartTimestamps[0]! < oneHourAgo) {
+    restartTimestamps.shift();
   }
 
-  if (_restartTimestamps.length >= MAX_RESTARTS_PER_HOUR) {
+  if (restartTimestamps.length >= MAX_RESTARTS_PER_HOUR) {
     log.error('Browser restart limit exceeded', {
-      restartsInLastHour: _restartTimestamps.length,
+      restartsInLastHour: restartTimestamps.length,
       maxAllowed: MAX_RESTARTS_PER_HOUR,
     });
     return false;
   }
 
-  _restartTimestamps.push(now);
+  restartTimestamps.push(now);
   return true;
 }
 
-function attachDisconnectHandler(browser: Browser): void {
+function resolveRuntime(sourceCode?: string): BrowserRuntime {
+  const config = loadConfig();
+  if (sourceCode && config.scraper.patchrightSourceCodes.includes(sourceCode)) {
+    return 'patchright';
+  }
+  return config.scraper.browserRuntime;
+}
+
+async function loadLauncher(runtime: BrowserRuntime): Promise<BrowserLauncherModule> {
+  if (runtime === 'patchright') {
+    try {
+      return (await import('patchright')) as BrowserLauncherModule;
+    } catch (error) {
+      log.error('Patchright runtime requested but dependency is unavailable', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  return (await import('playwright')) as BrowserLauncherModule;
+}
+
+function attachDisconnectHandler(runtime: BrowserRuntime, browser: Browser): void {
   browser.on('disconnected', () => {
-    log.warn('Browser disconnected unexpectedly');
-    _browser = null;
-    _launchPromise = null;
+    log.warn('Browser disconnected unexpectedly', { runtime });
+    browsers[runtime] = null;
+    launchPromises[runtime] = null;
   });
 }
 
-export async function getBrowser(): Promise<Browser> {
-  // Fast path: browser is alive
-  if (_browser && _browser.isConnected()) return _browser;
+export async function getBrowser(sourceCode?: string): Promise<Browser> {
+  const runtime = resolveRuntime(sourceCode);
+  const existing = browsers[runtime];
+  if (existing && existing.isConnected()) return existing;
 
-  // If another caller is already launching, wait for it
-  if (_launchPromise) return _launchPromise;
+  const pending = launchPromises[runtime];
+  if (pending) return pending;
 
-  // Check restart budget before attempting launch
   if (!recordRestart()) {
     throw new Error(
       `Browser restart limit exceeded (${MAX_RESTARTS_PER_HOUR} restarts/hour). Manual intervention required.`,
     );
   }
 
-  // Launch under mutex — only the outer finally clears the promise
-  _launchPromise = (async () => {
-    log.info('Launching Playwright browser');
-    const browser = await chromium.launch({ headless: loadConfig().playwright.headless });
-    attachDisconnectHandler(browser);
-    _browser = browser;
+  launchPromises[runtime] = (async () => {
+    const launcher = await loadLauncher(runtime);
+    log.info('Launching browser runtime', { runtime });
+    const browser = await launcher.chromium.launch({ headless: loadConfig().playwright.headless });
+    attachDisconnectHandler(runtime, browser);
+    browsers[runtime] = browser;
     return browser;
   })();
 
   try {
-    return await _launchPromise;
+    return await launchPromises[runtime]!;
   } finally {
-    _launchPromise = null;
+    launchPromises[runtime] = null;
   }
 }
 
 export interface ScrapeContextOptions {
-  /** If set, Playwright will record a HAR file at this path. */
+  /** If set, Playwright/Patchright will record a HAR file at this path. */
   recordHarPath?: string;
+  /** Source code used to select the runtime. */
+  sourceCode?: string;
 }
 
 export async function createScrapeContext(options?: ScrapeContextOptions): Promise<BrowserContext> {
-  const browser = await getBrowser();
+  const browser = await getBrowser(options?.sourceCode);
   const viewport = pickRandomViewport();
   const userAgent = pickRandomUserAgent();
-  log.debug('Browser context config', { viewport, userAgent: userAgent.slice(0, 40) });
+  log.debug('Browser context config', {
+    runtime: resolveRuntime(options?.sourceCode),
+    sourceCode: options?.sourceCode,
+    viewport,
+    userAgent: userAgent.slice(0, 40),
+  });
   return browser.newContext({
     viewport,
     locale: DEFAULT_BROWSER_CONTEXT_CONFIG.locale,
@@ -110,16 +138,20 @@ export async function createScrapeContext(options?: ScrapeContextOptions): Promi
   });
 }
 
-/** Check whether the shared browser instance is alive and accepting contexts. */
-export function isBrowserHealthy(): boolean {
-  return _browser != null && _browser.isConnected();
+export function isBrowserHealthy(sourceCode?: string): boolean {
+  const browser = browsers[resolveRuntime(sourceCode)];
+  return browser != null && browser.isConnected();
 }
 
 export async function closeBrowser(): Promise<void> {
-  if (_browser) {
-    log.info('Closing Playwright browser');
-    await _browser.close().catch(() => {});
-    _browser = null;
-    _launchPromise = null;
-  }
+  await Promise.all(
+    (['playwright', 'patchright'] as const).map(async (runtime) => {
+      const browser = browsers[runtime];
+      if (!browser) return;
+      log.info('Closing browser runtime', { runtime });
+      await browser.close().catch(() => {});
+      browsers[runtime] = null;
+      launchPromises[runtime] = null;
+    }),
+  );
 }

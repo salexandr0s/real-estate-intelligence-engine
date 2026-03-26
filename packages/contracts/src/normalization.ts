@@ -10,7 +10,7 @@ import type {
  * Bump this when normalization logic changes in a way that alters content fingerprints.
  * The pipeline uses this to distinguish "source content changed" from "our parsing improved".
  */
-export const CURRENT_NORMALIZATION_VERSION = 1;
+export const CURRENT_NORMALIZATION_VERSION = 2;
 
 // ── Canonical Listing Input ─────────────────────────────────────────────────
 
@@ -60,6 +60,10 @@ export interface CanonicalListingInput {
   conditionCategory?: string | null;
   heatingType?: string | null;
   energyCertificateClass?: string | null;
+  contactName?: string | null;
+  contactCompany?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
 
   hasBalcony?: boolean | null;
   hasTerrace?: boolean | null;
@@ -128,6 +132,10 @@ export interface SourceRawListingBase {
   heatingTypeRaw?: string | null;
   conditionRaw?: string | null;
   energyCertificateRaw?: string | null;
+  contactNameRaw?: string | null;
+  contactCompanyRaw?: string | null;
+  contactEmailRaw?: string | null;
+  contactPhoneRaw?: string | null;
   attributesRaw?: Record<string, unknown>;
   mediaRaw?: unknown[];
 }

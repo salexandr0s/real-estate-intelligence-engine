@@ -182,6 +182,10 @@ export interface ListingRow {
   conditionCategory: string | null;
   heatingType: string | null;
   energyCertificateClass: string | null;
+  contactName: string | null;
+  contactCompany: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
   hasBalcony: boolean | null;
   hasTerrace: boolean | null;
   hasGarden: boolean | null;

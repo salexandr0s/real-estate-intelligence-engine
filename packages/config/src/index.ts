@@ -87,6 +87,8 @@ export interface AppConfig {
     jitterMaxMs: number;
     canaryEnabled: boolean;
     detailWorkerConcurrency: number;
+    browserRuntime: 'playwright' | 'patchright';
+    patchrightSourceCodes: string[];
   };
   scheduler: {
     enabled: boolean;
@@ -109,6 +111,33 @@ export interface AppConfig {
       smtpHost: string;
       smtpPort: number;
       fromAddress: string;
+      smtpSecure: boolean;
+      smtpUser: string;
+      smtpPassword: string;
+    };
+  };
+  outreach: {
+    enabled: boolean;
+    mailboxMode: 'shared_env';
+    pollIntervalSeconds: number;
+    initialLookbackDays: number;
+    followupDelayHours: number;
+    maxAutoFollowups: number;
+    fromName: string;
+    imap: {
+      host: string;
+      port: number;
+      secure: boolean;
+      user: string;
+      password: string;
+      mailbox: string;
+    };
+    smtp: {
+      host: string;
+      port: number;
+      secure: boolean;
+      user: string;
+      password: string;
     };
   };
   features: {
@@ -192,6 +221,11 @@ export function loadConfig(): AppConfig {
       jitterMaxMs: envInt('SCRAPER_JITTER_MAX_MS', 7000),
       canaryEnabled: envBool('SCRAPER_CANARY_ENABLED', true),
       detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
+      browserRuntime:
+        envStr('SCRAPER_BROWSER_RUNTIME', 'playwright') === 'patchright'
+          ? 'patchright'
+          : 'playwright',
+      patchrightSourceCodes: envStringList('SCRAPER_PATCHRIGHT_SOURCES', []),
     },
     scheduler: {
       enabled: envBool('SCHEDULER_ENABLED', true),
@@ -211,9 +245,36 @@ export function loadConfig(): AppConfig {
         production: envBool('APNS_PRODUCTION', false),
       },
       email: {
-        smtpHost: envStr('SMTP_HOST', 'localhost'),
-        smtpPort: envInt('SMTP_PORT', 587),
-        fromAddress: envStr('SMTP_FROM_ADDRESS', 'noreply@localhost'),
+        smtpHost: envStr('ALERTS_SMTP_HOST', envStr('SMTP_HOST', 'localhost')),
+        smtpPort: envInt('ALERTS_SMTP_PORT', envInt('SMTP_PORT', 587)),
+        fromAddress: envStr('ALERTS_FROM_EMAIL', envStr('SMTP_FROM_ADDRESS', 'noreply@localhost')),
+        smtpSecure: envBool('ALERTS_SMTP_SECURE', envBool('SMTP_SECURE', false)),
+        smtpUser: envStr('ALERTS_SMTP_USER', envStr('SMTP_USER', '')),
+        smtpPassword: envStr('ALERTS_SMTP_PASSWORD', envStr('SMTP_PASSWORD', '')),
+      },
+    },
+    outreach: {
+      enabled: envBool('OUTREACH_ENABLED', false),
+      mailboxMode: 'shared_env',
+      pollIntervalSeconds: envInt('OUTREACH_POLL_INTERVAL_SECONDS', 60),
+      initialLookbackDays: envInt('OUTREACH_INITIAL_LOOKBACK_DAYS', 7),
+      followupDelayHours: envInt('OUTREACH_FOLLOWUP_DELAY_HOURS', 72),
+      maxAutoFollowups: envInt('OUTREACH_MAX_AUTO_FOLLOWUPS', 1),
+      fromName: envStr('OUTREACH_FROM_NAME', 'ImmoRadar'),
+      imap: {
+        host: envStr('OUTREACH_IMAP_HOST', ''),
+        port: envInt('OUTREACH_IMAP_PORT', 993),
+        secure: envBool('OUTREACH_IMAP_SECURE', true),
+        user: envStr('OUTREACH_IMAP_USER', ''),
+        password: envStr('OUTREACH_IMAP_PASSWORD', ''),
+        mailbox: envStr('OUTREACH_IMAP_MAILBOX', 'INBOX'),
+      },
+      smtp: {
+        host: envStr('OUTREACH_SMTP_HOST', ''),
+        port: envInt('OUTREACH_SMTP_PORT', 587),
+        secure: envBool('OUTREACH_SMTP_SECURE', false),
+        user: envStr('OUTREACH_SMTP_USER', ''),
+        password: envStr('OUTREACH_SMTP_PASSWORD', ''),
       },
     },
     features: {

@@ -1,0 +1,19 @@
+{
+  "name": "@immoradar/outreach",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@immoradar/contracts": "*",
+    "xstate": "^5.23.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "echo 'ok'",
+    "test:unit": "echo 'ok'",
+    "clean": "rm -rf dist"
+  }
+}

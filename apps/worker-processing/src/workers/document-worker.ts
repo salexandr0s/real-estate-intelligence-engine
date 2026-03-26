@@ -13,6 +13,9 @@
  */
 
 import { createHash } from 'node:crypto';
+import { access, readFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { join } from 'node:path';
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
@@ -20,6 +23,7 @@ import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scra
 import type { DocumentProcessingJobData } from '@immoradar/scraper-core';
 import { documents } from '@immoradar/db';
 import { extractPdfText, parseRealEstateFacts } from '@immoradar/documents';
+import { loadConfig } from '@immoradar/config';
 
 const log = createLogger('worker:document');
 
@@ -74,23 +78,49 @@ export function createDocumentWorker(): Worker<DocumentProcessingJobData> {
 
       let buffer: Buffer;
       let mimeType: string | null;
+      const config = loadConfig();
 
       try {
-        const response = await fetch(doc.url);
+        const storagePath = doc.storageKey ? join(config.s3.bucket, doc.storageKey) : null;
+        if (storagePath) {
+          try {
+            await access(storagePath, fsConstants.R_OK);
+            buffer = await readFile(storagePath);
+            mimeType = doc.mimeType;
+          } catch {
+            const response = await fetch(doc.url);
 
-        if (!response.ok) {
-          log.error('Document download failed', {
-            documentId,
-            url: doc.url,
-            status: response.status,
-          });
-          await documents.updateStatus(documentId, 'failed');
-          return;
+            if (!response.ok) {
+              log.error('Document download failed', {
+                documentId,
+                url: doc.url,
+                status: response.status,
+              });
+              await documents.updateStatus(documentId, 'failed');
+              return;
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            buffer = Buffer.from(arrayBuffer);
+            mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
+          }
+        } else {
+          const response = await fetch(doc.url);
+
+          if (!response.ok) {
+            log.error('Document download failed', {
+              documentId,
+              url: doc.url,
+              status: response.status,
+            });
+            await documents.updateStatus(documentId, 'failed');
+            return;
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          buffer = Buffer.from(arrayBuffer);
+          mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
         }
-
-        const arrayBuffer = await response.arrayBuffer();
-        buffer = Buffer.from(arrayBuffer);
-        mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
       } catch (err) {
         log.error('Document download error', {
           documentId,

@@ -7,6 +7,7 @@ struct ListingDetailView: View {
     let listing: Listing
     var onExpandMap: (() -> Void)?
     @Environment(AppState.self) private var appState
+    @State private var detailListing: Listing?
     @State private var explanation: ScoreExplanation?
     @State private var priceVersions: [PriceVersion] = []
     @State private var cluster: ListingCluster?
@@ -14,15 +15,22 @@ struct ListingDetailView: View {
     @State private var isLoadingAnalysis: Bool = false
     @State private var listingDocuments: [ListingDocument] = []
     @State private var isLoadingDocuments: Bool = false
+    @State private var outreachThread: OutreachThread?
+    @State private var isLoadingOutreach: Bool = false
+    @State private var outreachErrorMessage: String?
     @State private var isSaved: Bool = false
     @State private var isSaving: Bool = false
+
+    private var displayedListing: Listing {
+        detailListing ?? listing
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                 // Header: status, title, price, score, metrics
                 ListingHeaderSection(
-                    listing: listing,
+                    listing: displayedListing,
                     isSaved: isSaved,
                     cluster: cluster,
                     onToggleSave: { Task { await toggleSave() } }
@@ -31,7 +39,7 @@ struct ListingDetailView: View {
                 // Actions (moved up for quick access)
                 HStack(spacing: Theme.Spacing.sm) {
                     Button {
-                        if let url = URL(string: listing.canonicalUrl) {
+                        if let url = URL(string: displayedListing.canonicalUrl) {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -43,7 +51,7 @@ struct ListingDetailView: View {
 
                     Button {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(listing.canonicalUrl, forType: .string)
+                        NSPasteboard.general.setString(displayedListing.canonicalUrl, forType: .string)
                     } label: {
                         Label("Copy URL", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity)
@@ -51,7 +59,7 @@ struct ListingDetailView: View {
                     .controlSize(.regular)
                     .buttonStyle(.bordered)
 
-                    if let shareURL = URL(string: listing.canonicalUrl) {
+                    if let shareURL = URL(string: displayedListing.canonicalUrl) {
                         ShareLink(item: shareURL) {
                             Label("Share", systemImage: "square.and.arrow.up")
                                 .frame(maxWidth: .infinity)
@@ -139,7 +147,18 @@ struct ListingDetailView: View {
                 Divider()
 
                 // Property details grid
-                ListingDetailsSection(listing: listing)
+                ListingDetailsSection(listing: displayedListing)
+
+                OutreachDetailSection(
+                    listing: displayedListing,
+                    thread: outreachThread,
+                    isLoading: isLoadingOutreach,
+                    errorMessage: outreachErrorMessage,
+                    onStart: { Task { await startOutreach() } },
+                    onReload: { Task { await loadOutreachThread() } },
+                    onAction: { action in Task { await applyOutreachAction(action) } },
+                    onSendFollowup: { Task { await sendFollowup() } }
+                )
 
                 // Building context
                 if let building = analysis?.buildingContext {
@@ -147,7 +166,7 @@ struct ListingDetailView: View {
                 }
 
                 // Nearby POIs
-                ListingLocationSection(listing: listing)
+                ListingLocationSection(listing: displayedListing)
 
                 Divider()
 
@@ -161,19 +180,30 @@ struct ListingDetailView: View {
                 Divider()
 
                 // Map
-                ListingMapView(listing: listing, onExpandToFullMap: onExpandMap)
+                ListingMapView(listing: displayedListing, onExpandToFullMap: onExpandMap)
             }
             .padding(Theme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: listing.id) {
+            async let l: Void = loadListingDetail()
             async let v: Void = loadVersions()
             async let e: Void = loadExplanation()
             async let c: Void = loadCluster()
             async let s: Void = checkIfSaved()
             async let a: Void = loadAnalysis()
             async let d: Void = loadDocuments()
-            _ = await (v, e, c, s, a, d)
+            async let o: Void = loadOutreachThread()
+            _ = await (l, v, e, c, s, a, d, o)
+        }
+    }
+
+    private func loadListingDetail() async {
+        do {
+            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
+        } catch {
+            detailListing = nil
+            Log.ui.error("Failed to load listing detail for listing \(self.listing.id): \(error, privacy: .public)")
         }
     }
 
@@ -277,6 +307,179 @@ struct ListingDetailView: View {
             isSaved = wasSaved
             Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
         }
+    }
+
+    private func loadOutreachThread() async {
+        isLoadingOutreach = true
+        defer { isLoadingOutreach = false }
+
+        guard let summary = displayedListing.outreachSummary else {
+            outreachThread = nil
+            outreachErrorMessage = nil
+            return
+        }
+
+        do {
+            outreachThread = try await appState.apiClient.fetchOutreachThread(id: summary.threadId)
+            outreachErrorMessage = nil
+        } catch {
+            outreachThread = nil
+            outreachErrorMessage = error.localizedDescription
+            Log.ui.error("Failed to load outreach thread for listing \(self.listing.id): \(error, privacy: .public)")
+        }
+    }
+
+    private func startOutreach() async {
+        guard let contactEmail = displayedListing.contactEmail else { return }
+
+        isLoadingOutreach = true
+        defer { isLoadingOutreach = false }
+
+        do {
+            let threadId = try await appState.apiClient.startOutreach(
+                listingId: listing.id,
+                input: OutreachStartInput(
+                    subject: "Anfrage: \(displayedListing.title)",
+                    bodyText: "Guten Tag, ich interessiere mich für das Objekt \"\(displayedListing.title)\" und würde mich über weitere Informationen freuen.",
+                    contactEmail: contactEmail,
+                    contactName: displayedListing.contactName,
+                    contactCompany: displayedListing.contactCompany,
+                    contactPhone: displayedListing.contactPhone
+                )
+            )
+            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
+            outreachThread = try await appState.apiClient.fetchOutreachThread(id: threadId)
+            outreachErrorMessage = nil
+        } catch {
+            outreachErrorMessage = error.localizedDescription
+            Log.ui.error("Failed to start outreach for listing \(self.listing.id): \(error, privacy: .public)")
+        }
+    }
+
+    private func applyOutreachAction(_ action: OutreachAction) async {
+        guard let thread = outreachThread else { return }
+        do {
+            try await appState.apiClient.updateOutreachThread(id: thread.id, action: action)
+            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
+            await loadOutreachThread()
+        } catch {
+            outreachErrorMessage = error.localizedDescription
+            Log.ui.error("Failed outreach action for listing \(self.listing.id): \(error, privacy: .public)")
+        }
+    }
+
+    private func sendFollowup() async {
+        guard let thread = outreachThread else { return }
+        do {
+            try await appState.apiClient.sendOutreachFollowup(id: thread.id)
+            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
+            await loadOutreachThread()
+        } catch {
+            outreachErrorMessage = error.localizedDescription
+            Log.ui.error("Failed outreach follow-up for listing \(self.listing.id): \(error, privacy: .public)")
+        }
+    }
+
+}
+
+private struct OutreachDetailSection: View {
+    let listing: Listing
+    let thread: OutreachThread?
+    let isLoading: Bool
+    let errorMessage: String?
+    let onStart: () -> Void
+    let onReload: () -> Void
+    let onAction: (OutreachAction) -> Void
+    let onSendFollowup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack {
+                Text("Outreach")
+                    .font(.headline)
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            if let thread {
+                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    Text(thread.workflowState.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.subheadline.weight(.semibold))
+                    if let lastOutboundAt = thread.lastOutboundAt {
+                        Text("Last outbound: \(PriceFormatter.formatDateTime(lastOutboundAt))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let lastInboundAt = thread.lastInboundAt {
+                        Text("Last reply: \(PriceFormatter.formatDateTime(lastInboundAt))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if thread.unreadInboundCount > 0 {
+                        Text("Unread replies: \(thread.unreadInboundCount)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Button("Reload", action: onReload)
+                        Button("Pause") { onAction(.pause) }
+                            .disabled(thread.workflowState == "paused" || thread.workflowState == "closed")
+                        Button("Resume") { onAction(.resume) }
+                            .disabled(thread.workflowState != "paused")
+                        Button("Close") { onAction(.close) }
+                            .disabled(thread.workflowState == "closed")
+                        Button("Follow-up", action: onSendFollowup)
+                            .disabled(thread.lastInboundAt != nil || thread.workflowState == "closed")
+                    }
+
+                    if !thread.messages.isEmpty {
+                        Divider()
+                        ForEach(thread.messages.prefix(3)) { message in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(message.direction.capitalized)
+                                        .font(.caption.weight(.semibold))
+                                    Spacer()
+                                    Text(PriceFormatter.formatDateTime(message.occurredAt))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(message.subject)
+                                    .font(.subheadline.weight(.semibold))
+                                if let body = message.bodyText, !body.isEmpty {
+                                    Text(body)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(4)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            } else if let contactEmail = listing.contactEmail {
+                Text(contactEmail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Button("Start outreach", action: onStart)
+            } else {
+                Text("No contact email available for this listing.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding()
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

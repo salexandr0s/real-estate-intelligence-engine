@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import pg from 'pg';
-import { runMigrations, closePool } from '@immoradar/db';
-import { resetConfig } from '@immoradar/config';
+import { runMigrations } from '@immoradar/db';
+import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 const hasDb = !!process.env.DATABASE_URL;
+const testDb = createPostgresTestDatabase({
+  namePrefix: 'immoradar_test_rollback',
+  enabled: hasDb,
+});
 
 describe('migration rollback strategy', () => {
   // ── Lightweight file-based checks (always run) ─────────────────────────────
@@ -94,48 +97,12 @@ describe('migration rollback strategy', () => {
   // ── DB-dependent idempotency test ──────────────────────────────────────────
 
   describe('schema idempotent application', () => {
-    const TEST_DB_NAME = `immoradar_test_rollback_${process.pid}`;
-    let adminClient: pg.Client;
-    let originalDatabaseUrl: string | undefined;
-
     beforeAll(async () => {
-      if (!hasDb) return;
-
-      originalDatabaseUrl = process.env['DATABASE_URL'];
-      const adminUrl =
-        originalDatabaseUrl ?? 'postgres://postgres:postgres@localhost:5432/postgres';
-      const parsed = new URL(adminUrl);
-      parsed.pathname = '/postgres';
-
-      adminClient = new pg.Client({ connectionString: parsed.toString() });
-      await adminClient.connect();
-
-      await adminClient.query(`DROP DATABASE IF EXISTS "${TEST_DB_NAME}"`);
-      await adminClient.query(`CREATE DATABASE "${TEST_DB_NAME}"`);
-
-      parsed.pathname = `/${TEST_DB_NAME}`;
-      process.env['DATABASE_URL'] = parsed.toString();
-      resetConfig();
+      await testDb.setup();
     });
 
     afterAll(async () => {
-      if (!hasDb) return;
-
-      await closePool();
-
-      if (originalDatabaseUrl !== undefined) {
-        process.env['DATABASE_URL'] = originalDatabaseUrl;
-      } else {
-        delete process.env['DATABASE_URL'];
-      }
-      resetConfig();
-
-      await adminClient.query(
-        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [TEST_DB_NAME],
-      );
-      await adminClient.query(`DROP DATABASE IF EXISTS "${TEST_DB_NAME}"`);
-      await adminClient.end();
+      await testDb.teardown();
     });
 
     it.skipIf(!hasDb)('schema can be applied twice without error (idempotent)', async () => {

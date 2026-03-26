@@ -99,6 +99,7 @@ function buildCaptureFromJson(
     mediaRaw: [],
     images: detailData.images ?? [],
     contactName: contact?.name ?? null,
+    contactPhone: contact?.phone ?? null,
   };
 
   return {
@@ -133,6 +134,7 @@ interface DomExtracted {
   lng: string | null;
   description: string | null;
   contactName: string | null;
+  contactPhone: string | null;
   images: string[];
   features: string[];
 }
@@ -292,6 +294,14 @@ function extractFromDom(html: string): DomExtracted | null {
     contactName = stripTags(contactSection[1]);
   }
 
+  let contactPhone: string | null = null;
+  const phoneSection = decoded.match(
+    /<span[^>]*class="[^"]*agent-phone[^"]*"[^>]*>([\s\S]*?)<\/span>/,
+  );
+  if (phoneSection?.[1]) {
+    contactPhone = stripTags(phoneSection[1]);
+  }
+
   // Images: src attributes from img tags with derstandard URLs
   const images: string[] = [];
   const imgPattern = /<img[^>]+src="([^"]*derstandard[^"]*)"/g;
@@ -338,6 +348,7 @@ function extractFromDom(html: string): DomExtracted | null {
     lng,
     description,
     contactName,
+    contactPhone,
     images,
     features,
   };
@@ -407,6 +418,7 @@ function buildCaptureFromDom(
     mediaRaw: [],
     images: dom.images,
     contactName: dom.contactName,
+    contactPhone: dom.contactPhone,
   };
 
   return {
@@ -470,6 +482,7 @@ function buildFailedCapture(
       mediaRaw: [],
       images: [],
       contactName: null,
+      contactPhone: null,
     },
     parserVersion,
     extractionStatus: 'parse_failed',

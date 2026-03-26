@@ -242,6 +242,48 @@ actor APIClient {
         return response.data
     }
 
+    func fetchMailboxes() async throws -> [MailboxAccount] {
+        let response: PaginatedResponse<APIMailboxResponse> = try await requestPaginated(.listMailboxes)
+        return response.data.map { $0.toDomain() }
+    }
+
+    func syncMailbox(id: Int) async throws {
+        try await requestVoid(.syncMailbox(id: id))
+    }
+
+    func fetchOutreachThreads(scope: OutreachScope = .open, cursor: String? = nil, limit: Int? = 25) async throws -> (threads: [OutreachThreadSummary], nextCursor: String?) {
+        let response: PaginatedResponse<APIOutreachThreadSummaryResponse> = try await requestPaginated(
+            .listOutreachThreads(scope: scope, cursor: cursor, limit: limit)
+        )
+        return (response.data.map { $0.toDomain() }, response.meta?.nextCursor)
+    }
+
+    func fetchOutreachThread(id: Int) async throws -> OutreachThread {
+        let response: APIResponse<APIOutreachThreadResponse> = try await request(.getOutreachThread(id: id))
+        return response.data.toDomain()
+    }
+
+    func startOutreach(listingId: Int, input: OutreachStartInput) async throws -> Int {
+        let body = try encoder.encode(input)
+        struct StartResponse: Codable, Sendable { let threadId: Int }
+        let response: APIResponse<StartResponse> = try await request(.startOutreach(listingId: listingId, body: body))
+        return response.data.threadId
+    }
+
+    func updateOutreachThread(id: Int, action: OutreachAction) async throws {
+        let body = try encoder.encode(APIOutreachActionRequest(action: action.rawValue))
+        try await requestVoid(.updateOutreachThread(id: id, body: body))
+    }
+
+    func sendOutreachFollowup(id: Int, subject: String? = nil, bodyText: String? = nil) async throws {
+        struct FollowupRequest: Codable, Sendable {
+            let subject: String?
+            let bodyText: String?
+        }
+        let body = try encoder.encode(FollowupRequest(subject: subject, bodyText: bodyText))
+        try await requestVoid(.sendOutreachFollowup(id: id, body: body))
+    }
+
     func fetchDocumentFacts(documentId: Int) async throws -> [DocumentFact] {
         let response: PaginatedResponse<DocumentFact> = try await requestPaginated(.getDocumentFacts(documentId: documentId))
         return response.data

@@ -19,8 +19,9 @@
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx seeds/seed.ts",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --root ../.. --passWithNoTests packages/db/src/**/*.test.ts",
+    "test:integration": "vitest run --root ../.. --config vitest.config.integration.ts tests/integration/migrations.test.ts tests/integration/migration-rollback.test.ts tests/integration/mailbox-outreach-migrations.test.ts",
     "clean": "rm -rf dist"
   }
 }

@@ -27,6 +27,8 @@ const FILTER_KINDS = ['listing_search', 'alert'] as const;
 const ALERT_FREQUENCIES = ['instant', 'hourly_digest', 'daily_digest', 'manual'] as const;
 const ALERT_CHANNELS = ['in_app', 'email', 'push', 'webhook'] as const;
 const ALERT_STATUSES = ['queued', 'sent', 'failed', 'dismissed', 'opened', 'suppressed'] as const;
+const OUTREACH_THREAD_SCOPES = ['open', 'closed', 'all'] as const;
+const OUTREACH_THREAD_ACTIONS = ['pause', 'resume', 'close', 'retry'] as const;
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -221,4 +223,28 @@ export const districtTrendQuerySchema = z.object({
   operationType: z.enum(OPERATION_TYPES).optional(),
   propertyType: z.enum(PROPERTY_TYPES).optional(),
   months: z.preprocess(absentToUndefined, z.coerce.number().int().min(1).max(60).optional()),
+});
+
+export const startOutreachSchema = z.object({
+  contactEmail: z.string().email().optional(),
+  contactName: z.string().trim().max(200).optional(),
+  contactCompany: z.string().trim().max(200).optional(),
+  contactPhone: z.string().trim().max(100).optional(),
+  subject: z.string().trim().min(1).max(300),
+  bodyText: z.string().trim().min(1).max(20000),
+});
+
+export const outreachThreadListQuerySchema = z.object({
+  scope: z.enum(OUTREACH_THREAD_SCOPES).default('open'),
+  limit: optionalQueryLimit,
+  cursor: z.string().optional(),
+});
+
+export const outreachThreadActionSchema = z.object({
+  action: z.enum(OUTREACH_THREAD_ACTIONS),
+});
+
+export const manualFollowupSchema = z.object({
+  subject: z.string().trim().min(1).max(300).optional(),
+  bodyText: z.string().trim().min(1).max(20000).optional(),
 });

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@immoradar/observability';
 import type { ListingSearchFilter } from '@immoradar/db';
-import { listings, listingScores, listingVersions, clusters } from '@immoradar/db';
+import { listings, listingScores, listingVersions, clusters, outreach } from '@immoradar/db';
 import {
   parseOrThrow,
   listingSearchQuerySchema,
@@ -249,7 +249,10 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
 
-      const listing = await listings.findById(id);
+      const [listing, outreachSummary] = await Promise.all([
+        listings.findById(id),
+        outreach.findSummaryForListing(request.userId, id),
+      ]);
       if (!listing) {
         throw new NotFoundError('Listing', id);
       }
@@ -297,6 +300,11 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           conditionCategory: listing.conditionCategory,
           heatingType: listing.heatingType,
           energyCertificateClass: listing.energyCertificateClass,
+          contactName: listing.contactName,
+          contactCompany: listing.contactCompany,
+          contactEmail: listing.contactEmail,
+          contactPhone: listing.contactPhone,
+          outreachSummary,
           hasBalcony: listing.hasBalcony,
           hasTerrace: listing.hasTerrace,
           hasGarden: listing.hasGarden,

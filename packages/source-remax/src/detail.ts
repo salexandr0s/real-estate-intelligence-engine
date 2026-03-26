@@ -108,7 +108,7 @@ export function parseDetailPage(
   const propertyTypeRaw = dataLayer?.immoType ?? null;
   const operationTypeRaw = dataLayer?.immoTransaction
     ? mapOperationType(dataLayer.immoTransaction)
-    : 'sale';
+    : null;
 
   const immoId = dataLayer?.immoId ?? null;
 

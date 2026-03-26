@@ -89,7 +89,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
         : undefined;
 
       const context = await createScrapeContext(
-        harTempPath ? { recordHarPath: harTempPath } : undefined,
+        harTempPath ? { recordHarPath: harTempPath, sourceCode } : { sourceCode },
       );
       await setupRequestInterception(context);
 

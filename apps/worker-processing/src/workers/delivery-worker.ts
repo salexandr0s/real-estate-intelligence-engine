@@ -126,6 +126,9 @@ export function createDeliveryWorker(): Worker<AlertDeliveryJobData> {
               enabled: config.alerts.emailEnabled,
               smtpHost: config.alerts.email.smtpHost,
               smtpPort: config.alerts.email.smtpPort,
+              smtpSecure: config.alerts.email.smtpSecure,
+              smtpUser: config.alerts.email.smtpUser,
+              smtpPassword: config.alerts.email.smtpPassword,
               fromAddress: config.alerts.email.fromAddress,
             },
           });

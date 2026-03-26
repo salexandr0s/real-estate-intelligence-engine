@@ -56,6 +56,9 @@ export class DerStandardMapper extends BaseSourceMapper {
   private enrichPayload(raw: DerStandardRawListing): DerStandardRawListing {
     const enriched: DerStandardRawListing = { ...raw };
 
+    enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
+    enriched.contactPhoneRaw ??= (raw as { contactPhone?: string | null }).contactPhone ?? null;
+
     // DerStandard uses "Wohnung" as default property type
     if (enriched.propertyTypeRaw == null && enriched.subTypeRaw != null) {
       enriched.propertyTypeRaw = enriched.subTypeRaw;

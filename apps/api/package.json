@@ -17,6 +17,7 @@
     "@immoradar/legal-rent": "*",
     "@immoradar/copilot": "*",
     "@immoradar/observability": "*",
+    "@immoradar/outreach": "*",
     "fastify": "^5.2.1",
     "zod": "^4.3.6"
   },
@@ -29,8 +30,9 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --root ../.. --passWithNoTests apps/api/src/**/*.test.ts",
+    "test:integration": "vitest run --root ../.. --config vitest.config.integration.ts tests/integration/outreach-api.test.ts",
     "clean": "rm -rf dist"
   }
 }

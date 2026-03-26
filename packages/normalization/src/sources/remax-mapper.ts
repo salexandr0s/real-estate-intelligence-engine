@@ -57,6 +57,11 @@ export class RemaxMapper extends BaseSourceMapper {
   private enrichPayload(raw: RemaxRawListing): RemaxRawListing {
     const enriched: RemaxRawListing = { ...raw };
 
+    enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
+    enriched.contactCompanyRaw ??= raw.agentCompany ?? null;
+    enriched.contactPhoneRaw ??= (raw as { agentPhone?: string | null }).agentPhone ?? null;
+    enriched.contactEmailRaw ??= (raw as { agentEmail?: string | null }).agentEmail ?? null;
+
     if (enriched.operationTypeRaw == null && enriched.transactionTypeRaw != null) {
       const t = enriched.transactionTypeRaw.toLowerCase();
       if (t.includes('kauf')) enriched.operationTypeRaw = 'sale';

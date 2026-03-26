@@ -58,6 +58,10 @@ interface ListingDbRow {
   condition_category: string | null;
   heating_type: string | null;
   energy_certificate_class: string | null;
+  contact_name: string | null;
+  contact_company: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   has_balcony: boolean | null;
   has_terrace: boolean | null;
   has_garden: boolean | null;
@@ -134,6 +138,10 @@ function toListingRow(row: ListingDbRow): ListingRow {
     conditionCategory: row.condition_category,
     heatingType: row.heating_type,
     energyCertificateClass: row.energy_certificate_class,
+    contactName: row.contact_name,
+    contactCompany: row.contact_company,
+    contactEmail: row.contact_email,
+    contactPhone: row.contact_phone,
     hasBalcony: row.has_balcony,
     hasTerrace: row.has_terrace,
     hasGarden: row.has_garden,
@@ -240,6 +248,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        balcony_area_sqm, terrace_area_sqm, garden_area_sqm,
        rooms, floor_label, floor_number, year_built,
        condition_category, heating_type, energy_certificate_class,
+       contact_name, contact_company, contact_email, contact_phone,
        has_balcony, has_terrace, has_garden, has_elevator,
        parking_available, is_furnished,
        normalized_payload, completeness_score, content_fingerprint,
@@ -251,6 +260,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
        $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
        $42, $43, $44, $45, $46, $47, $48, $49, $50, $51,
+       $52, $53, $54, $55,
        NOW(), NOW()
      )
      ON CONFLICT (source_id, source_listing_key) DO UPDATE SET
@@ -291,6 +301,10 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        condition_category = EXCLUDED.condition_category,
        heating_type = EXCLUDED.heating_type,
        energy_certificate_class = EXCLUDED.energy_certificate_class,
+       contact_name = EXCLUDED.contact_name,
+       contact_company = EXCLUDED.contact_company,
+       contact_email = EXCLUDED.contact_email,
+       contact_phone = EXCLUDED.contact_phone,
        has_balcony = EXCLUDED.has_balcony,
        has_terrace = EXCLUDED.has_terrace,
        has_garden = EXCLUDED.has_garden,
@@ -360,6 +374,10 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
       input.conditionCategory ?? null,
       input.heatingType ?? null,
       input.energyCertificateClass ?? null,
+      input.contactName ?? null,
+      input.contactCompany ?? null,
+      input.contactEmail ?? null,
+      input.contactPhone ?? null,
       input.hasBalcony ?? null,
       input.hasTerrace ?? null,
       input.hasGarden ?? null,

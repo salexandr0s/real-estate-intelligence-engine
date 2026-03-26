@@ -61,6 +61,9 @@ export class Immoscout24Mapper extends BaseSourceMapper {
   private enrichPayload(raw: Immoscout24RawListing): Immoscout24RawListing {
     const enriched: Immoscout24RawListing = { ...raw };
 
+    enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
+    enriched.contactCompanyRaw ??= raw.brokerName ?? null;
+
     if (enriched.propertyTypeRaw == null && enriched.estateTypeRaw != null) {
       enriched.propertyTypeRaw = enriched.estateTypeRaw;
     }

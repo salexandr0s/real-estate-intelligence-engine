@@ -28,6 +28,11 @@ struct Listing: Identifiable, Codable, Hashable {
     let lastPriceChangeAt: Date?
     let firstSeenAt: Date
     let listingStatus: ListingStatus
+    let contactName: String?
+    let contactCompany: String?
+    let contactEmail: String?
+    let contactPhone: String?
+    let outreachSummary: OutreachSummary?
 
     /// Non-optional score for sorting (0 when nil).
     var sortableScore: Double { currentScore ?? 0 }
@@ -47,8 +52,76 @@ struct Listing: Identifiable, Codable, Hashable {
             || geocodePrecision == "street"
     }
 
+    var hasContactInfo: Bool {
+        contactName != nil || contactCompany != nil || contactEmail != nil || contactPhone != nil
+    }
+
     /// Transient flag set client-side when this listing has matching alerts.
     var hasAlertMatch: Bool = false
+
+    init(
+        id: Int,
+        listingUid: String,
+        sourceCode: String,
+        title: String,
+        canonicalUrl: String,
+        operationType: OperationType,
+        propertyType: PropertyType,
+        city: String,
+        postalCode: String?,
+        districtNo: Int?,
+        districtName: String?,
+        listPriceEur: Int,
+        livingAreaSqm: Double?,
+        rooms: Double?,
+        pricePerSqmEur: Double?,
+        currentScore: Double?,
+        latitude: Double?,
+        longitude: Double?,
+        geocodePrecision: String?,
+        geocodeSource: String?,
+        lastPriceChangePct: Double?,
+        lastPriceChangeAt: Date?,
+        firstSeenAt: Date,
+        listingStatus: ListingStatus,
+        contactName: String? = nil,
+        contactCompany: String? = nil,
+        contactEmail: String? = nil,
+        contactPhone: String? = nil,
+        outreachSummary: OutreachSummary? = nil,
+        hasAlertMatch: Bool = false
+    ) {
+        self.id = id
+        self.listingUid = listingUid
+        self.sourceCode = sourceCode
+        self.title = title
+        self.canonicalUrl = canonicalUrl
+        self.operationType = operationType
+        self.propertyType = propertyType
+        self.city = city
+        self.postalCode = postalCode
+        self.districtNo = districtNo
+        self.districtName = districtName
+        self.listPriceEur = listPriceEur
+        self.livingAreaSqm = livingAreaSqm
+        self.rooms = rooms
+        self.pricePerSqmEur = pricePerSqmEur
+        self.currentScore = currentScore
+        self.latitude = latitude
+        self.longitude = longitude
+        self.geocodePrecision = geocodePrecision
+        self.geocodeSource = geocodeSource
+        self.lastPriceChangePct = lastPriceChangePct
+        self.lastPriceChangeAt = lastPriceChangeAt
+        self.firstSeenAt = firstSeenAt
+        self.listingStatus = listingStatus
+        self.contactName = contactName
+        self.contactCompany = contactCompany
+        self.contactEmail = contactEmail
+        self.contactPhone = contactPhone
+        self.outreachSummary = outreachSummary
+        self.hasAlertMatch = hasAlertMatch
+    }
 }
 
 // MARK: - Mock Data
@@ -281,4 +354,112 @@ extension Listing {
         matchedPositiveKeywords: ["provisionsfrei", "renoviert"],
         matchedNegativeKeywords: []
     )
+}
+
+
+enum OutreachScope: String, Codable, CaseIterable, Sendable {
+    case open
+    case closed
+    case all
+}
+
+enum OutreachAction: String, Codable, Sendable {
+    case pause
+    case resume
+    case close
+    case retry
+}
+
+struct MailboxAccount: Identifiable, Codable, Hashable, Sendable {
+    let id: Int
+    let email: String
+    let displayName: String?
+    let syncStatus: String
+    let pollIntervalSeconds: Int
+    let lastSuccessfulSyncAt: Date?
+    let lastErrorMessage: String?
+}
+
+struct OutreachSummary: Codable, Hashable, Sendable {
+    let threadId: Int
+    let workflowState: String
+    let unreadInboundCount: Int
+    let nextActionAt: Date?
+    let lastInboundAt: Date?
+    let lastOutboundAt: Date?
+}
+
+struct OutreachAttachment: Identifiable, Codable, Hashable, Sendable {
+    let documentId: Int
+    let label: String?
+    let status: String
+    var id: Int { documentId }
+}
+
+struct OutreachMessage: Identifiable, Codable, Hashable, Sendable {
+    let id: Int
+    let direction: String
+    let messageKind: String
+    let deliveryStatus: String
+    let subject: String
+    let bodyText: String?
+    let bodyHtml: String?
+    let fromEmail: String?
+    let toEmail: String?
+    let matchStrategy: String
+    let occurredAt: Date
+    let errorMessage: String?
+    let attachments: [OutreachAttachment]
+}
+
+struct OutreachEvent: Identifiable, Codable, Hashable, Sendable {
+    let id: Int
+    let eventType: String
+    let fromState: String?
+    let toState: String?
+    let payload: [String: String]?
+    let occurredAt: Date
+}
+
+struct OutreachThread: Identifiable, Codable, Hashable, Sendable {
+    let id: Int
+    let listingId: Int
+    let mailboxAccountId: Int
+    let contactName: String?
+    let contactCompany: String?
+    let contactEmail: String
+    let contactPhone: String?
+    let workflowState: String
+    let unreadInboundCount: Int
+    let nextActionAt: Date?
+    let lastInboundAt: Date?
+    let lastOutboundAt: Date?
+    let updatedAt: Date
+    let messages: [OutreachMessage]
+    let events: [OutreachEvent]
+}
+
+struct OutreachThreadSummary: Identifiable, Codable, Hashable, Sendable {
+    let id: Int
+    let listingId: Int
+    let mailboxAccountId: Int
+    let contactName: String?
+    let contactCompany: String?
+    let contactEmail: String
+    let contactPhone: String?
+    let workflowState: String
+    let unreadInboundCount: Int
+    let nextActionAt: Date?
+    let lastInboundAt: Date?
+    let lastOutboundAt: Date?
+    let updatedAt: Date
+}
+
+struct OutreachStartInput: Codable, Sendable {
+    let subject: String
+    let bodyText: String
+    let contactEmail: String?
+    let contactName: String?
+    let contactCompany: String?
+    let contactPhone: String?
 }

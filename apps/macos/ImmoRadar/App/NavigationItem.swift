@@ -8,6 +8,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     case copilot
     case alerts
     case watchlist
+    case outreach
     case sources
     case analytics
     case settings
@@ -22,6 +23,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .copilot: "Copilot"
         case .alerts: "Alerts"
         case .watchlist: "Watchlist"
+        case .outreach: "Outreach"
         case .sources: "Sources"
         case .analytics: "Analytics"
         case .settings: "Settings"
@@ -36,6 +38,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .copilot: "bubble.left.and.text.bubble.right"
         case .alerts: "bell"
         case .watchlist: "bookmark"
+        case .outreach: "envelope.badge"
         case .sources: "antenna.radiowaves.left.and.right"
         case .analytics: "chart.bar.xaxis"
         case .settings: "gearshape"
@@ -51,6 +54,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .copilot: "⌘4"
         case .alerts: "⌘5"
         case .watchlist: "⌘6"
+        case .outreach: nil
         case .sources: "⌘7"
         case .analytics: "⌘8"
         case .settings: nil
@@ -66,6 +70,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
         case .copilot: "4"
         case .alerts: "5"
         case .watchlist: "6"
+        case .outreach: nil
         case .sources: "7"
         case .analytics: "8"
         case .settings: nil

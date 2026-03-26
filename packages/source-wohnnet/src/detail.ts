@@ -93,6 +93,7 @@ export function parseDetailPage(
   // -- Contact info from HTML
   const contactPhone = extractContactField(html, 'phone');
   const contactEmail = extractContactField(html, 'envelope');
+  const contactName = extractContactName(html);
 
   // -- Build attributes map from all sources
   const attributesRaw: Record<string, unknown> = {};
@@ -103,6 +104,7 @@ export function parseDetailPage(
   if (angebot) attributesRaw['angebot'] = angebot;
   if (contactPhone) attributesRaw['contactPhone'] = contactPhone;
   if (contactEmail) attributesRaw['contactEmail'] = contactEmail;
+  if (contactName) attributesRaw['contactName'] = contactName;
   if (energyCertificateRaw) attributesRaw['energyClass'] = energyCertificateRaw;
 
   const payload: WohnnetDetailDTO = {
@@ -138,7 +140,10 @@ export function parseDetailPage(
     attributesRaw,
     mediaRaw: [],
     images,
+    contactName,
     brokerCompany,
+    contactEmail,
+    contactPhone,
   };
 
   return {
@@ -184,7 +189,10 @@ function buildFailedCapture(
       attributesRaw: {},
       mediaRaw: [],
       images: [],
+      contactName: null,
       brokerCompany: null,
+      contactEmail: null,
+      contactPhone: null,
     },
     parserVersion,
     extractionStatus: 'parse_failed',
@@ -363,6 +371,14 @@ function extractImages(html: string): string[] {
 function extractBrokerName(html: string): string | null {
   const match = html.match(/broker-name[\s\S]*?<strong>([\s\S]*?)<\/strong>/i);
   return match?.[1]?.trim() ?? null;
+}
+
+/**
+ * Extract agent/contact person name from contact section.
+ */
+function extractContactName(html: string): string | null {
+  const match = html.match(/broker-agent[^>]*>([\s\S]*?)<\/p>/i);
+  return match?.[1]?.replace(/<[^>]+>/g, '').trim() ?? null;
 }
 
 /**

@@ -74,6 +74,9 @@ jobs:
       - name: Unit tests
         run: npx vitest run --reporter=verbose 2>&1 | tee test-output.log
 
+      - name: Integration tests
+        run: npm run test:integration -- --reporter=verbose 2>&1 | tee integration-test-output.log
+
       - name: Upload test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,7 +94,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-output
-          path: test-output.log
+          path: |
+            test-output.log
+            integration-test-output.log
           retention-days: 7
 
   macos-build:

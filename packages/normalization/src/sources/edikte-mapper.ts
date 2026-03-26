@@ -34,7 +34,7 @@ export interface EdikteRawListing extends SourceRawListingBase {
  * Enriches base normalization with auction-specific metadata.
  */
 export class EdikteMapper extends BaseSourceMapper {
-  override readonly normalizationVersion = 1;
+  override readonly normalizationVersion = 2;
 
   constructor() {
     super('edikte');

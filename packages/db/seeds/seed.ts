@@ -3,6 +3,14 @@ import { createLogger } from '@immoradar/observability';
 
 const logger = createLogger('db:seed');
 
+const defaultCrawlProfile = {
+  operationType: 'sale',
+  propertyType: 'apartment',
+  regions: ['wien'],
+  maxPagesPerRun: 100, // Safety cap; parsers control actual stop via nextPagePlan
+  sortOrder: 'published_desc',
+};
+
 export async function seed(): Promise<void> {
   const pool = getPool();
 
@@ -18,149 +26,7 @@ export async function seed(): Promise<void> {
   // Insert sources with crawl profiles and rate limits
   logger.info('Seeding sources...');
 
-  const defaultCrawlProfile = {
-    operationType: 'sale',
-    propertyType: 'apartment',
-    regions: ['wien'],
-    maxPagesPerRun: 100, // Safety cap; parsers control actual stop via nextPagePlan
-    sortOrder: 'published_desc',
-  };
-
-  const sources: Array<{
-    code: string;
-    name: string;
-    baseUrl: string;
-    scrapeMode: string;
-    rateLimitRpm: number;
-    crawlIntervalMinutes: number;
-    priority: number;
-    concurrencyLimit: number;
-    parserVersion: number;
-    legalStatus: string;
-    isActive: boolean;
-    config: Record<string, unknown>;
-  }> = [
-    {
-      code: 'willhaben',
-      name: 'willhaben.at',
-      baseUrl: 'https://www.willhaben.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 10,
-      crawlIntervalMinutes: 15,
-      priority: 10,
-      concurrencyLimit: 1,
-      parserVersion: 1,
-      legalStatus: 'approved',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'immoscout24',
-      name: 'ImmobilienScout24.at',
-      baseUrl: 'https://www.immobilienscout24.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 8,
-      crawlIntervalMinutes: 30,
-      priority: 20,
-      concurrencyLimit: 1,
-      parserVersion: 2,
-      legalStatus: 'review_required',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'wohnnet',
-      name: 'wohnnet.at',
-      baseUrl: 'https://www.wohnnet.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 15,
-      crawlIntervalMinutes: 30,
-      priority: 30,
-      concurrencyLimit: 1,
-      parserVersion: 1,
-      legalStatus: 'review_required',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'derstandard',
-      name: 'derstandard.at Immobilien',
-      baseUrl: 'https://immobilien.derstandard.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 12,
-      crawlIntervalMinutes: 60,
-      priority: 40,
-      concurrencyLimit: 1,
-      parserVersion: 2,
-      legalStatus: 'review_required',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'findmyhome',
-      name: 'findmyhome.at',
-      baseUrl: 'https://www.findmyhome.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 15,
-      crawlIntervalMinutes: 60,
-      priority: 50,
-      concurrencyLimit: 1,
-      parserVersion: 2,
-      legalStatus: 'review_required',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'openimmo',
-      name: 'openimmo.at',
-      baseUrl: 'https://www.openimmo.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 15,
-      crawlIntervalMinutes: 30,
-      priority: 999,
-      concurrencyLimit: 1,
-      parserVersion: 1,
-      legalStatus: 'disabled',
-      isActive: false,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'remax',
-      name: 'RE/MAX Austria',
-      baseUrl: 'https://www.remax.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 10,
-      crawlIntervalMinutes: 60,
-      priority: 60,
-      concurrencyLimit: 1,
-      parserVersion: 2,
-      legalStatus: 'review_required',
-      isActive: true,
-      config: { crawlProfile: defaultCrawlProfile },
-    },
-    {
-      code: 'edikte',
-      name: 'Ediktsdatei Justiz (Zwangsversteigerungen)',
-      baseUrl: 'https://edikte.justiz.gv.at',
-      scrapeMode: 'browser',
-      rateLimitRpm: 6,
-      crawlIntervalMinutes: 360,
-      priority: 70,
-      concurrencyLimit: 1,
-      parserVersion: 1,
-      legalStatus: 'approved',
-      isActive: true,
-      config: {
-        crawlProfile: {
-          operationType: 'sale',
-          propertyType: null, // forced auctions cover all property types
-          regions: ['wien'],
-          maxPagesPerRun: 20, // ~160 total results for Wien, conservative cap
-          sortOrder: 'published_desc',
-        },
-      },
-    },
-  ];
+  const sources = DEFAULT_SOURCE_SEEDS;
 
   for (const s of sources) {
     await pool.query(
@@ -201,6 +67,142 @@ export async function seed(): Promise<void> {
 
   logger.info('Seed complete');
 }
+
+export const DEFAULT_SOURCE_SEEDS: Array<{
+  code: string;
+  name: string;
+  baseUrl: string;
+  scrapeMode: string;
+  rateLimitRpm: number;
+  crawlIntervalMinutes: number;
+  priority: number;
+  concurrencyLimit: number;
+  parserVersion: number;
+  legalStatus: string;
+  isActive: boolean;
+  config: Record<string, unknown>;
+}> = [
+  {
+    code: 'willhaben',
+    name: 'willhaben.at',
+    baseUrl: 'https://www.willhaben.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 10,
+    crawlIntervalMinutes: 15,
+    priority: 10,
+    concurrencyLimit: 1,
+    parserVersion: 1,
+    legalStatus: 'approved',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'immoscout24',
+    name: 'ImmobilienScout24.at',
+    baseUrl: 'https://www.immobilienscout24.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 8,
+    crawlIntervalMinutes: 30,
+    priority: 20,
+    concurrencyLimit: 1,
+    parserVersion: 2,
+    legalStatus: 'review_required',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'wohnnet',
+    name: 'wohnnet.at',
+    baseUrl: 'https://www.wohnnet.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 15,
+    crawlIntervalMinutes: 30,
+    priority: 30,
+    concurrencyLimit: 1,
+    parserVersion: 1,
+    legalStatus: 'review_required',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'derstandard',
+    name: 'derstandard.at Immobilien',
+    baseUrl: 'https://immobilien.derstandard.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 12,
+    crawlIntervalMinutes: 60,
+    priority: 40,
+    concurrencyLimit: 1,
+    parserVersion: 2,
+    legalStatus: 'review_required',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'findmyhome',
+    name: 'findmyhome.at',
+    baseUrl: 'https://www.findmyhome.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 15,
+    crawlIntervalMinutes: 60,
+    priority: 50,
+    concurrencyLimit: 1,
+    parserVersion: 2,
+    legalStatus: 'review_required',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'openimmo',
+    name: 'openimmo.at',
+    baseUrl: 'https://www.openimmo.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 15,
+    crawlIntervalMinutes: 30,
+    priority: 999,
+    concurrencyLimit: 1,
+    parserVersion: 1,
+    legalStatus: 'disabled',
+    isActive: false,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'remax',
+    name: 'RE/MAX Austria',
+    baseUrl: 'https://www.remax.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 10,
+    crawlIntervalMinutes: 60,
+    priority: 60,
+    concurrencyLimit: 1,
+    parserVersion: 2,
+    legalStatus: 'review_required',
+    isActive: true,
+    config: { crawlProfile: defaultCrawlProfile },
+  },
+  {
+    code: 'edikte',
+    name: 'Ediktsdatei Justiz (Zwangsversteigerungen)',
+    baseUrl: 'https://edikte.justiz.gv.at',
+    scrapeMode: 'browser',
+    rateLimitRpm: 6,
+    crawlIntervalMinutes: 360,
+    priority: 70,
+    concurrencyLimit: 1,
+    parserVersion: 1,
+    legalStatus: 'approved',
+    isActive: true,
+    config: {
+      crawlProfile: {
+        operationType: 'sale',
+        propertyType: null, // forced auctions cover all property types
+        regions: ['wien'],
+        maxPagesPerRun: 20, // ~160 total results for Wien, conservative cap
+        sortOrder: 'published_desc',
+      },
+    },
+  },
+];
 
 // CLI entry point
 const isMain =

@@ -29,7 +29,7 @@ import { normalizePropertyType, normalizeOperationType } from '../canonical/prop
 
 const logger = createLogger('normalization');
 
-const NORMALIZATION_VERSION = 1;
+const NORMALIZATION_VERSION = 2;
 
 /**
  * Maps source-reported availability strings to canonical listing statuses.
@@ -332,6 +332,10 @@ export class BaseSourceMapper implements SourceNormalizer {
         conditionCategory: normalizeWhitespace(rawPayload.conditionRaw),
         heatingType: normalizeWhitespace(rawPayload.heatingTypeRaw),
         energyCertificateClass: normalizeWhitespace(rawPayload.energyCertificateRaw),
+        contactName: normalizeWhitespace(rawPayload.contactNameRaw),
+        contactCompany: normalizeWhitespace(rawPayload.contactCompanyRaw),
+        contactEmail: normalizeWhitespace(rawPayload.contactEmailRaw),
+        contactPhone: normalizeWhitespace(rawPayload.contactPhoneRaw),
 
         hasBalcony,
         hasTerrace,
@@ -344,6 +348,12 @@ export class BaseSourceMapper implements SourceNormalizer {
           provenance,
           sourceCode: this.sourceCode,
           pricePerSqmEur,
+          contact: {
+            name: normalizeWhitespace(rawPayload.contactNameRaw),
+            company: normalizeWhitespace(rawPayload.contactCompanyRaw),
+            email: normalizeWhitespace(rawPayload.contactEmailRaw),
+            phone: normalizeWhitespace(rawPayload.contactPhoneRaw),
+          },
         },
         completenessScore: 0, // computed below
         contentFingerprint: '', // computed below

@@ -1,56 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import pg from 'pg';
-import { runMigrations, query, closePool } from '@immoradar/db';
-import { seed } from '../../packages/db/seeds/seed.js';
-import { resetConfig } from '@immoradar/config';
+import { runMigrations, query } from '@immoradar/db';
+import { DEFAULT_SOURCE_SEEDS, seed } from '../../packages/db/seeds/seed.js';
+import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
 
-const TEST_DB_NAME = `immoradar_test_migrations_${process.pid}`;
-
-let adminClient: pg.Client;
-let originalDatabaseUrl: string | undefined;
+const testDb = createPostgresTestDatabase({
+  namePrefix: 'immoradar_test_migrations',
+  enabled: true,
+});
 
 beforeAll(async () => {
-  // Save the original DATABASE_URL so we can restore it
-  originalDatabaseUrl = process.env['DATABASE_URL'];
-
-  // Connect to the default database to create the test database
-  const adminUrl = originalDatabaseUrl ?? 'postgres://postgres:postgres@localhost:5432/postgres';
-  // Parse the URL and connect to the default 'postgres' database for admin operations
-  const parsed = new URL(adminUrl);
-  parsed.pathname = '/postgres';
-
-  adminClient = new pg.Client({ connectionString: parsed.toString() });
-  await adminClient.connect();
-
-  // Create the test database
-  await adminClient.query(`DROP DATABASE IF EXISTS "${TEST_DB_NAME}"`);
-  await adminClient.query(`CREATE DATABASE "${TEST_DB_NAME}"`);
-
-  // Point the app at the test database
-  parsed.pathname = `/${TEST_DB_NAME}`;
-  process.env['DATABASE_URL'] = parsed.toString();
-  resetConfig();
+  await testDb.setup();
 });
 
 afterAll(async () => {
-  // Close the app pool so connections to the test DB are released
-  await closePool();
-
-  // Restore the original DATABASE_URL
-  if (originalDatabaseUrl !== undefined) {
-    process.env['DATABASE_URL'] = originalDatabaseUrl;
-  } else {
-    delete process.env['DATABASE_URL'];
-  }
-  resetConfig();
-
-  // Terminate lingering connections then drop the test database
-  await adminClient.query(
-    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-    [TEST_DB_NAME],
-  );
-  await adminClient.query(`DROP DATABASE IF EXISTS "${TEST_DB_NAME}"`);
-  await adminClient.end();
+  await testDb.teardown();
 });
 
 describe('migration quality', () => {
@@ -120,7 +83,7 @@ describe('migration quality', () => {
       expect(Number(users[0]?.count)).toBe(1);
 
       const sources = await query<{ count: string }>('SELECT count(*)::text AS count FROM sources');
-      expect(Number(sources[0]?.count)).toBe(7);
+      expect(Number(sources[0]?.count)).toBe(DEFAULT_SOURCE_SEEDS.length);
     });
 
     it('is idempotent (running again does not duplicate)', async () => {
@@ -130,7 +93,7 @@ describe('migration quality', () => {
       expect(Number(users[0]?.count)).toBe(1);
 
       const sources = await query<{ count: string }>('SELECT count(*)::text AS count FROM sources');
-      expect(Number(sources[0]?.count)).toBe(7);
+      expect(Number(sources[0]?.count)).toBe(DEFAULT_SOURCE_SEEDS.length);
     });
   });
 });

@@ -18,6 +18,18 @@ struct ListingDetailsSection: View {
         if let postalCode = listing.postalCode {
             result.append(("Postal Code", postalCode))
         }
+        if let contactName = listing.contactName {
+            result.append(("Contact", contactName))
+        }
+        if let contactCompany = listing.contactCompany {
+            result.append(("Broker", contactCompany))
+        }
+        if let contactEmail = listing.contactEmail {
+            result.append(("Email", contactEmail))
+        }
+        if let contactPhone = listing.contactPhone {
+            result.append(("Phone", contactPhone))
+        }
 
         result.append(("First Seen", PriceFormatter.formatDateTime(listing.firstSeenAt)))
         result.append(("Listing UID", String(listing.listingUid.prefix(8)) + "..."))

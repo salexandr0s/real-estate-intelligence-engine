@@ -71,13 +71,21 @@ enum APIEndpoint {
     case getDocuments(listingId: Int)
     case getDocumentFacts(documentId: Int)
 
+    // MARK: - Outreach
+
+    case listMailboxes
+    case syncMailbox(id: Int)
+    case listOutreachThreads(scope: OutreachScope, cursor: String?, limit: Int?)
+    case getOutreachThread(id: Int)
+    case startOutreach(listingId: Int, body: Data)
+    case updateOutreachThread(id: Int, body: Data)
+    case sendOutreachFollowup(id: Int, body: Data?)
+
     // MARK: - Analytics
 
     case getBaselines
     case getDistrictTrends(districtNo: Int?, operationType: String?, months: Int?)
     case getMarketTemperature
-
-    // MARK: - Path & Method
 
     var path: String {
         switch self {
@@ -89,6 +97,13 @@ enum APIEndpoint {
         case .getAnalysis(let id): "/v1/listings/\(id)/analysis"
         case .getDocuments(let id): "/v1/listings/\(id)/documents"
         case .getDocumentFacts(let id): "/v1/documents/\(id)/facts"
+        case .listMailboxes: "/v1/mailboxes"
+        case .syncMailbox(let id): "/v1/mailboxes/\(id)/sync"
+        case .listOutreachThreads: "/v1/outreach/threads"
+        case .getOutreachThread(let id): "/v1/outreach/threads/\(id)"
+        case .startOutreach(let listingId, _): "/v1/listings/\(listingId)/outreach/start"
+        case .updateOutreachThread(let id, _): "/v1/outreach/threads/\(id)"
+        case .sendOutreachFollowup(let id, _): "/v1/outreach/threads/\(id)/follow-up"
         case .listFilters: "/v1/filters"
         case .createFilter: "/v1/filters"
         case .getFilter(let id): "/v1/filters/\(id)"
@@ -129,6 +144,7 @@ enum APIEndpoint {
         case .listListings, .getListing, .getScoreExplanation, .getListingHistory,
              .listFilters, .getFilter, .listAlerts, .getUnreadCount, .listSources, .getListingCluster, .listScrapeRuns,
              .getAnalysis, .getDocuments, .getDocumentFacts,
+             .listMailboxes, .listOutreachThreads, .getOutreachThread,
              .listSavedListings, .checkSavedListings, .exportSavedListings, .exportListings,
              .getDashboardStats, .getDashboardVelocity,
              .getScoreDistribution, .getDistrictComparison,
@@ -136,9 +152,9 @@ enum APIEndpoint {
              .getFeedback:
             "GET"
         case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing,
-             .submitFeedback, .createScrapeRun:
+             .submitFeedback, .createScrapeRun, .syncMailbox, .startOutreach, .sendOutreachFollowup:
             "POST"
-        case .updateFilter, .updateAlert, .bulkUpdateAlerts, .updateSource:
+        case .updateFilter, .updateAlert, .bulkUpdateAlerts, .updateSource, .updateOutreachThread:
             "PATCH"
         case .deleteFilter, .unsaveListing, .deleteFeedback:
             "DELETE"
@@ -151,7 +167,10 @@ enum APIEndpoint {
              .updateAlert(_, let body), .bulkUpdateAlerts(let body),
              .updateSource(_, let body),
              .saveListing(let body), .submitFeedback(let body),
-             .createScrapeRun(let body):
+             .createScrapeRun(let body), .startOutreach(_, let body),
+             .updateOutreachThread(_, let body):
+            return body
+        case .sendOutreachFollowup(_, let body):
             return body
         default:
             return nil
@@ -172,6 +191,11 @@ enum APIEndpoint {
             if let l = limit { items.append(URLQueryItem(name: "limit", value: "\(l)")) }
             if let c = cursor { items.append(URLQueryItem(name: "cursor", value: c)) }
             return items.isEmpty ? nil : items
+        case .listOutreachThreads(let scope, let cursor, let limit):
+            var items: [URLQueryItem] = [URLQueryItem(name: "scope", value: scope.rawValue)]
+            if let limit { items.append(URLQueryItem(name: "limit", value: "\(limit)")) }
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+            return items
         case .checkSavedListings(let listingIds):
             let ids = listingIds.map(String.init).joined(separator: ",")
             return [URLQueryItem(name: "listingIds", value: ids)]

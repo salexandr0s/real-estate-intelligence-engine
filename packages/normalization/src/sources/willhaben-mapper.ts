@@ -104,6 +104,9 @@ export class WillhabenMapper extends BaseSourceMapper {
   private enrichPayload(raw: WillhabenRawListing): WillhabenRawListing {
     const enriched: WillhabenRawListing = { ...raw };
 
+    enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
+    enriched.contactPhoneRaw ??= (raw as { contactPhone?: string | null }).contactPhone ?? null;
+
     // Map Objekttyp to property type if main type is missing
     if (enriched.propertyTypeRaw == null && enriched.objekttypRaw != null) {
       enriched.propertyTypeRaw = enriched.objekttypRaw;

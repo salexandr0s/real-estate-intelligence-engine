@@ -73,6 +73,16 @@ export class WohnnetMapper extends BaseSourceMapper {
       enriched.propertyTypeRaw = enriched.categoryRaw;
     }
 
+    enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
+    enriched.contactCompanyRaw ??= raw.brokerCompany ?? null;
+    const attrs = enriched.attributesRaw ?? {};
+    if (enriched.contactPhoneRaw == null && typeof attrs['contactPhone'] === 'string') {
+      enriched.contactPhoneRaw = attrs['contactPhone'];
+    }
+    if (enriched.contactEmailRaw == null && typeof attrs['contactEmail'] === 'string') {
+      enriched.contactEmailRaw = attrs['contactEmail'];
+    }
+
     return enriched;
   }
 }

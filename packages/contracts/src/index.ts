@@ -10,3 +10,4 @@ export * from './future-hooks.js';
 export * from './copilot.js';
 export * from './keyword-match.js';
 export * from './analysis.js';
+export * from './outreach.js';

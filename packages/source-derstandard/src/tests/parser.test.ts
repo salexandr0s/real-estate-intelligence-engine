@@ -305,6 +305,7 @@ describe('Detail page parsing — DOM fallback (real HTML format)', () => {
     expect(p.heatingTypeRaw).toBe('Fernw\u00E4rme');
     expect(p.energyCertificateRaw).toBe('B');
     expect(p.contactName).toBe('Immobilien Wien GmbH');
+    expect(p.contactPhone).toBe('+43 1 234 5678');
     expect(p.images).toHaveLength(2);
     expect(p.images[0]).toContain('15086452');
   });

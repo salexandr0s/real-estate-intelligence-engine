@@ -16,6 +16,8 @@
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
     "test:integration": "vitest run --config vitest.config.integration.ts",
+    "test:integration:db": "vitest run --config vitest.config.integration.ts tests/integration/migrations.test.ts tests/integration/migration-rollback.test.ts tests/integration/mailbox-outreach-migrations.test.ts",
+    "test:integration:outreach": "vitest run --config vitest.config.integration.ts tests/integration/outreach-api.test.ts apps/worker-processing/src/workers/outreach-flow.integration.test.ts",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "db:migrate": "npm -w packages/db run migrate",

@@ -252,6 +252,8 @@ describe('Detail page parsing', () => {
     expect(p.operatingCostRaw).toBe('285');
     expect(p.floorRaw).toBe('3');
     expect(p.contactName).toBe('Mag. Anna Berger');
+    expect(p.contactPhone).toBe('+43 1 987 6543');
+    expect(p.contactEmail).toBeNull();
     expect(p.propertyTypeRaw).toBe('Wohnung');
   });
 

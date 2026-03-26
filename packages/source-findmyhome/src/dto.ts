@@ -85,4 +85,6 @@ export interface FindMyHomeDetailDTO extends SourceRawListingBase {
   findmyhomeId: string;
   images: string[];
   contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
 }

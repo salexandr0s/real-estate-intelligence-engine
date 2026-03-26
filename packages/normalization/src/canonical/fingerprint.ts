@@ -116,6 +116,10 @@ interface FingerprintFields {
   districtNo: number | null;
   postalCode: string | null;
   city: string | null;
+  contactName: string | null;
+  contactCompany: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
   hasBalcony: boolean | null;
   hasTerrace: boolean | null;
   hasGarden: boolean | null;
@@ -143,6 +147,10 @@ export function computeContentFingerprint(listing: Partial<CanonicalListingInput
     districtNo: listing.districtNo ?? null,
     postalCode: listing.postalCode ?? null,
     city: listing.city ?? null,
+    contactName: listing.contactName ?? null,
+    contactCompany: listing.contactCompany ?? null,
+    contactEmail: listing.contactEmail ?? null,
+    contactPhone: listing.contactPhone ?? null,
     hasBalcony: listing.hasBalcony ?? null,
     hasTerrace: listing.hasTerrace ?? null,
     hasGarden: listing.hasGarden ?? null,

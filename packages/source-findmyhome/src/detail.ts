@@ -77,6 +77,8 @@ export function parseDetailPage(
       mediaRaw: [],
       images,
       contactName: apartment.contactPoint?.name ?? null,
+      contactEmail: apartment.contactPoint?.email ?? null,
+      contactPhone: apartment.contactPoint?.telephone ?? null,
     };
   } else {
     // DOM fallback — extract from HTML table rows and OG meta tags
@@ -132,6 +134,8 @@ function buildFailedCapture(
       mediaRaw: [],
       images: [],
       contactName: null,
+      contactEmail: null,
+      contactPhone: null,
     },
     parserVersion,
     extractionStatus: 'parse_failed',
@@ -266,6 +270,8 @@ function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO
     mediaRaw: [],
     images,
     contactName: null,
+    contactEmail: null,
+    contactPhone: null,
   };
 }
 

@@ -100,7 +100,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
       };
 
       const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
-      const context = await createScrapeContext();
+      const context = await createScrapeContext({ sourceCode });
       await setupRequestInterception(context);
 
       try {

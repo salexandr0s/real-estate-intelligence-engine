@@ -13,6 +13,7 @@
     "@immoradar/ingestion": "*",
     "@immoradar/normalization": "*",
     "@immoradar/observability": "*",
+    "@immoradar/outreach": "*",
     "@immoradar/scoring": "*",
     "@immoradar/scraper-core": "*",
     "@immoradar/source-willhaben": "*",
@@ -24,6 +25,9 @@
     "@immoradar/source-remax": "*",
     "@immoradar/source-edikte": "*",
     "bullmq": "^5.71.0",
+    "imapflow": "^1.0.190",
+    "mailparser": "^3.7.5",
+    "nodemailer": "^7.0.6",
     "playwright": "^1.52.0",
     "ioredis": "^5.10.1"
   },
@@ -36,8 +40,9 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --root ../.. apps/worker-processing/src/workers/outreach-send-worker.test.ts apps/worker-processing/src/workers/mailbox-sync-worker.test.ts",
+    "test:integration": "vitest run --root ../.. --config vitest.config.integration.ts apps/worker-processing/src/workers/outreach-flow.integration.test.ts",
     "clean": "rm -rf dist"
   }
 }

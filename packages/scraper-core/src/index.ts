@@ -60,6 +60,8 @@ export {
   type CanaryJobData,
   type AlertDeliveryJobData,
   type DocumentProcessingJobData,
+  type MailboxSyncJobData,
+  type OutreachSendJobData,
   DEFAULT_JOB_RETRY_OPTS,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';

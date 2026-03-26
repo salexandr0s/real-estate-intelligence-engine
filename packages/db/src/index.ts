@@ -30,6 +30,8 @@ export * as comparables from './queries/comparables.js';
 export * as buildingFacts from './queries/building-facts.js';
 export * as legalRent from './queries/legal-rent.js';
 export * as documents from './queries/documents.js';
+export * as mailboxes from './queries/mailboxes.js';
+export * as outreach from './queries/outreach.js';
 
 // ── LISTEN/NOTIFY ──────────────────────────────────────────────────────────
 export { subscribeToAlerts, closeNotifyClient } from './notify.js';

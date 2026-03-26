@@ -240,7 +240,10 @@ describe('Detail page parsing', () => {
     expect(p.postalCodeRaw).toBe('1050');
     expect(p.cityRaw).toBe('Wien');
     expect(p.districtRaw).toBe('Margareten');
+    expect(p.contactName).toBe('Mag. Maria Steiner');
     expect(p.brokerCompany).toBe('Wiener Immobilien Kontor GmbH');
+    expect(p.contactPhone).toBe('+43 1 555 1234');
+    expect(p.contactEmail).toBe('info@wik-immo.at');
   });
 
   it('extracts wohnnetId from var realtyId', () => {
@@ -336,6 +339,7 @@ describe('Detail page parsing', () => {
     expect(attrs['price']).toBe('615900');
     expect(attrs['propertyType']).toBe('Eigentumswohnung');
     expect(attrs['energyClass']).toBe('B');
+    expect(attrs['contactName']).toBe('Mag. Maria Steiner');
     expect(attrs['contactPhone']).toBe('+43 1 555 1234');
     expect(attrs['contactEmail']).toBe('info@wik-immo.at');
   });

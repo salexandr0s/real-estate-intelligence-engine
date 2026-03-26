@@ -59,4 +59,5 @@ export interface DerStandardDetailDTO extends SourceRawListingBase {
   standardId: string;
   images: string[];
   contactName: string | null;
+  contactPhone: string | null;
 }

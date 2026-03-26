@@ -15,6 +15,8 @@ export const QUEUE_NAMES = {
   CANARY: 'processing-canary',
   ALERT_DELIVERY: 'processing-alert-delivery',
   DOCUMENT_PROCESSING: 'document-processing',
+  MAILBOX_SYNC: 'mailbox-sync',
+  OUTREACH_SEND: 'outreach-send',
 } as const;
 
 /** Job data for a discovery scrape (one source, one page). */
@@ -117,6 +119,19 @@ export interface AlertDeliveryJobData {
 /** Job data for document processing (download, extract, parse). */
 export interface DocumentProcessingJobData {
   documentId: number;
+}
+
+/** Job data for mailbox sync polling. */
+export interface MailboxSyncJobData {
+  mailboxAccountId: number;
+  triggeredBy: 'scheduler' | 'manual';
+}
+
+/** Job data for outbound outreach send jobs. */
+export interface OutreachSendJobData {
+  threadId: number;
+  sendKind: 'initial' | 'followup';
+  triggeredBy: 'api' | 'scheduler' | 'manual';
 }
 
 /** Default retry config for scraper jobs. */

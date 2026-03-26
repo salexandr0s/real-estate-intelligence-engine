@@ -27,6 +27,8 @@ import { deviceRoutes } from './routes/devices.js';
 import { analysisRoutes } from './routes/analysis.js';
 import { documentRoutes } from './routes/documents.js';
 import { legalRentRoutes } from './routes/legal-rent.js';
+import { mailboxRoutes } from './routes/mailboxes.js';
+import { outreachRoutes } from './routes/outreach.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
@@ -115,6 +117,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(analysisRoutes);
   await app.register(documentRoutes);
   await app.register(legalRentRoutes);
+  await app.register(mailboxRoutes);
+  await app.register(outreachRoutes);
 
   // API request duration metrics
   app.addHook('onResponse', (_request, reply, done) => {
