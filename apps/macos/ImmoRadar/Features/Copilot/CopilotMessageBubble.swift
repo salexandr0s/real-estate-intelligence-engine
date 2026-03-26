@@ -1,14 +1,34 @@
 import SwiftUI
 
-/// Renders a Copilot exchange as research notes rather than chat bubbles.
+/// Renders a Copilot exchange in a calmer, conversation-style presentation.
 struct CopilotMessageBubble: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: CopilotMessage
     let onListingTap: (Int) -> Void
 
+    @State private var hasAppeared = false
+
     var body: some View {
+        bubbleContent
+            .opacity(hasAppeared || reduceMotion ? 1 : 0)
+            .offset(y: hasAppeared || reduceMotion ? 0 : 8)
+            .onAppear {
+                guard !hasAppeared else { return }
+                withAdaptiveAnimation(reduceMotion, .easeOut(duration: 0.18)) {
+                    hasAppeared = true
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var bubbleContent: some View {
         switch message.role {
         case .user:
-            UserPromptCard(contentBlocks: message.contentBlocks, timestamp: message.timestamp)
+            HStack {
+                Spacer(minLength: 72)
+                UserPromptCard(contentBlocks: message.contentBlocks, timestamp: message.timestamp)
+                    .frame(maxWidth: 560, alignment: .trailing)
+            }
         case .assistant:
             AssistantResearchCard(
                 contentBlocks: message.contentBlocks,
@@ -24,31 +44,36 @@ private struct UserPromptCard: View {
     let contentBlocks: [ContentBlock]
     let timestamp: Date
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack {
-                Label("Prompt", systemImage: "person.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(PriceFormatter.relativeDate(timestamp))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+    private var textBlocks: [String] {
+        contentBlocks.compactMap { block in
+            if case .text(let text) = block.content {
+                return text
             }
+            return nil
+        }
+    }
 
-            ForEach(contentBlocks) { block in
-                if case .text(let text) = block.content {
+    var body: some View {
+        VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                ForEach(Array(textBlocks.enumerated()), id: \.offset) { _, text in
                     Text(text)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        }
-        .padding(Theme.Spacing.lg)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.24), lineWidth: 0.5)
+            }
+
+            Text(PriceFormatter.relativeDate(timestamp))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.trailing, Theme.Spacing.xs)
         }
     }
 }
@@ -71,43 +96,52 @@ private struct AssistantResearchCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-            HStack {
-                Label("ImmoRadar analysis", systemImage: "sparkles.rectangle.stack")
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "sparkles")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 22, height: 22)
+                    .background(Color.accentColor.opacity(0.1), in: Circle())
+
+                Text("Copilot")
                     .font(.caption)
+                    .adaptiveFontWeight(.semibold)
                     .foregroundStyle(.secondary)
+
                 if renderedArtifactCount > 0 {
                     Text("\(renderedArtifactCount) artifact\(renderedArtifactCount == 1 ? "" : "s")")
                         .font(.caption2.bold())
                         .padding(.horizontal, Theme.Spacing.xs)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1), in: Capsule())
+                        .background(Color.secondary.opacity(0.08), in: Capsule())
                 }
+
                 Spacer()
+
                 Text(PriceFormatter.relativeDate(timestamp))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
 
-            ForEach(Array(contentBlocks.enumerated()), id: \.element.id) { index, block in
-                if index > 0 {
-                    Divider()
-                        .overlay(Color(nsColor: .separatorColor).opacity(0.25))
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                ForEach(contentBlocks) { block in
+                    ContentBlockView(
+                        block: block,
+                        isStreaming: isStreaming,
+                        onListingTap: onListingTap
+                    )
                 }
-
-                ContentBlockView(
-                    block: block,
-                    isStreaming: isStreaming,
-                    onListingTap: onListingTap
-                )
             }
         }
-        .padding(Theme.Spacing.lg)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.lg)
+        .background(Theme.inputBarBackground.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius))
         .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.2), lineWidth: 0.5)
         }
+        .shadow(color: .black.opacity(0.03), radius: 10, y: 4)
     }
 }
 

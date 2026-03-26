@@ -12,7 +12,8 @@ struct CopilotInputBarContainer: View {
             onSend: { Task { await viewModel.send(using: appState) } },
             onStop: { viewModel.stop() }
         )
-        .frame(maxWidth: 860)
-        .padding(.horizontal, Theme.Spacing.xl)
+        .frame(maxWidth: Theme.Copilot.composerMaxWidth)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Theme.Copilot.horizontalPadding)
     }
 }

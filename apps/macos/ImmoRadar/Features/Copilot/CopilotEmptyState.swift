@@ -7,31 +7,45 @@ struct CopilotEmptyState<InputBar: View>: View {
     @ViewBuilder let inputBar: InputBar
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                Text("Start a research session")
-                    .font(.title2)
-                    .adaptiveFontWeight(.semibold)
+        VStack(spacing: 0) {
+            Spacer(minLength: Theme.Spacing.xxxl)
 
-                Text("Use Copilot to search listings, compare districts, inspect price changes, and review rendered evidence without losing your work when you switch views.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    Text("Start a research session")
+                        .font(.largeTitle)
+                        .adaptiveFontWeight(.semibold)
+
+                    Text("Search listings, compare districts, inspect price changes, and review rendered evidence without losing your work when you switch views.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                CopilotSuggestionChips(suggestions: suggestions, onSelect: onSuggestionSelected)
             }
+            .frame(maxWidth: Theme.Copilot.contentMaxWidth, alignment: .leading)
+            .padding(.horizontal, Theme.Copilot.horizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .center)
 
-            CopilotSuggestionChips(suggestions: suggestions, onSelect: onSuggestionSelected)
-
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                Text("Research prompt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                inputBar
-            }
-
-            Spacer(minLength: 0)
+            Spacer(minLength: Theme.Spacing.xxxl)
         }
-        .padding(Theme.Spacing.xxl)
-        .frame(maxWidth: 920, maxHeight: .infinity, alignment: .topLeading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            inputBar
+                .padding(.top, Theme.Spacing.md)
+                .padding(.bottom, Theme.Copilot.bottomDockPadding)
+                .background {
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .windowBackgroundColor).opacity(0),
+                            Color(nsColor: .windowBackgroundColor).opacity(0.88),
+                            Color(nsColor: .windowBackgroundColor),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+        }
     }
 }

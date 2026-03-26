@@ -3,11 +3,28 @@ import SwiftUI
 /// Top-level copilot research workspace with threaded history and optional listing inspector.
 struct CopilotView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = CopilotViewModel()
     @State private var showInspector: Bool = false
     @State private var showRenameSheet = false
     @State private var renameDraft = ""
     @State private var renameTargetID: UUID?
+
+    private var toolbarTitle: String {
+        guard let title = viewModel.activeConversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
+            return "New session"
+        }
+        return title
+    }
+
+    private var toolbarDetail: String {
+        if viewModel.isStreaming { return "Thinking" }
+        if showInspector { return "Inspector open" }
+        if viewModel.messages.isEmpty { return "Local research workspace" }
+
+        let count = viewModel.messages.count
+        return "\(count) message\(count == 1 ? "" : "s")"
+    }
 
     var body: some View {
         HSplitView {
@@ -25,45 +42,26 @@ struct CopilotView: View {
                     Task { await viewModel.deleteConversation(id: summary.id) }
                 }
             )
-            .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
-            .background(Color(nsColor: .underPageBackgroundColor))
+            .frame(
+                minWidth: Theme.Copilot.railMinWidth,
+                idealWidth: Theme.Copilot.railIdealWidth,
+                maxWidth: Theme.Copilot.railMaxWidth
+            )
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: viewModel.activeConversationID)
 
-            VStack(spacing: 0) {
-                CopilotWorkspaceHeader(
-                    title: viewModel.activeConversationTitle ?? "Copilot Workspace",
-                    subtitle: viewModel.messages.isEmpty
-                        ? "Ask focused research questions, review rendered analysis, and keep conversations as reusable working sessions."
-                        : "A persistent research thread for market questions, listing analysis, and rendered evidence.",
-                    canRename: viewModel.activeConversationID != nil,
-                    canDelete: viewModel.activeConversationID != nil,
-                    onRename: {
-                        renameTargetID = viewModel.activeConversationID
-                        renameDraft = viewModel.activeConversationTitle ?? ""
-                        showRenameSheet = true
-                    },
-                    onDelete: {
-                        if let id = viewModel.activeConversationID {
-                            Task { await viewModel.deleteConversation(id: id) }
-                        }
-                    }
-                )
-
-                Divider()
-
-                Group {
-                    if viewModel.messages.isEmpty {
-                        CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
-                    } else {
-                        CopilotConversationContainer(
-                            viewModel: viewModel,
-                            appState: appState,
-                            showInspector: $showInspector
-                        )
-                    }
+            Group {
+                if viewModel.messages.isEmpty {
+                    CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
+                } else {
+                    CopilotConversationContainer(
+                        viewModel: viewModel,
+                        appState: appState,
+                        showInspector: $showInspector
+                    )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
             .frame(minWidth: 540, maxWidth: .infinity, maxHeight: .infinity)
 
             if showInspector {
@@ -85,23 +83,57 @@ struct CopilotView: View {
                 .adaptiveMaterial(.regularMaterial)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showInspector)
         .navigationTitle("Copilot")
-        .toolbar(id: "copilot") {
-            ToolbarItem(id: "newChat", placement: .primaryAction) {
+        .toolbarRole(.editor)
+        .toolbar {
+            ToolbarItem(id: "sessionTitle", placement: .principal) {
+                CopilotToolbarTitleChip(title: toolbarTitle, detail: toolbarDetail)
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    viewModel.beginNewConversation()
-                    showInspector = false
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.18)) {
+                        viewModel.beginNewConversation()
+                        showInspector = false
+                    }
                 } label: {
                     Label("New Session", systemImage: "square.and.pencil")
                 }
-            }
-            ToolbarItem(id: "inspector", placement: .automatic) {
+                .labelStyle(.iconOnly)
+                .help("Start a new session")
+
                 Button {
-                    showInspector.toggle()
+                    renameTargetID = viewModel.activeConversationID
+                    renameDraft = viewModel.activeConversationTitle ?? ""
+                    showRenameSheet = true
+                } label: {
+                    Label("Rename Session", systemImage: "pencil")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(viewModel.activeConversationID == nil)
+                .help("Rename current session")
+
+                Button(role: .destructive) {
+                    if let id = viewModel.activeConversationID {
+                        Task { await viewModel.deleteConversation(id: id) }
+                    }
+                } label: {
+                    Label("Delete Session", systemImage: "trash")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(viewModel.activeConversationID == nil)
+                .help("Delete current session")
+
+                Button {
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.18)) {
+                        showInspector.toggle()
+                    }
                 } label: {
                     Label("Inspector", systemImage: "sidebar.trailing")
                 }
-                .help("Toggle listing detail inspector")
+                .labelStyle(.iconOnly)
+                .help(showInspector ? "Hide listing inspector" : "Show listing inspector")
             }
         }
         .task {
@@ -110,7 +142,10 @@ struct CopilotView: View {
         .sheet(isPresented: $showRenameSheet) {
             RenameConversationSheet(
                 title: $renameDraft,
-                onCancel: { showRenameSheet = false },
+                onCancel: {
+                    showRenameSheet = false
+                    renameTargetID = nil
+                },
                 onSave: {
                     Task {
                         if let targetID = renameTargetID, targetID != viewModel.activeConversationID {
@@ -127,33 +162,64 @@ struct CopilotView: View {
 }
 
 private struct CopilotHistorySidebar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var viewModel: CopilotViewModel
     let onSelectConversation: (UUID) -> Void
     let onRenameConversation: (CopilotConversationSummary) -> Void
     let onDeleteConversation: (CopilotConversationSummary) -> Void
-    @State private var selectedConversationID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Research Sessions")
-                        .font(.headline)
-                    Text("Persistent local history")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: Theme.Spacing.md) {
+                HStack(spacing: Theme.Spacing.sm) {
+                    Image(systemName: "sparkles")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 28, height: 28)
+                        .background(Theme.inputBarBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Copilot")
+                            .font(.title3)
+                            .adaptiveFontWeight(.semibold)
+                        Text("Persistent local history")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+
                 Spacer()
+
                 Button {
-                    viewModel.beginNewConversation()
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.16)) {
+                        viewModel.beginNewConversation()
+                    }
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 30, height: 30)
+                        .background(Theme.inputBarBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Start a new session")
+                .accessibilityLabel("New Session")
             }
             .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.vertical, Theme.Spacing.md)
+            .padding(.top, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.md)
+
+            HStack {
+                Text("Research Sessions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(viewModel.conversations.count)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
 
             Divider()
 
@@ -166,60 +232,76 @@ private struct CopilotHistorySidebar: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, Theme.Spacing.md)
             } else {
-                List(selection: $selectedConversationID) {
-                    ForEach(viewModel.conversations) { summary in
-                        ConversationHistoryRow(
-                            summary: summary,
-                            isActive: summary.id == viewModel.activeConversationID
-                        )
-                        .tag(Optional(summary.id))
-                        .contextMenu {
+                ScrollView {
+                    LazyVStack(spacing: Theme.Spacing.sm) {
+                        ForEach(viewModel.conversations) { summary in
                             Button {
-                                onRenameConversation(summary)
+                                onSelectConversation(summary.id)
                             } label: {
-                                Label("Rename Session", systemImage: "pencil")
+                                ConversationHistoryRow(
+                                    summary: summary,
+                                    isActive: summary.id == viewModel.activeConversationID
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    onRenameConversation(summary)
+                                } label: {
+                                    Label("Rename Session", systemImage: "pencil")
+                                }
 
-                            Button(role: .destructive) {
-                                onDeleteConversation(summary)
-                            } label: {
-                                Label("Delete Session", systemImage: "trash")
+                                Button(role: .destructive) {
+                                    onDeleteConversation(summary)
+                                } label: {
+                                    Label("Delete Session", systemImage: "trash")
+                                }
                             }
                         }
                     }
+                    .padding(Theme.Spacing.md)
                 }
-                .listStyle(.sidebar)
             }
         }
-        .onAppear {
-            selectedConversationID = viewModel.activeConversationID
-        }
-        .onChange(of: viewModel.activeConversationID) { _, newValue in
-            selectedConversationID = newValue
-        }
-        .onChange(of: selectedConversationID) { _, newValue in
-            if let id = newValue, id != viewModel.activeConversationID {
-                onSelectConversation(id)
-            }
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(width: 1)
         }
     }
 }
 
 private struct ConversationHistoryRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: CopilotConversationSummary
     let isActive: Bool
 
+    @State private var isHovered = false
+
+    private var backgroundColor: Color {
+        if isActive {
+            Color(nsColor: .selectedContentBackgroundColor).opacity(0.18)
+        } else if isHovered {
+            Theme.inputBarBackground.opacity(0.82)
+        } else {
+            Theme.inputBarBackground.opacity(0.46)
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(alignment: .center, spacing: Theme.Spacing.sm) {
+                Circle()
+                    .fill(isActive ? Color.accentColor : Color.secondary.opacity(isHovered ? 0.28 : 0.18))
+                    .frame(width: 6, height: 6)
+
                 Text(summary.title)
                     .font(.subheadline)
                     .adaptiveFontWeight(isActive ? .semibold : .medium)
                     .lineLimit(1)
+
                 Spacer(minLength: Theme.Spacing.sm)
-                Text(PriceFormatter.relativeDate(summary.updatedAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
 
             Text(summary.preview)
@@ -227,50 +309,89 @@ private struct ConversationHistoryRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            Text("\(summary.messageCount) messages")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: Theme.Spacing.sm) {
+                Text(PriceFormatter.relativeDate(summary.updatedAt))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text("•")
+                    .foregroundStyle(.tertiary)
+                Text("\(summary.messageCount) messages")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
-        .padding(.vertical, Theme.Spacing.xxs)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(backgroundColor)
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .stroke(
+                    isActive
+                        ? Color.accentColor.opacity(0.22)
+                        : Color(nsColor: .separatorColor).opacity(isHovered ? 0.28 : 0.18),
+                    lineWidth: 0.5
+                )
+        }
+        .shadow(
+            color: .black.opacity(isActive || isHovered ? 0.07 : 0.02),
+            radius: isActive || isHovered ? 10 : 4,
+            y: isActive || isHovered ? 6 : 2
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .scaleEffect(isHovered && !reduceMotion ? 1.01 : 1)
+        .offset(y: isHovered && !reduceMotion ? -1 : 0)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: isHovered)
+        .onHover { hovered in
+            withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.14)) {
+                isHovered = hovered
+            }
+        }
     }
 }
 
-private struct CopilotWorkspaceHeader: View {
+private struct CopilotToolbarTitleChip: View {
     let title: String
-    let subtitle: String
-    let canRename: Bool
-    let canDelete: Bool
-    let onRename: () -> Void
-    let onDelete: () -> Void
+    let detail: String
+
+    private var statusColor: Color {
+        detail == "Thinking" ? .accentColor : Color.secondary.opacity(0.5)
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(.title2)
-                    .adaptiveFontWeight(.semibold)
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HStack(spacing: Theme.Spacing.sm) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 7, height: 7)
 
-            Spacer(minLength: Theme.Spacing.lg)
+            Text(title)
+                .font(.subheadline)
+                .adaptiveFontWeight(.semibold)
+                .lineLimit(1)
+                .contentTransition(.opacity)
 
-            HStack(spacing: Theme.Spacing.sm) {
-                Button("Rename", systemImage: "pencil", action: onRename)
-                    .disabled(!canRename)
-                Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
-                    .disabled(!canDelete)
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.45))
+                .frame(width: 1, height: 12)
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentTransition(.opacity)
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .padding(.vertical, Theme.Spacing.lg)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 8)
+        .frame(maxWidth: Theme.Copilot.toolbarChipMaxWidth)
+        .adaptiveMaterial(.ultraThinMaterial, solid: Theme.inputBarBackground, in: RoundedRectangle(cornerRadius: Theme.Copilot.toolbarChipRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Copilot.toolbarChipRadius)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.26), lineWidth: 0.5)
+        }
+        .help("\(title) — \(detail)")
     }
 }
+
 
 private struct RenameConversationSheet: View {
     @Binding var title: String

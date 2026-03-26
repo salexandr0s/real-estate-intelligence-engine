@@ -135,6 +135,21 @@ enum Theme {
     static let inputBarBackground = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
     static let cardShadowRadius: CGFloat = 2
     static let cardShadowY: CGFloat = 1
+
+    // MARK: - Copilot Layout
+
+    enum Copilot {
+        static let railMinWidth: CGFloat = 232
+        static let railIdealWidth: CGFloat = 264
+        static let railMaxWidth: CGFloat = 304
+        static let contentMaxWidth: CGFloat = 840
+        static let composerMaxWidth: CGFloat = 760
+        static let horizontalPadding: CGFloat = 32
+        static let bottomDockPadding: CGFloat = 24
+        static let composerRadius: CGFloat = 26
+        static let toolbarChipMaxWidth: CGFloat = 360
+        static let toolbarChipRadius: CGFloat = 18
+    }
 }
 
 // MARK: - Custom Colors

@@ -19,10 +19,11 @@ struct CopilotMessageList: View {
                         .id(message.id)
                     }
                 }
-                .frame(maxWidth: 860, alignment: .leading)
-                .padding(.horizontal, Theme.Spacing.xl)
-                .padding(.vertical, Theme.Spacing.xl)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(maxWidth: Theme.Copilot.contentMaxWidth, alignment: .leading)
+                .padding(.horizontal, Theme.Copilot.horizontalPadding)
+                .padding(.top, Theme.Spacing.xl)
+                .padding(.bottom, Theme.Spacing.xxxl)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(Color(nsColor: .windowBackgroundColor))
             .onChange(of: messages.last?.id) { _, newID in

@@ -7,18 +7,28 @@ struct CopilotConversationContainer: View {
     @Binding var showInspector: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            CopilotMessageList(
-                messages: viewModel.messages,
-                isStreaming: viewModel.isStreaming
-            ) { listingId in
-                showInspector = true
-                viewModel.selectListing(id: listingId, using: appState)
-            }
-
+        CopilotMessageList(
+            messages: viewModel.messages,
+            isStreaming: viewModel.isStreaming
+        ) { listingId in
+            showInspector = true
+            viewModel.selectListing(id: listingId, using: appState)
+        }
+        .safeAreaInset(edge: .bottom) {
             CopilotInputBarContainer(viewModel: viewModel, appState: appState)
                 .padding(.top, Theme.Spacing.md)
-                .padding(.bottom, Theme.Spacing.lg)
+                .padding(.bottom, Theme.Copilot.bottomDockPadding)
+                .background {
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .windowBackgroundColor).opacity(0),
+                            Color(nsColor: .windowBackgroundColor).opacity(0.85),
+                            Color(nsColor: .windowBackgroundColor),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
         }
     }
 }

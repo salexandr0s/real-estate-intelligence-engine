@@ -2,32 +2,43 @@ import SwiftUI
 
 /// Structured starter actions for a new Copilot research session.
 struct CopilotSuggestionChips: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let suggestions: [SuggestedQuery]
     let onSelect: (String) -> Void
 
     @State private var hoveredId: String?
 
     private let columns = [
-        GridItem(.flexible(), spacing: Theme.Spacing.lg),
-        GridItem(.flexible(), spacing: Theme.Spacing.lg),
+        GridItem(.adaptive(minimum: 260, maximum: 340), spacing: Theme.Spacing.lg),
     ]
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: Theme.Spacing.lg) {
             ForEach(suggestions) { suggestion in
+                let isHovered = hoveredId == suggestion.id
+
                 Button {
                     onSelect(suggestion.query)
                 } label: {
                     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                         HStack(spacing: Theme.Spacing.sm) {
                             Image(systemName: suggestion.icon)
-                                .font(.body)
+                                .font(.callout.weight(.semibold))
                                 .foregroundStyle(Color.accentColor)
+                                .frame(width: 30, height: 30)
+                                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+
                             Text(suggestion.label)
                                 .font(.subheadline)
                                 .adaptiveFontWeight(.semibold)
                                 .foregroundStyle(.primary)
+
                             Spacer(minLength: 0)
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                                .opacity(isHovered ? 1 : 0)
                         }
 
                         Text(suggestion.subtitle)
@@ -40,30 +51,38 @@ struct CopilotSuggestionChips: View {
                             .foregroundStyle(.tertiary)
                             .lineLimit(2)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
                     .padding(Theme.Spacing.lg)
                 }
                 .buttonStyle(.plain)
                 .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                    RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
                         .fill(
-                            hoveredId == suggestion.id
-                                ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.12)
-                                : Theme.cardBackground
+                            isHovered
+                                ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.16)
+                                : Theme.inputBarBackground.opacity(0.72)
                         )
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
+                        .strokeBorder(
+                            Color(nsColor: .separatorColor).opacity(isHovered ? 0.4 : 0.32),
+                            lineWidth: 0.5
+                        )
                 }
                 .shadow(
-                    color: .black.opacity(hoveredId == suggestion.id ? 0.08 : 0.04),
-                    radius: hoveredId == suggestion.id ? 6 : Theme.cardShadowRadius,
-                    y: hoveredId == suggestion.id ? 2 : Theme.cardShadowY
+                    color: .black.opacity(isHovered ? 0.08 : 0.03),
+                    radius: isHovered ? 12 : 4,
+                    y: isHovered ? 6 : 2
                 )
-                .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
-                .onHover { isHovered in
-                    hoveredId = isHovered ? suggestion.id : nil
+                .contentShape(RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius))
+                .scaleEffect(isHovered && !reduceMotion ? 1.012 : 1)
+                .offset(y: isHovered && !reduceMotion ? -2 : 0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: isHovered)
+                .onHover { hovering in
+                    withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.14)) {
+                        hoveredId = hovering ? suggestion.id : nil
+                    }
                 }
             }
         }
