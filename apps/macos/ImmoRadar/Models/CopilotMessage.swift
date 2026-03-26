@@ -58,6 +58,9 @@ enum ContentBlockType: Codable {
     case priceHistory(PriceHistoryData)
     case chartData(ChartBlockData)
     case marketStats([StatItem])
+    case listingComparison(ListingComparisonData)
+    case proximitySummary(ProximitySummaryData)
+    case crossSourceComparison(CrossSourceComparisonData)
     case loading(String)
 
     private enum CodingKeys: String, CodingKey {
@@ -69,6 +72,9 @@ enum ContentBlockType: Codable {
         case priceHistory
         case chartData
         case marketStats
+        case listingComparison
+        case proximitySummary
+        case crossSourceComparison
         case loading
     }
 
@@ -80,6 +86,9 @@ enum ContentBlockType: Codable {
         case priceHistory
         case chartData
         case marketStats
+        case listingComparison
+        case proximitySummary
+        case crossSourceComparison
         case loading
     }
 
@@ -102,6 +111,12 @@ enum ContentBlockType: Codable {
             self = .chartData(try container.decode(ChartBlockData.self, forKey: .chartData))
         case .marketStats:
             self = .marketStats(try container.decode([StatItem].self, forKey: .marketStats))
+        case .listingComparison:
+            self = .listingComparison(try container.decode(ListingComparisonData.self, forKey: .listingComparison))
+        case .proximitySummary:
+            self = .proximitySummary(try container.decode(ProximitySummaryData.self, forKey: .proximitySummary))
+        case .crossSourceComparison:
+            self = .crossSourceComparison(try container.decode(CrossSourceComparisonData.self, forKey: .crossSourceComparison))
         case .loading:
             self = .loading(try container.decode(String.self, forKey: .loading))
         }
@@ -132,6 +147,15 @@ enum ContentBlockType: Codable {
         case .marketStats(let value):
             try container.encode(BlockType.marketStats, forKey: .type)
             try container.encode(value, forKey: .marketStats)
+        case .listingComparison(let value):
+            try container.encode(BlockType.listingComparison, forKey: .type)
+            try container.encode(value, forKey: .listingComparison)
+        case .proximitySummary(let value):
+            try container.encode(BlockType.proximitySummary, forKey: .type)
+            try container.encode(value, forKey: .proximitySummary)
+        case .crossSourceComparison(let value):
+            try container.encode(BlockType.crossSourceComparison, forKey: .type)
+            try container.encode(value, forKey: .crossSourceComparison)
         case .loading(let value):
             try container.encode(BlockType.loading, forKey: .type)
             try container.encode(value, forKey: .loading)

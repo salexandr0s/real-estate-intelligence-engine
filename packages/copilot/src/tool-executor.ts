@@ -20,6 +20,7 @@ import type {
   PropertyType,
   SortBy,
   ListingRow,
+  PoiCategoryCode,
 } from '@immoradar/contracts';
 import type { ToolResult } from './types.js';
 
@@ -347,6 +348,128 @@ async function executeGetScoreExplanation(input: unknown): Promise<ToolResult> {
   return { contentBlock: block, rawForClaude };
 }
 
+type CompareFound = {
+  listing: ListingRow;
+  score: Awaited<ReturnType<typeof listingScores.findLatestByListingId>>;
+};
+
+type ComparisonMetricSpec = {
+  label: string;
+  formatter: (entry: CompareFound) => string | null;
+  numericValue?: (entry: CompareFound) => number | null;
+  better?: 'higher' | 'lower';
+};
+
+const POI_CATEGORY_LABELS: Record<PoiCategoryCode, string> = {
+  ubahn: 'U-Bahn',
+  tram: 'Tram',
+  bus: 'Bus',
+  taxi: 'Taxi',
+  park: 'Park',
+  school: 'School',
+  supermarket: 'Supermarket',
+  hospital: 'Hospital',
+  doctor: 'Doctor',
+  police: 'Police',
+  fire_station: 'Fire Station',
+};
+
+const PROXIMITY_COUNT_SPECS: Array<{
+  category: PoiCategoryCode;
+  label: string;
+  withinMeters: number;
+}> = [
+  { category: 'supermarket', label: 'Supermarkets within 500m', withinMeters: 500 },
+  { category: 'park', label: 'Parks within 500m', withinMeters: 500 },
+  { category: 'school', label: 'Schools within 500m', withinMeters: 500 },
+  { category: 'doctor', label: 'Doctors within 500m', withinMeters: 500 },
+  { category: 'hospital', label: 'Hospitals within 2km', withinMeters: 2000 },
+  { category: 'police', label: 'Police within 1km', withinMeters: 1000 },
+  { category: 'fire_station', label: 'Fire stations within 1km', withinMeters: 1000 },
+];
+
+function formatNumeric(value: number, maximumFractionDigits = 1): string {
+  return value.toLocaleString('de-AT', { maximumFractionDigits });
+}
+
+function formatMaybeEur(eur: number | null): string | null {
+  return eur == null ? null : formatEur(eur);
+}
+
+function formatMaybePerSqm(eur: number | null): string | null {
+  return eur == null ? null : `${formatEur(eur)}/m²`;
+}
+
+function formatMaybePercent(value: number | null): string | null {
+  return value == null ? null : `${value.toFixed(1)}%`;
+}
+
+function formatMaybeDecimal(value: number | null, suffix = ''): string | null {
+  return value == null ? null : `${formatNumeric(value)}${suffix}`;
+}
+
+function findExtremeListingId(
+  entries: CompareFound[],
+  selector: (entry: CompareFound) => number | null,
+  better: 'higher' | 'lower',
+): number | null {
+  let chosenId: number | null = null;
+  let chosenValue: number | null = null;
+
+  for (const entry of entries) {
+    const value = selector(entry);
+    if (value == null) continue;
+    if (chosenValue == null || (better === 'higher' ? value > chosenValue : value < chosenValue)) {
+      chosenValue = value;
+      chosenId = entry.listing.id;
+    }
+  }
+
+  return chosenId;
+}
+
+function buildComparisonMetric(
+  entries: CompareFound[],
+  spec: ComparisonMetricSpec,
+): {
+  label: string;
+  values: Array<{
+    listingId: number;
+    value: string | null;
+    emphasis?: 'best' | 'weakest' | 'neutral';
+  }>;
+} {
+  const bestId =
+    spec.numericValue && spec.better
+      ? findExtremeListingId(entries, spec.numericValue, spec.better)
+      : null;
+  const weakestId =
+    spec.numericValue && spec.better
+      ? findExtremeListingId(
+          entries,
+          spec.numericValue,
+          spec.better === 'higher' ? 'lower' : 'higher',
+        )
+      : null;
+
+  return {
+    label: spec.label,
+    values: entries.map((entry) => {
+      const emphasis =
+        entry.listing.id === bestId
+          ? 'best'
+          : entry.listing.id === weakestId
+            ? 'weakest'
+            : undefined;
+      return {
+        listingId: entry.listing.id,
+        value: spec.formatter(entry),
+        emphasis,
+      };
+    }),
+  };
+}
+
 async function executeCompareListings(input: unknown): Promise<ToolResult> {
   const { listingIds } = asCompareInput(input);
 
@@ -360,9 +483,7 @@ async function executeCompareListings(input: unknown): Promise<ToolResult> {
     }),
   );
 
-  const found = results.filter(
-    (r): r is { listing: ListingRow; score: typeof r.score } => r.listing != null,
-  );
+  const found = results.filter((result): result is CompareFound => result.listing != null);
 
   if (found.length < 2) {
     return {
@@ -374,72 +495,155 @@ async function executeCompareListings(input: unknown): Promise<ToolResult> {
     };
   }
 
-  const headers = [
-    'Metric',
-    ...found.map((f) => `#${f.listing.id} ${f.listing.title.slice(0, 30)}`),
+  const listingsPayload = found.map((entry) => listingToCardDTO(entry.listing));
+
+  const sections = [
+    {
+      title: 'Value',
+      metrics: [
+        buildComparisonMetric(found, {
+          label: 'Price',
+          formatter: (entry) => formatMaybeEur(centsToEur(entry.listing.listPriceEurCents)),
+          numericValue: (entry) => centsToEur(entry.listing.listPriceEurCents),
+          better: 'lower',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Price / m²',
+          formatter: (entry) => formatMaybePerSqm(entry.listing.pricePerSqmEur),
+          numericValue: (entry) => entry.listing.pricePerSqmEur,
+          better: 'lower',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Discount vs district',
+          formatter: (entry) => formatMaybePercent(entry.score?.discountToDistrictPct ?? null),
+          numericValue: (entry) => entry.score?.discountToDistrictPct ?? null,
+          better: 'lower',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Undervaluation',
+          formatter: (entry) => formatMaybeDecimal(entry.score?.undervaluationScore ?? null),
+          numericValue: (entry) => entry.score?.undervaluationScore ?? null,
+          better: 'higher',
+        }),
+      ],
+    },
+    {
+      title: 'Profile',
+      metrics: [
+        buildComparisonMetric(found, {
+          label: 'Area',
+          formatter: (entry) => formatMaybeDecimal(entry.listing.livingAreaSqm, ' m²'),
+          numericValue: (entry) => entry.listing.livingAreaSqm,
+          better: 'higher',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Rooms',
+          formatter: (entry) => formatMaybeDecimal(entry.listing.rooms),
+          numericValue: (entry) => entry.listing.rooms,
+          better: 'higher',
+        }),
+        buildComparisonMetric(found, {
+          label: 'District',
+          formatter: (entry) => districtLabel(entry.listing.districtNo),
+        }),
+        buildComparisonMetric(found, {
+          label: 'Status',
+          formatter: (entry) => entry.listing.listingStatus,
+        }),
+      ],
+    },
+    {
+      title: 'Quality',
+      metrics: [
+        buildComparisonMetric(found, {
+          label: 'Score',
+          formatter: (entry) => formatMaybeDecimal(entry.listing.currentScore),
+          numericValue: (entry) => entry.listing.currentScore,
+          better: 'higher',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Location score',
+          formatter: (entry) => formatMaybeDecimal(entry.score?.locationScore ?? null),
+          numericValue: (entry) => entry.score?.locationScore ?? null,
+          better: 'higher',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Confidence',
+          formatter: (entry) => formatMaybeDecimal(entry.score?.confidenceScore ?? null),
+          numericValue: (entry) => entry.score?.confidenceScore ?? null,
+          better: 'higher',
+        }),
+        buildComparisonMetric(found, {
+          label: 'Year built',
+          formatter: (entry) =>
+            entry.listing.yearBuilt != null ? String(entry.listing.yearBuilt) : null,
+          numericValue: (entry) => entry.listing.yearBuilt,
+          better: 'higher',
+        }),
+      ],
+    },
   ];
 
-  const metricRows: { label: string; values: (string | number | null)[] }[] = [
-    {
-      label: 'Price (EUR)',
-      values: found.map((f) => centsToEur(f.listing.listPriceEurCents)),
-    },
-    {
-      label: 'Price/sqm',
-      values: found.map((f) => f.listing.pricePerSqmEur),
-    },
-    {
-      label: 'Area (sqm)',
-      values: found.map((f) => f.listing.livingAreaSqm),
-    },
-    {
-      label: 'Rooms',
-      values: found.map((f) => f.listing.rooms),
-    },
-    {
-      label: 'District',
-      values: found.map((f) => districtLabel(f.listing.districtNo)),
-    },
-    {
-      label: 'Score',
-      values: found.map((f) => f.listing.currentScore),
-    },
-    {
-      label: 'Undervaluation',
-      values: found.map((f) => f.score?.undervaluationScore ?? null),
-    },
-    {
-      label: 'Discount to District',
-      values: found.map((f) =>
-        f.score?.discountToDistrictPct != null
-          ? `${f.score.discountToDistrictPct.toFixed(1)}%`
-          : null,
-      ),
-    },
-    {
-      label: 'Year Built',
-      values: found.map((f) => f.listing.yearBuilt),
-    },
-    {
-      label: 'Status',
-      values: found.map((f) => f.listing.listingStatus),
-    },
-  ];
+  const highestScore = found
+    .filter((entry) => entry.listing.currentScore != null)
+    .sort((lhs, rhs) => (rhs.listing.currentScore ?? 0) - (lhs.listing.currentScore ?? 0))[0];
+  const lowestPpsqm = found
+    .filter((entry) => entry.listing.pricePerSqmEur != null)
+    .sort((lhs, rhs) => (lhs.listing.pricePerSqmEur ?? 0) - (rhs.listing.pricePerSqmEur ?? 0))[0];
+  const biggestDiscount = found
+    .filter((entry) => entry.score?.discountToDistrictPct != null)
+    .sort(
+      (lhs, rhs) =>
+        (lhs.score?.discountToDistrictPct ?? 0) - (rhs.score?.discountToDistrictPct ?? 0),
+    )[0];
+
+  const callouts = [
+    highestScore
+      ? {
+          label: 'Highest score',
+          detail: `#${highestScore.listing.id} leads at ${formatNumeric(highestScore.listing.currentScore ?? 0)}.`,
+          listingId: highestScore.listing.id,
+          tone: 'positive' as const,
+        }
+      : null,
+    lowestPpsqm
+      ? {
+          label: 'Best unit economics',
+          detail: `#${lowestPpsqm.listing.id} is lowest at ${formatMaybePerSqm(lowestPpsqm.listing.pricePerSqmEur) ?? 'N/A'}.`,
+          listingId: lowestPpsqm.listing.id,
+          tone: 'positive' as const,
+        }
+      : null,
+    biggestDiscount
+      ? {
+          label: 'Biggest district discount',
+          detail: `#${biggestDiscount.listing.id} sits ${formatMaybePercent(biggestDiscount.score?.discountToDistrictPct ?? null) ?? 'N/A'} vs district baseline.`,
+          listingId: biggestDiscount.listing.id,
+          tone: 'neutral' as const,
+        }
+      : null,
+  ].filter((callout): callout is NonNullable<typeof callout> => callout != null);
 
   const block: ContentBlock = {
-    type: 'comparison_table',
-    headers,
-    rows: metricRows.map((mr) => ({
-      label: mr.label,
-      values: mr.values.map((v) => (v != null ? String(v) : null)),
-    })),
+    type: 'listing_comparison',
+    listings: listingsPayload,
+    sections,
+    callouts,
   };
 
-  const rawLines = metricRows.map((mr) => {
-    const vals = mr.values.map((v) => (v != null ? String(v) : 'N/A')).join(' | ');
-    return `${mr.label}: ${vals}`;
-  });
-  const rawForClaude = `Comparison of ${found.length} listings:\n${rawLines.join('\n')}`;
+  const rawForClaude = [
+    `Comparison of ${found.length} listings:`,
+    ...sections.flatMap((section) => [
+      `${section.title}:`,
+      ...section.metrics.map((metric) => {
+        const values = metric.values
+          .map((value) => `#${value.listingId} ${value.value ?? 'N/A'}`)
+          .join(' | ');
+        return `  ${metric.label}: ${values}`;
+      }),
+    ]),
+    ...callouts.map((callout) => `${callout.label}: ${callout.detail}`),
+  ].join('\n');
 
   return { contentBlock: block, rawForClaude };
 }
@@ -468,7 +672,6 @@ async function executeGetPriceHistory(input: unknown): Promise<ToolResult> {
     };
   }
 
-  // Reverse so oldest first for chronological display
   const chronological = [...versions].reverse();
 
   const dataPoints = chronological
@@ -495,8 +698,6 @@ async function executeGetPriceHistory(input: unknown): Promise<ToolResult> {
 async function executeGetMarketStats(input: unknown): Promise<ToolResult> {
   const params = asMarketStatsInput(input);
 
-  // Use dashboard stats for citywide view; for district-filtered data, run a
-  // filtered search to derive counts.
   const globalStats = await dashboard.getStats();
 
   const stats: { label: string; value: string | number; trend?: 'up' | 'down' | 'flat' }[] = [
@@ -509,7 +710,6 @@ async function executeGetMarketStats(input: unknown): Promise<ToolResult> {
     { label: 'High Score (70+)', value: globalStats.highScore70 },
   ];
 
-  // If a specific district was requested, also get count for that district
   if (params.districtNo != null) {
     const districtResult = await listings.searchListings(
       {
@@ -564,91 +764,163 @@ async function executeGetNearbyPois(input: unknown): Promise<ToolResult> {
     };
   }
 
-  // Try cached POIs first, fall back to live Haversine computation
-  let poiData: { name: string; category: string; distanceM: number }[] = [];
   const cached = await listingPois.getByListingId(listingId);
 
-  if (cached.length > 0) {
-    poiData = cached.map((r) => ({
-      name: r.poiName,
-      category: r.category,
-      distanceM: r.distanceM,
-    }));
-  } else if (listing.latitude != null && listing.longitude != null) {
+  let dataSource: 'cache' | 'live' | null = null;
+  let poiData: Array<{
+    name: string;
+    category: string;
+    distanceM: number;
+    coordinate?: { latitude: number; longitude: number };
+  }> = [];
+
+  if (listing.latitude != null && listing.longitude != null) {
     const nearby = await pois.findNearby(listing.latitude, listing.longitude, 2000);
-    // Cache for next time (best-effort, don't break the response on failure)
+    poiData = nearby.map((poi) => ({
+      name: poi.name,
+      category: poi.category,
+      distanceM: poi.distanceM,
+      coordinate: {
+        latitude: poi.latitude,
+        longitude: poi.longitude,
+      },
+    }));
+    dataSource = 'live';
+
     try {
       await listingPois.cacheNearestPois(listingId, nearby);
     } catch {
-      // Cache write failed — non-critical, continue with live data
+      // Best-effort cache refresh only.
     }
-    // Take top 2 per category to match cached format
-    const byCategory = new Map<string, typeof nearby>();
-    for (const poi of nearby) {
-      const existing = byCategory.get(poi.category);
-      if (existing) {
-        if (existing.length < 2) existing.push(poi);
-      } else {
-        byCategory.set(poi.category, [poi]);
-      }
-    }
-    for (const items of byCategory.values()) {
-      for (const item of items) {
-        poiData.push({ name: item.name, category: item.category, distanceM: item.distanceM });
-      }
-    }
+  } else if (cached.length > 0) {
+    poiData = cached.map((row) => ({
+      name: row.poiName,
+      category: row.category,
+      distanceM: row.distanceM,
+    }));
+    dataSource = 'cache';
   } else {
+    const block: ContentBlock = {
+      type: 'proximity_summary',
+      listingId,
+      listingTitle: listing.title,
+      status: 'missing_coordinates',
+      dataSource: null,
+      summary:
+        'This listing has no geocoded coordinates yet, so Copilot cannot render distance evidence.',
+      listingCoordinate: null,
+      nearest: [],
+      counts: [],
+    };
     return {
-      contentBlock: {
-        type: 'text',
-        text: `Listing ${listingId} has no geocoded coordinates and no cached proximity data.`,
-      },
-      rawForClaude: `Listing ${listingId} has no geocoded coordinates.`,
+      contentBlock: block,
+      rawForClaude: `Listing ${listingId} has no geocoded coordinates and no cached proximity data.`,
     };
   }
 
-  // Unified output: show up to 2 closest named POIs per category
-  const categories = new Map<string, { name: string; distanceM: number }[]>();
-  for (const poi of poiData) {
-    const existing = categories.get(poi.category) ?? [];
-    existing.push({ name: poi.name, distanceM: poi.distanceM });
-    categories.set(poi.category, existing);
+  const byCategory = new Map<
+    string,
+    Array<{
+      name: string;
+      distanceM: number;
+      coordinate?: { latitude: number; longitude: number };
+    }>
+  >();
+  for (const poi of poiData.sort((lhs, rhs) => lhs.distanceM - rhs.distanceM)) {
+    const items = byCategory.get(poi.category) ?? [];
+    items.push({
+      name: poi.name,
+      distanceM: poi.distanceM,
+      coordinate: poi.coordinate,
+    });
+    byCategory.set(poi.category, items);
   }
 
-  const transitCats = ['ubahn', 'tram', 'bus'];
-  const categoryLabels: Record<string, string> = {
-    ubahn: 'U-Bahn',
-    tram: 'Tram',
-    bus: 'Bus',
-    park: 'Park',
-    school: 'School',
-    supermarket: 'Supermarket',
-    hospital: 'Hospital',
-    doctor: 'Doctor',
-    police: 'Police',
-    fire_station: 'Fire Station',
+  if (poiData.length === 0) {
+    const block: ContentBlock = {
+      type: 'proximity_summary',
+      listingId,
+      listingTitle: listing.title,
+      status: 'no_pois',
+      dataSource,
+      summary: 'No nearby amenities were found in the current proximity window.',
+      listingCoordinate:
+        listing.latitude != null && listing.longitude != null
+          ? { latitude: listing.latitude, longitude: listing.longitude }
+          : null,
+      nearest: [],
+      counts: [],
+    };
+    return {
+      contentBlock: block,
+      rawForClaude: `No nearby points of interest found for listing ${listingId}.`,
+    };
+  }
+
+  const nearest = (Object.entries(POI_CATEGORY_LABELS) as Array<[PoiCategoryCode, string]>).flatMap(
+    ([category, label]) => {
+      const items = byCategory.get(category) ?? [];
+      const maxItems = category === 'ubahn' || category === 'tram' || category === 'bus' ? 2 : 1;
+      return items.slice(0, maxItems).map((item, index) => ({
+        category,
+        label,
+        name: item.name,
+        distanceM: Math.round(item.distanceM),
+        walkMinutes: Math.max(1, Math.round(item.distanceM / 80)),
+        rank: index + 1,
+        coordinate: item.coordinate ?? null,
+      }));
+    },
+  );
+
+  const counts = PROXIMITY_COUNT_SPECS.map((spec) => ({
+    category: spec.category,
+    label: spec.label,
+    withinMeters: spec.withinMeters,
+    count: poiData.filter(
+      (poi) => poi.category === spec.category && poi.distanceM <= spec.withinMeters,
+    ).length,
+  })).filter((item) => item.count > 0);
+
+  const summaryParts: string[] = [];
+  const nearestUbahn = nearest.find((item) => item.category === 'ubahn');
+  const nearestSchool = nearest.find((item) => item.category === 'school');
+  const nearestMarket = nearest.find((item) => item.category === 'supermarket');
+  if (nearestUbahn) summaryParts.push(`${nearestUbahn.walkMinutes} min to U-Bahn`);
+  if (nearestSchool) summaryParts.push(`${nearestSchool.walkMinutes} min to school`);
+  if (nearestMarket) summaryParts.push(`${nearestMarket.walkMinutes} min to supermarket`);
+  if (counts.length > 0) {
+    summaryParts.push(
+      counts
+        .slice(0, 2)
+        .map((item) => `${item.count} ${item.label.toLowerCase()}`)
+        .join(', '),
+    );
+  }
+
+  const block: ContentBlock = {
+    type: 'proximity_summary',
+    listingId,
+    listingTitle: listing.title,
+    status: 'ok',
+    dataSource,
+    summary: summaryParts.join(' • ') || 'Nearby amenity evidence available.',
+    listingCoordinate:
+      listing.latitude != null && listing.longitude != null
+        ? { latitude: listing.latitude, longitude: listing.longitude }
+        : null,
+    nearest,
+    counts,
   };
 
-  const stats: { label: string; value: string | number }[] = [];
-  for (const [cat, label] of Object.entries(categoryLabels)) {
-    const items = categories.get(cat) ?? [];
-    if (items.length === 0) {
-      stats.push({ label: `Nearest ${label}`, value: 'None nearby' });
-      continue;
-    }
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]!;
-      const suffix = items.length > 1 ? ` (#${i + 1})` : '';
-      stats.push({
-        label: transitCats.includes(cat) ? `${label}${suffix}` : `Nearest ${label}${suffix}`,
-        value: `${item.name} (${Math.round(item.distanceM)}m)`,
-      });
-    }
-  }
-
-  const block: ContentBlock = { type: 'market_stats', stats };
-  const rawLines = stats.map((s) => `  ${s.label}: ${s.value}`);
-  const rawForClaude = `Points of interest near listing #${listingId} "${listing.title}":\n${rawLines.join('\n')}`;
+  const rawForClaude = [
+    `Points of interest near listing #${listingId} "${listing.title}":`,
+    ...nearest.map(
+      (item) =>
+        `  ${item.label}${item.rank > 1 ? ` #${item.rank}` : ''}: ${item.name} (${item.distanceM}m)`,
+    ),
+    ...counts.map((item) => `  ${item.label}: ${item.count}`),
+  ].join('\n');
 
   return { contentBlock: block, rawForClaude };
 }
@@ -670,27 +942,43 @@ async function executeGetCrossSourceCluster(input: unknown): Promise<ToolResult>
     };
   }
 
-  const headers = ['Source', 'Title', 'Price (EUR)', 'Price/sqm', 'Score', 'First Seen'];
-  const rows = cluster.members.map((m) => ({
-    label: m.sourceCode,
-    values: [
-      m.title.slice(0, 50),
-      centsToEur(m.listPriceEurCents),
-      m.pricePerSqmEur,
-      m.currentScore,
-      m.firstSeenAt.toISOString().slice(0, 10),
-    ] as (string | number | null)[],
-  }));
+  const sortedMembers = [...cluster.members].sort((lhs, rhs) => {
+    const lhsPrice = lhs.listPriceEurCents ?? Number.MAX_SAFE_INTEGER;
+    const rhsPrice = rhs.listPriceEurCents ?? Number.MAX_SAFE_INTEGER;
+    return lhsPrice - rhsPrice;
+  });
+  const cheapest = sortedMembers[0];
+  const summary =
+    cluster.priceSpreadPct != null
+      ? `${cluster.members.length} portals tracked. Price spread is ${cluster.priceSpreadPct.toFixed(1)}%.`
+      : `${cluster.members.length} portals tracked for this property.`;
 
   const block: ContentBlock = {
-    type: 'comparison_table',
-    headers,
-    rows,
+    type: 'cross_source_comparison',
+    subjectListingId: listingId,
+    clusterId: cluster.id,
+    priceSpreadPct: cluster.priceSpreadPct,
+    summary:
+      cheapest?.listPriceEurCents != null
+        ? `${summary} Lowest ask: ${cheapest.sourceCode} at ${formatEur(centsToEur(cheapest.listPriceEurCents))}.`
+        : summary,
+    members: cluster.members.map((member) => ({
+      listingId: member.listingId,
+      sourceCode: member.sourceCode,
+      sourceName: member.sourceName,
+      title: member.title,
+      listPriceEur: centsToEur(member.listPriceEurCents),
+      pricePerSqmEur: member.pricePerSqmEur,
+      currentScore: member.currentScore,
+      canonicalUrl: member.canonicalUrl,
+      firstSeenAt: member.firstSeenAt.toISOString().slice(0, 10),
+      isSubject: member.listingId === listingId,
+    })),
   };
 
   const rawLines = cluster.members.map(
-    (m) =>
-      `  ${m.sourceCode}: "${m.title.slice(0, 40)}" | ${formatEur(centsToEur(m.listPriceEurCents))} | Score: ${m.currentScore ?? 'N/A'}`,
+    (member) =>
+      `  ${member.sourceCode}: "${member.title.slice(0, 40)}" | ${formatEur(centsToEur(member.listPriceEurCents))} | Score: ${member.currentScore ?? 'N/A'}`,
   );
   const rawForClaude = [
     `Cross-source cluster for listing #${listingId} (${cluster.members.length} sources):`,

@@ -6,7 +6,7 @@ struct CopilotListing: Identifiable, Codable, Hashable {
     let title: String
     let districtNo: Int?
     let districtName: String?
-    let priceEur: Int
+    let priceEur: Int?
     let areaSqm: Double?
     let rooms: Double?
     let pricePerSqmEur: Double?

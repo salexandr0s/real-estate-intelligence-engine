@@ -135,7 +135,7 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
   {
     name: 'compare_listings',
     description:
-      'Compare 2-5 listings side by side. Returns a comparison table with key metrics (price, area, rooms, score, district) for each listing.',
+      'Compare 2-5 listings side by side. Returns a structured listing comparison block with grouped metrics, standouts, and side-by-side candidate context.',
     input_schema: {
       type: 'object',
       properties: {
@@ -190,7 +190,7 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
   {
     name: 'get_nearby_pois',
     description:
-      'Get points of interest near a listing: U-Bahn stations, tram/bus stops, parks, schools, supermarkets, hospitals, police stations. Requires the listing to have geocoded coordinates.',
+      'Get points of interest near a listing: U-Bahn stations, tram/bus stops, parks, schools, supermarkets, hospitals, police stations. Returns a typed proximity summary with nearest amenities and compact radius counts.',
     input_schema: {
       type: 'object',
       properties: {
@@ -205,7 +205,7 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
   {
     name: 'get_cross_source_cluster',
     description:
-      'Find cross-source duplicates for a listing. If the same property is listed on multiple portals, returns all instances with their source, price, and score for comparison.',
+      'Find cross-source duplicates for a listing. If the same property is listed on multiple portals, returns a structured source-verification comparison with pricing spread and per-portal rows.',
     input_schema: {
       type: 'object',
       properties: {

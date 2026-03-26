@@ -16,7 +16,7 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 
 # Scraper artifacts and local data
-immoradar/
+/immoradar/
 assets/
 
 # Certificates and keys

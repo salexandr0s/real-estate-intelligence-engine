@@ -226,6 +226,18 @@ final class CopilotStreamService: Sendable {
                 let stats = try decoder.decode(MarketStatsWrapper.self, from: jsonData)
                 return .contentBlock(ContentBlock(.marketStats(stats.stats)))
 
+            case "listing_comparison":
+                let comparison = try decoder.decode(ListingComparisonData.self, from: jsonData)
+                return .contentBlock(ContentBlock(.listingComparison(comparison)))
+
+            case "proximity_summary":
+                let summary = try decoder.decode(ProximitySummaryData.self, from: jsonData)
+                return .contentBlock(ContentBlock(.proximitySummary(summary)))
+
+            case "cross_source_comparison":
+                let comparison = try decoder.decode(CrossSourceComparisonData.self, from: jsonData)
+                return .contentBlock(ContentBlock(.crossSourceComparison(comparison)))
+
             default:
                 Log.stream.debug("Unknown content block type: \(blockType, privacy: .public)")
                 return nil

@@ -98,6 +98,109 @@ export interface MarketStatsBlock {
   stats: StatItem[];
 }
 
+export type ComparisonCalloutTone = 'positive' | 'neutral' | 'caution';
+
+export interface ComparisonCallout {
+  label: string;
+  detail: string;
+  listingId: number | null;
+  tone: ComparisonCalloutTone;
+}
+
+export interface ListingComparisonValue {
+  listingId: number;
+  value: string | null;
+  emphasis?: 'best' | 'weakest' | 'neutral';
+}
+
+export interface ListingComparisonMetric {
+  label: string;
+  values: ListingComparisonValue[];
+}
+
+export interface ListingComparisonSection {
+  title: string;
+  metrics: ListingComparisonMetric[];
+}
+
+export interface ListingComparisonBlock {
+  type: 'listing_comparison';
+  listings: ListingCardDTO[];
+  sections: ListingComparisonSection[];
+  callouts: ComparisonCallout[];
+}
+
+export type ProximityDataSource = 'cache' | 'live';
+export type ProximityStatus = 'ok' | 'missing_coordinates' | 'no_pois';
+export type PoiCategoryCode =
+  | 'ubahn'
+  | 'tram'
+  | 'bus'
+  | 'taxi'
+  | 'park'
+  | 'school'
+  | 'police'
+  | 'fire_station'
+  | 'supermarket'
+  | 'hospital'
+  | 'doctor';
+
+export interface GeoCoordinate {
+  latitude: number;
+  longitude: number;
+}
+
+export interface ProximityNearestItem {
+  category: PoiCategoryCode;
+  label: string;
+  name: string;
+  distanceM: number;
+  walkMinutes: number;
+  rank: number;
+  coordinate?: GeoCoordinate | null;
+}
+
+export interface ProximityCountItem {
+  category: PoiCategoryCode;
+  label: string;
+  withinMeters: number;
+  count: number;
+}
+
+export interface ProximitySummaryBlock {
+  type: 'proximity_summary';
+  listingId: number;
+  listingTitle: string;
+  status: ProximityStatus;
+  dataSource: ProximityDataSource | null;
+  summary: string;
+  listingCoordinate?: GeoCoordinate | null;
+  nearest: ProximityNearestItem[];
+  counts: ProximityCountItem[];
+}
+
+export interface CrossSourceComparisonMember {
+  listingId: number;
+  sourceCode: string;
+  sourceName: string;
+  title: string;
+  listPriceEur: number | null;
+  pricePerSqmEur: number | null;
+  currentScore: number | null;
+  canonicalUrl: string;
+  firstSeenAt: string;
+  isSubject: boolean;
+}
+
+export interface CrossSourceComparisonBlock {
+  type: 'cross_source_comparison';
+  subjectListingId: number;
+  clusterId: number;
+  priceSpreadPct: number | null;
+  summary: string;
+  members: CrossSourceComparisonMember[];
+}
+
 // ── Discriminated union ─────────────────────────────────────────────────────
 
 export type ContentBlock =
@@ -107,7 +210,10 @@ export type ContentBlock =
   | ScoreBreakdownBlock
   | PriceHistoryBlock
   | ChartDataBlock
-  | MarketStatsBlock;
+  | MarketStatsBlock
+  | ListingComparisonBlock
+  | ProximitySummaryBlock
+  | CrossSourceComparisonBlock;
 
 // ── Request / Response types ────────────────────────────────────────────────
 

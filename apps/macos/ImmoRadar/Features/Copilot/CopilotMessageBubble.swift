@@ -59,19 +59,42 @@ private struct AssistantResearchCard: View {
     let timestamp: Date
     let onListingTap: (Int) -> Void
 
+    private var renderedArtifactCount: Int {
+        contentBlocks.reduce(into: 0) { count, block in
+            switch block.content {
+            case .text, .loading:
+                break
+            default:
+                count += 1
+            }
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             HStack {
                 Label("ImmoRadar analysis", systemImage: "sparkles.rectangle.stack")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if renderedArtifactCount > 0 {
+                    Text("\(renderedArtifactCount) artifact\(renderedArtifactCount == 1 ? "" : "s")")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, Theme.Spacing.xs)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1), in: Capsule())
+                }
                 Spacer()
                 Text(PriceFormatter.relativeDate(timestamp))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
 
-            ForEach(contentBlocks) { block in
+            ForEach(Array(contentBlocks.enumerated()), id: \.element.id) { index, block in
+                if index > 0 {
+                    Divider()
+                        .overlay(Color(nsColor: .separatorColor).opacity(0.25))
+                }
+
                 ContentBlockView(
                     block: block,
                     isStreaming: isStreaming,
@@ -80,7 +103,11 @@ private struct AssistantResearchCard: View {
             }
         }
         .padding(Theme.Spacing.lg)
-        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 0.5)
+        }
     }
 }
 

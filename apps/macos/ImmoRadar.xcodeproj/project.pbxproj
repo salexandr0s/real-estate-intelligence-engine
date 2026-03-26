@@ -212,6 +212,10 @@
 		B0D1966193699C7A2540A2B3 /* CopilotEmptyStateContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A9D13AE3644B0281A4CDF /* CopilotEmptyStateContainer.swift */; };
 		256F25DF2C2B9A36F92F7657 /* CopilotConversationContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0236FAFC56707996965CFAB4 /* CopilotConversationContainer.swift */; };
 		D88D3FBFE8123F873E667042 /* ContentBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E821ECF5CCC28F12C90F17FD /* ContentBlockView.swift */; };
+		A1C8F0D12B3E4F567890ABCD /* CopilotAdvancedContentData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C8F0D12B3E4F567890ABCE /* CopilotAdvancedContentData.swift */; };
+		B2D9E1F23C4D5E67890ABCDE /* ListingComparisonBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D9E1F23C4D5E67890ABCDF /* ListingComparisonBlockView.swift */; };
+		C3EAF2034D5E6F7890ABCDEF /* ProximitySummaryBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EAF2034D5E6F7890ABCDE0 /* ProximitySummaryBlock.swift */; };
+		D4FB03145E6F708190ABCDEF /* CrossSourceComparisonBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FB03145E6F708190ABCDE0 /* CrossSourceComparisonBlockView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -422,6 +426,10 @@
 		2D6A9D13AE3644B0281A4CDF /* CopilotEmptyStateContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotEmptyStateContainer.swift; sourceTree = "<group>"; };
 		0236FAFC56707996965CFAB4 /* CopilotConversationContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotConversationContainer.swift; sourceTree = "<group>"; };
 		E821ECF5CCC28F12C90F17FD /* ContentBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBlockView.swift; sourceTree = "<group>"; };
+		A1C8F0D12B3E4F567890ABCE /* CopilotAdvancedContentData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotAdvancedContentData.swift; sourceTree = "<group>"; };
+		B2D9E1F23C4D5E67890ABCDF /* ListingComparisonBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingComparisonBlockView.swift; sourceTree = "<group>"; };
+		C3EAF2034D5E6F7890ABCDE0 /* ProximitySummaryBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximitySummaryBlock.swift; sourceTree = "<group>"; };
+		D4FB03145E6F708190ABCDE0 /* CrossSourceComparisonBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossSourceComparisonBlockView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -571,10 +579,13 @@
 				8DF152493FD57CCCE68F27D1 /* ComparisonTableBlock.swift */,
 				E821ECF5CCC28F12C90F17FD /* ContentBlockView.swift */,
 				8DAC7B8CC38D8F59D78A6E64 /* ListingCardBlock.swift */,
+				B2D9E1F23C4D5E67890ABCDF /* ListingComparisonBlockView.swift */,
 				DB65BB16EF5C35C5B955729E /* MarketStatsBlock.swift */,
+				C3EAF2034D5E6F7890ABCDE0 /* ProximitySummaryBlock.swift */,
 				A1681E42AD48BB96EBD37D4C /* PriceHistoryBlock.swift */,
 				CEA797B61DD3A81E86058CAC /* ScoreBreakdownBlock.swift */,
 				B80DC5AE36D9A7299200969A /* TextContentBlock.swift */,
+				D4FB03145E6F708190ABCDE0 /* CrossSourceComparisonBlockView.swift */,
 			);
 			path = ContentBlocks;
 			sourceTree = "<group>";
@@ -606,6 +617,7 @@
 				511EF78F5B1E13207B308FA2 /* AlertType.swift */,
 				62127BC3383850838D43831D /* Analysis.swift */,
 				0D9C13C5AC152B80A518A92F /* CopilotContentData.swift */,
+				A1C8F0D12B3E4F567890ABCE /* CopilotAdvancedContentData.swift */,
 				F81A4CAC1F79336E952CCF7D /* CopilotListing.swift */,
 				FDB213CB409B04B4A20C371A /* CopilotMessage.swift */,
 				D05E317415F3FADCEBC71821 /* CopilotProvider.swift */,
@@ -942,6 +954,7 @@
 				7E22BBA5E07190168E8237ED /* ContentView.swift in Sources */,
 				D88D3FBFE8123F873E667042 /* ContentBlockView.swift in Sources */,
 				2E283BD583A89283840840E4 /* CopilotContentData.swift in Sources */,
+				A1C8F0D12B3E4F567890ABCD /* CopilotAdvancedContentData.swift in Sources */,
 				256F25DF2C2B9A36F92F7657 /* CopilotConversationContainer.swift in Sources */,
 				FE8B87940567FC261EC03054 /* CopilotEmptyState.swift in Sources */,
 				B0D1966193699C7A2540A2B3 /* CopilotEmptyStateContainer.swift in Sources */,
@@ -959,6 +972,7 @@
 				1087D86F8F211AD7B699F237 /* CopilotViewModel.swift in Sources */,
 				ED4B5AAECC490DA220AFFD0F /* CrossSourceBadge.swift in Sources */,
 				3C9B42DB522BDDF69363A4EB /* CrossSourceComparisonView.swift in Sources */,
+				D4FB03145E6F708190ABCDEF /* CrossSourceComparisonBlockView.swift in Sources */,
 				C4EC5A549BA1B51A68D8CF92 /* DashboardHeader.swift in Sources */,
 				B23ABA7052857F35184D4A9C /* DashboardListingRow.swift in Sources */,
 				AB13EDC10E12FD22BD4828FD /* DashboardPriceTrendChart.swift in Sources */,
@@ -1003,6 +1017,8 @@
 				181C14C3E0368CB4C03D1765 /* Listing.swift in Sources */,
 				3DC1B48DE5DE72090C243507 /* ListingAnnotation.swift in Sources */,
 				4850E2D000C64F711ED6334D /* ListingCardBlock.swift in Sources */,
+				B2D9E1F23C4D5E67890ABCDE /* ListingComparisonBlockView.swift in Sources */,
+				C3EAF2034D5E6F7890ABCDEF /* ProximitySummaryBlock.swift in Sources */,
 				FBF165B5C32079CFF6AD1808 /* ListingCluster.swift in Sources */,
 				DFD11391ABB95998AA996D4D /* ListingClusterBubble.swift in Sources */,
 				9A541DE5913CFB66E5A49208 /* ListingDetailView.swift in Sources */,

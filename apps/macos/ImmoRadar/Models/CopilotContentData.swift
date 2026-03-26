@@ -9,7 +9,7 @@ struct ComparisonTableData: Codable {
 
 struct ComparisonRow: Codable {
     let label: String
-    let values: [String]
+    let values: [String?]
 }
 
 // MARK: - Score Breakdown

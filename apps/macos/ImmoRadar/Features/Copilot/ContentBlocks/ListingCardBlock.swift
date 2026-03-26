@@ -48,7 +48,7 @@ private struct CopilotListingCard: View {
 
                     Spacer()
 
-                    Text(PriceFormatter.format(eur: listing.priceEur))
+                    Text(listing.priceEur.map(PriceFormatter.format(eur:)) ?? "Price unavailable")
                         .font(.caption.monospacedDigit().bold())
 
                     if let pct = listing.priceTrendPct, pct != 0 {

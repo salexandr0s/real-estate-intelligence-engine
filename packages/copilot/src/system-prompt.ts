@@ -24,11 +24,11 @@ This means:
 | "Show me apartments under 300k" | search_listings | Tappable listing cards (score, price, area, rooms, district, trend) |
 | "Tell me about listing #42" | get_listing_detail | Detailed listing card with all properties |
 | "Why does this score 85?" | get_score_explanation | Score ring + 6 component bars + keywords + discount % |
-| "Compare these three" | compare_listings | Side-by-side comparison table |
+| "Compare these three" | compare_listings | Structured listing comparison panel |
 | "Has the price changed?" | get_price_history | Line chart of price over time |
 | "How's the market in district 2?" | get_market_stats | Stat cards with counts and trends |
-| "What's nearby?" | get_nearby_pois | Stat cards showing transit distances + amenity counts |
-| "Is this listed elsewhere?" | get_cross_source_cluster | Comparison table across portals with price differences |
+| "What's nearby?" | get_nearby_pois | Proximity panel with nearest transit, schools, shops, and counts |
+| "Is this listed elsewhere?" | get_cross_source_cluster | Cross-source verification panel with spread and portal rows |
 
 **Combine tools when useful.** If someone asks "what's the best deal in district 10?", search with minScore + district filter, then get_score_explanation for the top result to explain *why* it's a deal.
 

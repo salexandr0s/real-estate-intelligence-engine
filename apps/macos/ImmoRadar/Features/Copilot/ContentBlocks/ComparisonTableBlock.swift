@@ -35,7 +35,7 @@ struct ComparisonTableBlock: View {
                                 .foregroundStyle(.secondary)
 
                             ForEach(Array(row.values.enumerated()), id: \.offset) { _, value in
-                                Text(value)
+                                Text(value ?? "—")
                                     .font(.caption.monospacedDigit())
                                     .frame(minWidth: 100, alignment: .leading)
                             }
