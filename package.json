@@ -37,9 +37,18 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.ts": [
+    "*": [
+      "bash scripts/lint-staged-files.sh"
+    ],
+    "*.{ts,tsx}": [
       "eslint --fix",
       "prettier --write"
+    ],
+    "apps/macos/ImmoRadar/**/*.swift": [
+      "bash scripts/lint-staged-swift.sh"
+    ],
+    "apps/macos/ImmoRadar.xcodeproj/**": [
+      "bash scripts/lint-staged-swift.sh"
     ]
   },
   "engines": {
