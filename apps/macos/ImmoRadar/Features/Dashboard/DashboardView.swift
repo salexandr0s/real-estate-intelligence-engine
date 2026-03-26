@@ -425,6 +425,11 @@ private struct DashboardSupportingStat: View {
 private struct DashboardActivityPanel: View {
     let snapshot: DashboardViewModel.ActivitySnapshot
 
+    private let columns = [
+        GridItem(.flexible(), spacing: Theme.Spacing.md),
+        GridItem(.flexible(), spacing: Theme.Spacing.md),
+    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             DashboardSectionHeader(
@@ -432,26 +437,12 @@ private struct DashboardActivityPanel: View {
                 subtitle: "Signals derived from the listings already loaded into the dashboard."
             )
 
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    DashboardActivityMetric(title: "New 24h", value: snapshot.newListings, icon: "sparkles", color: .blue)
-                    Divider()
-                    DashboardActivityMetric(title: "Price drops", value: snapshot.priceDrops, icon: "arrow.down.circle", color: .green)
-                }
-
-                Divider()
-
-                HStack(spacing: 0) {
-                    DashboardActivityMetric(title: "Score 70+", value: snapshot.highScoreMatches, icon: "star.fill", color: .orange)
-                    Divider()
-                    DashboardActivityMetric(title: "Unique matches", value: snapshot.totalMatches, icon: "tray.full.fill", color: .purple)
-                }
+            LazyVGrid(columns: columns, spacing: Theme.Spacing.md) {
+                DashboardActivityMetric(title: "New 24h", value: snapshot.newListings, icon: "sparkles", color: .blue)
+                DashboardActivityMetric(title: "Price drops", value: snapshot.priceDrops, icon: "arrow.down.circle", color: .green)
+                DashboardActivityMetric(title: "Score 70+", value: snapshot.highScoreMatches, icon: "star.fill", color: .orange)
+                DashboardActivityMetric(title: "Unique matches", value: snapshot.totalMatches, icon: "tray.full.fill", color: .purple)
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.12), lineWidth: 0.5)
-            }
-            .clipShape(.rect(cornerRadius: Theme.Radius.lg))
         }
         .dashboardPanelStyle(tint: .green)
     }
@@ -465,11 +456,15 @@ private struct DashboardActivityMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-                .frame(width: 28, height: 28)
-                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+            HStack(alignment: .top) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 28, height: 28)
+                    .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+
+                Spacer(minLength: 0)
+            }
 
             Text("\(value)")
                 .font(.title2.bold())
@@ -478,11 +473,15 @@ private struct DashboardActivityMetric: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
         .padding(Theme.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(color.opacity(0.08))
+                .fill(color.opacity(0.09))
+                .overlay {
+                    RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                        .strokeBorder(color.opacity(0.10), lineWidth: 0.5)
+                }
         )
     }
 }
@@ -519,37 +518,36 @@ private struct DashboardFilterCoveragePanel: View {
                     .controlSize(.small)
             }
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: Theme.Spacing.xl) {
-                    coverageSummary
-                        .frame(width: 260, alignment: .leading)
-
-                    Divider()
-
-                    coverageRows
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-                    coverageSummary
-                    Divider()
-                    coverageRows
-                }
-            }
+            coverageSummary
+            coverageRows
         }
         .dashboardPanelStyle(tint: .purple)
     }
 
     private var coverageSummary: some View {
-        HStack(spacing: 0) {
-            DashboardSupportingStat(value: "\(summary.matchedFilters)/\(summary.activeFilters)", label: "Filters with matches")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            DashboardSupportingStat(value: "\(summary.emptyFilters)", label: "Filters empty")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            DashboardSupportingStat(value: "\(summary.totalUniqueMatches)", label: "Unique matches")
-                .frame(maxWidth: .infinity, alignment: .leading)
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: Theme.Spacing.md),
+                GridItem(.flexible(), spacing: Theme.Spacing.md),
+                GridItem(.flexible(), spacing: Theme.Spacing.md),
+            ],
+            spacing: Theme.Spacing.md
+        ) {
+            DashboardCoverageStatCard(
+                value: "\(summary.matchedFilters)/\(summary.activeFilters)",
+                label: "Filters with matches",
+                color: .blue
+            )
+            DashboardCoverageStatCard(
+                value: "\(summary.emptyFilters)",
+                label: "Filters empty",
+                color: .orange
+            )
+            DashboardCoverageStatCard(
+                value: "\(summary.totalUniqueMatches)",
+                label: "Unique matches",
+                color: .purple
+            )
         }
     }
 
@@ -566,6 +564,7 @@ private struct DashboardFilterCoveragePanel: View {
                         HStack(spacing: Theme.Spacing.sm) {
                             Text(row.name)
                                 .font(.caption)
+                                .adaptiveFontWeight(.medium)
                                 .lineLimit(1)
                             Spacer(minLength: Theme.Spacing.sm)
                             if row.isLoading {
@@ -579,9 +578,40 @@ private struct DashboardFilterCoveragePanel: View {
 
                         DashboardCoverageBar(value: Double(row.matchCount), maximum: Double(maxCount))
                     }
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
                 }
             }
         }
+    }
+}
+
+private struct DashboardCoverageStatCard: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(value)
+                .font(.title2.bold())
+                .fontDesign(.rounded)
+
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .padding(Theme.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                .fill(color.opacity(0.09))
+                .overlay {
+                    RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                        .strokeBorder(color.opacity(0.10), lineWidth: 0.5)
+                }
+        )
     }
 }
 
@@ -594,14 +624,14 @@ private struct DashboardCoverageBar: View {
             let ratio = maximum > 0 ? min(value / maximum, 1) : 0
 
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.secondary.opacity(0.12))
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: 4)
                     .fill(Color.accentColor.opacity(0.85))
-                    .frame(width: max(6, proxy.size.width * ratio))
+                    .frame(width: ratio == 0 ? 0 : max(8, proxy.size.width * ratio))
             }
         }
-        .frame(height: 6)
+        .frame(height: 8)
     }
 }
 
