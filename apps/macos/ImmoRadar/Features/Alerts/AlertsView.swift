@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Alerts view with status filtering, list, and HSplitView inspector.
+/// Alerts view with triage-first scope controls, list, and focused inspector.
 struct AlertsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.undoManager) private var undoManager
@@ -15,8 +15,26 @@ struct AlertsView: View {
                 AlertsFilterBar(viewModel: viewModel)
                 Divider()
 
-                if viewModel.filteredAlerts.isEmpty && !viewModel.isLoading {
-                    AlertsEmptyState(hasFilter: viewModel.filterStatus != nil)
+                if let error = viewModel.errorMessage {
+                    errorBanner(error)
+                    Divider()
+                }
+
+                if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
+                    AlertsEmptyState(
+                        scope: viewModel.scope,
+                        hasAnyAlerts: viewModel.hasAnyAlerts,
+                        hasSearch: !viewModel.searchText.isEmpty,
+                        onClearSearch: { searchText = "" },
+                        onSwitchToAll: { viewModel.scope = .all },
+                        onOpenFilters: { appState.navigateTo(.filters) },
+                        onRefresh: {
+                            Task {
+                                await viewModel.refresh(using: appState.apiClient)
+                                await appState.refreshUnreadCount()
+                            }
+                        }
+                    )
                 } else {
                     AlertsList(
                         viewModel: viewModel,
@@ -25,12 +43,36 @@ struct AlertsView: View {
                     )
                 }
             }
-            .frame(minWidth: 400)
+            .frame(minWidth: 440)
 
             if showInspector {
-                AlertInspectorContent(alert: viewModel.selectedAlert)
-                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 460)
-                    .adaptiveMaterial(.regularMaterial)
+                AlertInspectorContent(
+                    alert: viewModel.selectedAlert,
+                    onMarkAsRead: {
+                        guard let alert = viewModel.selectedAlert else { return }
+                        Task {
+                            await viewModel.markAsRead(alert, using: appState.apiClient)
+                            await appState.refreshUnreadCount()
+                        }
+                    },
+                    onDismiss: {
+                        guard let alert = viewModel.selectedAlert else { return }
+                        Task {
+                            await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
+                            await appState.refreshUnreadCount()
+                        }
+                    },
+                    onOpenListing: {
+                        guard let listingId = viewModel.selectedAlert?.listingId else { return }
+                        appState.deepLinkListingId = listingId
+                        appState.navigateTo(.listings)
+                    },
+                    onOpenFilters: {
+                        appState.navigateTo(.filters)
+                    }
+                )
+                .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
+                .adaptiveMaterial(.regularMaterial)
             }
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search alerts...")
@@ -52,27 +94,33 @@ struct AlertsView: View {
             }
         }
         .toolbar(id: "alerts") {
-            ToolbarItem(id: "markAllRead", placement: .automatic) {
+            ToolbarItem(id: "markVisibleRead", placement: .automatic) {
                 Button {
-                    Task { await viewModel.markAllRead(using: appState.apiClient) }
+                    Task {
+                        await viewModel.markVisibleRead(using: appState.apiClient)
+                        await appState.refreshUnreadCount()
+                    }
                 } label: {
-                    Label("Mark All Read", systemImage: "envelope.open")
+                    Label("Mark Visible Read", systemImage: "envelope.open")
                 }
-                .disabled(viewModel.unreadCount == 0)
+                .disabled(viewModel.visibleAlerts.allSatisfy { $0.status != .unread })
             }
-            ToolbarItem(id: "dismissAll", placement: .automatic) {
+            ToolbarItem(id: "dismissVisible", placement: .automatic) {
                 Button {
                     showDismissConfirmation = true
                 } label: {
-                    Label("Dismiss All", systemImage: "xmark.circle")
+                    Label("Dismiss Visible", systemImage: "archivebox")
                 }
-                .disabled(viewModel.alerts.isEmpty)
-                .confirmationDialog("Dismiss All Alerts", isPresented: $showDismissConfirmation) {
-                    Button("Dismiss All", role: .destructive) {
-                        Task { await viewModel.dismissAll(using: appState.apiClient) }
+                .disabled(viewModel.visibleAlerts.allSatisfy { $0.status == .dismissed })
+                .confirmationDialog("Dismiss Visible Alerts", isPresented: $showDismissConfirmation) {
+                    Button("Dismiss Visible", role: .destructive) {
+                        Task {
+                            await viewModel.dismissVisible(using: appState.apiClient)
+                            await appState.refreshUnreadCount()
+                        }
                     }
                 } message: {
-                    Text("This will dismiss all alerts. This action cannot be undone.")
+                    Text("This will dismiss the alerts currently visible in the inbox.")
                 }
             }
             ToolbarItem(id: "inspector", placement: .automatic) {
@@ -85,7 +133,10 @@ struct AlertsView: View {
             }
             ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
-                    Task { await viewModel.refresh(using: appState.apiClient) }
+                    Task {
+                        await viewModel.refresh(using: appState.apiClient)
+                        await appState.refreshUnreadCount()
+                    }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -94,6 +145,7 @@ struct AlertsView: View {
         }
         .task {
             await viewModel.refresh(using: appState.apiClient)
+            await appState.refreshUnreadCount()
         }
         .onChange(of: viewModel.selectedAlertID) { _, newValue in
             if newValue != nil {
@@ -111,9 +163,49 @@ struct AlertsView: View {
         .onDeleteCommand {
             if let id = viewModel.selectedAlertID,
                let alert = viewModel.alerts.first(where: { $0.id == id }) {
-                Task { await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager) }
+                Task {
+                    await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
+                    await appState.refreshUnreadCount()
+                }
             }
         }
+    }
+
+    private func errorBanner(_ error: String) -> some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn’t load alerts.")
+                    .font(.callout.weight(.semibold))
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Button("Dismiss") {
+                viewModel.clearError()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button("Retry") {
+                Task {
+                    await viewModel.refresh(using: appState.apiClient)
+                    await appState.refreshUnreadCount()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Color.red.opacity(0.08))
     }
 }
 

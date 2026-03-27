@@ -1,4 +1,5 @@
 import type { AlertChannel, AlertStatus, AlertType } from './domain.js';
+import type { ListingSearchResult } from './filtering.js';
 
 // ── Match Reasons ────────────────────────────────────────────────────────────
 
@@ -64,6 +65,8 @@ export interface AlertRow {
   updatedAt: Date;
   /** Present only when query JOINs user_filters (e.g. findByUser). */
   filterName?: string | null;
+  /** Embedded canonical listing summary for alert UIs. */
+  listing?: ListingSearchResult | null;
 }
 
 // ── Dedupe Key Builder ──────────────────────────────────────────────────────

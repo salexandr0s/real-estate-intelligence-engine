@@ -26,7 +26,7 @@ struct CopilotSuggestionChips: View {
                                 .font(.callout.weight(.semibold))
                                 .foregroundStyle(Color.accentColor)
                                 .frame(width: 30, height: 30)
-                                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                                .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
 
                             Text(suggestion.label)
                                 .font(.subheadline)
@@ -35,10 +35,11 @@ struct CopilotSuggestionChips: View {
 
                             Spacer(minLength: 0)
 
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                                .opacity(isHovered ? 1 : 0)
+                            if isHovered {
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
 
                         Text(suggestion.subtitle)
@@ -51,7 +52,7 @@ struct CopilotSuggestionChips: View {
                             .foregroundStyle(.tertiary)
                             .lineLimit(2)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
                     .padding(Theme.Spacing.lg)
                 }
                 .buttonStyle(.plain)
@@ -59,25 +60,18 @@ struct CopilotSuggestionChips: View {
                     RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
                         .fill(
                             isHovered
-                                ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.16)
-                                : Theme.inputBarBackground.opacity(0.72)
+                                ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.1)
+                                : Theme.inputBarBackground.opacity(0.5)
                         )
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
                         .strokeBorder(
-                            Color(nsColor: .separatorColor).opacity(isHovered ? 0.4 : 0.32),
+                            Color(nsColor: .separatorColor).opacity(isHovered ? 0.28 : 0.18),
                             lineWidth: 0.5
                         )
                 }
-                .shadow(
-                    color: .black.opacity(isHovered ? 0.08 : 0.03),
-                    radius: isHovered ? 12 : 4,
-                    y: isHovered ? 6 : 2
-                )
                 .contentShape(RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius))
-                .scaleEffect(isHovered && !reduceMotion ? 1.012 : 1)
-                .offset(y: isHovered && !reduceMotion ? -2 : 0)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: isHovered)
                 .onHover { hovering in
                     withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.14)) {

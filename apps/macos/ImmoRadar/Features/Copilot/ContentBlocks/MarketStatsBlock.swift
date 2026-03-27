@@ -42,9 +42,7 @@ private struct StatCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactInset(padding: Theme.Spacing.md)
     }
 
     private func trendIcon(_ trend: StatItem.Trend) -> some View {

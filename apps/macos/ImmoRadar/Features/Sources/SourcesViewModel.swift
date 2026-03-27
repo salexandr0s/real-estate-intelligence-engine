@@ -27,6 +27,10 @@ final class SourcesViewModel {
         sources.count(where: { $0.healthStatus == .failing })
     }
 
+    var attentionCount: Int {
+        sources.count(where: { $0.healthStatus == .failing || $0.healthStatus == .degraded })
+    }
+
     var activeCount: Int {
         sources.count(where: { $0.isActive })
     }
@@ -39,6 +43,24 @@ final class SourcesViewModel {
         !sources.isEmpty && sources.allSatisfy { !$0.isActive }
     }
 
+    var needsAttentionSources: [Source] {
+        sources
+            .filter { $0.isActive && ($0.healthStatus == .failing || $0.healthStatus == .degraded) }
+            .sorted(by: sourceSort)
+    }
+
+    var healthySources: [Source] {
+        sources
+            .filter { $0.isActive && $0.healthStatus == .healthy }
+            .sorted(by: sourceSort)
+    }
+
+    var pausedSources: [Source] {
+        sources
+            .filter { !$0.isActive }
+            .sorted(by: sourceSort)
+    }
+
     // MARK: - Actions
 
     func refresh(using client: APIClient) async {
@@ -47,11 +69,16 @@ final class SourcesViewModel {
 
         do {
             sources = try await client.fetchSources()
+            sources.sort(by: sourceSort)
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    func clearError() {
+        errorMessage = nil
     }
 
     func toggleActive(_ source: Source, using client: APIClient) async {
@@ -60,6 +87,7 @@ final class SourcesViewModel {
         sources[index].isActive = newActive
         do {
             try await client.updateSource(id: source.id, isActive: newActive)
+            sources.sort(by: sourceSort)
         } catch {
             if let idx = sources.firstIndex(where: { $0.id == source.id }) {
                 sources[idx].isActive = !newActive
@@ -78,6 +106,7 @@ final class SourcesViewModel {
             } else {
                 try await client.resumeAllSources()
             }
+            sources.sort(by: sourceSort)
         } catch {
             for i in sources.indices where i < backup.count {
                 sources[i].isActive = backup[i]
@@ -124,5 +153,15 @@ final class SourcesViewModel {
             Log.ui.error("Failed to load scrape runs for \(sourceCode, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return .failure(error)
         }
+    }
+
+    private func sourceSort(lhs: Source, rhs: Source) -> Bool {
+        if lhs.isActive != rhs.isActive {
+            return lhs.isActive && !rhs.isActive
+        }
+        if lhs.healthStatus.sortOrder != rhs.healthStatus.sortOrder {
+            return lhs.healthStatus.sortOrder < rhs.healthStatus.sortOrder
+        }
+        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
 }

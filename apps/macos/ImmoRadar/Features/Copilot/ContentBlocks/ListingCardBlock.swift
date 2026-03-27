@@ -70,8 +70,7 @@ private struct CopilotListingCard: View {
             }
         }
         .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactInset(padding: Theme.Spacing.md)
         .contentShape(Rectangle())
         .contextMenu {
             if let urlString = listing.canonicalUrl, let url = URL(string: urlString) {

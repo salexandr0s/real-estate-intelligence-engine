@@ -1,5 +1,5 @@
-import SwiftUI
 import CoreLocation
+import SwiftUI
 
 /// Analytics view showing market baselines, trends, and temperature data.
 struct AnalyticsView: View {
@@ -24,7 +24,7 @@ struct AnalyticsView: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                         errorBanner
                         DistrictTrendChartView(data: viewModel.trendData, selectedDistrictNo: $selectedDistrictNo) { months in
-                            Task { await viewModel.refreshTrends(using: appState.apiClient, months: months) }
+                            Task { await viewModel.refreshTrends(using: appState.apiClient, districtNo: selectedDistrictNo, months: months) }
                         }
                     }
                     .padding(Theme.Spacing.xl)
@@ -33,7 +33,10 @@ struct AnalyticsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                         errorBanner
-                        MarketTemperatureView(data: viewModel.temperatureData, selectedDistrictNo: $selectedDistrictNo)
+                        MarketTemperatureView(data: viewModel.temperatureData, selectedDistrictNo: $selectedDistrictNo) { districtNo in
+                            selectedDistrictNo = districtNo
+                            selectedTab = .trends
+                        }
                     }
                     .padding(Theme.Spacing.xl)
                 }
@@ -74,25 +77,26 @@ struct AnalyticsView: View {
     }
 
     private var overviewContent: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-            errorBanner
-            AnalyticsSummaryBar(viewModel: viewModel)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                errorBanner
+                AnalyticsSummaryBar(viewModel: viewModel)
 
-            if viewModel.baselines.isEmpty && !viewModel.isLoading {
-                AnalyticsEmptyState()
-            } else {
-                AnalyticsOverviewPane(
-                    districts: viewModel.districtBreakdown,
-                    selectedDistrictNo: $selectedDistrictNo,
-                    onOpenTrends: { districtNo in
-                        selectedDistrictNo = districtNo
-                        selectedTab = .trends
-                    }
-                )
+                if viewModel.baselines.isEmpty && !viewModel.isLoading {
+                    AnalyticsEmptyState()
+                } else {
+                    AnalyticsOverviewPane(
+                        districts: viewModel.districtBreakdown,
+                        selectedDistrictNo: $selectedDistrictNo,
+                        onOpenTrends: { districtNo in
+                            selectedDistrictNo = districtNo
+                            selectedTab = .trends
+                        }
+                    )
+                }
             }
+            .padding(Theme.Spacing.xl)
         }
-        .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -105,77 +109,45 @@ struct AnalyticsView: View {
     }
 }
 
-// MARK: - Summary Bar
-
 private struct AnalyticsSummaryBar: View {
     let viewModel: AnalyticsViewModel
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 180, maximum: 280), spacing: Theme.Spacing.lg)
-    ]
+    private let columns = [GridItem(.adaptive(minimum: 180, maximum: 260), spacing: Theme.Spacing.md)]
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.lg) {
-            AnalyticsSummaryCard(
-                title: "Total Listings",
-                value: PriceFormatter.formatCompact(viewModel.totalListings),
-                icon: "building.2.fill",
-                color: .accentColor
-            )
-
-            AnalyticsSummaryCard(
-                title: "Avg District Median/m²",
-                value: PriceFormatter.formatPerSqm(viewModel.averagePricePerSqm),
-                icon: "eurosign.circle.fill",
-                color: .green
-            )
-
-            AnalyticsSummaryCard(
-                title: "Coverage",
-                value: "\(viewModel.districtsWithDataCount)/23",
-                icon: "map.fill",
-                color: .orange
-            )
-
-            AnalyticsSummaryCard(
-                title: "Baselines",
-                value: "\(viewModel.baselines.count)",
-                icon: "chart.bar.fill",
-                color: .purple
-            )
+        LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.md) {
+            AnalyticsSummaryMetric(title: "Total Listings", value: PriceFormatter.formatCompact(viewModel.totalListings), detail: "district baseline sample count", icon: "building.2.fill", tint: .accentColor)
+            AnalyticsSummaryMetric(title: "Avg Median/m²", value: PriceFormatter.formatPerSqm(viewModel.averagePricePerSqm), detail: "across districts with data", icon: "eurosign.circle.fill", tint: .secondary)
+            AnalyticsSummaryMetric(title: "Coverage", value: "\(viewModel.districtsWithDataCount)/23", detail: "districts with baseline data", icon: "map.fill", tint: .secondary)
+            AnalyticsSummaryMetric(title: "Baselines", value: "\(viewModel.baselines.count)", detail: "loaded into analytics", icon: "chart.bar.fill", tint: .secondary)
         }
     }
 }
 
-private struct AnalyticsSummaryCard: View {
+private struct AnalyticsSummaryMetric: View {
     let title: String
     let value: String
+    let detail: String
     let icon: String
-    let color: Color
+    let tint: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: icon)
-                    .foregroundStyle(color)
-                    .font(.caption)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(tint)
             Text(value)
-                .font(.title2)
-                .fontWeight(.semibold)
+                .font(.title3.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dashboardPanelStyle(padding: Theme.Spacing.md, cornerRadius: Theme.Radius.lg, tint: color)
+        .cardStyle(.subtle, padding: Theme.Spacing.md, cornerRadius: Theme.Radius.lg)
     }
 }
-
-// MARK: - Overview Pane
 
 private enum AnalyticsMapMetric: String, CaseIterable {
     case price = "Price"
@@ -183,8 +155,8 @@ private enum AnalyticsMapMetric: String, CaseIterable {
 
     var subtitle: String {
         switch self {
-        case .price: "Colors reflect median €/m²."
-        case .temperature: "Colors reflect listing velocity temperature."
+        case .price: "Median €/m² by district"
+        case .temperature: "Current activity temperature by district"
         }
     }
 }
@@ -218,13 +190,14 @@ private struct AnalyticsOverviewPane: View {
                             districts: districts,
                             mapMetric: $mapMetric,
                             hoveredDistrictNo: $hoveredDistrictNo,
-                            selectedDistrictNo: $selectedDistrictNo,
-                            onOpenTrends: onOpenTrends
+                            selectedDistrictNo: $selectedDistrictNo
                         )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 540)
 
-                        AnalyticsDistrictListPanel(
+                        AnalyticsDistrictSidebar(
                             districts: districts,
+                            activeDistrict: activeDistrict,
                             activeDistrictNo: selectedDistrictNo ?? hoveredDistrictNo,
                             onSelect: { districtNo in
                                 if selectedDistrictNo == districtNo {
@@ -235,7 +208,7 @@ private struct AnalyticsOverviewPane: View {
                             },
                             onOpenTrends: onOpenTrends
                         )
-                        .frame(width: min(max(proxy.size.width * 0.28, 300), 360))
+                        .frame(width: min(max(proxy.size.width * 0.30, 320), 380))
                     }
                 } else {
                     VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
@@ -243,10 +216,18 @@ private struct AnalyticsOverviewPane: View {
                             districts: districts,
                             mapMetric: $mapMetric,
                             hoveredDistrictNo: $hoveredDistrictNo,
-                            selectedDistrictNo: $selectedDistrictNo,
-                            onOpenTrends: onOpenTrends
+                            selectedDistrictNo: $selectedDistrictNo
                         )
                         .frame(minHeight: 420)
+
+                        AnalyticsDistrictDetailPanel(
+                            district: activeDistrict,
+                            onOpenTrends: {
+                                if let districtNo = activeDistrict?.districtNo {
+                                    onOpenTrends(districtNo)
+                                }
+                            }
+                        )
 
                         AnalyticsDistrictCompactGrid(
                             districts: districts,
@@ -257,70 +238,31 @@ private struct AnalyticsOverviewPane: View {
                                 } else {
                                     selectedDistrictNo = districtNo
                                 }
-                            },
-                            onOpenTrends: onOpenTrends
+                            }
                         )
                     }
                 }
             }
             .animation(.easeInOut(duration: 0.18), value: hoveredDistrictNo)
             .animation(.easeInOut(duration: 0.18), value: selectedDistrictNo)
-            .overlay(alignment: .bottomLeading) {
-                if let activeDistrict {
-                    AnalyticsDistrictSelectionFootnote(district: activeDistrict)
-                        .padding(Theme.Spacing.md)
-                }
-            }
         }
+        .frame(minHeight: 620)
     }
 }
-
-private struct AnalyticsDistrictSelectionFootnote: View {
-    let district: DistrictSummary
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Circle()
-                .fill(district.temperatureColor)
-                .frame(width: 8, height: 8)
-            Text("Hover for pricing • click to pin • double-click for trends: \(district.districtLabel)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.vertical, Theme.Spacing.xs)
-        .background(.ultraThinMaterial, in: Capsule())
-    }
-}
-
-// MARK: - District Map
 
 private struct AnalyticsDistrictMapCard: View {
     let districts: [DistrictSummary]
     @Binding var mapMetric: AnalyticsMapMetric
     @Binding var hoveredDistrictNo: Int?
     @Binding var selectedDistrictNo: Int?
-    let onOpenTrends: (Int) -> Void
-    @State private var tooltipAnchor: CGPoint?
-    @State private var mapSize: CGSize = .zero
-
-    private var activeDistrict: DistrictSummary? {
-        if let selectedDistrictNo {
-            return districts.first(where: { $0.districtNo == selectedDistrictNo })
-        }
-        if let hoveredDistrictNo {
-            return districts.first(where: { $0.districtNo == hoveredDistrictNo })
-        }
-        return districts.first(where: \.hasData) ?? districts.first
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Vienna District Heatmap")
+                    Text("Vienna District Map")
                         .font(.headline)
-                    Text("All 23 districts are visible at once. \(mapMetric.subtitle)")
+                    Text("Click a district to focus it. Use Open Trends from the detail panel for drill-in.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -338,7 +280,7 @@ private struct AnalyticsDistrictMapCard: View {
             if let selectedDistrictNo,
                let district = districts.first(where: { $0.districtNo == selectedDistrictNo }) {
                 HStack(spacing: Theme.Spacing.sm) {
-                    Label("Pinned", systemImage: "mappin.and.ellipse")
+                    Label("Focused", systemImage: "mappin.and.ellipse")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text(district.districtLabel)
@@ -353,48 +295,17 @@ private struct AnalyticsDistrictMapCard: View {
                 .padding(.horizontal, Theme.Spacing.sm)
                 .padding(.vertical, Theme.Spacing.xs)
                 .background(Color.primary.opacity(0.04), in: Capsule())
-                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            GeometryReader { proxy in
-                ZStack(alignment: .topLeading) {
-                    AnalyticsDistrictMap(
-                        districts: districts,
-                        mapMetric: mapMetric,
-                        hoveredDistrictNo: $hoveredDistrictNo,
-                        selectedDistrictNo: $selectedDistrictNo,
-                        tooltipAnchor: $tooltipAnchor,
-                        mapSize: $mapSize,
-                        onOpenTrends: onOpenTrends
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    if let activeDistrict {
-                        AnalyticsDistrictTooltip(district: activeDistrict, onOpenTrends: {
-                            onOpenTrends(activeDistrict.districtNo)
-                        })
-                            .position(tooltipPosition(in: proxy.size))
-                            .transition(.scale(scale: 0.96).combined(with: .opacity))
-                    }
-                }
-            }
+            AnalyticsDistrictMap(
+                districts: districts,
+                mapMetric: mapMetric,
+                hoveredDistrictNo: $hoveredDistrictNo,
+                selectedDistrictNo: $selectedDistrictNo
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tint: .accentColor, elevated: true)
-    }
-
-    private func tooltipPosition(in size: CGSize) -> CGPoint {
-        let fallback = CGPoint(x: 170, y: 110)
-        guard let anchor = tooltipAnchor else { return fallback }
-
-        let tooltipSize = CGSize(width: 280, height: 168)
-        let desiredX = anchor.x + 150
-        let desiredY = anchor.y - 70
-
-        return CGPoint(
-            x: min(max(desiredX, tooltipSize.width / 2 + 14), size.width - tooltipSize.width / 2 - 14),
-            y: min(max(desiredY, tooltipSize.height / 2 + 14), size.height - tooltipSize.height / 2 - 14)
-        )
+        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tone: .neutral, elevated: true)
     }
 }
 
@@ -403,9 +314,6 @@ private struct AnalyticsDistrictMap: View {
     let mapMetric: AnalyticsMapMetric
     @Binding var hoveredDistrictNo: Int?
     @Binding var selectedDistrictNo: Int?
-    @Binding var tooltipAnchor: CGPoint?
-    @Binding var mapSize: CGSize
-    let onOpenTrends: (Int) -> Void
 
     private let boundaries = ViennaDistrictStore.boundaries
 
@@ -435,17 +343,7 @@ private struct AnalyticsDistrictMap: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.Radius.xl)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.accentColor.opacity(0.08),
-                                Color.purple.opacity(0.06),
-                                Color.clear,
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.primary.opacity(0.03))
 
                 ForEach(boundaries) { boundary in
                     if let district = districtLookup[boundary.id] {
@@ -454,43 +352,25 @@ private struct AnalyticsDistrictMap: View {
 
                         path
                             .fill(fillColor(for: district, isActive: isActive))
-                            .shadow(
-                                color: (selectedDistrictNo == boundary.id ? district.temperatureColor : .clear).opacity(0.45),
-                                radius: selectedDistrictNo == boundary.id ? 14 : 0,
-                                y: 0
-                            )
                             .overlay {
-                                path
-                                    .stroke(
-                                        hoveredDistrictNo == boundary.id && selectedDistrictNo != boundary.id
-                                            ? Color.white.opacity(0.18)
-                                            : .clear,
-                                        lineWidth: hoveredDistrictNo == boundary.id && selectedDistrictNo != boundary.id ? 7 : 0
-                                    )
-                                path
-                                    .stroke(strokeColor(for: district, isActive: isActive), lineWidth: isActive ? 2.2 : 1)
+                                path.stroke(strokeColor(for: district, isActive: isActive), lineWidth: isActive ? 2 : 1)
                             }
                             .contentShape(path)
                             .onHover { inside in
-                                if inside {
-                                    hoveredDistrictNo = boundary.id
-                                } else if hoveredDistrictNo == boundary.id {
-                                    hoveredDistrictNo = nil
+                                if selectedDistrictNo == nil {
+                                    hoveredDistrictNo = inside ? boundary.id : nil
                                 }
                             }
                             .onTapGesture {
-                                if selectedDistrictNo == boundary.id {
-                                    selectedDistrictNo = nil
-                                } else {
-                                    selectedDistrictNo = boundary.id
-                                }
+                                toggleDistrictSelection(boundary.id)
                             }
-                            .simultaneousGesture(
-                                TapGesture(count: 2).onEnded {
-                                    selectedDistrictNo = boundary.id
-                                    onOpenTrends(boundary.id)
-                                }
-                            )
+                            .accessibilityElement()
+                            .accessibilityLabel(district.districtLabel)
+                            .accessibilityValue(isActive ? "Selected" : "Not selected")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction {
+                                toggleDistrictSelection(boundary.id)
+                            }
 
                         let center = projectedPoint(for: boundary.boundingBox.center, in: frame)
                         let offset = labelOffset(for: boundary.id)
@@ -498,53 +378,24 @@ private struct AnalyticsDistrictMap: View {
                             .font(.caption2.weight(.bold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(.black.opacity(isActive ? 0.42 : 0.30), in: Capsule())
-                            .foregroundStyle(.white.opacity(isActive ? 0.98 : 0.90))
-                            .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+                            .background(.black.opacity(isActive ? 0.34 : 0.22), in: Capsule())
+                            .foregroundStyle(.white.opacity(isActive ? 0.98 : 0.88))
                             .position(x: center.x + offset.width, y: center.y + offset.height)
-                            .scaleEffect(isActive ? 1.08 : (hoveredDistrictNo == boundary.id ? 1.04 : 1))
                             .allowsHitTesting(false)
-
-                        if selectedDistrictNo == boundary.id {
-                            Text(district.districtName)
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, Theme.Spacing.xs)
-                                .padding(.vertical, 3)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .overlay {
-                                    Capsule()
-                                        .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
-                                }
-                                .position(
-                                    x: center.x + offset.width,
-                                    y: center.y + offset.height + 20
-                                )
-                                .allowsHitTesting(false)
-                                .transition(.opacity.combined(with: .scale))
-                        }
                     }
                 }
             }
-            .onAppear {
-                mapSize = proxy.size
-                updateTooltipAnchor()
-            }
-            .onChange(of: proxy.size) { _, newSize in
-                mapSize = newSize
-                updateTooltipAnchor()
-            }
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xl))
-        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: hoveredDistrictNo)
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: selectedDistrictNo)
-        .onChange(of: hoveredDistrictNo) { _, _ in
-            updateTooltipAnchor()
-        }
-        .onChange(of: selectedDistrictNo) { _, _ in
-            updateTooltipAnchor()
-        }
-        .onAppear {
-            updateTooltipAnchor()
+        .animation(.easeInOut(duration: 0.18), value: hoveredDistrictNo)
+        .animation(.easeInOut(duration: 0.18), value: selectedDistrictNo)
+    }
+
+    private func toggleDistrictSelection(_ districtNo: Int) {
+        if selectedDistrictNo == districtNo {
+            selectedDistrictNo = nil
+        } else {
+            selectedDistrictNo = districtNo
         }
     }
 
@@ -596,36 +447,36 @@ private struct AnalyticsDistrictMap: View {
         switch mapMetric {
         case .price:
             guard let median = district.medianPpsqmEur else {
-                return Color.secondary.opacity(isActive ? 0.30 : 0.16)
+                return Color.secondary.opacity(isActive ? 0.24 : 0.12)
             }
-
             let range = medianRange
             let span = max(range.upperBound - range.lowerBound, 1)
             let normalized = (median - range.lowerBound) / span
-            let eased = pow(normalized, 0.82)
-            let hue = 0.60 - (eased * 0.30)
-            let saturation = min(0.58 + (eased * 0.28) + (isActive ? 0.08 : 0), 0.95)
-            let brightness = min(0.82 + (eased * 0.11) + (isActive ? 0.04 : 0), 0.98)
-            return Color(hue: hue, saturation: saturation, brightness: brightness)
+            let base = Color(
+                hue: 0.59 - (normalized * 0.10),
+                saturation: 0.18 + (normalized * 0.18),
+                brightness: 0.82 + (normalized * 0.08)
+            )
+            return base.opacity(isActive ? 0.92 : 0.76)
         case .temperature:
             let base = mapTemperatureColor(for: district.temperature)
-            return base.opacity(isActive ? 0.90 : (district.temperature == nil ? 0.18 : 0.72))
+            return base.opacity(isActive ? 0.86 : (district.temperature == nil ? 0.14 : 0.55))
         }
     }
 
     private func strokeColor(for district: DistrictSummary, isActive: Bool) -> Color {
         if isActive {
-            return .white.opacity(0.98)
+            return district.temperatureColor.opacity(0.85)
         }
-        return district.hasData ? .white.opacity(0.35) : .secondary.opacity(0.4)
+        return district.hasData ? Color.white.opacity(0.42) : .secondary.opacity(0.30)
     }
 
     private func mapTemperatureColor(for temperature: String?) -> Color {
         switch temperature {
-        case "hot": Color(red: 0.98, green: 0.37, blue: 0.33)
-        case "warm": Color(red: 0.97, green: 0.66, blue: 0.28)
-        case "cool": Color(red: 0.34, green: 0.77, blue: 0.84)
-        case "cold": Color(red: 0.38, green: 0.47, blue: 0.63)
+        case "hot": Color(red: 0.88, green: 0.43, blue: 0.39)
+        case "warm": Color(red: 0.90, green: 0.67, blue: 0.38)
+        case "cool": Color(red: 0.42, green: 0.70, blue: 0.82)
+        case "cold": Color(red: 0.54, green: 0.58, blue: 0.67)
         default: .secondary
         }
     }
@@ -643,146 +494,6 @@ private struct AnalyticsDistrictMap: View {
         case 9: CGSize(width: 14, height: -18)
         case 20: CGSize(width: 18, height: -4)
         default: .zero
-        }
-    }
-
-    private func updateTooltipAnchor() {
-        let activeDistrictNo = selectedDistrictNo ?? hoveredDistrictNo
-        guard let activeDistrictNo,
-              let boundary = boundaries.first(where: { $0.id == activeDistrictNo }) else {
-            tooltipAnchor = nil
-            return
-        }
-
-        let center = boundary.boundingBox.center
-        let frame = projectedFrame(in: mapSize == .zero ? CGSize(width: 900, height: 620) : mapSize)
-        let point = projectedPoint(for: center, in: frame)
-        let offset = labelOffset(for: boundary.id)
-        tooltipAnchor = CGPoint(x: point.x + offset.width, y: point.y + offset.height)
-    }
-}
-
-private struct AnalyticsDistrictTooltip: View {
-    let district: DistrictSummary
-    let onOpenTrends: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Circle()
-                            .fill(district.temperatureColor)
-                            .frame(width: 8, height: 8)
-                        Text("District snapshot")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(district.districtLabel)
-                        .font(.headline)
-                    Text(district.hasData ? "Median €/m² and current activity" : "No district baseline yet")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: Theme.Spacing.md)
-
-                Text(district.temperatureLabel)
-                    .font(.caption.bold())
-                    .padding(.horizontal, Theme.Spacing.sm)
-                    .padding(.vertical, 3)
-                    .background(district.temperatureColor.opacity(0.16))
-                    .foregroundStyle(district.temperatureColor)
-                    .clipShape(Capsule())
-            }
-
-            Divider()
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: Theme.Spacing.sm),
-                    GridItem(.flexible(), spacing: Theme.Spacing.sm),
-                ],
-                spacing: Theme.Spacing.sm
-            ) {
-                AnalyticsTooltipMetricCard(
-                    label: "Median",
-                    value: district.medianPpsqmEur.map(PriceFormatter.formatPerSqm) ?? "No data"
-                )
-                AnalyticsTooltipMetricCard(
-                    label: "Velocity",
-                    value: district.velocity.map(PriceFormatter.formatPercent) ?? "—"
-                )
-                AnalyticsTooltipMetricCard(
-                    label: "P25 / P75",
-                    value: percentileValue
-                )
-                AnalyticsTooltipMetricCard(
-                    label: "Sample count",
-                    value: district.sampleCount > 0 ? PriceFormatter.formatCompact(district.sampleCount) : "—"
-                )
-            }
-
-            HStack {
-                Spacer()
-                Button {
-                    onOpenTrends()
-                } label: {
-                    Label("View trends", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .buttonStyle(.link)
-                .font(.caption.weight(.semibold))
-            }
-        }
-        .frame(width: 280, alignment: .leading)
-        .padding(Theme.Spacing.md)
-        .background(
-            LinearGradient(
-                colors: [
-                    district.temperatureColor.opacity(0.18),
-                    Color(nsColor: .controlBackgroundColor).opacity(0.96),
-                    Color(nsColor: .controlBackgroundColor).opacity(0.90),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.lg)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
-    }
-
-    private var percentileValue: String {
-        guard let p25 = district.p25PpsqmEur, let p75 = district.p75PpsqmEur else {
-            return "—"
-        }
-        return "\(PriceFormatter.formatPerSqm(p25)) / \(PriceFormatter.formatPerSqm(p75))"
-    }
-}
-
-private struct AnalyticsTooltipMetricCard: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
         }
     }
 }
@@ -807,9 +518,9 @@ private struct AnalyticsMapLegend: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color(hue: 0.61, saturation: 0.68, brightness: 0.82),
-                                    Color(hue: 0.50, saturation: 0.72, brightness: 0.84),
-                                    Color(hue: 0.39, saturation: 0.76, brightness: 0.88),
+                                    Color(hue: 0.58, saturation: 0.22, brightness: 0.78),
+                                    Color(hue: 0.54, saturation: 0.28, brightness: 0.82),
+                                    Color(hue: 0.49, saturation: 0.36, brightness: 0.86),
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -825,10 +536,10 @@ private struct AnalyticsMapLegend: View {
             }
         case .temperature:
             HStack(spacing: Theme.Spacing.xs) {
-                AnalyticsLegendDot(color: Color(red: 0.98, green: 0.37, blue: 0.33), label: "Hot")
-                AnalyticsLegendDot(color: Color(red: 0.97, green: 0.66, blue: 0.28), label: "Warm")
-                AnalyticsLegendDot(color: Color(red: 0.34, green: 0.77, blue: 0.84), label: "Cool")
-                AnalyticsLegendDot(color: Color(red: 0.38, green: 0.47, blue: 0.63), label: "Cold")
+                AnalyticsLegendDot(color: Color(red: 0.88, green: 0.43, blue: 0.39), label: "Hot")
+                AnalyticsLegendDot(color: Color(red: 0.90, green: 0.67, blue: 0.38), label: "Warm")
+                AnalyticsLegendDot(color: Color(red: 0.42, green: 0.70, blue: 0.82), label: "Cool")
+                AnalyticsLegendDot(color: Color(red: 0.54, green: 0.58, blue: 0.67), label: "Cold")
             }
             .font(.caption2)
         }
@@ -850,10 +561,9 @@ private struct AnalyticsLegendDot: View {
     }
 }
 
-// MARK: - District Companion Panels
-
-private struct AnalyticsDistrictListPanel: View {
+private struct AnalyticsDistrictSidebar: View {
     let districts: [DistrictSummary]
+    let activeDistrict: DistrictSummary?
     let activeDistrictNo: Int?
     let onSelect: (Int) -> Void
     let onOpenTrends: (Int) -> Void
@@ -864,28 +574,32 @@ private struct AnalyticsDistrictListPanel: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("District Snapshot")
-                    .font(.headline)
-                Text("Dense 23-district matrix for quick scanning.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: columns, spacing: Theme.Spacing.xs) {
-                ForEach(districts) { district in
-                    AnalyticsDistrictRow(
-                        district: district,
-                        isActive: activeDistrictNo == district.districtNo,
-                        onSelect: { onSelect(district.districtNo) },
-                        onOpenTrends: { onOpenTrends(district.districtNo) }
-                    )
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            AnalyticsDistrictDetailPanel(district: activeDistrict) {
+                if let districtNo = activeDistrict?.districtNo {
+                    onOpenTrends(districtNo)
                 }
             }
-            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Text("District Snapshot")
+                    .font(.headline)
+                Text("Scan all 23 districts, then open trends from the focused district above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: columns, spacing: Theme.Spacing.xs) {
+                    ForEach(districts) { district in
+                        AnalyticsDistrictRow(
+                            district: district,
+                            isActive: activeDistrictNo == district.districtNo,
+                            onSelect: { onSelect(district.districtNo) }
+                        )
+                    }
+                }
+            }
         }
-        .dashboardPanelStyle(padding: Theme.Spacing.md, cornerRadius: Theme.Dashboard.panelRadius, tint: .purple)
+        .dashboardPanelStyle(padding: Theme.Spacing.md, cornerRadius: Theme.Dashboard.panelRadius, tone: .neutral)
     }
 }
 
@@ -893,7 +607,6 @@ private struct AnalyticsDistrictCompactGrid: View {
     let districts: [DistrictSummary]
     let activeDistrictNo: Int?
     let onSelect: (Int) -> Void
-    let onOpenTrends: (Int) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 220, maximum: 320), spacing: Theme.Spacing.xs)
@@ -903,19 +616,112 @@ private struct AnalyticsDistrictCompactGrid: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("District Snapshot")
                 .font(.headline)
+            Text("Select a district, then use the detail panel to open its trend view.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             LazyVGrid(columns: columns, spacing: Theme.Spacing.xs) {
                 ForEach(districts) { district in
                     AnalyticsDistrictRow(
                         district: district,
                         isActive: activeDistrictNo == district.districtNo,
-                        onSelect: { onSelect(district.districtNo) },
-                        onOpenTrends: { onOpenTrends(district.districtNo) }
+                        onSelect: { onSelect(district.districtNo) }
                     )
                 }
             }
         }
-        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tint: .purple)
+        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tone: .neutral)
+    }
+}
+
+private struct AnalyticsDistrictDetailPanel: View {
+    let district: DistrictSummary?
+    let onOpenTrends: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            if let district {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: Theme.Spacing.xs) {
+                            Circle()
+                                .fill(district.temperatureColor)
+                                .frame(width: 8, height: 8)
+                            Text("District detail")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(district.districtLabel)
+                            .font(.headline)
+                        Text(district.hasData ? "Median €/m² and activity snapshot." : "No district baseline yet.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: Theme.Spacing.md)
+
+                    Text(district.temperatureLabel)
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, Theme.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(district.temperatureColor.opacity(0.12), in: Capsule())
+                        .foregroundStyle(district.temperatureColor)
+                }
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: Theme.Spacing.sm),
+                        GridItem(.flexible(), spacing: Theme.Spacing.sm),
+                    ],
+                    spacing: Theme.Spacing.sm
+                ) {
+                    AnalyticsDetailMetric(label: "Median", value: district.medianPpsqmEur.map(PriceFormatter.formatPerSqm) ?? "No data")
+                    AnalyticsDetailMetric(label: "Velocity", value: district.velocity.map(PriceFormatter.formatPercent) ?? "—")
+                    AnalyticsDetailMetric(label: "P25 / P75", value: percentileValue(for: district))
+                    AnalyticsDetailMetric(label: "Sample count", value: district.sampleCount > 0 ? PriceFormatter.formatCompact(district.sampleCount) : "—")
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Open Trends", action: onOpenTrends)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
+            } else {
+                ContentUnavailableView {
+                    Label("No District Selected", systemImage: "map")
+                } description: {
+                    Text("Select a district to review pricing and activity, then open trends explicitly.")
+                }
+                .frame(maxWidth: .infinity, minHeight: 160)
+            }
+        }
+        .cardStyle(.subtle, padding: Theme.Spacing.md, cornerRadius: Theme.Radius.lg)
+    }
+
+    private func percentileValue(for district: DistrictSummary) -> String {
+        guard let p25 = district.p25PpsqmEur, let p75 = district.p75PpsqmEur else { return "—" }
+        return "\(PriceFormatter.formatPerSqm(p25)) / \(PriceFormatter.formatPerSqm(p75))"
+    }
+}
+
+private struct AnalyticsDetailMetric: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 }
 
@@ -923,7 +729,6 @@ private struct AnalyticsDistrictRow: View {
     let district: DistrictSummary
     let isActive: Bool
     let onSelect: () -> Void
-    let onOpenTrends: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
@@ -950,45 +755,18 @@ private struct AnalyticsDistrictRow: View {
                     .frame(width: 7, height: 7)
             }
             .padding(.horizontal, Theme.Spacing.sm)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(rowBackground)
+            .background(isActive ? district.temperatureColor.opacity(0.10) : Color.primary.opacity(0.03))
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.Radius.md)
-                    .strokeBorder(borderColor, lineWidth: isActive ? 1 : 0.5)
+                    .strokeBorder(isActive ? district.temperatureColor.opacity(0.45) : Color(nsColor: .separatorColor).opacity(0.14), lineWidth: isActive ? 1.2 : 0.8)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded {
-                onOpenTrends()
-            }
-        )
-    }
-
-    private var rowBackground: some ShapeStyle {
-        if isActive {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        district.temperatureColor.opacity(0.18),
-                        Color.accentColor.opacity(0.10),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-        }
-        return AnyShapeStyle(Color.primary.opacity(0.03))
-    }
-
-    private var borderColor: Color {
-        isActive ? district.temperatureColor.opacity(0.55) : Color(nsColor: .separatorColor).opacity(0.15)
     }
 }
-
-// MARK: - Empty State
 
 private struct AnalyticsEmptyState: View {
     var body: some View {
@@ -998,11 +776,9 @@ private struct AnalyticsEmptyState: View {
             Text("Market baselines will appear here once enough listing data has been collected.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius)
+        .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tone: .neutral)
     }
 }
-
-// MARK: - Error Banner
 
 private struct AnalyticsErrorBanner: View {
     let message: String
@@ -1011,7 +787,7 @@ private struct AnalyticsErrorBanner: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.scoreAverage)
 
             Text(message)
                 .font(.caption)
@@ -1022,9 +798,10 @@ private struct AnalyticsErrorBanner: View {
 
             Button("Retry", action: onRetry)
                 .controlSize(.small)
+                .buttonStyle(.borderedProminent)
         }
         .padding(Theme.Spacing.md)
-        .background(Color.orange.opacity(0.08))
+        .background(Color.scoreAverage.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 }

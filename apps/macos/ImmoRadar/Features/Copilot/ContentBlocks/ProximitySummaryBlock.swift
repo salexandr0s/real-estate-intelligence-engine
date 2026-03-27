@@ -109,13 +109,7 @@ struct ProximitySummaryBlock: View {
                 }
             }
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 0.5)
-        }
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactCard(padding: Theme.Spacing.md)
     }
 
     private var header: some View {

@@ -182,9 +182,20 @@ actor APIClient {
         return response.data
     }
 
-    /// Save a listing to the watchlist.
-    func saveListing(listingId: Int) async throws {
-        let body = try encoder.encode(["listingId": listingId])
+    /// Save a listing to the watchlist, optionally updating notes if already saved.
+    func saveListing(listingId: Int, notes: String? = nil) async throws {
+        struct SaveListingBody: Codable {
+            let listingId: Int
+            let notes: String?
+        }
+
+        let normalizedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = try encoder.encode(
+            SaveListingBody(
+                listingId: listingId,
+                notes: normalizedNotes?.isEmpty == true ? nil : normalizedNotes
+            )
+        )
         try await requestVoid(.saveListing(body: body))
     }
 
@@ -330,19 +341,7 @@ actor APIClient {
         let response: PaginatedResponse<APIAlertResponse> = try await requestPaginated(
             .listAlerts(query: query)
         )
-        return response.data.map { dto in
-            Alert(
-                id: dto.id,
-                alertType: AlertType(rawValue: dto.alertType) ?? .newMatch,
-                status: AlertStatus(rawValue: dto.status) ?? .unread,
-                title: dto.title,
-                body: dto.body,
-                matchedAt: Date.fromISO(dto.matchedAt),
-                filterName: dto.filterName,
-                listingId: dto.listingId,
-                matchReasons: dto.matchReasons
-            )
-        }
+        return response.data.map { $0.toDomain(decoder: decoder) }
     }
 
     /// Bulk update alert statuses. Returns the number of updated alerts.

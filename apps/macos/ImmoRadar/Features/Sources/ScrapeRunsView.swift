@@ -1,24 +1,27 @@
 import SwiftUI
 
-/// Detail view showing recent scrape runs with success/failure badges and stats.
+/// Detail view showing recent scrape runs with operational stats.
 struct ScrapeRunsView: View {
     let runs: [ScrapeRun]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text("Recent Scrape Runs")
-                .font(.headline)
+            Text("Recent Runs")
+                .font(.subheadline.weight(.semibold))
 
             if runs.isEmpty {
-                Text("No scrape runs yet")
+                Text("No recent scrape runs yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.vertical, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.md)
             } else {
-                ForEach(runs) { run in
-                    ScrapeRunRow(run: run)
-                    if run.id != runs.last?.id {
-                        Divider()
+                VStack(spacing: 0) {
+                    ForEach(runs) { run in
+                        ScrapeRunRow(run: run)
+                            .padding(.vertical, Theme.Spacing.sm)
+                        if run.id != runs.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
@@ -30,78 +33,88 @@ private struct ScrapeRunRow: View {
     let run: ScrapeRun
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            // Status badge
-            Circle()
-                .fill(statusColor)
-                .frame(width: 10, height: 10)
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
+                StatusBadge(label: statusTitle, color: statusColor, icon: statusIcon)
 
-            // Timestamp
-            VStack(alignment: .leading, spacing: 2) {
                 if let started = run.parsedStartedAt {
-                    Text(started, style: .relative)
+                    Text(PriceFormatter.relativeDate(started))
                         .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Text(run.status)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 90, alignment: .leading)
 
-            // Stats
+                Spacer()
+
+                Text(run.triggerType.replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
             HStack(spacing: Theme.Spacing.md) {
-                StatPill(label: "Pages", value: "\(run.pagesFetched)")
-                StatPill(label: "Found", value: "\(run.listingsDiscovered)")
-                StatPill(label: "2xx", value: "\(run.http2xx)")
+                RunStat(label: "Pages", value: "\(run.pagesFetched)")
+                RunStat(label: "Found", value: "\(run.listingsDiscovered)")
+                RunStat(label: "2xx", value: "\(run.http2xx)")
+
+                if run.retryCount > 0 {
+                    RunStat(label: "Retries", value: "\(run.retryCount)", tint: .scoreAverage)
+                }
                 if run.http4xx > 0 {
-                    StatPill(label: "4xx", value: "\(run.http4xx)", color: .orange)
+                    RunStat(label: "4xx", value: "\(run.http4xx)", tint: .scoreAverage)
                 }
                 if run.http5xx > 0 {
-                    StatPill(label: "5xx", value: "\(run.http5xx)", color: .red)
+                    RunStat(label: "5xx", value: "\(run.http5xx)", tint: .scorePoor)
                 }
                 if run.captchaCount > 0 {
-                    StatPill(label: "CAPTCHA", value: "\(run.captchaCount)", color: .purple)
+                    RunStat(label: "Captcha", value: "\(run.captchaCount)", tint: .scorePoor)
                 }
             }
 
-            Spacer()
-
-            // Error message
             if let error = run.errorMessage {
                 Text(error)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(1)
-                    .frame(maxWidth: 200)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
         }
-        .padding(.vertical, 2)
+    }
+
+    private var statusTitle: String {
+        run.status.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private var statusIcon: String {
+        switch run.status {
+        case "succeeded": "checkmark.circle.fill"
+        case "partial": "exclamationmark.circle.fill"
+        case "failed": "xmark.circle.fill"
+        case "rate_limited": "tortoise.fill"
+        default: "circle.fill"
+        }
     }
 
     private var statusColor: Color {
         switch run.status {
-        case "succeeded": .green
-        case "partial": .orange
-        case "failed": .red
-        case "rate_limited": .yellow
-        default: .gray
+        case "succeeded": .scoreGood
+        case "partial", "rate_limited": .scoreAverage
+        case "failed": .scorePoor
+        default: .secondary
         }
     }
 }
 
-private struct StatPill: View {
+private struct RunStat: View {
     let label: String
     let value: String
-    var color: Color = .secondary
+    var tint: Color = .primary
 
     var body: some View {
-        VStack(spacing: 1) {
-            Text(value)
-                .font(.caption.monospacedDigit().bold())
-                .foregroundStyle(color)
+        HStack(spacing: 4) {
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(tint)
         }
     }
 }

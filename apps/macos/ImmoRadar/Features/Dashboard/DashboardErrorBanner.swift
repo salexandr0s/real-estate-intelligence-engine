@@ -8,7 +8,7 @@ struct DashboardErrorBanner: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Theme.Dashboard.iconTint(for: .caution))
                 .font(.caption)
 
             Text(message)
@@ -25,7 +25,11 @@ struct DashboardErrorBanner: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.sm)
-        .background(Color.orange.opacity(0.08))
+        .background(Theme.Dashboard.tileBackground(for: .caution))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .strokeBorder(Theme.Dashboard.panelBorderColor(for: .caution), lineWidth: 0.5)
+        }
         .clipShape(.rect(cornerRadius: Theme.Radius.sm))
         .accessibilityElement(children: .combine)
     }

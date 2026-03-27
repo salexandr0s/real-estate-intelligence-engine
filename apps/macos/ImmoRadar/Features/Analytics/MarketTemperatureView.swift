@@ -1,19 +1,25 @@
 import SwiftUI
 
-/// Color-coded district grid showing market velocity/temperature.
+/// Temperature grid showing district activity with explicit drill-ins.
 struct MarketTemperatureView: View {
     let data: [MarketTemperaturePoint]
     @Binding var selectedDistrictNo: Int?
+    var onOpenTrends: ((Int) -> Void)?
 
     private let columns = [
-        GridItem(.adaptive(minimum: 200, maximum: 280), spacing: Theme.Spacing.md)
+        GridItem(.adaptive(minimum: 240, maximum: 300), spacing: Theme.Spacing.md)
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack {
-                Text("Market Temperature")
-                    .font(.headline)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Market Temperature")
+                        .font(.headline)
+                    Text("Use district activity as a quick drill-in signal, not a decorative heat grid.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 TemperatureLegend()
             }
@@ -67,12 +73,17 @@ struct MarketTemperatureView: View {
                                 } else {
                                     selectedDistrictNo = point.districtNo
                                 }
+                            },
+                            onOpenTrends: {
+                                selectedDistrictNo = point.districtNo
+                                onOpenTrends?(point.districtNo)
                             }
                         )
                     }
                 }
             }
         }
+        .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: selectedDistrictNo)
     }
 
@@ -82,67 +93,69 @@ struct MarketTemperatureView: View {
     }
 }
 
-// MARK: - Temperature Card
-
 private struct TemperatureCard: View {
     let point: MarketTemperaturePoint
     let isSelected: Bool
     let onSelect: () -> Void
+    let onOpenTrends: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                HStack {
-                    Text(point.districtLabel)
-                        .font(.headline)
-                    Spacer()
-                    Text(point.temperatureLabel)
-                        .font(.caption.bold())
-                        .padding(.horizontal, Theme.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background(point.temperatureColor.opacity(0.15))
-                        .foregroundStyle(point.temperatureColor)
-                        .clipShape(Capsule())
-                }
-
-                Divider()
-
-                HStack(spacing: Theme.Spacing.lg) {
-                    StatColumn(label: "Active", value: "\(point.totalActive)")
-                    StatColumn(label: "New 7d", value: "\(point.newLast7d)")
-                    StatColumn(label: "New 30d", value: "\(point.newLast30d)")
-                }
-
-                HStack {
-                    Text("Avg Price/m²")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(PriceFormatter.formatPerSqm(point.currentAvgPpsqm))
-                        .font(.caption.monospacedDigit().bold())
-                }
-
-                HStack {
-                    Text("Velocity")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\((point.velocity * 100).formatted(.number.precision(.fractionLength(1))))%")
-                        .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(point.temperatureColor)
-                }
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(point.districtLabel)
+                    .font(.headline)
+                Spacer()
+                Text(point.temperatureLabel)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(point.temperatureColor.opacity(0.12), in: Capsule())
+                    .foregroundStyle(point.temperatureColor)
             }
-            .padding(Theme.Spacing.md)
-            .background(Theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.Radius.md)
-                    .stroke(point.temperatureColor.opacity(isSelected ? 0.75 : 0.3), lineWidth: isSelected ? 1.5 : 1)
+
+            HStack(spacing: Theme.Spacing.lg) {
+                StatColumn(label: "Active", value: "\(point.totalActive)")
+                StatColumn(label: "New 7d", value: "\(point.newLast7d)")
+                StatColumn(label: "New 30d", value: "\(point.newLast30d)")
             }
-            .shadow(color: point.temperatureColor.opacity(isSelected ? 0.18 : 0.06), radius: isSelected ? 12 : Theme.cardShadowRadius, y: isSelected ? 6 : Theme.cardShadowY)
-            .scaleEffect(isSelected ? 1.01 : 1)
+
+            HStack {
+                Text("Avg Price/m²")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(PriceFormatter.formatPerSqm(point.currentAvgPpsqm))
+                    .font(.caption.monospacedDigit().bold())
+            }
+
+            HStack {
+                Text("Velocity")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\((point.velocity * 100).formatted(.number.precision(.fractionLength(1))))%")
+                    .font(.caption.monospacedDigit().bold())
+                    .foregroundStyle(point.temperatureColor)
+            }
+
+            HStack {
+                Button(isSelected ? "Clear Focus" : "Focus District", action: onSelect)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                Spacer()
+                Button("Open Trends", action: onOpenTrends)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(Theme.Spacing.md)
+        .background(Theme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .stroke(point.temperatureColor.opacity(isSelected ? 0.55 : 0.16), lineWidth: isSelected ? 1.5 : 1)
+        }
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 4)
     }
 }
 
@@ -160,8 +173,6 @@ private struct StatColumn: View {
         }
     }
 }
-
-// MARK: - Legend
 
 private struct TemperatureLegend: View {
     var body: some View {

@@ -4,7 +4,7 @@ import Foundation
 struct SavedListingItem: Identifiable, Codable, Sendable {
     let id: Int
     let listingId: Int
-    let notes: String?
+    var notes: String?
     let savedAt: String
     let listing: SavedListingDetail
 

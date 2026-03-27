@@ -251,11 +251,17 @@ final class ListingsViewModel {
         }
 
         if let min = Int(minPrice) {
-            result = result.filter { $0.listPriceEur >= min }
+            result = result.filter {
+                guard let price = $0.listPriceEur else { return false }
+                return price >= min
+            }
         }
 
         if let max = Int(maxPrice) {
-            result = result.filter { $0.listPriceEur <= max }
+            result = result.filter {
+                guard let price = $0.listPriceEur else { return false }
+                return price <= max
+            }
         }
 
         if let score = Double(minScore) {

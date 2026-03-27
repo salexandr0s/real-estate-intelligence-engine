@@ -12,6 +12,22 @@ struct APIAlertResponse: Codable {
     let filterName: String?
     let listingId: Int?
     let matchReasons: AlertMatchReasons?
+    let listing: APIListingResponse?
+
+    func toDomain(decoder: JSONDecoder) -> Alert {
+        Alert(
+            id: id,
+            alertType: AlertType(rawValue: alertType) ?? .newMatch,
+            status: AlertStatus(rawValue: status) ?? .unread,
+            title: title,
+            body: body,
+            matchedAt: Date.fromISO(matchedAt),
+            filterName: filterName,
+            listingId: listingId,
+            matchReasons: matchReasons,
+            listing: listing?.toDomain(decoder: decoder)
+        )
+    }
 }
 
 struct AlertMatchReasons: Codable, Hashable, Sendable {

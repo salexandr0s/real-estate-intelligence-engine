@@ -13,6 +13,8 @@ import { query, clusters } from '@immoradar/db';
 
 const log = createLogger('worker:cluster');
 
+type ClusterMemberInput = Parameters<typeof clusters.upsertCluster>[1][number];
+
 interface ClusterGroupRow {
   fingerprint: string;
   listing_ids: string[];
@@ -96,6 +98,19 @@ function buildGeoProximityClusters(listings: GeoListingRow[]): GeoListingRow[][]
   return Array.from(groups.values()).filter((g) => g.length >= 2);
 }
 
+export function dedupeMembersBySource<T extends ClusterMemberInput>(members: readonly T[]): T[] {
+  const seenSourceIds = new Set<number>();
+  const uniqueMembers: T[] = [];
+
+  for (const member of members) {
+    if (seenSourceIds.has(member.sourceId)) continue;
+    seenSourceIds.add(member.sourceId);
+    uniqueMembers.push(member);
+  }
+
+  return uniqueMembers;
+}
+
 export function createClusterWorker(): Worker<ClusterJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
@@ -123,11 +138,13 @@ export function createClusterWorker(): Worker<ClusterJobData> {
       let totalMembers = 0;
 
       for (const group of groups) {
-        const members = group.listing_ids.map((idStr, i) => ({
-          listingId: Number(idStr),
-          sourceId: Number(group.source_ids[i]),
-          listPriceEurCents: group.prices[i] != null ? Number(group.prices[i]) : null,
-        }));
+        const members = dedupeMembersBySource(
+          group.listing_ids.map((idStr, i) => ({
+            listingId: Number(idStr),
+            sourceId: Number(group.source_ids[i]),
+            listPriceEurCents: group.prices[i] != null ? Number(group.prices[i]) : null,
+          })),
+        );
         await clusters.upsertCluster(group.fingerprint, members);
         created++;
         totalMembers += members.length;
@@ -165,9 +182,10 @@ export function createClusterWorker(): Worker<ClusterJobData> {
           sourceId: Number(l.source_id),
           listPriceEurCents: l.list_price_eur_cents != null ? Number(l.list_price_eur_cents) : null,
         }));
-        await clusters.upsertCluster(fp, members);
+        const uniqueMembers = dedupeMembersBySource(members);
+        await clusters.upsertCluster(fp, uniqueMembers);
         geoClusters++;
-        totalMembers += members.length;
+        totalMembers += uniqueMembers.length;
       }
 
       log.info('Cluster rebuild complete', {

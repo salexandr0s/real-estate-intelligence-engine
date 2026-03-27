@@ -183,7 +183,7 @@ struct ListingsMapView: View {
                 position = .region(boundary.boundingBox)
             }
         }
-        .onChange(of: viewModel.filteredListings.count) {
+        .onChange(of: viewModel.filteredListings.map(\.id)) { _, _ in
             recomputeClusters()
         }
         .onChange(of: viewModel.mapFocusTrigger) {

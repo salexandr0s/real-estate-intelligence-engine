@@ -64,15 +64,12 @@ struct ListingHeaderSection: View {
 
             // Row 4: Key metrics
             HStack(spacing: Theme.Spacing.lg) {
-                Label(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0), systemImage: "ruler")
+                Label(PriceFormatter.formatArea(listing.livingAreaSqm), systemImage: "ruler")
                     .font(.subheadline)
-                Label("\(PriceFormatter.formatRooms(listing.rooms)) rooms", systemImage: "square.split.2x2")
+                Label(roomLabel, systemImage: "square.split.2x2")
                     .font(.subheadline)
-                Label(
-                    PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0) + "/m\u{00B2}",
-                    systemImage: "eurosign"
-                )
-                .font(.subheadline.monospacedDigit())
+                Label(pricePerSqmLabel, systemImage: "eurosign")
+                    .font(.subheadline.monospacedDigit())
             }
             .foregroundStyle(.secondary)
 
@@ -81,5 +78,19 @@ struct ListingHeaderSection: View {
                 CrossSourceBadge(cluster: cluster, currentListingId: listing.id)
             }
         }
+    }
+
+    private var roomLabel: String {
+        if let rooms = listing.rooms {
+            return "\(PriceFormatter.formatRooms(rooms)) rooms"
+        }
+        return "—"
+    }
+
+    private var pricePerSqmLabel: String {
+        if let pricePerSqm = listing.pricePerSqmEur {
+            return PriceFormatter.formatPerSqm(pricePerSqm) + "/m\u{00B2}"
+        }
+        return "—"
     }
 }

@@ -13,7 +13,6 @@ struct DistrictTrendChartView: View {
         if let district = selectedDistrictNo {
             result = result.filter { $0.districtNo == district }
         }
-        // Client-side date filter as safety net
         let cutoff = Calendar.current.date(byAdding: .month, value: -selectedMonths, to: .now) ?? .distantPast
         return result.filter { $0.parsedDate >= cutoff }
     }
@@ -24,9 +23,14 @@ struct DistrictTrendChartView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack {
-                Text("Price Trends")
-                    .font(.headline)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Price Trends")
+                        .font(.headline)
+                    Text("Follow district median €/m² over time with an explicit district focus.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer()
 
@@ -73,7 +77,7 @@ struct DistrictTrendChartView: View {
                 } description: {
                     Text("Trend data will appear once baselines have been computed over multiple dates.")
                 }
-                .frame(minHeight: 250)
+                .frame(minHeight: 280)
             } else {
                 Chart(filteredData) { point in
                     LineMark(
@@ -90,7 +94,7 @@ struct DistrictTrendChartView: View {
                             yStart: .value("P25", p25),
                             yEnd: .value("P75", p75)
                         )
-                        .foregroundStyle(.gray.opacity(0.1))
+                        .foregroundStyle(.secondary.opacity(0.12))
                     }
                 }
                 .chartYAxisLabel("EUR/m²")
@@ -100,13 +104,10 @@ struct DistrictTrendChartView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits))
                     }
                 }
-                .frame(minHeight: 300)
+                .frame(minHeight: 320)
             }
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
         .onChange(of: selectedMonths) { _, newValue in
             onMonthsChanged?(newValue)
         }

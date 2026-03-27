@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Dashboard — organized investor overview with KPI cards, focus panel, and tracked filters.
+/// Dashboard — a calm briefing page that answers what deserves the next click.
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
@@ -9,18 +9,6 @@ struct DashboardView: View {
         case compact
         case medium
         case expanded
-
-        var panelColumns: [GridItem] {
-            switch self {
-            case .compact, .medium:
-                [GridItem(.flexible(), spacing: Theme.Dashboard.gridSpacing)]
-            case .expanded:
-                [
-                    GridItem(.flexible(minimum: 320), spacing: Theme.Dashboard.gridSpacing, alignment: .top),
-                    GridItem(.flexible(minimum: 320), spacing: Theme.Dashboard.gridSpacing, alignment: .top),
-                ]
-            }
-        }
     }
 
     private var summaryCards: [DashboardViewModel.SummaryCard] {
@@ -47,19 +35,55 @@ struct DashboardView: View {
 
                     focusPanel
 
-                    LazyVGrid(columns: layoutMode.panelColumns, alignment: .leading, spacing: Theme.Dashboard.gridSpacing) {
-                        summaryCluster
-                        DashboardActivityPanel(snapshot: viewModel.activitySnapshot)
-                        topOpportunitiesPanel
-                        DashboardFilterCoveragePanel(
-                            summary: viewModel.filterCoverageSummary,
-                            rows: viewModel.filterCoverageRows,
-                            onOpenFilters: { appState.navigateTo(.filters) }
+                    if layoutMode == .expanded {
+                        HStack(alignment: .top, spacing: Theme.Dashboard.gridSpacing) {
+                            topOpportunitiesPanel(limit: 5)
+                                .frame(maxWidth: .infinity, minHeight: Theme.Dashboard.secondaryRowMinHeight, alignment: .topLeading)
+                                .layoutPriority(1)
+
+                            DashboardSignalsPanel(
+                                cards: summaryCards,
+                                snapshot: viewModel.activitySnapshot,
+                                onCardNavigate: { cardId in
+                                    switch cardId {
+                                    case "active-listings", "new-this-week", "high-score":
+                                        appState.navigateTo(.listings)
+                                    case "unread-alerts":
+                                        appState.navigateTo(.alerts)
+                                    default:
+                                        break
+                                    }
+                                }
+                            )
+                            .frame(width: Theme.Dashboard.sideColumnWidth, alignment: .topLeading)
+                        }
+                    } else {
+                        topOpportunitiesPanel(limit: 4)
+                        DashboardSignalsPanel(
+                            cards: summaryCards,
+                            snapshot: viewModel.activitySnapshot,
+                            onCardNavigate: { cardId in
+                                switch cardId {
+                                case "active-listings", "new-this-week", "high-score":
+                                    appState.navigateTo(.listings)
+                                case "unread-alerts":
+                                    appState.navigateTo(.alerts)
+                                default:
+                                    break
+                                }
+                            }
                         )
                     }
 
+                    DashboardFilterCoveragePanel(
+                        summary: viewModel.filterCoverageSummary,
+                        rows: viewModel.filterCoverageRows,
+                        onOpenFilters: { appState.navigateTo(.filters) }
+                    )
+
                     ForYouSection(
-                        activeFilters: viewModel.dashboardFilters,
+                        activeFilters: Array(viewModel.dashboardFilters.prefix(4)),
+                        totalActiveFilterCount: viewModel.dashboardFilters.count,
                         filterListings: viewModel.filterListings,
                         filterLoadingStates: viewModel.filterLoadingStates,
                         isLoading: viewModel.isLoading,
@@ -120,31 +144,6 @@ struct DashboardView: View {
         return .expanded
     }
 
-    private var summaryCluster: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            DashboardSectionHeader(
-                title: "Market pulse",
-                subtitle: "The few numbers worth scanning before you drill into listings."
-            )
-
-            SummaryStripView(
-                cards: summaryCards,
-                onCardNavigate: { cardId in
-                    switch cardId {
-                    case "active-listings", "new-this-week", "high-score":
-                        appState.navigateTo(.listings)
-                    case "active-filters":
-                        appState.navigateTo(.filters)
-                    case "unread-alerts":
-                        appState.navigateTo(.alerts)
-                    default:
-                        break
-                    }
-                }
-            )
-        }
-    }
-
     @ViewBuilder
     private var focusPanel: some View {
         if let priorityListing = viewModel.priorityListing {
@@ -170,9 +169,9 @@ struct DashboardView: View {
         }
     }
 
-    private var topOpportunitiesPanel: some View {
+    private func topOpportunitiesPanel(limit: Int) -> some View {
         TopOpportunitiesSection(
-            listings: viewModel.topOpportunities(),
+            listings: viewModel.topOpportunities(limit: limit),
             totalMatches: viewModel.totalUniqueMatches,
             onListingTap: { id in
                 appState.deepLinkListingId = id
@@ -205,12 +204,12 @@ private struct DashboardOverviewHeader: View {
     private var headerCopy: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Investor overview")
-                .font(.largeTitle)
-                .bold()
+                .font(.title2)
+                .adaptiveFontWeight(.semibold)
                 .fontDesign(.rounded)
 
             Text("A calm overview of what changed, what qualifies, and what deserves your next click.")
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -369,7 +368,7 @@ private struct PriorityBriefingCard: View {
         }
         .dashboardPanelStyle(
             padding: Theme.Spacing.xxl,
-            tint: listing.currentScore.map { Theme.scoreColor(for: $0) },
+            tone: .neutral,
             elevated: true
         )
     }
@@ -410,7 +409,7 @@ private struct DashboardFocusEmptyCard: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .dashboardPanelStyle(padding: Theme.Spacing.xxl, tint: .blue, elevated: true)
+        .dashboardPanelStyle(padding: Theme.Spacing.xxl, tone: .neutral, elevated: true)
     }
 }
 
@@ -424,7 +423,7 @@ private struct DashboardMetaChip: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, Theme.Spacing.sm)
             .padding(.vertical, 7)
-            .background(Color.white.opacity(0.08), in: Capsule())
+            .background(Color.secondary.opacity(0.08), in: Capsule())
     }
 }
 
@@ -445,29 +444,35 @@ private struct DashboardSupportingStat: View {
     }
 }
 
-private struct DashboardActivityPanel: View {
+private struct DashboardSignalsPanel: View {
+    let cards: [DashboardViewModel.SummaryCard]
     let snapshot: DashboardViewModel.ActivitySnapshot
+    var onCardNavigate: ((String) -> Void)?
 
     private let columns = [
-        GridItem(.flexible(), spacing: Theme.Spacing.md),
-        GridItem(.flexible(), spacing: Theme.Spacing.md),
+        GridItem(.flexible(), spacing: Theme.Spacing.sm),
+        GridItem(.flexible(), spacing: Theme.Spacing.sm),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             DashboardSectionHeader(
-                title: "Live activity",
-                subtitle: "Signals derived from the listings already loaded into the dashboard."
+                title: "Briefing signals",
+                subtitle: "Supporting context on what changed since you last looked."
             )
 
+            SummaryStripView(cards: cards, onCardNavigate: onCardNavigate)
+
+            Divider()
+
             LazyVGrid(columns: columns, spacing: Theme.Spacing.md) {
-                DashboardActivityMetric(title: "New 24h", value: snapshot.newListings, icon: "sparkles", color: .blue)
-                DashboardActivityMetric(title: "Price drops", value: snapshot.priceDrops, icon: "arrow.down.circle", color: .green)
-                DashboardActivityMetric(title: "Score 70+", value: snapshot.highScoreMatches, icon: "star.fill", color: .orange)
-                DashboardActivityMetric(title: "Unique matches", value: snapshot.totalMatches, icon: "tray.full.fill", color: .purple)
+                DashboardActivityMetric(title: "New 24h", value: snapshot.newListings, icon: "sparkles", tone: .accent)
+                DashboardActivityMetric(title: "Price drops", value: snapshot.priceDrops, icon: "arrow.down.circle", tone: .alert)
+                DashboardActivityMetric(title: "Score 70+", value: snapshot.highScoreMatches, icon: "star.fill", tone: .score)
+                DashboardActivityMetric(title: "Unique matches", value: snapshot.totalMatches, icon: "tray.full.fill", tone: .neutral)
             }
         }
-        .dashboardPanelStyle(tint: .green)
+        .dashboardPanelStyle(tone: .neutral)
     }
 }
 
@@ -475,35 +480,37 @@ private struct DashboardActivityMetric: View {
     let title: String
     let value: Int
     let icon: String
-    let color: Color
+    let tone: Theme.Dashboard.SemanticTone
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .top) {
                 Image(systemName: icon)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(color)
-                    .frame(width: 28, height: 28)
-                    .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                    .foregroundStyle(Theme.Dashboard.iconTint(for: tone))
+                    .frame(width: 24, height: 24)
+                    .background(Theme.Dashboard.iconChipBackground(for: tone), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
 
                 Spacer(minLength: 0)
             }
 
-            Text("\(value)")
-                .font(.title2.bold())
+            Text(value.formatted())
+                .font(.title3)
+                .bold()
                 .fontDesign(.rounded)
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
-        .padding(Theme.Spacing.md)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(color.opacity(0.09))
+                .fill(Theme.cardBackground)
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                        .strokeBorder(color.opacity(0.10), lineWidth: 0.5)
+                        .strokeBorder(Theme.Dashboard.panelBorderColor(for: tone), lineWidth: 0.5)
                 }
         )
     }
@@ -544,33 +551,31 @@ private struct DashboardFilterCoveragePanel: View {
             coverageSummary
             coverageRows
         }
-        .dashboardPanelStyle(tint: .purple)
+        .dashboardPanelStyle(tone: .neutral)
     }
 
     private var coverageSummary: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: Theme.Spacing.md),
-                GridItem(.flexible(), spacing: Theme.Spacing.md),
-                GridItem(.flexible(), spacing: Theme.Spacing.md),
-            ],
-            spacing: Theme.Spacing.md
-        ) {
-            DashboardCoverageStatCard(
-                value: "\(summary.matchedFilters)/\(summary.activeFilters)",
-                label: "Filters with matches",
-                color: .blue
-            )
-            DashboardCoverageStatCard(
-                value: "\(summary.emptyFilters)",
-                label: "Filters empty",
-                color: .orange
-            )
-            DashboardCoverageStatCard(
-                value: "\(summary.totalUniqueMatches)",
-                label: "Unique matches",
-                color: .purple
-            )
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            Text(summarySentence)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Spacing.xl) {
+                    DashboardSupportingStat(value: "\(summary.activeFilters)", label: "Active filters")
+                    DashboardSupportingStat(value: "\(summary.matchedFilters)", label: "With matches")
+                    DashboardSupportingStat(value: "\(summary.emptyFilters)", label: "Empty")
+                    DashboardSupportingStat(value: "\(summary.totalUniqueMatches)", label: "Unique matches")
+                }
+
+                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                    DashboardSupportingStat(value: "\(summary.activeFilters)", label: "Active filters")
+                    DashboardSupportingStat(value: "\(summary.matchedFilters)", label: "With matches")
+                    DashboardSupportingStat(value: "\(summary.emptyFilters)", label: "Empty")
+                    DashboardSupportingStat(value: "\(summary.totalUniqueMatches)", label: "Unique matches")
+                }
+            }
         }
     }
 
@@ -582,7 +587,7 @@ private struct DashboardFilterCoveragePanel: View {
                 .foregroundStyle(.secondary)
         } else {
             VStack(spacing: Theme.Spacing.sm) {
-                ForEach(rows.prefix(4)) { row in
+                ForEach(rows.prefix(3)) { row in
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         HStack(spacing: Theme.Spacing.sm) {
                             Text(row.name)
@@ -603,36 +608,51 @@ private struct DashboardFilterCoveragePanel: View {
                     }
                     .padding(.horizontal, Theme.Spacing.md)
                     .padding(.vertical, Theme.Spacing.sm)
-                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+                    .background(Theme.Dashboard.tileBackground(for: .neutral), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
                 }
             }
         }
+    }
+
+    private var summarySentence: String {
+        if summary.activeFilters == 0 {
+            return "No active filters yet. Create filters to turn the dashboard into a real investor briefing."
+        }
+        if let strongestFilterName = summary.strongestFilterName, summary.strongestFilterCount > 0 {
+            return "\(summary.matchedFilters) of \(summary.activeFilters) active filters are returning matches. Strongest filter: \(strongestFilterName) with \(summary.strongestFilterCount) matches."
+        }
+        return "You have \(summary.activeFilters) active filters, but none are currently returning matches."
     }
 }
 
 private struct DashboardCoverageStatCard: View {
     let value: String
     let label: String
-    let color: Color
+    let tone: Theme.Dashboard.SemanticTone
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(spacing: Theme.Spacing.xs) {
+                Circle()
+                    .fill(Theme.Dashboard.iconTint(for: tone))
+                    .frame(width: 6, height: 6)
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Text(value)
                 .font(.title2.bold())
                 .fontDesign(.rounded)
-
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
         .padding(Theme.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .fill(color.opacity(0.09))
+                .fill(Theme.cardBackground)
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                        .strokeBorder(color.opacity(0.10), lineWidth: 0.5)
+                        .strokeBorder(Theme.Dashboard.panelBorderColor(for: tone), lineWidth: 0.5)
                 }
         )
     }
@@ -648,9 +668,9 @@ private struct DashboardCoverageBar: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.secondary.opacity(0.10))
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.accentColor.opacity(0.85))
+                    .fill(Theme.Dashboard.iconTint(for: .accent).opacity(0.85))
                     .frame(width: ratio == 0 ? 0 : max(8, proxy.size.width * ratio))
             }
         }

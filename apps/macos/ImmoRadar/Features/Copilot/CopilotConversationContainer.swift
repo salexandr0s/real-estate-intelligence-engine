@@ -22,7 +22,7 @@ struct CopilotConversationContainer: View {
                     LinearGradient(
                         colors: [
                             Color(nsColor: .windowBackgroundColor).opacity(0),
-                            Color(nsColor: .windowBackgroundColor).opacity(0.85),
+                            Color(nsColor: .windowBackgroundColor).opacity(0.76),
                             Color(nsColor: .windowBackgroundColor),
                         ],
                         startPoint: .top,

@@ -5,10 +5,26 @@ struct CopilotView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = CopilotViewModel()
+    @State private var availableWidth: CGFloat = Theme.Copilot.inlineInspectorBreakpoint
     @State private var showInspector: Bool = false
+    @State private var showHistorySheet: Bool = false
     @State private var showRenameSheet = false
     @State private var renameDraft = ""
     @State private var renameTargetID: UUID?
+
+    private enum LayoutMode {
+        case compact
+        case standard
+        case expanded
+
+        var showsInlineHistory: Bool {
+            self != .compact
+        }
+
+        var showsInlineInspector: Bool {
+            self == .expanded
+        }
+    }
 
     private var toolbarTitle: String {
         guard let title = viewModel.activeConversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
@@ -27,60 +43,35 @@ struct CopilotView: View {
     }
 
     var body: some View {
-        HSplitView {
-            CopilotHistorySidebar(
-                viewModel: viewModel,
-                onSelectConversation: { id in
-                    Task { await viewModel.selectConversation(id: id) }
-                },
-                onRenameConversation: { summary in
-                    renameTargetID = summary.id
-                    renameDraft = summary.title
-                    showRenameSheet = true
-                },
-                onDeleteConversation: { summary in
-                    Task { await viewModel.deleteConversation(id: summary.id) }
-                }
-            )
-            .frame(
-                minWidth: Theme.Copilot.railMinWidth,
-                idealWidth: Theme.Copilot.railIdealWidth,
-                maxWidth: Theme.Copilot.railMaxWidth
-            )
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: viewModel.activeConversationID)
+        GeometryReader { proxy in
+            let layoutMode = layoutMode(for: proxy.size.width)
 
-            Group {
-                if viewModel.messages.isEmpty {
-                    CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
-                } else {
-                    CopilotConversationContainer(
-                        viewModel: viewModel,
-                        appState: appState,
-                        showInspector: $showInspector
-                    )
+            HStack(spacing: 0) {
+                if layoutMode.showsInlineHistory {
+                    historySidebar
+                        .frame(
+                            minWidth: Theme.Copilot.railMinWidth,
+                            idealWidth: Theme.Copilot.railIdealWidth,
+                            maxWidth: Theme.Copilot.railMaxWidth
+                        )
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+
+                conversationContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(nsColor: .windowBackgroundColor))
+
+                if layoutMode.showsInlineInspector && showInspector {
+                    inspectorPanel
+                        .frame(minWidth: 300, idealWidth: 360, maxWidth: 420, maxHeight: .infinity)
+                        .adaptiveMaterial(.regularMaterial)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .frame(minWidth: 540, maxWidth: .infinity, maxHeight: .infinity)
-
-            if showInspector {
-                Group {
-                    if viewModel.isLoadingInspector {
-                        ProgressView("Loading listing…")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if let error = viewModel.inspectorError {
-                        ContentUnavailableView {
-                            Label("Failed to Load", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(error)
-                        }
-                    } else {
-                        ListingsInspectorContent(listing: viewModel.inspectedListing)
-                    }
-                }
-                .frame(minWidth: 300, idealWidth: 360, maxWidth: 480, maxHeight: .infinity)
-                .adaptiveMaterial(.regularMaterial)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: layoutMode)
+            .task(id: proxy.size.width) {
+                availableWidth = proxy.size.width
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showInspector)
@@ -88,10 +79,14 @@ struct CopilotView: View {
         .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(id: "sessionTitle", placement: .principal) {
-                CopilotToolbarTitleChip(title: toolbarTitle, detail: toolbarDetail)
+                CopilotToolbarTitleView(title: toolbarTitle, detail: toolbarDetail)
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                ToolbarHistoryButton(isVisible: showHistoryButton) {
+                    showHistorySheet = true
+                }
+
                 Button {
                     withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.18)) {
                         viewModel.beginNewConversation()
@@ -102,28 +97,6 @@ struct CopilotView: View {
                 }
                 .labelStyle(.iconOnly)
                 .help("Start a new session")
-
-                Button {
-                    renameTargetID = viewModel.activeConversationID
-                    renameDraft = viewModel.activeConversationTitle ?? ""
-                    showRenameSheet = true
-                } label: {
-                    Label("Rename Session", systemImage: "pencil")
-                }
-                .labelStyle(.iconOnly)
-                .disabled(viewModel.activeConversationID == nil)
-                .help("Rename current session")
-
-                Button(role: .destructive) {
-                    if let id = viewModel.activeConversationID {
-                        Task { await viewModel.deleteConversation(id: id) }
-                    }
-                } label: {
-                    Label("Delete Session", systemImage: "trash")
-                }
-                .labelStyle(.iconOnly)
-                .disabled(viewModel.activeConversationID == nil)
-                .help("Delete current session")
 
                 Button {
                     withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.18)) {
@@ -138,6 +111,24 @@ struct CopilotView: View {
         }
         .task {
             await viewModel.loadSavedStateIfNeeded()
+        }
+        .sheet(isPresented: $showHistorySheet) {
+            historySidebar
+                .frame(minWidth: 320, idealWidth: 360, maxWidth: 420, maxHeight: .infinity)
+        }
+        .sheet(isPresented: inlineInspectorIsUnavailable) {
+            NavigationStack {
+                inspectorPanel
+                    .navigationTitle("Listing Inspector")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                showInspector = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 540, minHeight: 620)
         }
         .sheet(isPresented: $showRenameSheet) {
             RenameConversationSheet(
@@ -159,6 +150,102 @@ struct CopilotView: View {
             )
         }
     }
+
+    private var showHistoryButton: Bool {
+        compactWidthBand == .compact
+    }
+
+    private var compactWidthBand: LayoutMode {
+        layoutMode(for: availableWidth)
+    }
+
+    private var inlineInspectorIsUnavailable: Binding<Bool> {
+        Binding(
+            get: {
+                showInspector && compactWidthBand != .expanded
+            },
+            set: { isPresented in
+                if !isPresented {
+                    showInspector = false
+                }
+            }
+        )
+    }
+
+    private var historySidebar: some View {
+        CopilotHistorySidebar(
+            viewModel: viewModel,
+            onSelectConversation: { id in
+                showHistorySheet = false
+                Task { await viewModel.selectConversation(id: id) }
+            },
+            onRenameConversation: { summary in
+                renameTargetID = summary.id
+                renameDraft = summary.title
+                showRenameSheet = true
+            },
+            onDeleteConversation: { summary in
+                Task { await viewModel.deleteConversation(id: summary.id) }
+            }
+        )
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: viewModel.activeConversationID)
+    }
+
+    @ViewBuilder
+    private var conversationContent: some View {
+        if viewModel.messages.isEmpty {
+            CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
+        } else {
+            CopilotConversationContainer(
+                viewModel: viewModel,
+                appState: appState,
+                showInspector: $showInspector
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var inspectorPanel: some View {
+        if viewModel.isLoadingInspector {
+            ProgressView("Loading listing…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = viewModel.inspectorError {
+            ContentUnavailableView {
+                Label("Failed to Load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            }
+        } else {
+            ListingsInspectorContent(listing: viewModel.inspectedListing)
+        }
+    }
+
+    private func layoutMode(for availableWidth: CGFloat) -> LayoutMode {
+        if availableWidth < Theme.Copilot.collapsedHistoryBreakpoint {
+            return .compact
+        }
+
+        if availableWidth < Theme.Copilot.inlineInspectorBreakpoint {
+            return .standard
+        }
+
+        return .expanded
+    }
+}
+
+private struct ToolbarHistoryButton: View {
+    let isVisible: Bool
+    let action: () -> Void
+
+    var body: some View {
+        if isVisible {
+            Button(action: action) {
+                Label("Sessions", systemImage: "sidebar.leading")
+            }
+            .labelStyle(.iconOnly)
+            .help("Show saved sessions")
+        }
+    }
 }
 
 private struct CopilotHistorySidebar: View {
@@ -170,22 +257,14 @@ private struct CopilotHistorySidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: Theme.Spacing.md) {
-                HStack(spacing: Theme.Spacing.sm) {
-                    Image(systemName: "sparkles")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 28, height: 28)
-                        .background(Theme.inputBarBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Copilot")
-                            .font(.title3)
-                            .adaptiveFontWeight(.semibold)
-                        Text("Persistent local history")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    Text("Research Sessions")
+                        .font(.title3)
+                        .adaptiveFontWeight(.semibold)
+                    Text("Saved locally on this Mac")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -195,28 +274,20 @@ private struct CopilotHistorySidebar: View {
                         viewModel.beginNewConversation()
                     }
                 } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 30, height: 30)
-                        .background(Theme.inputBarBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                    Label("New Session", systemImage: "square.and.pencil")
                 }
-                .buttonStyle(.plain)
-                .help("Start a new session")
-                .accessibilityLabel("New Session")
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.top, Theme.Spacing.lg)
             .padding(.bottom, Theme.Spacing.md)
 
             HStack {
-                Text("Research Sessions")
+                Text(viewModel.conversations.isEmpty ? "No saved sessions yet" : "\(viewModel.conversations.count) saved")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(viewModel.conversations.count)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.bottom, Theme.Spacing.sm)
@@ -227,13 +298,13 @@ private struct CopilotHistorySidebar: View {
                 ContentUnavailableView {
                     Label("No Saved Sessions", systemImage: "clock.arrow.circlepath")
                 } description: {
-                    Text("Your research sessions will appear here after your first prompt.")
+                    Text("Your research sessions appear here after your first prompt.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, Theme.Spacing.md)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: Theme.Spacing.sm) {
+                    LazyVStack(spacing: Theme.Spacing.xs) {
                         ForEach(viewModel.conversations) { summary in
                             Button {
                                 onSelectConversation(summary.id)
@@ -281,27 +352,27 @@ private struct ConversationHistoryRow: View {
 
     private var backgroundColor: Color {
         if isActive {
-            Color(nsColor: .selectedContentBackgroundColor).opacity(0.18)
+            Color(nsColor: .selectedContentBackgroundColor).opacity(0.14)
         } else if isHovered {
-            Theme.inputBarBackground.opacity(0.82)
+            Color(nsColor: .controlBackgroundColor)
         } else {
-            Theme.inputBarBackground.opacity(0.46)
+            .clear
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             HStack(alignment: .center, spacing: Theme.Spacing.sm) {
-                Circle()
-                    .fill(isActive ? Color.accentColor : Color.secondary.opacity(isHovered ? 0.28 : 0.18))
-                    .frame(width: 6, height: 6)
-
                 Text(summary.title)
                     .font(.subheadline)
                     .adaptiveFontWeight(isActive ? .semibold : .medium)
                     .lineLimit(1)
 
                 Spacer(minLength: Theme.Spacing.sm)
+
+                Text(PriceFormatter.relativeDate(summary.updatedAt))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
 
             Text(summary.preview)
@@ -309,38 +380,30 @@ private struct ConversationHistoryRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            HStack(spacing: Theme.Spacing.sm) {
-                Text(PriceFormatter.relativeDate(summary.updatedAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Text("•")
-                    .foregroundStyle(.tertiary)
-                Text("\(summary.messageCount) messages")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            Text("\(summary.messageCount) message\(summary.messageCount == 1 ? "" : "s")")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(backgroundColor)
+        .background(backgroundColor, in: RoundedRectangle(cornerRadius: Theme.Copilot.historyRowRadius, style: .continuous))
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(isActive ? Color.accentColor : .clear)
+                .frame(width: 3)
+                .padding(.vertical, Theme.Spacing.sm)
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .stroke(
+            RoundedRectangle(cornerRadius: Theme.Copilot.historyRowRadius, style: .continuous)
+                .strokeBorder(
                     isActive
-                        ? Color.accentColor.opacity(0.22)
-                        : Color(nsColor: .separatorColor).opacity(isHovered ? 0.28 : 0.18),
+                        ? Color.accentColor.opacity(0.18)
+                        : Color(nsColor: .separatorColor).opacity(isHovered ? 0.22 : 0.12),
                     lineWidth: 0.5
                 )
         }
-        .shadow(
-            color: .black.opacity(isActive || isHovered ? 0.07 : 0.02),
-            radius: isActive || isHovered ? 10 : 4,
-            y: isActive || isHovered ? 6 : 2
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
-        .scaleEffect(isHovered && !reduceMotion ? 1.01 : 1)
-        .offset(y: isHovered && !reduceMotion ? -1 : 0)
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Copilot.historyRowRadius, style: .continuous))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: isHovered)
         .onHover { hovered in
             withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.14)) {
@@ -350,29 +413,17 @@ private struct ConversationHistoryRow: View {
     }
 }
 
-private struct CopilotToolbarTitleChip: View {
+private struct CopilotToolbarTitleView: View {
     let title: String
     let detail: String
 
-    private var statusColor: Color {
-        detail == "Thinking" ? .accentColor : Color.secondary.opacity(0.5)
-    }
-
     var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 7, height: 7)
-
+        VStack(spacing: 2) {
             Text(title)
                 .font(.subheadline)
                 .adaptiveFontWeight(.semibold)
                 .lineLimit(1)
                 .contentTransition(.opacity)
-
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.45))
-                .frame(width: 1, height: 12)
 
             Text(detail)
                 .font(.caption)
@@ -380,18 +431,10 @@ private struct CopilotToolbarTitleChip: View {
                 .lineLimit(1)
                 .contentTransition(.opacity)
         }
-        .padding(.horizontal, Theme.Spacing.md)
-        .padding(.vertical, 8)
         .frame(maxWidth: Theme.Copilot.toolbarChipMaxWidth)
-        .adaptiveMaterial(.ultraThinMaterial, solid: Theme.inputBarBackground, in: RoundedRectangle(cornerRadius: Theme.Copilot.toolbarChipRadius))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Copilot.toolbarChipRadius)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.26), lineWidth: 0.5)
-        }
         .help("\(title) — \(detail)")
     }
 }
-
 
 private struct RenameConversationSheet: View {
     @Binding var title: String

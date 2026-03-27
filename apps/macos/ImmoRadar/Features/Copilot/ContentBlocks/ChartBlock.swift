@@ -40,8 +40,6 @@ struct ChartBlock: View {
             .chartLegend(data.series.count > 1 ? .visible : .hidden)
             .frame(minHeight: 180)
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactCard(padding: Theme.Spacing.md)
     }
 }

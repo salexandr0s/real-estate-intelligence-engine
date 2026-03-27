@@ -31,6 +31,131 @@ interface AlertDbRow {
   created_at: Date;
   updated_at: Date;
   filter_name?: string | null;
+  listing_listing_uid?: string | null;
+  listing_source_code?: string | null;
+  listing_canonical_url?: string | null;
+  listing_title?: string | null;
+  listing_operation_type?: string | null;
+  listing_property_type?: string | null;
+  listing_city?: string | null;
+  listing_postal_code?: string | null;
+  listing_district_no?: number | null;
+  listing_district_name?: string | null;
+  listing_list_price_eur_cents?: string | null;
+  listing_living_area_sqm?: string | null;
+  listing_rooms?: string | null;
+  listing_price_per_sqm_eur?: string | null;
+  listing_current_score?: string | null;
+  listing_first_seen_at?: Date | null;
+  listing_listing_status?: string | null;
+  listing_latitude?: string | null;
+  listing_longitude?: string | null;
+  listing_geocode_precision?: string | null;
+  listing_last_price_change_pct?: string | null;
+  listing_last_price_change_at?: Date | null;
+}
+
+const ALERT_SELECT_WITH_LISTING = `
+  a.*,
+  uf.name AS filter_name,
+  l.listing_uid AS listing_listing_uid,
+  s.code AS listing_source_code,
+  l.canonical_url AS listing_canonical_url,
+  l.title AS listing_title,
+  l.operation_type AS listing_operation_type,
+  l.property_type AS listing_property_type,
+  l.city AS listing_city,
+  l.postal_code AS listing_postal_code,
+  l.district_no AS listing_district_no,
+  l.district_name AS listing_district_name,
+  l.list_price_eur_cents AS listing_list_price_eur_cents,
+  l.living_area_sqm AS listing_living_area_sqm,
+  l.rooms AS listing_rooms,
+  l.price_per_sqm_eur AS listing_price_per_sqm_eur,
+  l.current_score AS listing_current_score,
+  l.first_seen_at AS listing_first_seen_at,
+  l.listing_status AS listing_listing_status,
+  l.latitude AS listing_latitude,
+  l.longitude AS listing_longitude,
+  l.geocode_precision AS listing_geocode_precision,
+  pc.price_change_pct AS listing_last_price_change_pct,
+  pc.observed_at AS listing_last_price_change_at
+`;
+
+const ALERT_LISTING_JOIN = `
+  LEFT JOIN user_filters uf ON a.user_filter_id = uf.id
+  LEFT JOIN listings l ON a.listing_id = l.id
+  LEFT JOIN sources s ON l.source_id = s.id
+  LEFT JOIN LATERAL (
+    SELECT
+      v.observed_at,
+      CASE
+        WHEN prev.list_price_eur_cents IS NOT NULL AND prev.list_price_eur_cents > 0
+        THEN ROUND(
+          ((v.list_price_eur_cents - prev.list_price_eur_cents)::numeric
+            / prev.list_price_eur_cents) * 100, 2
+        )
+        ELSE NULL
+      END AS price_change_pct
+    FROM listing_versions v
+    LEFT JOIN LATERAL (
+      SELECT pv.list_price_eur_cents
+      FROM listing_versions pv
+      WHERE pv.listing_id = l.id
+        AND pv.version_no < v.version_no
+        AND pv.list_price_eur_cents IS NOT NULL
+      ORDER BY pv.version_no DESC
+      LIMIT 1
+    ) prev ON true
+    WHERE v.listing_id = l.id
+      AND v.version_reason = 'price_change'
+    ORDER BY v.version_no DESC
+    LIMIT 1
+  ) pc ON true
+`;
+
+function toAlertListing(row: AlertDbRow): AlertRow['listing'] {
+  if (
+    row.listing_listing_uid == null ||
+    row.listing_canonical_url == null ||
+    row.listing_title == null ||
+    row.listing_operation_type == null ||
+    row.listing_property_type == null ||
+    row.listing_city == null ||
+    row.listing_first_seen_at == null ||
+    row.listing_listing_status == null
+  ) {
+    return null;
+  }
+
+  return {
+    id: Number(row.listing_id),
+    listingUid: row.listing_listing_uid,
+    sourceCode: row.listing_source_code ?? undefined,
+    canonicalUrl: row.listing_canonical_url,
+    title: row.listing_title,
+    operationType: row.listing_operation_type,
+    propertyType: row.listing_property_type,
+    city: row.listing_city,
+    postalCode: row.listing_postal_code ?? null,
+    districtNo: row.listing_district_no ?? null,
+    districtName: row.listing_district_name ?? null,
+    listPriceEurCents:
+      row.listing_list_price_eur_cents != null ? Number(row.listing_list_price_eur_cents) : null,
+    livingAreaSqm: row.listing_living_area_sqm != null ? Number(row.listing_living_area_sqm) : null,
+    rooms: row.listing_rooms != null ? Number(row.listing_rooms) : null,
+    pricePerSqmEur:
+      row.listing_price_per_sqm_eur != null ? Number(row.listing_price_per_sqm_eur) : null,
+    currentScore: row.listing_current_score != null ? Number(row.listing_current_score) : null,
+    firstSeenAt: row.listing_first_seen_at,
+    listingStatus: row.listing_listing_status,
+    latitude: row.listing_latitude != null ? Number(row.listing_latitude) : null,
+    longitude: row.listing_longitude != null ? Number(row.listing_longitude) : null,
+    geocodePrecision: row.listing_geocode_precision ?? null,
+    lastPriceChangePct:
+      row.listing_last_price_change_pct != null ? Number(row.listing_last_price_change_pct) : null,
+    lastPriceChangeAt: row.listing_last_price_change_at ?? null,
+  };
 }
 
 function toAlertRow(row: AlertDbRow): AlertRow {
@@ -56,6 +181,7 @@ function toAlertRow(row: AlertDbRow): AlertRow {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     filterName: row.filter_name ?? null,
+    listing: toAlertListing(row),
   };
 }
 
@@ -128,9 +254,9 @@ export async function findByUser(
   const cursorId = cursor ? Number(Buffer.from(cursor, 'base64url').toString('utf8')) : null;
 
   const rows = await query<AlertDbRow>(
-    `SELECT a.*, uf.name AS filter_name
+    `SELECT ${ALERT_SELECT_WITH_LISTING}
      FROM alerts a
-     LEFT JOIN user_filters uf ON a.user_filter_id = uf.id
+     ${ALERT_LISTING_JOIN}
      WHERE a.user_id = $1
        AND ($2::text IS NULL OR a.status = $2)
        AND ($3::bigint IS NULL OR a.id < $3)
@@ -156,7 +282,13 @@ export async function findByUser(
  * Find a single alert by ID.
  */
 export async function findById(id: number): Promise<AlertRow | null> {
-  const rows = await query<AlertDbRow>('SELECT * FROM alerts WHERE id = $1', [id]);
+  const rows = await query<AlertDbRow>(
+    `SELECT ${ALERT_SELECT_WITH_LISTING}
+     FROM alerts a
+     ${ALERT_LISTING_JOIN}
+     WHERE a.id = $1`,
+    [id],
+  );
   const row = rows[0];
   return row ? toAlertRow(row) : null;
 }
@@ -170,17 +302,17 @@ export async function updateStatus(
   sentAt?: Date,
   errorMessage?: string,
 ): Promise<AlertRow | null> {
-  const rows = await query<AlertDbRow>(
+  const rows = await query<{ id: string }>(
     `UPDATE alerts
      SET status = $2,
          sent_at = COALESCE($3, sent_at),
          error_message = COALESCE($4, error_message)
      WHERE id = $1
-     RETURNING *`,
+     RETURNING id`,
     [id, status, sentAt ?? null, errorMessage ?? null],
   );
-  const row = rows[0];
-  return row ? toAlertRow(row) : null;
+  const updatedId = rows[0]?.id;
+  return updatedId ? findById(Number(updatedId)) : null;
 }
 
 /**
@@ -243,9 +375,11 @@ export async function bulkUpdateByFilter(
  */
 export async function findSince(userId: number, since: Date, limit = 100): Promise<AlertRow[]> {
   const rows = await query<AlertDbRow>(
-    `SELECT * FROM alerts
-     WHERE user_id = $1 AND matched_at > $2
-     ORDER BY matched_at ASC
+    `SELECT ${ALERT_SELECT_WITH_LISTING}
+     FROM alerts a
+     ${ALERT_LISTING_JOIN}
+     WHERE a.user_id = $1 AND a.matched_at > $2
+     ORDER BY a.matched_at ASC
      LIMIT $3`,
     [userId, since, limit],
   );

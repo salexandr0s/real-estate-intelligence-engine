@@ -142,13 +142,21 @@ enum Theme {
         static let railMinWidth: CGFloat = 232
         static let railIdealWidth: CGFloat = 264
         static let railMaxWidth: CGFloat = 304
-        static let contentMaxWidth: CGFloat = 840
-        static let composerMaxWidth: CGFloat = 760
-        static let horizontalPadding: CGFloat = 32
-        static let bottomDockPadding: CGFloat = 24
-        static let composerRadius: CGFloat = 26
-        static let toolbarChipMaxWidth: CGFloat = 360
-        static let toolbarChipRadius: CGFloat = 18
+        static let collapsedHistoryBreakpoint: CGFloat = 900
+        static let inlineInspectorBreakpoint: CGFloat = 1220
+        static let contentMaxWidth: CGFloat = 920
+        static let promptMaxWidth: CGFloat = 720
+        static let composerMaxWidth: CGFloat = 740
+        static let horizontalPadding: CGFloat = 28
+        static let bottomDockPadding: CGFloat = 18
+        static let composerRadius: CGFloat = 20
+        static let sectionRadius: CGFloat = 18
+        static let artifactRadius: CGFloat = 16
+        static let historyRowRadius: CGFloat = 14
+        static let sessionSpacing: CGFloat = 18
+        static let evidenceSpacing: CGFloat = 14
+        static let toolbarChipMaxWidth: CGFloat = 400
+        static let toolbarChipRadius: CGFloat = 14
     }
 
     enum Dashboard {
@@ -156,10 +164,80 @@ enum Theme {
         static let sectionSpacing: CGFloat = 24
         static let gridSpacing: CGFloat = 18
         static let sideColumnWidth: CGFloat = 360
-        static let singleColumnBreakpoint: CGFloat = 1180
+        static let compactBreakpoint: CGFloat = 980
+        static let mediumBreakpoint: CGFloat = 1320
+        static let topRowMinHeight: CGFloat = 508
+        static let secondaryRowMinHeight: CGFloat = 300
         static let panelRadius: CGFloat = 24
         static let metricMinWidth: CGFloat = 156
         static let trackedFilterMinWidth: CGFloat = 300
+
+        enum SemanticTone {
+            case neutral
+            case accent
+            case score
+            case alert
+            case positive
+            case caution
+        }
+
+        static func iconTint(for tone: SemanticTone) -> Color {
+            switch tone {
+            case .neutral: return .secondary
+            case .accent: return .accentColor
+            case .score: return .scoreExcellent
+            case .alert: return .scorePoor
+            case .positive: return .scoreGood
+            case .caution: return .scoreAverage
+            }
+        }
+
+        static func panelWash(for tone: SemanticTone) -> Color? {
+            switch tone {
+            case .neutral:
+                return nil
+            case .accent:
+                return .accentColor
+            case .score:
+                return .scoreExcellent
+            case .alert:
+                return .scorePoor
+            case .positive:
+                return .scoreGood
+            case .caution:
+                return .scoreAverage
+            }
+        }
+
+        static func panelBorderColor(for tone: SemanticTone) -> Color {
+            let base = Color(nsColor: .separatorColor).opacity(0.18)
+            guard let wash = panelWash(for: tone) else { return base }
+            return wash.opacity(0.16)
+        }
+
+        static func iconChipBackground(for tone: SemanticTone) -> Color {
+            iconTint(for: tone).opacity(tone == .neutral ? 0.08 : 0.12)
+        }
+
+        static func badgeBackground(for tone: SemanticTone) -> Color {
+            iconTint(for: tone).opacity(tone == .neutral ? 0.08 : 0.14)
+        }
+
+        static func tileBackground(for tone: SemanticTone) -> Color {
+            iconTint(for: tone).opacity(tone == .neutral ? 0.04 : 0.06)
+        }
+
+        static func deltaColor(isPositive: Bool) -> Color {
+            isPositive ? .scoreGood : .scorePoor
+        }
+
+        static func filterKindTint(isAlert: Bool) -> Color {
+            isAlert ? .accentColor : .secondary
+        }
+
+        static func filterKindBackground(isAlert: Bool) -> Color {
+            filterKindTint(isAlert: isAlert).opacity(isAlert ? 0.14 : 0.08)
+        }
     }
 }
 

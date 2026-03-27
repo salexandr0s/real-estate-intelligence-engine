@@ -3,6 +3,7 @@ import SwiftUI
 /// Tracked filter overview — matched listings grouped into secondary dashboard panels.
 struct ForYouSection: View {
     let activeFilters: [Filter]
+    let totalActiveFilterCount: Int
     let filterListings: [Int: [Listing]]
     let filterLoadingStates: [Int: Bool]
     let isLoading: Bool
@@ -22,7 +23,7 @@ struct ForYouSection: View {
                         .font(.title3)
                         .adaptiveFontWeight(.semibold)
 
-                    Text("Filter-level detail, kept secondary to the live overview above.")
+                    Text("Secondary filter snapshots after the main briefing and decision surfaces.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -39,6 +40,12 @@ struct ForYouSection: View {
             if activeFilters.isEmpty && !isLoading {
                 ForYouEmptyState(onSetUpFilters: onNavigateToFilters)
             } else {
+                if totalActiveFilterCount > activeFilters.count {
+                    Text("Showing the top \(activeFilters.count) of \(totalActiveFilterCount) active filters.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Dashboard.gridSpacing) {
                     ForEach(activeFilters) { filter in
                         ForYouFilterGroup(
@@ -75,10 +82,6 @@ struct ForYouFilterGroup: View {
         )
     }
 
-    private var accentColor: Color {
-        filter.filterKind == .alert ? .purple : .blue
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             HStack(alignment: .top, spacing: Theme.Spacing.md) {
@@ -92,7 +95,7 @@ struct ForYouFilterGroup: View {
                         Text(filter.filterKind == .alert ? "Alert filter" : "Saved filter")
                     } icon: {
                         Circle()
-                            .fill(filter.filterKind == .alert ? Color.purple : Color.blue)
+                            .fill(Theme.Dashboard.filterKindTint(isAlert: filter.filterKind == .alert))
                             .frame(width: 6, height: 6)
                     }
                     .font(.caption)
@@ -158,7 +161,7 @@ struct ForYouFilterGroup: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dashboardPanelStyle(tint: accentColor)
+        .dashboardPanelStyle(tone: .neutral)
     }
 }
 
@@ -182,13 +185,14 @@ private struct ForYouEmptyState: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 180)
-        .dashboardPanelStyle(tint: .purple)
+        .dashboardPanelStyle(tone: .neutral)
     }
 }
 
 #Preview {
     ForYouSection(
         activeFilters: Array(Filter.samples.filter(\.isActive)),
+        totalActiveFilterCount: Array(Filter.samples.filter(\.isActive)).count,
         filterListings: [1: Array(Listing.samples.prefix(3))],
         filterLoadingStates: [:],
         isLoading: false

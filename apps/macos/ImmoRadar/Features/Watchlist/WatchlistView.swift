@@ -36,9 +36,16 @@ struct WatchlistView: View {
                 let filteredItems = viewModel.filteredSavedListings(matching: searchText)
 
                 List(filteredItems, selection: $selectedItemID) { item in
-                    WatchlistRow(item: item) {
-                        Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
-                    }
+                    WatchlistRow(
+                        item: item,
+                        isSavingNotes: viewModel.savingNotesListingId == item.listingId,
+                        onSaveNotes: { notes in
+                            Task { await viewModel.saveNotes(for: item.listingId, notes: notes, using: appState.apiClient) }
+                        },
+                        onUnsave: {
+                            Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
+                        }
+                    )
                     .tag(item.listingId)
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))

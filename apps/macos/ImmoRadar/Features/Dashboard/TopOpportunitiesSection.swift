@@ -16,7 +16,7 @@ struct TopOpportunitiesSection: View {
                         .font(.title3)
                         .adaptiveFontWeight(.semibold)
 
-                    Text("Highest-scoring current matches across your active filters.")
+                    Text("Highest-scoring matches to inspect after today’s edge.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -64,6 +64,6 @@ struct TopOpportunitiesSection: View {
                 }
             }
         }
-        .dashboardPanelStyle(tint: .blue, elevated: true)
+        .dashboardPanelStyle(tone: .neutral, elevated: true)
     }
 }

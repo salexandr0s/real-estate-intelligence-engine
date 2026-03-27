@@ -1,76 +1,41 @@
 import SwiftUI
 
-/// Inspector content showing alert detail or empty state.
+/// Focused inspector content for alert triage.
 struct AlertInspectorContent: View {
     let alert: Alert?
+    var onMarkAsRead: (() -> Void)?
+    var onDismiss: (() -> Void)?
+    var onOpenListing: (() -> Void)?
+    var onOpenFilters: (() -> Void)?
 
     var body: some View {
         if let alert {
+            let presentation = AlertPresentation.make(for: alert)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                    // Header
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        HStack(spacing: Theme.Spacing.sm) {
-                            Image(systemName: alert.alertType.iconName)
-                                .foregroundStyle(Theme.alertColor(for: alert.alertType))
-                                .font(.title2)
-                                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                    inspectorHeader(alert: alert, presentation: presentation)
+                    inspectorSnapshot(alert: alert)
 
-                            Text(alert.alertType.displayName)
-                                .font(.headline)
-                                .foregroundStyle(Theme.alertColor(for: alert.alertType))
-                        }
-
-                        Text(alert.title)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                    }
-
-                    Divider()
-
-                    // Body
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Details")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-
-                        Text(alert.body)
-                            .font(.body)
-                    }
-
-                    // Metadata
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        Text("Info")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-
-                        InspectorDetailRow(label: "Status", value: alert.status.displayName)
-                        InspectorDetailRow(label: "Matched", value: PriceFormatter.formatDateTime(alert.matchedAt))
-
-                        if let filterName = alert.filterName {
-                            InspectorDetailRow(label: "Filter", value: filterName)
-                        }
-
-                        if let listingId = alert.listingId {
-                            InspectorDetailRow(label: "Listing ID", value: "#\(listingId)")
-                        }
-                    }
-
-                    // Match reasons
                     if let reasons = alert.matchReasons {
-                        MatchReasonsView(reasons: reasons)
+                        inspectorSection(title: "Match Reasons", systemImage: "line.3.horizontal.decrease.circle") {
+                            AlertMatchReasonChips(reasons: reasons)
+                        }
                     }
 
-                    // Linked listing hint
-                    if let listingId = alert.listingId {
-                        Divider()
+                    inspectorSection(title: "Alert Summary", systemImage: presentation.type.icon) {
+                        Text(presentation.reasonSummary)
+                            .font(.body)
+                            .foregroundStyle(.primary)
 
-                        Text("Listing #\(listingId) — view in Listings tab")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if alert.body != presentation.reasonSummary {
+                            Text(alert.body)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+
+                    inspectorDetails(alert: alert)
                 }
                 .padding(Theme.Spacing.lg)
             }
@@ -78,8 +43,149 @@ struct AlertInspectorContent: View {
             ContentUnavailableView(
                 "No Alert Selected",
                 systemImage: "bell",
-                description: Text("Select an alert to view its details.")
+                description: Text("Select an alert to review its context and next action.")
             )
         }
+    }
+
+    private func inspectorHeader(alert: Alert, presentation: AlertPresentation) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+                Label(presentation.type.title, systemImage: presentation.type.icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(presentation.type.tint)
+
+                StatusBadge(
+                    label: presentation.status.title,
+                    color: presentation.status.tint,
+                    icon: presentation.status.icon
+                )
+
+                Spacer()
+
+                Text(PriceFormatter.formatDateTime(alert.matchedAt))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(alert.listing?.title ?? alert.title)
+                .font(.title3.weight(.semibold))
+                .lineLimit(3)
+
+            HStack(spacing: Theme.Spacing.sm) {
+                if let filterName = alert.filterName {
+                    Label(filterName, systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let listingId = alert.listingId {
+                    Text("#\(listingId)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            HStack(spacing: Theme.Spacing.sm) {
+                if let onMarkAsRead, alert.status == .unread {
+                    Button("Mark Read", systemImage: "envelope.open", action: onMarkAsRead)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
+
+                if let onDismiss, alert.status != .dismissed {
+                    Button(role: .destructive, action: onDismiss) {
+                        Label("Dismiss", systemImage: "archivebox")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if let onOpenListing, alert.listingId != nil {
+                    Button("Open Listing", systemImage: "arrow.right.circle", action: onOpenListing)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+
+                if let onOpenFilters, alert.filterName != nil {
+                    Button("Open Filters", systemImage: "line.3.horizontal.decrease.circle", action: onOpenFilters)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+        }
+        .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
+    }
+
+    @ViewBuilder
+    private func inspectorSnapshot(alert: Alert) -> some View {
+        if let listing = alert.listing {
+            inspectorSection(title: "Listing Snapshot", systemImage: "building.2") {
+                HStack(alignment: .top, spacing: Theme.Spacing.md) {
+                    ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+
+                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                        HStack(spacing: Theme.Spacing.sm) {
+                            Text(PriceFormatter.format(eur: listing.listPriceEur))
+                                .font(.headline.monospacedDigit())
+
+                            if let pct = listing.lastPriceChangePct, pct != 0 {
+                                PriceTrendBadge(changePct: pct)
+                            }
+                        }
+
+                        HStack(spacing: Theme.Spacing.sm) {
+                            Label(listing.districtName ?? listing.city, systemImage: "mappin")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            if let area = listing.livingAreaSqm {
+                                Text(PriceFormatter.formatArea(area))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if let rooms = listing.rooms {
+                                Text("\(PriceFormatter.formatRooms(rooms)) rooms")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private func inspectorDetails(alert: Alert) -> some View {
+        inspectorSection(title: "Details", systemImage: "info.circle") {
+            InspectorDetailRow(label: "Status", value: AlertPresentation.make(for: alert).status.title)
+            InspectorDetailRow(label: "Matched", value: PriceFormatter.formatDateTime(alert.matchedAt))
+
+            if let filterName = alert.filterName {
+                InspectorDetailRow(label: "Filter", value: filterName)
+            }
+
+            if let listingId = alert.listingId {
+                InspectorDetailRow(label: "Listing ID", value: "#\(listingId)")
+            }
+        }
+    }
+
+    private func inspectorSection<Content: View>(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            content()
+        }
+        .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
     }
 }

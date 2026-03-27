@@ -6,6 +6,7 @@ final class WatchlistViewModel {
     var savedListings: [SavedListingItem] = []
     var isLoading = false
     var errorMessage: String?
+    var savingNotesListingId: Int?
     private var nextCursor: String?
 
     func filteredSavedListings(matching searchText: String) -> [SavedListingItem] {
@@ -44,7 +45,7 @@ final class WatchlistViewModel {
             if removedItem != nil {
                 undoManager?.registerUndo(withTarget: self) { vm in
                     Task { @MainActor in
-                        try? await client.saveListing(listingId: listingId)
+                        try? await client.saveListing(listingId: listingId, notes: removedItem?.notes)
                         await vm.refresh(using: client)
                     }
                 }
@@ -53,6 +54,28 @@ final class WatchlistViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func saveNotes(for listingId: Int, notes: String?, using client: APIClient) async {
+        guard let index = savedListings.firstIndex(where: { $0.listingId == listingId }) else { return }
+
+        let previousNotes = savedListings[index].notes
+        let normalizedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextNotes = normalizedNotes?.isEmpty == true ? nil : normalizedNotes
+
+        savingNotesListingId = listingId
+        savedListings[index].notes = nextNotes
+
+        do {
+            try await client.saveListing(listingId: listingId, notes: nextNotes)
+        } catch {
+            if let rollbackIndex = savedListings.firstIndex(where: { $0.listingId == listingId }) {
+                savedListings[rollbackIndex].notes = previousNotes
+            }
+            errorMessage = error.localizedDescription
+        }
+
+        savingNotesListingId = nil
     }
 
     func exportCSV(using client: APIClient) async -> Data? {

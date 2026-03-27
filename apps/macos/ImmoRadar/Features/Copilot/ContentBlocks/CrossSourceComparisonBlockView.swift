@@ -5,9 +5,22 @@ struct CrossSourceComparisonBlockView: View {
     let data: CrossSourceComparisonData
     let onListingTap: (Int) -> Void
 
+    private var uniqueMembers: [CrossSourceComparisonMember] {
+        var seenSourceCodes = Set<String>()
+        var uniqueMembers: [CrossSourceComparisonMember] = []
+
+        for member in data.members {
+            if seenSourceCodes.insert(member.sourceCode.lowercased()).inserted {
+                uniqueMembers.append(member)
+            }
+        }
+
+        return uniqueMembers
+    }
+
     private var orderedMembers: [CrossSourceComparisonMember] {
-        let subject = data.members.first(where: { $0.isSubject })
-        let others = data.members
+        let subject = uniqueMembers.first(where: { $0.isSubject })
+        let others = uniqueMembers
             .filter { !$0.isSubject }
             .sorted { lhs, rhs in
                 let lhsPrice = lhs.listPriceEur ?? .greatestFiniteMagnitude
@@ -19,9 +32,12 @@ struct CrossSourceComparisonBlockView: View {
     }
 
     private var lowestAsk: CrossSourceComparisonMember? {
-        data.members
+        uniqueMembers
             .filter { $0.listPriceEur != nil }
-            .min { ($0.listPriceEur ?? 0) < ($1.listPriceEur ?? 0) }
+            .min { lhs, rhs in
+                guard let lhsPrice = lhs.listPriceEur, let rhsPrice = rhs.listPriceEur else { return false }
+                return lhsPrice < rhsPrice
+            }
     }
 
     var body: some View {
@@ -30,13 +46,7 @@ struct CrossSourceComparisonBlockView: View {
             summaryStrip
             ledger
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 0.5)
-        }
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactCard(padding: Theme.Spacing.md)
     }
 
     private var header: some View {
@@ -60,15 +70,15 @@ struct CrossSourceComparisonBlockView: View {
             HStack(spacing: Theme.Spacing.sm) {
                 SummaryBadge(
                     title: "Portals",
-                    value: "\(data.members.count)",
-                    tint: .blue,
+                    value: "\(uniqueMembers.count)",
+                    tint: .accentColor,
                     icon: "square.stack.3d.up"
                 )
 
                 if let spread = data.priceSpreadPct {
                     SummaryBadge(
                         title: "Spread",
-                        value: String(format: "%.1f%%", spread),
+                        value: "\(spread.formatted(.number.precision(.fractionLength(1))))%",
                         tint: spread >= 5 ? .orange : .green,
                         icon: "arrow.left.and.right.righttriangle.left.righttriangle.right"
                     )
@@ -77,7 +87,7 @@ struct CrossSourceComparisonBlockView: View {
                 if let lowestAsk {
                     SummaryBadge(
                         title: "Lowest ask",
-                        value: "\(lowestAsk.sourceName) • \(lowestAsk.listPriceEur.map(PriceFormatter.format(eurDouble:)) ?? "—")",
+                        value: "\(lowestAsk.sourceName) • \(PriceFormatter.format(eurDouble: lowestAsk.listPriceEur))",
                         tint: .accentColor,
                         icon: "tag"
                     )
@@ -111,11 +121,7 @@ struct CrossSourceComparisonBlockView: View {
                 }
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 0.5)
-        }
+        .copilotArtifactInset(padding: 0)
     }
 }
 
@@ -141,10 +147,10 @@ private struct SummaryBadge: View {
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
         .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                .strokeBorder(tint.opacity(0.16), lineWidth: 0.5)
+                .strokeBorder(tint.opacity(0.12), lineWidth: 0.5)
         }
     }
 }

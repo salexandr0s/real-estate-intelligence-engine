@@ -126,18 +126,7 @@ final class AlertStreamService {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             do {
                 let dto = try decoder.decode(APIAlertResponse.self, from: jsonData)
-                let alert = Alert(
-                    id: dto.id,
-                    alertType: AlertType(rawValue: dto.alertType) ?? .newMatch,
-                    status: AlertStatus(rawValue: dto.status) ?? .unread,
-                    title: dto.title,
-                    body: dto.body,
-                    matchedAt: Date.fromISO(dto.matchedAt),
-                    filterName: dto.filterName,
-                    listingId: dto.listingId,
-                    matchReasons: dto.matchReasons
-                )
-                lastEvent = alert
+                lastEvent = dto.toDomain(decoder: decoder)
             } catch {
                 Log.stream.error("Failed to decode alert: \(error, privacy: .public)")
             }

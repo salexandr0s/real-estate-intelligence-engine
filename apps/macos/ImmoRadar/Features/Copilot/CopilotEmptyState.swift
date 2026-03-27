@@ -12,17 +12,25 @@ struct CopilotEmptyState<InputBar: View>: View {
 
             VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    Text("Start a research session")
+                    Text("Research workspace")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+
+                    Text("Start a session")
                         .font(.largeTitle)
                         .adaptiveFontWeight(.semibold)
 
-                    Text("Search listings, compare districts, inspect price changes, and review rendered evidence without losing your work when you switch views.")
+                    Text("Search listings, compare districts, inspect price changes, and keep rendered evidence with the session while you move across the app.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 CopilotSuggestionChips(suggestions: suggestions, onSelect: onSuggestionSelected)
+
+                Text("Recent sessions stay in the sidebar when space allows.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: Theme.Copilot.contentMaxWidth, alignment: .leading)
             .padding(.horizontal, Theme.Copilot.horizontalPadding)
@@ -39,7 +47,7 @@ struct CopilotEmptyState<InputBar: View>: View {
                     LinearGradient(
                         colors: [
                             Color(nsColor: .windowBackgroundColor).opacity(0),
-                            Color(nsColor: .windowBackgroundColor).opacity(0.88),
+                            Color(nsColor: .windowBackgroundColor).opacity(0.78),
                             Color(nsColor: .windowBackgroundColor),
                         ],
                         startPoint: .top,

@@ -34,13 +34,7 @@ struct ListingComparisonBlockView: View {
 
             comparisonMatrix
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 0.5)
-        }
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactCard(padding: Theme.Spacing.md)
     }
 
     private var header: some View {
@@ -102,12 +96,7 @@ struct ListingComparisonBlockView: View {
                             )
                         }
                     }
-                    .padding(Theme.Spacing.sm)
-                    .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Theme.Radius.md)
-                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 0.5)
-                    }
+                    .copilotArtifactInset(padding: Theme.Spacing.sm)
                 }
             }
         }
@@ -163,12 +152,7 @@ private struct ComparisonCandidateHeader: View {
             }
         }
         .frame(width: width, alignment: .leading)
-        .padding(Theme.Spacing.sm)
-        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.28), lineWidth: 0.75)
-        }
+        .copilotArtifactInset(padding: Theme.Spacing.sm)
         .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 }
@@ -208,17 +192,17 @@ private struct ComparisonVerdictStrip: View {
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
         .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                .strokeBorder(tint.opacity(0.16), lineWidth: 0.5)
+                .strokeBorder(tint.opacity(0.14), lineWidth: 0.5)
         }
     }
 
     private var tint: Color {
         switch callout.tone {
         case .positive: .green
-        case .neutral: .blue
+        case .neutral: .accentColor
         case .caution: .orange
         }
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Renders a Copilot exchange in a calmer, conversation-style presentation.
+/// Renders a Copilot exchange in a calmer, evidence-first workspace presentation.
 struct CopilotMessageBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: CopilotMessage
@@ -24,13 +24,10 @@ struct CopilotMessageBubble: View {
     private var bubbleContent: some View {
         switch message.role {
         case .user:
-            HStack {
-                Spacer(minLength: 72)
-                UserPromptCard(contentBlocks: message.contentBlocks, timestamp: message.timestamp)
-                    .frame(maxWidth: 560, alignment: .trailing)
-            }
+            UserPromptNote(contentBlocks: message.contentBlocks, timestamp: message.timestamp)
+                .frame(maxWidth: Theme.Copilot.promptMaxWidth, alignment: .leading)
         case .assistant:
-            AssistantResearchCard(
+            AssistantResearchSection(
                 contentBlocks: message.contentBlocks,
                 isStreaming: message.isStreaming,
                 timestamp: message.timestamp,
@@ -40,7 +37,7 @@ struct CopilotMessageBubble: View {
     }
 }
 
-private struct UserPromptCard: View {
+private struct UserPromptNote: View {
     let contentBlocks: [ContentBlock]
     let timestamp: Date
 
@@ -54,68 +51,11 @@ private struct UserPromptCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                ForEach(Array(textBlocks.enumerated()), id: \.offset) { _, text in
-                    Text(text)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.24), lineWidth: 0.5)
-            }
-
-            Text(PriceFormatter.relativeDate(timestamp))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.trailing, Theme.Spacing.xs)
-        }
-    }
-}
-
-private struct AssistantResearchCard: View {
-    let contentBlocks: [ContentBlock]
-    let isStreaming: Bool
-    let timestamp: Date
-    let onListingTap: (Int) -> Void
-
-    private var renderedArtifactCount: Int {
-        contentBlocks.reduce(into: 0) { count, block in
-            switch block.content {
-            case .text, .loading:
-                break
-            default:
-                count += 1
-            }
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(spacing: Theme.Spacing.sm) {
-                Image(systemName: "sparkles")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 22, height: 22)
-                    .background(Color.accentColor.opacity(0.1), in: Circle())
-
-                Text("Copilot")
-                    .font(.caption)
-                    .adaptiveFontWeight(.semibold)
+                Text("Question")
+                    .font(.caption.bold())
                     .foregroundStyle(.secondary)
-
-                if renderedArtifactCount > 0 {
-                    Text("\(renderedArtifactCount) artifact\(renderedArtifactCount == 1 ? "" : "s")")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, Theme.Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.08), in: Capsule())
-                }
 
                 Spacer()
 
@@ -124,24 +64,125 @@ private struct AssistantResearchCard: View {
                     .foregroundStyle(.tertiary)
             }
 
-            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                ForEach(contentBlocks) { block in
-                    ContentBlockView(
-                        block: block,
-                        isStreaming: isStreaming,
-                        onListingTap: onListingTap
-                    )
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                ForEach(Array(textBlocks.enumerated()), id: \.offset) { _, text in
+                    Text(text)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineSpacing(3)
                 }
             }
         }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.lg)
-        .background(Theme.inputBarBackground.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Copilot.composerRadius)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.2), lineWidth: 0.5)
+        .copilotArtifactCard(padding: Theme.Spacing.lg)
+    }
+}
+
+private struct AssistantResearchSection: View {
+    let contentBlocks: [ContentBlock]
+    let isStreaming: Bool
+    let timestamp: Date
+    let onListingTap: (Int) -> Void
+
+    private var narrativeBlocks: [ContentBlock] {
+        contentBlocks.filter {
+            if case .text = $0.content { return true }
+            return false
         }
-        .shadow(color: .black.opacity(0.03), radius: 10, y: 4)
+    }
+
+    private var evidenceBlocks: [ContentBlock] {
+        contentBlocks.filter {
+            switch $0.content {
+            case .text, .loading:
+                return false
+            default:
+                return true
+            }
+        }
+    }
+
+    private var loadingLabel: String? {
+        contentBlocks.compactMap { block -> String? in
+            if case .loading(let label) = block.content {
+                return label
+            }
+            return nil
+        }.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Copilot.evidenceSpacing) {
+            header
+
+            if !narrativeBlocks.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    ForEach(Array(narrativeBlocks.enumerated()), id: \.element.id) { index, block in
+                        ContentBlockView(
+                            block: block,
+                            isStreaming: isStreaming && index == narrativeBlocks.indices.last,
+                            onListingTap: onListingTap
+                        )
+                    }
+                }
+                .copilotArtifactCard(padding: Theme.Spacing.lg)
+            }
+
+            if !evidenceBlocks.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Copilot.evidenceSpacing) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Rendered evidence")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("\(evidenceBlocks.count) block\(evidenceBlocks.count == 1 ? "" : "s")")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    VStack(alignment: .leading, spacing: Theme.Copilot.evidenceSpacing) {
+                        ForEach(evidenceBlocks) { block in
+                            ContentBlockView(
+                                block: block,
+                                isStreaming: false,
+                                onListingTap: onListingTap
+                            )
+                        }
+                    }
+                }
+            }
+
+            if let loadingLabel, narrativeBlocks.isEmpty, evidenceBlocks.isEmpty {
+                HStack(spacing: Theme.Spacing.sm) {
+                    TypingIndicator()
+                    Text(loadingLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .copilotArtifactCard(padding: Theme.Spacing.md)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Text("Analysis")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            if isStreaming {
+                Text("Thinking")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            Text(PriceFormatter.relativeDate(timestamp))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 

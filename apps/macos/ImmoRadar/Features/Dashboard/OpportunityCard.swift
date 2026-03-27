@@ -15,7 +15,7 @@ struct OpportunityCard: View {
     var body: some View {
         Button(action: { onTap?() }) {
             HStack(alignment: .top, spacing: Theme.Spacing.md) {
-                Text(String(format: "%02d", rank))
+                Text(rank.formatted(.number.precision(.integerLength(2...))))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
                     .frame(width: 28, alignment: .leading)
@@ -65,14 +65,19 @@ struct OpportunityCard: View {
 
                     HStack(spacing: Theme.Spacing.xs) {
                         if isNew {
-                            DashboardCapsuleLabel(text: "NEW", tint: .accentColor, foreground: .white, filled: true)
+                            DashboardCapsuleLabel(
+                                text: "NEW",
+                                tint: Theme.Dashboard.iconTint(for: .accent),
+                                foreground: .white,
+                                filled: true
+                            )
                         }
 
                         if let pct = listing.lastPriceChangePct, pct < 0 {
                             DashboardCapsuleLabel(
                                 text: PriceFormatter.formatPercent(pct),
-                                tint: Color.scoreGood,
-                                foreground: Color.scoreGood,
+                                tint: Theme.Dashboard.iconTint(for: .positive),
+                                foreground: Theme.Dashboard.iconTint(for: .positive),
                                 filled: false
                             )
                         }

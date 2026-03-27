@@ -15,7 +15,7 @@ struct Listing: Identifiable, Codable, Hashable {
     let postalCode: String?
     let districtNo: Int?
     let districtName: String?
-    let listPriceEur: Int
+    let listPriceEur: Int?
     let livingAreaSqm: Double?
     let rooms: Double?
     let pricePerSqmEur: Double?
@@ -36,6 +36,9 @@ struct Listing: Identifiable, Codable, Hashable {
 
     /// Non-optional score for sorting (0 when nil).
     var sortableScore: Double { currentScore ?? 0 }
+
+    /// Unknown prices sort last when descending and first when ascending.
+    var sortableListPriceEur: Int { listPriceEur ?? -1 }
 
     /// Map coordinate derived from latitude/longitude, nil if unavailable.
     var coordinate: CLLocationCoordinate2D? {
@@ -71,7 +74,7 @@ struct Listing: Identifiable, Codable, Hashable {
         postalCode: String?,
         districtNo: Int?,
         districtName: String?,
-        listPriceEur: Int,
+        listPriceEur: Int?,
         livingAreaSqm: Double?,
         rooms: Double?,
         pricePerSqmEur: Double?,

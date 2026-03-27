@@ -7,6 +7,19 @@ struct ListingCluster: Codable, Sendable {
     let listingCount: Int
     let priceSpreadPct: Double?
     let members: [ClusterMember]
+
+    var deduplicatedMembers: [ClusterMember] {
+        var seenSourceCodes = Set<String>()
+        var uniqueMembers: [ClusterMember] = []
+
+        for member in members {
+            if seenSourceCodes.insert(member.sourceCode.lowercased()).inserted {
+                uniqueMembers.append(member)
+            }
+        }
+
+        return uniqueMembers
+    }
 }
 
 struct ClusterMember: Identifiable, Codable, Sendable {

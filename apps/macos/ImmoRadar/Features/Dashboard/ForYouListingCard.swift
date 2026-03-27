@@ -38,7 +38,7 @@ struct ForYouListingCard: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color.accentColor, in: Capsule())
+                                .background(Theme.Dashboard.iconTint(for: .accent), in: Capsule())
                         }
 
                         if let district = listing.districtName {

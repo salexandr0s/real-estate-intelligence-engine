@@ -26,7 +26,7 @@ struct DashboardListingRow: View {
                     Text("--")
                         .font(.caption)
                         .foregroundStyle(.quaternary)
-                    Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
+                    Text(PriceFormatter.formatArea(listing.livingAreaSqm))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

@@ -126,7 +126,7 @@ struct ListingDetailView: View {
                 PriceHistoryView(versions: priceVersions)
 
                 // Cross-source comparison
-                if let cluster, cluster.members.count >= 2 {
+                if let cluster, cluster.deduplicatedMembers.count >= 2 {
                     CrossSourceComparisonView(cluster: cluster)
                 }
 
@@ -229,13 +229,17 @@ struct ListingDetailView: View {
             }
         } catch {
             Log.ui.error("Failed to load price versions for listing \(self.listing.id): \(error, privacy: .public)")
-            priceVersions = [
-                PriceVersion(
-                    date: listing.firstSeenAt,
-                    priceEur: listing.listPriceEur,
-                    reason: "Current price"
-                )
-            ]
+            if let listPriceEur = listing.listPriceEur {
+                priceVersions = [
+                    PriceVersion(
+                        date: listing.firstSeenAt,
+                        priceEur: listPriceEur,
+                        reason: "Current price"
+                    )
+                ]
+            } else {
+                priceVersions = []
+            }
         }
     }
 
@@ -406,8 +410,7 @@ private struct OutreachDetailSection: View {
 
             if let thread {
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    Text(thread.workflowState.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.subheadline.weight(.semibold))
+                    OutreachWorkflowBadge(state: thread.workflowState)
                     if let lastOutboundAt = thread.lastOutboundAt {
                         Text("Last outbound: \(PriceFormatter.formatDateTime(lastOutboundAt))")
                             .font(.caption)

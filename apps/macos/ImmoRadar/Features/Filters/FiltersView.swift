@@ -362,10 +362,14 @@ private struct FilterEditorSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
-                Text(editingFilter != nil ? "Edit Filter" : "New Filter")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    Text(editingFilter != nil ? "Edit Filter" : "New Filter")
+                        .font(.headline)
+                    Text("Define the exact listings that should earn a place in your investor queue.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -374,154 +378,124 @@ private struct FilterEditorSheet: View {
 
             Divider()
 
-            // Form
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                    // Name
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Filter Name")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
+                    FilterCriteriaSummaryCard(summary: draft.summaryText)
+
+                    FilterBuilderSection(
+                        title: "Goal",
+                        subtitle: "Name the investment thesis you want the app to watch for."
+                    ) {
                         TextField("e.g. Vienna Value Apartments", text: $draft.name)
                             .textFieldStyle(.roundedBorder)
+
                         if let error = draft.nameError, showsValidation {
-                            Text(error).font(.caption).foregroundStyle(.red)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
                         }
                     }
 
-                    // Operation type
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Operation Type")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        Picker("Operation", selection: $draft.operationType) {
-                            Text("Any").tag(Optional<OperationType>.none)
-                            ForEach(OperationType.allCases, id: \.self) { opType in
-                                Text(opType.rawValue.capitalized).tag(Optional(opType))
-                            }
-                        }
-                        .labelsHidden()
-                    }
-
-                    // Property types
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Property Types")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        HStack(spacing: Theme.Spacing.sm) {
-                            ForEach(PropertyType.allCases) { propType in
-                                Toggle(propType.displayName, isOn: propertyTypeBinding(propType))
-                                    .toggleStyle(.checkbox)
-                            }
-                        }
-                    }
-
-                    // Price range
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    FilterBuilderSection(
+                        title: "Acquisition target",
+                        subtitle: "Start with the market segment: operation, property type, and Vienna districts."
+                    ) {
                         HStack(spacing: Theme.Spacing.lg) {
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Min Price (EUR)")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 100000", value: $draft.minPriceEur, format: .number)
-                                    .textFieldStyle(.roundedBorder)
+                                Text("Operation")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("Operation", selection: $draft.operationType) {
+                                    Text("Any").tag(Optional<OperationType>.none)
+                                    ForEach(OperationType.allCases, id: \.self) { opType in
+                                        Text(opType.rawValue.capitalized).tag(Optional(opType))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .frame(width: 140)
                             }
+
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Max Price (EUR)")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 350000", value: $draft.maxPriceEur, format: .number)
-                                    .textFieldStyle(.roundedBorder)
+                                Text("Alert cadence")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("Frequency", selection: $draft.alertFrequency) {
+                                    ForEach(AlertFrequency.allCases, id: \.self) { freq in
+                                        Text(freq.displayName).tag(freq)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
                             }
                         }
-                        if let error = draft.priceRangeError {
-                            Text(error).font(.caption).foregroundStyle(.red)
+
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text("Property types")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            PropertyTypeGrid(draft: draft, propertyTypeBinding: propertyTypeBinding)
+                        }
+
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text("Vienna districts")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            DistrictGrid(selected: $draft.selectedDistricts)
                         }
                     }
 
-                    // Area range
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    FilterBuilderSection(
+                        title: "Budget and size",
+                        subtitle: "Define the rough envelope of listings that should qualify."
+                    ) {
                         HStack(spacing: Theme.Spacing.lg) {
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Min Area (m\u{00B2})")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 50", value: $draft.minAreaSqm, format: .number)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Max Area (m\u{00B2})")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 120", value: $draft.maxAreaSqm, format: .number)
-                                    .textFieldStyle(.roundedBorder)
-                            }
+                            numericField("Min Price (EUR)", value: $draft.minPriceEur, prompt: "100000")
+                            numericField("Max Price (EUR)", value: $draft.maxPriceEur, prompt: "350000")
                         }
-                        if let error = draft.areaRangeError {
+
+                        if let error = draft.priceRangeError, showsValidation {
                             Text(error).font(.caption).foregroundStyle(.red)
                         }
-                    }
 
-                    // Rooms range
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         HStack(spacing: Theme.Spacing.lg) {
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Min Rooms")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 2", value: $draft.minRooms, format: .number)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                Text("Max Rooms")
-                                    .font(.subheadline)
-                                    .adaptiveFontWeight(.medium)
-                                TextField("e.g. 5", value: $draft.maxRooms, format: .number)
-                                    .textFieldStyle(.roundedBorder)
-                            }
+                            numericField("Min Area (m²)", value: $draft.minAreaSqm, prompt: "50")
+                            numericField("Max Area (m²)", value: $draft.maxAreaSqm, prompt: "120")
                         }
-                        if let error = draft.roomsRangeError {
+
+                        if let error = draft.areaRangeError, showsValidation {
+                            Text(error).font(.caption).foregroundStyle(.red)
+                        }
+
+                        HStack(spacing: Theme.Spacing.lg) {
+                            numericField("Min Rooms", value: $draft.minRooms, prompt: "2")
+                            numericField("Max Rooms", value: $draft.maxRooms, prompt: "5")
+                        }
+
+                        if let error = draft.roomsRangeError, showsValidation {
                             Text(error).font(.caption).foregroundStyle(.red)
                         }
                     }
 
-                    // Keywords
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Required Keywords (comma-separated)")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        TextField("e.g. provisionsfrei, balkon", text: $draft.keywords)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Excluded Keywords (comma-separated)")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        TextField("e.g. baurecht, vermietet", text: $draft.excludedKeywordsStr)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    // Alert frequency
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Alert Frequency")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        Picker("Frequency", selection: $draft.alertFrequency) {
-                            ForEach(AlertFrequency.allCases, id: \.self) { freq in
-                                Text(freq.displayName).tag(freq)
-                            }
+                    FilterBuilderSection(
+                        title: "Thesis keywords",
+                        subtitle: "Use keywords sparingly to express what must appear — and what should be filtered out."
+                    ) {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text("Required keywords")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextField("e.g. provisionsfrei, balkon", text: $draft.keywords)
+                                .textFieldStyle(.roundedBorder)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                    }
 
-                    // Districts
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("Vienna Districts")
-                            .font(.subheadline)
-                            .adaptiveFontWeight(.medium)
-                        DistrictGrid(selected: $draft.selectedDistricts)
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text("Excluded keywords")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextField("e.g. baurecht, vermietet", text: $draft.excludedKeywordsStr)
+                                .textFieldStyle(.roundedBorder)
+                        }
                     }
                 }
                 .padding(Theme.Spacing.lg)
@@ -551,7 +525,7 @@ private struct FilterEditorSheet: View {
             }
             .padding(Theme.Spacing.lg)
         }
-        .frame(width: 560, height: 640)
+        .frame(width: 620, height: 720)
     }
 
     private func propertyTypeBinding(_ type: PropertyType) -> Binding<Bool> {
@@ -565,6 +539,98 @@ private struct FilterEditorSheet: View {
                 }
             }
         )
+    }
+
+    private func numericField(
+        _ title: String,
+        value: Binding<Int?>,
+        prompt: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(prompt, value: value, format: .number)
+                .textFieldStyle(.roundedBorder)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func numericField(
+        _ title: String,
+        value: Binding<Double?>,
+        prompt: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(prompt, value: value, format: .number)
+                .textFieldStyle(.roundedBorder)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FilterCriteriaSummaryCard: View {
+    let summary: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text("This filter means")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(summary)
+                .font(.body)
+                .adaptiveFontWeight(.medium)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Theme.Spacing.md)
+        .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(Color.accentColor.opacity(0.12), lineWidth: 0.5)
+        }
+    }
+}
+
+private struct FilterBuilderSection<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(title)
+                    .font(.subheadline)
+                    .adaptiveFontWeight(.semibold)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            content
+        }
+        .padding(Theme.Spacing.md)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+    }
+}
+
+private struct PropertyTypeGrid: View {
+    @Bindable var draft: FilterDraft
+    let propertyTypeBinding: (PropertyType) -> Binding<Bool>
+
+    private let columns = [GridItem(.adaptive(minimum: 120), spacing: Theme.Spacing.sm)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.sm) {
+            ForEach(PropertyType.allCases) { propType in
+                Toggle(propType.displayName, isOn: propertyTypeBinding(propType))
+                    .toggleStyle(.checkbox)
+            }
+        }
     }
 }
 

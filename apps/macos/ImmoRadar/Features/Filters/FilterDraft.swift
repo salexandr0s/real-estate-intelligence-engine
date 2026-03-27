@@ -48,6 +48,72 @@ final class FilterDraft {
         nameError == nil && priceRangeError == nil && areaRangeError == nil && roomsRangeError == nil
     }
 
+    var summaryText: String {
+        let operation = operationType?.rawValue.capitalized ?? "Any"
+
+        let propertySummary: String = {
+            if selectedPropertyTypes.isEmpty { return "properties" }
+            let names = selectedPropertyTypes.map(\.displayName).sorted()
+            if names.count == 1 { return names[0].lowercased() }
+            if names.count == 2 { return "\(names[0].lowercased()) and \(names[1].lowercased())" }
+            return "\(names.count) property types"
+        }()
+
+        let districtSummary: String = {
+            switch selectedDistricts.count {
+            case 0: return "across Vienna"
+            case 1:
+                if let districtNo = selectedDistricts.first {
+                    return "in district \(districtNo)"
+                }
+                return "across Vienna"
+            default:
+                return "across \(selectedDistricts.count) selected districts"
+            }
+        }()
+
+        var parts = ["Track \(operation.lowercased()) \(propertySummary)", districtSummary]
+
+        if let minPriceEur, let maxPriceEur {
+            parts.append("between €\(minPriceEur.formatted()) and €\(maxPriceEur.formatted())")
+        } else if let maxPriceEur {
+            parts.append("up to €\(maxPriceEur.formatted())")
+        } else if let minPriceEur {
+            parts.append("from €\(minPriceEur.formatted())")
+        }
+
+        if let minAreaSqm, let maxAreaSqm {
+            parts.append("with \(minAreaSqm.formatted(.number.precision(.fractionLength(0))))–\(maxAreaSqm.formatted(.number.precision(.fractionLength(0)))) m²")
+        } else if let minAreaSqm {
+            parts.append("with at least \(minAreaSqm.formatted(.number.precision(.fractionLength(0)))) m²")
+        }
+
+        if let minRooms {
+            parts.append("and \(minRooms)+ rooms")
+        }
+
+        let required = keywordsList
+        if !required.isEmpty {
+            parts.append("including “\(required.prefix(2).joined(separator: "”, “"))”")
+        }
+
+        return parts.joined(separator: " ")
+    }
+
+    var keywordsList: [String] {
+        keywords
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    var excludedKeywordsList: [String] {
+        excludedKeywordsStr
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     func toCriteria() -> FilterCriteria {
         FilterCriteria(
             operationType: operationType,
@@ -60,8 +126,8 @@ final class FilterDraft {
             minRooms: minRooms,
             maxRooms: maxRooms,
             minScore: nil,
-            requiredKeywords: keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
-            excludedKeywords: excludedKeywordsStr.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
+            requiredKeywords: keywordsList,
+            excludedKeywords: excludedKeywordsList,
             sortBy: "score_desc"
         )
     }

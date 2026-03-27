@@ -1,41 +1,23 @@
 import SwiftUI
 
-/// Dashboard KPI cluster — colorful metric cards with stronger hierarchy.
+/// Quiet dashboard metric rail used as supporting context inside the briefing flow.
 struct SummaryStripView: View {
     let cards: [DashboardViewModel.SummaryCard]
     var onCardNavigate: ((String) -> Void)?
 
-    private var primaryCards: [DashboardViewModel.SummaryCard] {
-        Array(cards.prefix(4))
-    }
-
-    private var secondaryCard: DashboardViewModel.SummaryCard? {
-        cards.count > 4 ? cards.last : nil
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Dashboard.gridSpacing) {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: Theme.Dashboard.gridSpacing),
-                    GridItem(.flexible(), spacing: Theme.Dashboard.gridSpacing),
-                ],
-                alignment: .leading,
-                spacing: Theme.Dashboard.gridSpacing
-            ) {
-                ForEach(primaryCards) { card in
-                    SummaryMetric(
-                        card: card,
-                        onNavigate: onCardNavigate.map { callback in { callback(card.id) } }
-                    )
-                }
-            }
-
-            if let secondaryCard {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: Theme.Spacing.sm),
+                GridItem(.flexible(), spacing: Theme.Spacing.sm),
+            ],
+            alignment: .leading,
+            spacing: Theme.Spacing.sm
+        ) {
+            ForEach(cards) { card in
                 SummaryMetric(
-                    card: secondaryCard,
-                    onNavigate: onCardNavigate.map { callback in { callback(secondaryCard.id) } },
-                    minHeight: 118
+                    card: card,
+                    onNavigate: onCardNavigate.map { callback in { callback(card.id) } }
                 )
             }
         }
@@ -45,7 +27,7 @@ struct SummaryStripView: View {
 private struct SummaryMetric: View {
     let card: DashboardViewModel.SummaryCard
     var onNavigate: (() -> Void)?
-    var minHeight: CGFloat = 128
+    var minHeight: CGFloat = 92
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -54,33 +36,33 @@ private struct SummaryMetric: View {
         Button {
             onNavigate?()
         } label: {
-            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                 HStack(alignment: .top) {
                     ZStack {
                         Circle()
-                            .fill(.white.opacity(0.12))
-                            .frame(width: 34, height: 34)
+                            .fill(Theme.Dashboard.iconChipBackground(for: card.tone))
+                            .frame(width: 28, height: 28)
 
                         Image(systemName: card.icon)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(card.color)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.Dashboard.iconTint(for: card.tone))
                     }
 
-                    Spacer(minLength: Theme.Spacing.md)
+                    Spacer(minLength: Theme.Spacing.sm)
 
                     if let delta = card.delta {
-                        Text(delta.value)
+                        Label(delta.value, systemImage: delta.isPositive ? "arrow.up" : "arrow.down")
                             .font(.caption2.monospacedDigit())
-                            .foregroundStyle(delta.isPositive ? Color.green : Color.red)
-                            .padding(.horizontal, Theme.Spacing.sm)
-                            .padding(.vertical, 5)
-                            .background(.white.opacity(0.08), in: Capsule())
+                            .foregroundStyle(Theme.Dashboard.deltaColor(isPositive: delta.isPositive))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.08), in: Capsule())
                     }
                 }
 
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     Text(card.value)
-                        .font(.title)
+                        .font(.title3)
                         .bold()
                         .fontDesign(.rounded)
                         .foregroundStyle(.primary)
@@ -95,12 +77,12 @@ private struct SummaryMetric: View {
             }
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
             .dashboardPanelStyle(
-                padding: Theme.Spacing.lg,
-                tint: card.color,
-                elevated: true
+                padding: Theme.Spacing.md,
+                tone: card.tone,
+                elevated: false
             )
-            .scaleEffect(isHovered && onNavigate != nil && !reduceMotion ? 1.01 : 1)
-            .offset(y: isHovered && onNavigate != nil && !reduceMotion ? -2 : 0)
+            .scaleEffect(isHovered && onNavigate != nil && !reduceMotion ? 1.006 : 1)
+            .offset(y: isHovered && onNavigate != nil && !reduceMotion ? -1 : 0)
         }
         .buttonStyle(.plain)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: isHovered)
@@ -120,11 +102,11 @@ private struct SummaryMetric: View {
 
 #Preview {
     SummaryStripView(cards: [
-        .init(id: "a", title: "Active Listings", value: "93", icon: "building.2.fill", color: .blue, delta: .init(value: "+12 this week", isPositive: true)),
-        .init(id: "b", title: "New This Week", value: "12", icon: "sparkles", color: .green, delta: nil),
-        .init(id: "c", title: "High Score (70+)", value: "36", icon: "star.fill", color: .orange, delta: .init(value: "Avg 58", isPositive: true)),
-        .init(id: "d", title: "Active Filters", value: "2", icon: "line.3.horizontal.decrease.circle.fill", color: .purple, delta: .init(value: "1 with matches", isPositive: true)),
-        .init(id: "e", title: "Unread Alerts", value: "5", icon: "bell.badge.fill", color: .red, delta: nil),
+        .init(id: "a", title: "Active Listings", value: "93", icon: "building.2.fill", tone: .neutral, delta: .init(value: "+12 this week", isPositive: true)),
+        .init(id: "b", title: "New This Week", value: "12", icon: "sparkles", tone: .accent, delta: nil),
+        .init(id: "c", title: "High Score (70+)", value: "36", icon: "star.fill", tone: .score, delta: .init(value: "Avg 58", isPositive: true)),
+        .init(id: "d", title: "Active Filters", value: "2", icon: "line.3.horizontal.decrease.circle.fill", tone: .accent, delta: .init(value: "1 with matches", isPositive: true)),
+        .init(id: "e", title: "Unread Alerts", value: "5", icon: "bell.badge.fill", tone: .alert, delta: nil),
     ])
     .padding()
     .frame(width: 420)

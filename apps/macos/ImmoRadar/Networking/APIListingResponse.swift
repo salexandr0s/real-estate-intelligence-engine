@@ -15,6 +15,7 @@ struct APIListingResponse: Codable {
     let districtNo: Int?
     let districtName: String?
     let listPriceEur: Double?
+    let listPriceEurCents: Int?
     let livingAreaSqm: Double?
     let rooms: Double?
     let pricePerSqmEur: Double?
@@ -43,6 +44,13 @@ struct APIListingResponse: Codable {
         let priceChangeDate = lastPriceChangeAt.map { Date.fromISO($0) }
         let status = ListingStatus(rawValue: listingStatus ?? "active") ?? .active
 
+        let resolvedPriceEur: Int?
+        if let listPriceEurCents {
+            resolvedPriceEur = listPriceEurCents / 100
+        } else {
+            resolvedPriceEur = listPriceEur.map(Int.init)
+        }
+
         return Listing(
             id: id,
             listingUid: listingUid,
@@ -55,7 +63,7 @@ struct APIListingResponse: Codable {
             postalCode: postalCode,
             districtNo: districtNo,
             districtName: districtName,
-            listPriceEur: Int(listPriceEur ?? 0),
+            listPriceEur: resolvedPriceEur,
             livingAreaSqm: livingAreaSqm,
             rooms: rooms,
             pricePerSqmEur: pricePerSqmEur,

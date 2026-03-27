@@ -40,12 +40,12 @@ struct ListingsTable: View {
             .width(min: 80, ideal: 130)
 
             TableColumn("Size") { (listing: Listing) in
-                Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
+                Text(PriceFormatter.formatArea(listing.livingAreaSqm))
                     .monospacedDigit()
             }
             .width(min: 70, ideal: 80)
 
-            TableColumn("Price", value: \.listPriceEur) { (listing: Listing) in
+            TableColumn("Price", value: \.sortableListPriceEur) { (listing: Listing) in
                 HStack(spacing: 4) {
                     Text(PriceFormatter.format(eur: listing.listPriceEur))
                         .monospacedDigit()
@@ -57,7 +57,7 @@ struct ListingsTable: View {
             .width(min: 90, ideal: 150)
 
             TableColumn("Price/m\u{00B2}") { (listing: Listing) in
-                Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur ?? 0))
+                Text(PriceFormatter.formatPerSqm(listing.pricePerSqmEur))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }

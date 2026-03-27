@@ -32,23 +32,27 @@ struct CardModifier: ViewModifier {
 struct DashboardPanelModifier: ViewModifier {
     var padding: CGFloat = Theme.Spacing.lg
     var cornerRadius: CGFloat = Theme.Dashboard.panelRadius
+    var tone: Theme.Dashboard.SemanticTone = .neutral
     var tint: Color? = nil
     var elevated: Bool = false
 
     func body(content: Content) -> some View {
+        let wash = tint ?? Theme.Dashboard.panelWash(for: tone)
+        let borderColor = tint?.opacity(0.16) ?? Theme.Dashboard.panelBorderColor(for: tone)
+
         content
             .padding(padding)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Theme.cardBackground)
                     .overlay {
-                        if let tint {
+                        if let wash {
                             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                                 .fill(
                                     LinearGradient(
                                         colors: [
-                                            tint.opacity(0.22),
-                                            tint.opacity(0.08),
+                                            wash.opacity(0.10),
+                                            wash.opacity(0.04),
                                             .clear,
                                         ],
                                         startPoint: .topLeading,
@@ -60,7 +64,7 @@ struct DashboardPanelModifier: ViewModifier {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 0.5)
+                    .strokeBorder(borderColor, lineWidth: 0.5)
             }
             .shadow(
                 color: .black.opacity(elevated ? 0.12 : 0.05),
@@ -82,6 +86,22 @@ extension View {
     func dashboardPanelStyle(
         padding: CGFloat = Theme.Spacing.lg,
         cornerRadius: CGFloat = Theme.Dashboard.panelRadius,
+        tone: Theme.Dashboard.SemanticTone,
+        elevated: Bool = false
+    ) -> some View {
+        modifier(
+            DashboardPanelModifier(
+                padding: padding,
+                cornerRadius: cornerRadius,
+                tone: tone,
+                elevated: elevated
+            )
+        )
+    }
+
+    func dashboardPanelStyle(
+        padding: CGFloat = Theme.Spacing.lg,
+        cornerRadius: CGFloat = Theme.Dashboard.panelRadius,
         tint: Color? = nil,
         elevated: Bool = false
     ) -> some View {
@@ -89,6 +109,7 @@ extension View {
             DashboardPanelModifier(
                 padding: padding,
                 cornerRadius: cornerRadius,
+                tone: .neutral,
                 tint: tint,
                 elevated: elevated
             )

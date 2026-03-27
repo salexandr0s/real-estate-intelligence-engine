@@ -16,13 +16,13 @@ struct PriceHistoryBlock: View {
                         x: .value("Date", point.date),
                         y: .value("Price", point.priceEur)
                     )
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
 
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value("Price", point.priceEur)
                     )
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
                     .annotation(position: .top, spacing: 4) {
                         Text(PriceFormatter.format(eur: point.priceEur))
                             .font(.system(size: 8).monospacedDigit())
@@ -54,8 +54,6 @@ struct PriceHistoryBlock: View {
                 }
             }
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .shadow(radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        .copilotArtifactCard(padding: Theme.Spacing.md)
     }
 }

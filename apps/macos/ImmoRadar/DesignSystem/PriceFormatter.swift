@@ -50,14 +50,29 @@ enum PriceFormatter {
         eurFormatter.string(from: NSNumber(value: amount)) ?? "EUR \(amount)"
     }
 
+    static func format(eur amount: Int?) -> String {
+        guard let amount else { return "—" }
+        return format(eur: amount)
+    }
+
     /// Format whole-euro prices from a Double: "EUR 299.000"
     static func format(eurDouble amount: Double) -> String {
         format(eur: Int(amount))
     }
 
+    static func format(eurDouble amount: Double?) -> String {
+        guard let amount else { return "—" }
+        return format(eurDouble: amount)
+    }
+
     /// Format price per sqm with decimals: "EUR 4.124,14"
     static func formatPerSqm(_ amount: Double) -> String {
         eurDecimalFormatter.string(from: NSNumber(value: amount)) ?? "EUR \(amount)"
+    }
+
+    static func formatPerSqm(_ amount: Double?) -> String {
+        guard let amount else { return "—" }
+        return formatPerSqm(amount)
     }
 
     /// Format area: "72,5 m2"
@@ -70,9 +85,19 @@ enum PriceFormatter {
         return "\(formatted) m\u{00B2}"
     }
 
+    static func formatArea(_ sqm: Double?) -> String {
+        guard let sqm else { return "—" }
+        return formatArea(sqm)
+    }
+
     /// Compact number: "299.000"
     static func formatCompact(_ value: Int) -> String {
         compactFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    static func formatCompact(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return formatCompact(value)
     }
 
     /// Percentage: "15,4 %"
@@ -82,7 +107,7 @@ enum PriceFormatter {
 
     /// Format room count: "3" or "3,5" for half-rooms
     static func formatRooms(_ rooms: Double?) -> String {
-        guard let rooms else { return "0" }
+        guard let rooms else { return "—" }
         if rooms == rooms.rounded() {
             return "\(Int(rooms))"
         }

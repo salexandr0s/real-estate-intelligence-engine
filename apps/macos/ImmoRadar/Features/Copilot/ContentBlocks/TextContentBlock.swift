@@ -4,18 +4,30 @@ import SwiftUI
 struct TextContentBlock: View {
     let text: String
     let isStreaming: Bool
+    private let renderedText: AttributedString?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var cursorVisible = true
 
+    init(text: String, isStreaming: Bool) {
+        self.text = text
+        self.isStreaming = isStreaming
+        self.renderedText = try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )
+    }
+
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 0) {
-            if let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                Text(attributed)
+            if let renderedText {
+                Text(renderedText)
                     .textSelection(.enabled)
+                    .lineSpacing(3)
             } else {
                 Text(text)
                     .textSelection(.enabled)
+                    .lineSpacing(3)
             }
 
             if isStreaming {

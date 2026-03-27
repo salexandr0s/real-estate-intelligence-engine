@@ -77,7 +77,7 @@ final class DashboardViewModel {
         let title: String
         let value: String
         let icon: String
-        let color: Color
+        let tone: Theme.Dashboard.SemanticTone
         let delta: Delta?
     }
 
@@ -244,7 +244,7 @@ final class DashboardViewModel {
                 title: "Active Listings",
                 value: "\(s?.totalActive ?? 0)",
                 icon: "building.2.fill",
-                color: .blue,
+                tone: .neutral,
                 delta: weekDelta
             ),
             SummaryCard(
@@ -252,7 +252,7 @@ final class DashboardViewModel {
                 title: "New This Week",
                 value: "\(s?.newThisWeek ?? s?.newToday ?? 0)",
                 icon: "sparkles",
-                color: .green,
+                tone: .accent,
                 delta: nil
             ),
             SummaryCard(
@@ -260,7 +260,7 @@ final class DashboardViewModel {
                 title: "High Score (70+)",
                 value: "\(s?.highScore70 ?? 0)",
                 icon: "star.fill",
-                color: .orange,
+                tone: .score,
                 delta: s?.avgScore.map {
                     Delta(
                         value: "Avg \($0.formatted(.number.precision(.fractionLength(0))))",
@@ -268,28 +268,16 @@ final class DashboardViewModel {
                     )
                 }
             ),
-            SummaryCard(
-                id: "active-filters",
-                title: "Active Filters",
-                value: "\(activeFilters.count)",
-                icon: "line.3.horizontal.decrease.circle.fill",
-                color: .purple,
-                delta: matchedFilterCount > 0
-                    ? Delta(value: "\(matchedFilterCount) with matches", isPositive: true)
-                    : nil
-            ),
         ]
 
-        if unreadAlertCount > 0 {
-            cards.append(SummaryCard(
-                id: "unread-alerts",
-                title: "Unread Alerts",
-                value: "\(unreadAlertCount)",
-                icon: "bell.badge.fill",
-                color: .red,
-                delta: nil
-            ))
-        }
+        cards.append(SummaryCard(
+            id: "unread-alerts",
+            title: "Unread Alerts",
+            value: "\(unreadAlertCount)",
+            icon: "bell.badge.fill",
+            tone: unreadAlertCount > 0 ? .alert : .neutral,
+            delta: nil
+        ))
 
         return cards
     }

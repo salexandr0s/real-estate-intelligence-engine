@@ -6,13 +6,16 @@ struct AlertsList: View {
     var undoManager: UndoManager?
 
     var body: some View {
-        List(viewModel.filteredAlerts, selection: $viewModel.selectedAlertID) { alert in
-            AlertRow(alert: alert)
+        List(viewModel.visibleAlerts, selection: $viewModel.selectedAlertID) { alert in
+            AlertRow(alert: alert, isSelected: viewModel.selectedAlertID == alert.id)
                 .tag(alert.id)
                 .contextMenu {
                     if alert.status == .unread {
                         Button {
-                            Task { await viewModel.markAsRead(alert, using: appState.apiClient) }
+                            Task {
+                                await viewModel.markAsRead(alert, using: appState.apiClient)
+                                await appState.refreshUnreadCount()
+                            }
                         } label: {
                             Label("Mark as Read", systemImage: "envelope.open")
                         }
@@ -20,7 +23,10 @@ struct AlertsList: View {
 
                     if alert.status != .dismissed {
                         Button {
-                            Task { await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager) }
+                            Task {
+                                await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
+                                await appState.refreshUnreadCount()
+                            }
                         } label: {
                             Label("Dismiss", systemImage: "xmark.circle")
                         }

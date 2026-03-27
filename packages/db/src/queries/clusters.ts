@@ -66,15 +66,34 @@ export interface ClusterMemberInput {
   listPriceEurCents: number | null;
 }
 
+export function dedupeClusterMemberInputs(
+  members: readonly ClusterMemberInput[],
+): ClusterMemberInput[] {
+  const seenSourceIds = new Set<number>();
+  const uniqueMembers: ClusterMemberInput[] = [];
+
+  for (const member of members) {
+    if (seenSourceIds.has(member.sourceId)) continue;
+    seenSourceIds.add(member.sourceId);
+    uniqueMembers.push(member);
+  }
+
+  return uniqueMembers;
+}
+
 export async function upsertCluster(
   fingerprint: string,
   members: ClusterMemberInput[],
 ): Promise<ClusterRow> {
-  if (members.length === 0) {
+  const uniqueMembers = dedupeClusterMemberInputs(members);
+
+  if (uniqueMembers.length === 0) {
     throw new Error('Cannot create cluster with zero members');
   }
 
-  const prices = members.map((m) => m.listPriceEurCents).filter((p): p is number => p != null);
+  const prices = uniqueMembers
+    .map((m) => m.listPriceEurCents)
+    .filter((p): p is number => p != null);
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
   const spread =
@@ -83,7 +102,7 @@ export async function upsertCluster(
       : null;
 
   // Use first member as canonical (caller should sort by score before calling)
-  const canonicalListingId = members[0]?.listingId ?? null;
+  const canonicalListingId = uniqueMembers[0]?.listingId ?? null;
 
   return transaction(async (client) => {
     const clusterRows = await queryWithClient<ClusterDbRow>(
@@ -98,13 +117,13 @@ export async function upsertCluster(
          price_spread_pct = EXCLUDED.price_spread_pct,
          last_updated_at = NOW()
        RETURNING *`,
-      [fingerprint, canonicalListingId, members.length, minPrice, maxPrice, spread],
+      [fingerprint, canonicalListingId, uniqueMembers.length, minPrice, maxPrice, spread],
     );
 
     const cluster = toClusterRow(clusterRows[0]!);
 
     // Remove stale members no longer in the current set
-    const currentListingIds = members.map((m) => m.listingId);
+    const currentListingIds = uniqueMembers.map((m) => m.listingId);
     await queryWithClient(
       client,
       `DELETE FROM listing_cluster_members
@@ -112,7 +131,7 @@ export async function upsertCluster(
       [cluster.id, currentListingIds],
     );
 
-    for (const member of members) {
+    for (const member of uniqueMembers) {
       await queryWithClient(
         client,
         `INSERT INTO listing_cluster_members (cluster_id, listing_id, source_id, list_price_eur_cents)
@@ -144,6 +163,7 @@ export async function findClusterByListingId(
 
   const memberRows = await query<{
     listing_id: string;
+    source_id: string;
     source_code: string;
     source_name: string;
     title: string;
@@ -153,21 +173,41 @@ export async function findClusterByListingId(
     canonical_url: string;
     first_seen_at: Date;
   }>(
-    `SELECT
-       l.id AS listing_id,
-       s.code AS source_code,
-       s.name AS source_name,
-       l.title,
-       l.list_price_eur_cents,
-       l.price_per_sqm_eur,
-       l.current_score,
-       l.canonical_url,
-       l.first_seen_at
-     FROM listing_cluster_members lcm
-     JOIN listings l ON l.id = lcm.listing_id
-     JOIN sources s ON s.id = lcm.source_id
-     WHERE lcm.cluster_id = $1
-     ORDER BY l.current_score DESC NULLS LAST`,
+    `WITH ranked_members AS (
+       SELECT
+         l.id AS listing_id,
+         l.source_id AS source_id,
+         s.code AS source_code,
+         s.name AS source_name,
+         l.title,
+         l.list_price_eur_cents,
+         l.price_per_sqm_eur,
+         l.current_score,
+         l.canonical_url,
+         l.first_seen_at,
+         ROW_NUMBER() OVER (
+           PARTITION BY l.source_id
+           ORDER BY l.current_score DESC NULLS LAST, l.first_seen_at DESC, l.id DESC
+         ) AS source_rank
+       FROM listing_cluster_members lcm
+       JOIN listings l ON l.id = lcm.listing_id
+       JOIN sources s ON s.id = l.source_id
+       WHERE lcm.cluster_id = $1
+     )
+     SELECT
+       listing_id,
+       source_id,
+       source_code,
+       source_name,
+       title,
+       list_price_eur_cents,
+       price_per_sqm_eur,
+       current_score,
+       canonical_url,
+       first_seen_at
+     FROM ranked_members
+     WHERE source_rank = 1
+     ORDER BY current_score DESC NULLS LAST, first_seen_at DESC, listing_id DESC`,
     [cluster.id],
   );
 

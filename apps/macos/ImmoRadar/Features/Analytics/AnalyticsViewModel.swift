@@ -77,7 +77,6 @@ final class AnalyticsViewModel {
         isLoading = true
         errorMessage = nil
 
-        // Fetch each independently so a single failure doesn't block others.
         do {
             baselines = try await client.fetchBaselines()
         } catch {
@@ -105,6 +104,13 @@ final class AnalyticsViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func districtSummary(for districtNo: Int?) -> DistrictSummary? {
+        guard let districtNo else {
+            return districtBreakdown.first(where: \.hasData) ?? districtBreakdown.first
+        }
+        return districtBreakdown.first(where: { $0.districtNo == districtNo })
     }
 
     // MARK: - Helpers

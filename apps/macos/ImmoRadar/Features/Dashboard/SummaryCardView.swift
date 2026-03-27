@@ -13,7 +13,7 @@ struct SummaryCardView: View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: card.icon)
                 .font(.body)
-                .foregroundStyle(card.color)
+                .foregroundStyle(Theme.Dashboard.iconTint(for: card.tone))
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -30,7 +30,7 @@ struct SummaryCardView: View {
                     if let delta = card.delta {
                         Text("\(delta.isPositive ? "↑" : "↓") \(delta.value)")
                             .font(.caption2.monospacedDigit())
-                            .foregroundStyle(delta.isPositive ? .green : .red)
+                            .foregroundStyle(Theme.Dashboard.deltaColor(isPositive: delta.isPositive))
                     }
                 }
             }

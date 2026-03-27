@@ -27,11 +27,11 @@ struct ListingRow: View {
                         PriceTrendBadge(changePct: pct)
                     }
 
-                    Text(PriceFormatter.formatArea(listing.livingAreaSqm ?? 0))
+                    Text(PriceFormatter.formatArea(listing.livingAreaSqm))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
 
-                    Text("\(PriceFormatter.formatRooms(listing.rooms))R")
+                    Text(roomBadge)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -44,6 +44,13 @@ struct ListingRow: View {
         }
         .padding(.vertical, Theme.Spacing.xs)
         .contentShape(Rectangle())
+    }
+
+    private var roomBadge: String {
+        if let rooms = listing.rooms {
+            return "\(PriceFormatter.formatRooms(rooms))R"
+        }
+        return "—"
     }
 }
 

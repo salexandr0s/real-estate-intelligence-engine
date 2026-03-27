@@ -48,6 +48,7 @@ export type { UpsertDevelopmentInput, WienDevelopmentRow } from './queries/wien-
 export type { DeviceTokenRow } from './queries/device-tokens.js';
 export type { AppUserRow } from './queries/app-users.js';
 export type { CanaryResultRow } from './queries/canary-results.js';
+export type { ClusterMemberInput } from './queries/clusters.js';
 export type { ComparableResult } from './queries/comparables.js';
 export type { BuildingFactRow, UpsertBuildingFactInput } from './queries/building-facts.js';
 export type { LegalRentAssessmentRow, CreateLegalRentInput } from './queries/legal-rent.js';

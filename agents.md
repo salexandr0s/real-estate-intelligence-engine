@@ -9,6 +9,56 @@ Every change must preserve the following non-negotiable rules.
 
 ---
 
+## Design Context
+
+### Users
+
+- Primary user is **a single professional real estate investor operating a self-hosted system**
+- Desktop-first macOS workflow on a large display, often alongside a browser and spreadsheet
+- Sessions range from quick alert checks to deeper listing analysis and scoring review
+- Design for a focused owner-operator workflow first, not a collaborative multi-user workspace
+
+### Brand Personality
+
+**Precise · Calm · Confident**
+
+- The interface should communicate quiet authority
+- It should feel reliable, explainable, and frictionless
+- Core emotional goal: **“I have an edge.”**
+
+### Aesthetic Direction
+
+- **Native macOS first** — SwiftUI system components, San Francisco typography, standard macOS interaction patterns
+- **Apple Finance/Stocks** — clean data presentation, restrained color, subtle sparklines, typographic hierarchy
+- **Apple Shortcuts** — polished, memorable color on cards when it clarifies section identity or meaning
+- **Fantastical / Things 3** — warm professional craft, refined spacing, smooth transitions, thoughtful details
+- Full **light and dark mode** support using system-adaptive colors
+
+### Anti-References
+
+- Cluttered dashboards with too many competing widgets
+- Generic web-app styling or Electron-like chrome
+- Consumer real-estate portal aesthetics
+- Enterprise SaaS visual language with heavy tabs, breadcrumbs, and modal overload
+
+### Design Principles
+
+1. **Data density through clarity, not compression**
+   - Show more by arranging information intelligently, never by shrinking text or cramming UI
+2. **Every color communicates**
+   - Avoid decorative rainbowing; use small, coherent color families tied to meaning, workflow, or section identity
+3. **Native or nothing**
+   - The app should feel like it belongs on macOS, not like a ported web app
+4. **Typography is the design**
+   - Hierarchy should come primarily from type, spacing, and weight; use monospaced digits for numbers
+5. **Quiet until relevant**
+   - Motion should be functional, smooth, and restrained; the app should feel composed and fluid, never flashy or jerky
+
+### Design Token Source of Truth
+
+- Primary design token file: `apps/macos/ImmoRadar/DesignSystem/Theme.swift`
+- Persistent design context: `.impeccable.md`
+
 ## 1. Non-negotiable rules
 
 1. **Do not merge scraping and normalization logic.**
