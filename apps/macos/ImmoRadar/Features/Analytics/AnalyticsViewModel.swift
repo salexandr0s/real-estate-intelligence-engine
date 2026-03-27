@@ -18,46 +18,57 @@ final class AnalyticsViewModel {
         baselines.reduce(0) { $0 + $1.sampleSize }
     }
 
-    var averagePrice: Double {
-        guard !baselines.isEmpty else { return 0 }
-        let total = baselines.reduce(0.0) { $0 + $1.medianPpsqmEur * Double($1.sampleSize) }
-        let count = baselines.reduce(0) { $0 + $1.sampleSize }
-        guard count > 0 else { return 0 }
-        return total / Double(count)
+    var averagePricePerSqm: Double {
+        let values = districtBreakdown.compactMap(\.medianPpsqmEur)
+        guard !values.isEmpty else { return 0 }
+        return values.reduce(0, +) / Double(values.count)
     }
 
-    var averagePricePerSqm: Double {
-        guard !baselines.isEmpty else { return 0 }
-        let total = baselines.reduce(0.0) { $0 + $1.medianPpsqmEur }
-        return total / Double(baselines.count)
+    var districtsWithDataCount: Int {
+        districtBreakdown.filter(\.hasData).count
     }
 
     /// District-level breakdown aggregating across area/room buckets.
+    /// Always returns the full 23 Vienna districts in numeric order.
     var districtBreakdown: [DistrictSummary] {
-        let grouped = Dictionary(grouping: baselines) { $0.districtNo ?? 0 }
-        return grouped.map { districtNo, items in
+        let grouped = Dictionary(grouping: baselines.compactMap { baseline -> MarketBaseline? in
+            guard baseline.districtNo != nil else { return nil }
+            return baseline
+        }) { $0.districtNo ?? 0 }
+
+        let temperatureByDistrict = Dictionary(uniqueKeysWithValues: temperatureData.map { ($0.districtNo, $0) })
+
+        return ViennaDistricts.all.map { district in
+            let items = grouped[district.number] ?? []
             let totalSamples = items.reduce(0) { $0 + $1.sampleSize }
-            let weightedMedian = items.reduce(0.0) {
-                $0 + $1.medianPpsqmEur * Double($1.sampleSize)
-            } / max(Double(totalSamples), 1)
-            let weightedP25 = items.compactMap { b -> Double? in
-                guard let p25 = b.p25PpsqmEur else { return nil }
-                return p25 * Double(b.sampleSize)
-            }.reduce(0.0, +) / max(Double(totalSamples), 1)
-            let weightedP75 = items.compactMap { b -> Double? in
-                guard let p75 = b.p75PpsqmEur else { return nil }
-                return p75 * Double(b.sampleSize)
-            }.reduce(0.0, +) / max(Double(totalSamples), 1)
+            let weightedMedian = weightedAverage(
+                values: items.map { ($0.medianPpsqmEur, $0.sampleSize) }
+            )
+            let weightedP25 = weightedAverage(
+                values: items.compactMap { item in
+                    guard let p25 = item.p25PpsqmEur else { return nil }
+                    return (p25, item.sampleSize)
+                }
+            )
+            let weightedP75 = weightedAverage(
+                values: items.compactMap { item in
+                    guard let p75 = item.p75PpsqmEur else { return nil }
+                    return (p75, item.sampleSize)
+                }
+            )
+            let temperature = temperatureByDistrict[district.number]
 
             return DistrictSummary(
-                districtNo: districtNo,
+                districtNo: district.number,
+                districtName: district.name,
                 medianPpsqmEur: weightedMedian,
                 p25PpsqmEur: weightedP25,
                 p75PpsqmEur: weightedP75,
-                sampleCount: totalSamples
+                sampleCount: totalSamples,
+                velocity: temperature?.velocity,
+                temperature: temperature?.temperature
             )
         }
-        .sorted { $0.districtNo < $1.districtNo }
     }
 
     // MARK: - Actions
@@ -66,7 +77,7 @@ final class AnalyticsViewModel {
         isLoading = true
         errorMessage = nil
 
-        // Fetch each independently so a single failure doesn't block others
+        // Fetch each independently so a single failure doesn't block others.
         do {
             baselines = try await client.fetchBaselines()
         } catch {
@@ -94,5 +105,18 @@ final class AnalyticsViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Helpers
+
+    private func weightedAverage(values: [(Double, Int)]) -> Double? {
+        let weightedSamples = values.filter { $0.1 > 0 }
+        let totalWeight = weightedSamples.reduce(0) { $0 + $1.1 }
+        guard totalWeight > 0 else { return nil }
+
+        let weightedValue = weightedSamples.reduce(0.0) { partial, entry in
+            partial + (entry.0 * Double(entry.1))
+        }
+        return weightedValue / Double(totalWeight)
     }
 }

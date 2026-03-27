@@ -18,6 +18,10 @@ struct DistrictTrendPoint: Identifiable, Codable, Sendable {
         DistrictTrendPoint.dateFormatter.date(from: date) ?? .now
     }
 
+    var districtLabel: String {
+        ViennaDistricts.label(for: districtNo)
+    }
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -52,6 +56,6 @@ struct MarketTemperaturePoint: Identifiable, Codable, Sendable {
     }
 
     var districtLabel: String {
-        "District \(districtNo)"
+        ViennaDistricts.label(for: districtNo)
     }
 }
