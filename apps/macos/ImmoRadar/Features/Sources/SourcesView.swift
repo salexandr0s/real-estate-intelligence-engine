@@ -176,6 +176,7 @@ private struct SourceDetailCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded: Bool = false
     @State private var scrapeRuns: [ScrapeRun] = []
+    @State private var scrapeRunsErrorMessage: String?
     @State private var isLoadingRuns: Bool = false
     @State private var selectedInterval: Int = 0
     @State private var isActive: Bool = false
@@ -371,6 +372,15 @@ private struct SourceDetailCard: View {
                     if isLoadingRuns {
                         ProgressView()
                             .controlSize(.small)
+                    } else if let scrapeRunsErrorMessage {
+                        ContentUnavailableView {
+                            Label("Couldn’t Load Recent Runs", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(scrapeRunsErrorMessage)
+                        } actions: {
+                            Button("Retry", action: retryLoadScrapeRuns)
+                                .buttonStyle(.bordered)
+                        }
                     } else if !scrapeRuns.isEmpty {
                         Divider()
                         ScrapeRunsView(runs: scrapeRuns)
@@ -378,15 +388,7 @@ private struct SourceDetailCard: View {
                 }
                 .padding(Theme.Spacing.md)
                 .task {
-                    guard scrapeRuns.isEmpty else { return }
-                    isLoadingRuns = true
-                    do {
-                        let allRuns = try await appState.apiClient.fetchScrapeRuns(limit: 200)
-                        scrapeRuns = allRuns.filter { $0.sourceCode == source.code }.prefix(10).map { $0 }
-                    } catch {
-                        scrapeRuns = []
-                    }
-                    isLoadingRuns = false
+                    await loadScrapeRunsIfNeeded()
                 }
             }
         }
@@ -432,6 +434,33 @@ private struct SourceDetailCard: View {
         case 90...: .sourceHealthy
         case 70..<90: .sourceDegraded
         default: .sourceFailing
+        }
+    }
+
+    private func loadScrapeRunsIfNeeded() async {
+        guard scrapeRuns.isEmpty, scrapeRunsErrorMessage == nil else { return }
+        await loadScrapeRuns()
+    }
+
+    private func loadScrapeRuns() async {
+        isLoadingRuns = true
+        scrapeRunsErrorMessage = nil
+
+        let result = await viewModel.fetchRecentRuns(for: source.code, using: appState.apiClient)
+        switch result {
+        case .success(let runs):
+            scrapeRuns = runs
+        case .failure(let error):
+            scrapeRuns = []
+            scrapeRunsErrorMessage = error.localizedDescription
+        }
+
+        isLoadingRuns = false
+    }
+
+    private func retryLoadScrapeRuns() {
+        Task {
+            await loadScrapeRuns()
         }
     }
 

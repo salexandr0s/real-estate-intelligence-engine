@@ -80,7 +80,9 @@ private struct SummaryMetric: View {
 
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     Text(card.value)
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.title)
+                        .bold()
+                        .fontDesign(.rounded)
                         .foregroundStyle(.primary)
                         .contentTransition(reduceMotion ? .identity : .numericText())
 

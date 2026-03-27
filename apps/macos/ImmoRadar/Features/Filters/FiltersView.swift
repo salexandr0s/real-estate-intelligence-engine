@@ -423,14 +423,14 @@ private struct FilterEditorSheet: View {
                                 Text("Min Price (EUR)")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 100000", text: $draft.minPriceStr)
+                                TextField("e.g. 100000", value: $draft.minPriceEur, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Price (EUR)")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 350000", text: $draft.maxPriceStr)
+                                TextField("e.g. 350000", value: $draft.maxPriceEur, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                         }
@@ -446,14 +446,14 @@ private struct FilterEditorSheet: View {
                                 Text("Min Area (m\u{00B2})")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 50", text: $draft.minAreaStr)
+                                TextField("e.g. 50", value: $draft.minAreaSqm, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Area (m\u{00B2})")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 120", text: $draft.maxAreaStr)
+                                TextField("e.g. 120", value: $draft.maxAreaSqm, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                         }
@@ -469,14 +469,14 @@ private struct FilterEditorSheet: View {
                                 Text("Min Rooms")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 2", text: $draft.minRoomsStr)
+                                TextField("e.g. 2", value: $draft.minRooms, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 Text("Max Rooms")
                                     .font(.subheadline)
                                     .adaptiveFontWeight(.medium)
-                                TextField("e.g. 5", text: $draft.maxRoomsStr)
+                                TextField("e.g. 5", value: $draft.maxRooms, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                         }

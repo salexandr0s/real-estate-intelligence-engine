@@ -110,4 +110,19 @@ final class SourcesViewModel {
         }
         runningSourceIDs.remove(source.id)
     }
+
+    func fetchRecentRuns(
+        for sourceCode: String,
+        using client: APIClient,
+        limit: Int = 10
+    ) async -> Result<[ScrapeRun], Error> {
+        do {
+            let allRuns = try await client.fetchScrapeRuns(limit: 200)
+            let runs = Array(allRuns.filter { $0.sourceCode == sourceCode }.prefix(limit))
+            return .success(runs)
+        } catch {
+            Log.ui.error("Failed to load scrape runs for \(sourceCode, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return .failure(error)
+        }
+    }
 }

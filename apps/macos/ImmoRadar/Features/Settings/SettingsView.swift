@@ -3,16 +3,44 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showSettingsError: Bool = false
+    @State private var didLoadDrafts = false
+
+    @State private var apiBaseURLDraft = ""
+    @State private var apiTokenDraft = ""
+    @State private var copilotProviderDraft: CopilotProvider = .anthropic
+    @State private var anthropicApiKeyDraft = ""
+    @State private var openaiApiKeyDraft = ""
+    @State private var copilotModelDraft = ""
+
+    private var hasConnectionChanges: Bool {
+        apiBaseURLDraft != appState.apiBaseURL || apiTokenDraft != appState.apiToken
+    }
+
+    private var hasAIChanges: Bool {
+        copilotProviderDraft != appState.copilotProvider
+            || anthropicApiKeyDraft != appState.anthropicApiKey
+            || openaiApiKeyDraft != appState.openaiApiKey
+            || copilotModelDraft != appState.copilotModel
+    }
+
+    private var defaultModelDescription: String {
+        switch copilotProviderDraft {
+        case .openai:
+            return "gpt-4o"
+        case .anthropic, .claudeSubscription:
+            return "claude-sonnet-4"
+        }
+    }
 
     var body: some View {
         @Bindable var state = appState
 
         Form {
             Section("API Connection") {
-                TextField("Base URL", text: $state.apiBaseURL)
+                TextField("Base URL", text: $apiBaseURLDraft)
                     .textFieldStyle(.roundedBorder)
 
-                SecureField("Bearer Token", text: $state.apiToken)
+                SecureField("Bearer Token", text: $apiTokenDraft)
                     .textFieldStyle(.roundedBorder)
 
                 HStack {
@@ -22,20 +50,16 @@ struct SettingsView: View {
                     Text(appState.connectionStatus.displayName)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Test Connection") {
-                        Task {
-                            await appState.apiClient.updateBaseURL(appState.apiBaseURL)
-                            await appState.apiClient.updateAuthToken(
-                                appState.apiToken.isEmpty ? nil : appState.apiToken
-                            )
-                            await appState.refreshConnection()
-                        }
-                    }
+                    Button("Apply", action: applyConnectionSettings)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!hasConnectionChanges)
+                    Button("Test Connection", action: testConnectionSettings)
+                        .buttonStyle(.bordered)
                 }
             }
 
             Section("AI Provider") {
-                Picker("Provider", selection: $state.copilotProvider) {
+                Picker("Provider", selection: $copilotProviderDraft) {
                     ForEach(CopilotProvider.allCases) { provider in
                         Text(provider.displayName)
                             .tag(provider)
@@ -43,27 +67,27 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.radioGroup)
 
-                if appState.copilotProvider == .anthropic {
-                    SecureField("Anthropic API Key", text: $state.anthropicApiKey)
+                if copilotProviderDraft == .anthropic {
+                    SecureField("Anthropic API Key", text: $anthropicApiKeyDraft)
                         .textFieldStyle(.roundedBorder)
-                    if appState.anthropicApiKey.isEmpty {
+                    if anthropicApiKeyDraft.isEmpty {
                         Label("Get your API key from console.anthropic.com", systemImage: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                if appState.copilotProvider == .openai {
-                    SecureField("OpenAI API Key", text: $state.openaiApiKey)
+                if copilotProviderDraft == .openai {
+                    SecureField("OpenAI API Key", text: $openaiApiKeyDraft)
                         .textFieldStyle(.roundedBorder)
-                    if appState.openaiApiKey.isEmpty {
+                    if openaiApiKeyDraft.isEmpty {
                         Label("Get your API key from platform.openai.com", systemImage: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                if appState.copilotProvider == .claudeSubscription {
+                if copilotProviderDraft == .claudeSubscription {
                     if appState.claudeSubscriptionAvailable {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
@@ -103,12 +127,18 @@ struct SettingsView: View {
                     }
                 }
 
-                // Optional model override
-                TextField("Model override (optional)", text: $state.copilotModel)
+                TextField("Model override (optional)", text: $copilotModelDraft)
                     .textFieldStyle(.roundedBorder)
-                Text("Leave empty for default (\(appState.copilotProvider == .openai ? "gpt-4o" : "claude-sonnet-4"))")
+                Text("Leave empty for default (\(defaultModelDescription))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button("Apply AI Settings", action: applyAISettings)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!hasAIChanges)
+                }
             }
 
             Section("Refresh") {
@@ -131,6 +161,9 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .task {
+            loadDraftsIfNeeded()
+        }
         .onChange(of: appState.settingsErrorMessage) { _, newValue in
             showSettingsError = newValue != nil
         }
@@ -141,6 +174,56 @@ struct SettingsView: View {
         } message: {
             if let message = appState.settingsErrorMessage {
                 Text(message)
+            }
+        }
+    }
+
+    private func loadDraftsIfNeeded() {
+        guard !didLoadDrafts else { return }
+        syncDraftsFromAppState()
+        didLoadDrafts = true
+    }
+
+    private func syncDraftsFromAppState() {
+        apiBaseURLDraft = appState.apiBaseURL
+        apiTokenDraft = appState.apiToken
+        copilotProviderDraft = appState.copilotProvider
+        anthropicApiKeyDraft = appState.anthropicApiKey
+        openaiApiKeyDraft = appState.openaiApiKey
+        copilotModelDraft = appState.copilotModel
+    }
+
+    private func applyConnectionSettings() {
+        Task {
+            await appState.applyConnectionSettings(
+                baseURL: apiBaseURLDraft,
+                token: apiTokenDraft
+            )
+            if appState.settingsErrorMessage == nil {
+                syncDraftsFromAppState()
+            }
+        }
+    }
+
+    private func testConnectionSettings() {
+        Task {
+            await appState.testConnection(
+                baseURL: apiBaseURLDraft,
+                token: apiTokenDraft
+            )
+        }
+    }
+
+    private func applyAISettings() {
+        Task {
+            await appState.applyCopilotSettings(
+                provider: copilotProviderDraft,
+                anthropicKey: anthropicApiKeyDraft,
+                openAIKey: openaiApiKeyDraft,
+                model: copilotModelDraft
+            )
+            if appState.settingsErrorMessage == nil {
+                syncDraftsFromAppState()
             }
         }
     }

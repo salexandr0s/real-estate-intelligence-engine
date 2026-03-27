@@ -9,12 +9,12 @@ final class FilterDraft {
     var operationType: OperationType? = nil
     var selectedPropertyTypes: Set<PropertyType> = []
     var selectedDistricts: Set<Int> = []
-    var minPriceStr: String = ""
-    var maxPriceStr: String = ""
-    var minAreaStr: String = ""
-    var maxAreaStr: String = ""
-    var minRoomsStr: String = ""
-    var maxRoomsStr: String = ""
+    var minPriceEur: Int? = nil
+    var maxPriceEur: Int? = nil
+    var minAreaSqm: Double? = nil
+    var maxAreaSqm: Double? = nil
+    var minRooms: Int? = nil
+    var maxRooms: Int? = nil
     var keywords: String = ""
     var excludedKeywordsStr: String = ""
     var alertFrequency: AlertFrequency = .instant
@@ -24,21 +24,21 @@ final class FilterDraft {
     }
 
     var priceRangeError: String? {
-        if let min = Int(minPriceStr), let max = Int(maxPriceStr), min > max {
+        if let min = minPriceEur, let max = maxPriceEur, min > max {
             return "Min price must be less than max price"
         }
         return nil
     }
 
     var areaRangeError: String? {
-        if let min = Double(minAreaStr), let max = Double(maxAreaStr), min > max {
+        if let min = minAreaSqm, let max = maxAreaSqm, min > max {
             return "Min area must be less than max area"
         }
         return nil
     }
 
     var roomsRangeError: String? {
-        if let min = Int(minRoomsStr), let max = Int(maxRoomsStr), min > max {
+        if let min = minRooms, let max = maxRooms, min > max {
             return "Min rooms must be less than max rooms"
         }
         return nil
@@ -53,12 +53,12 @@ final class FilterDraft {
             operationType: operationType,
             propertyTypes: Array(selectedPropertyTypes),
             districts: Array(selectedDistricts).sorted(),
-            minPriceEur: Int(minPriceStr),
-            maxPriceEur: Int(maxPriceStr),
-            minAreaSqm: Double(minAreaStr),
-            maxAreaSqm: Double(maxAreaStr),
-            minRooms: Int(minRoomsStr),
-            maxRooms: Int(maxRoomsStr),
+            minPriceEur: minPriceEur,
+            maxPriceEur: maxPriceEur,
+            minAreaSqm: minAreaSqm,
+            maxAreaSqm: maxAreaSqm,
+            minRooms: minRooms,
+            maxRooms: maxRooms,
             minScore: nil,
             requiredKeywords: keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
             excludedKeywords: excludedKeywordsStr.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
@@ -93,12 +93,12 @@ final class FilterDraft {
         draft.operationType = filter.criteria.operationType
         draft.selectedPropertyTypes = Set(filter.criteria.propertyTypes)
         draft.selectedDistricts = Set(filter.criteria.districts)
-        if let v = filter.criteria.minPriceEur { draft.minPriceStr = String(v) }
-        if let v = filter.criteria.maxPriceEur { draft.maxPriceStr = String(v) }
-        if let v = filter.criteria.minAreaSqm { draft.minAreaStr = String(v) }
-        if let v = filter.criteria.maxAreaSqm { draft.maxAreaStr = String(v) }
-        if let v = filter.criteria.minRooms { draft.minRoomsStr = String(v) }
-        if let v = filter.criteria.maxRooms { draft.maxRoomsStr = String(v) }
+        draft.minPriceEur = filter.criteria.minPriceEur
+        draft.maxPriceEur = filter.criteria.maxPriceEur
+        draft.minAreaSqm = filter.criteria.minAreaSqm
+        draft.maxAreaSqm = filter.criteria.maxAreaSqm
+        draft.minRooms = filter.criteria.minRooms
+        draft.maxRooms = filter.criteria.maxRooms
         draft.keywords = filter.criteria.requiredKeywords.joined(separator: ", ")
         draft.excludedKeywordsStr = filter.criteria.excludedKeywords.joined(separator: ", ")
         draft.alertFrequency = filter.alertFrequency

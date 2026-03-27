@@ -36,7 +36,7 @@ final class AppState {
     var apiToken: String {
         get { KeychainHelper.get(key: "apiToken") ?? "" }
         set {
-            persistSecret(
+            _ = persistSecret(
                 value: newValue,
                 key: "apiToken",
                 label: "API token"
@@ -82,7 +82,7 @@ final class AppState {
 
     var anthropicApiKey: String = KeychainHelper.get(key: "anthropicApiKey") ?? "" {
         didSet {
-            persistSecret(
+            _ = persistSecret(
                 value: anthropicApiKey,
                 key: "anthropicApiKey",
                 label: "Anthropic API key"
@@ -92,7 +92,7 @@ final class AppState {
 
     var openaiApiKey: String = KeychainHelper.get(key: "openaiApiKey") ?? "" {
         didSet {
-            persistSecret(
+            _ = persistSecret(
                 value: openaiApiKey,
                 key: "openaiApiKey",
                 label: "OpenAI API key"
@@ -127,6 +127,92 @@ final class AppState {
 
     func clearSettingsError() {
         settingsErrorMessage = nil
+    }
+
+    func testConnection(baseURL: String, token: String) async {
+        let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalizedBaseURL.isEmpty else {
+            settingsErrorMessage = "Base URL is required."
+            connectionStatus = .disconnected
+            return
+        }
+
+        settingsErrorMessage = nil
+        connectionStatus = .connecting
+
+        let client = APIClient(
+            baseURL: normalizedBaseURL,
+            authToken: normalizedToken.isEmpty ? nil : normalizedToken
+        )
+        let connected = await client.testConnection()
+        connectionStatus = connected ? .connected : .disconnected
+    }
+
+    func applyConnectionSettings(baseURL: String, token: String) async {
+        let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalizedBaseURL.isEmpty else {
+            settingsErrorMessage = "Base URL is required."
+            return
+        }
+
+        clearSettingsError()
+
+        guard persistSecret(
+            value: normalizedToken,
+            key: "apiToken",
+            label: "API token",
+            syncLiveAuthToken: false
+        ) else {
+            return
+        }
+
+        UserDefaults.standard.set(normalizedBaseURL, forKey: "apiBaseURL")
+        await apiClient.updateBaseURL(normalizedBaseURL)
+        await apiClient.updateAuthToken(normalizedToken.isEmpty ? nil : normalizedToken)
+
+        alertStream.disconnect()
+        await refreshConnection()
+    }
+
+    func applyCopilotSettings(
+        provider: CopilotProvider,
+        anthropicKey: String,
+        openAIKey: String,
+        model: String
+    ) async {
+        clearSettingsError()
+
+        let normalizedAnthropicKey = anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedOpenAIKey = openAIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch provider {
+        case .anthropic:
+            guard persistSecret(
+                value: normalizedAnthropicKey,
+                key: "anthropicApiKey",
+                label: "Anthropic API key"
+            ) else {
+                return
+            }
+        case .openai:
+            guard persistSecret(
+                value: normalizedOpenAIKey,
+                key: "openaiApiKey",
+                label: "OpenAI API key"
+            ) else {
+                return
+            }
+        case .claudeSubscription:
+            break
+        }
+
+        copilotProvider = provider
+        copilotModel = normalizedModel
     }
 
     // MARK: - API Client
@@ -176,6 +262,8 @@ final class AppState {
             if !alertStream.isConnected {
                 alertStream.connect(baseURL: apiBaseURL, token: apiToken.isEmpty ? "dev-token" : apiToken)
             }
+        } else if alertStream.isConnected {
+            alertStream.disconnect()
         }
     }
 
@@ -212,18 +300,27 @@ final class AppState {
         }
     }
 
-    private func persistSecret(value: String, key: String, label: String) {
+    @discardableResult
+    private func persistSecret(
+        value: String,
+        key: String,
+        label: String,
+        syncLiveAuthToken: Bool = true
+    ) -> Bool {
         do {
             try KeychainHelper.set(key: key, value: value)
             settingsErrorMessage = nil
 
-            if key == "apiToken" {
+            if syncLiveAuthToken, key == "apiToken" {
                 Task {
                     await apiClient.updateAuthToken(value.isEmpty ? nil : value)
                 }
             }
+
+            return true
         } catch {
             settingsErrorMessage = "Couldn’t save \(label). \(error.localizedDescription)"
+            return false
         }
     }
 }

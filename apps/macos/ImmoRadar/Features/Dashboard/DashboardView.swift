@@ -5,14 +5,31 @@ struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
 
+    private enum LayoutMode {
+        case compact
+        case medium
+        case expanded
+
+        var panelColumns: [GridItem] {
+            switch self {
+            case .compact, .medium:
+                [GridItem(.flexible(), spacing: Theme.Dashboard.gridSpacing)]
+            case .expanded:
+                [
+                    GridItem(.flexible(minimum: 320), spacing: Theme.Dashboard.gridSpacing, alignment: .top),
+                    GridItem(.flexible(minimum: 320), spacing: Theme.Dashboard.gridSpacing, alignment: .top),
+                ]
+            }
+        }
+    }
+
     private var summaryCards: [DashboardViewModel.SummaryCard] {
         viewModel.summaryCards(unreadAlertCount: appState.unreadAlertCount)
     }
 
     var body: some View {
         GeometryReader { proxy in
-            let isSingleColumn = proxy.size.width < Theme.Dashboard.singleColumnBreakpoint
-            let sideColumnWidth = min(max(proxy.size.width * 0.29, 320), Theme.Dashboard.sideColumnWidth)
+            let layoutMode = layoutMode(for: proxy.size.width)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Dashboard.sectionSpacing) {
@@ -28,40 +45,17 @@ struct DashboardView: View {
                         }
                     }
 
-                    if isSingleColumn {
-                        focusPanel
+                    focusPanel
+
+                    LazyVGrid(columns: layoutMode.panelColumns, alignment: .leading, spacing: Theme.Dashboard.gridSpacing) {
                         summaryCluster
-                        topOpportunitiesPanel
                         DashboardActivityPanel(snapshot: viewModel.activitySnapshot)
+                        topOpportunitiesPanel
                         DashboardFilterCoveragePanel(
                             summary: viewModel.filterCoverageSummary,
                             rows: viewModel.filterCoverageRows,
                             onOpenFilters: { appState.navigateTo(.filters) }
                         )
-                    } else {
-                        VStack(spacing: Theme.Dashboard.sectionSpacing) {
-                            HStack(alignment: .top, spacing: Theme.Dashboard.gridSpacing) {
-                                focusPanel
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                summaryCluster
-                                    .frame(width: sideColumnWidth, alignment: .topLeading)
-                            }
-
-                            HStack(alignment: .top, spacing: Theme.Dashboard.gridSpacing) {
-                                topOpportunitiesPanel
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                DashboardActivityPanel(snapshot: viewModel.activitySnapshot)
-                                    .frame(width: sideColumnWidth, alignment: .topLeading)
-                            }
-
-                            DashboardFilterCoveragePanel(
-                                summary: viewModel.filterCoverageSummary,
-                                rows: viewModel.filterCoverageRows,
-                                onOpenFilters: { appState.navigateTo(.filters) }
-                            )
-                        }
                     }
 
                     ForYouSection(
@@ -112,6 +106,18 @@ struct DashboardView: View {
         .task {
             await viewModel.refresh(using: appState.apiClient)
         }
+    }
+
+    private func layoutMode(for width: CGFloat) -> LayoutMode {
+        if width < Theme.Dashboard.compactBreakpoint {
+            return .compact
+        }
+
+        if width < Theme.Dashboard.mediumBreakpoint {
+            return .medium
+        }
+
+        return .expanded
     }
 
     private var summaryCluster: some View {
@@ -199,7 +205,9 @@ private struct DashboardOverviewHeader: View {
     private var headerCopy: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Investor overview")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.largeTitle)
+                .bold()
+                .fontDesign(.rounded)
 
             Text("A calm overview of what changed, what qualifies, and what deserves your next click.")
                 .font(.subheadline)
@@ -209,19 +217,30 @@ private struct DashboardOverviewHeader: View {
     }
 
     private var headerStatus: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            if let lastRefresh {
-                DashboardStatusPill(
-                    text: "Updated \(PriceFormatter.relativeDate(lastRefresh))",
-                    systemImage: "clock"
-                )
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.Spacing.sm) {
+                statusPills
             }
 
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                statusPills
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusPills: some View {
+        if let lastRefresh {
             DashboardStatusPill(
-                text: totalMatches > 0 ? "\(totalMatches) live matches" : (isLoading ? "Loading matches" : "No live matches"),
-                systemImage: totalMatches > 0 ? "sparkles" : "line.3.horizontal.decrease.circle"
+                text: "Updated \(PriceFormatter.relativeDate(lastRefresh))",
+                systemImage: "clock"
             )
         }
+
+        DashboardStatusPill(
+            text: totalMatches > 0 ? "\(totalMatches) live matches" : (isLoading ? "Loading matches" : "No live matches"),
+            systemImage: totalMatches > 0 ? "sparkles" : "line.3.horizontal.decrease.circle"
+        )
     }
 }
 
@@ -273,7 +292,9 @@ private struct PriorityBriefingCard: View {
                         .textCase(.uppercase)
 
                     Text(listing.title)
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .font(.title2)
+                        .fontDesign(.rounded)
+                        .adaptiveFontWeight(.semibold)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text("Best current opportunity across your active filters, surfaced first so the dashboard answers what to inspect next.")
@@ -363,7 +384,9 @@ private struct DashboardFocusEmptyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
             Text(hasActiveFilters ? "Nothing compelling yet" : "Build your first investor queue")
-                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .font(.title2)
+                .fontDesign(.rounded)
+                .adaptiveFontWeight(.semibold)
 
             Text(
                 hasActiveFilters
