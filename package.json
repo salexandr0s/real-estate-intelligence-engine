@@ -34,9 +34,11 @@
     "baselines": "npx tsx scripts/compute-baselines.ts",
     "canary": "npx tsx scripts/canary-crawl.ts",
     "generate:types": "bash scripts/generate-types.sh",
+    "runtime:bundle": "bash scripts/runtime/build-runtime-bundle.sh",
     "load-test": "npx tsx scripts/load-test-search.ts",
     "import:buildings": "npx tsx scripts/import-building-facts.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "macos:dmg": "bash scripts/release/build-macos-dmg.sh"
   },
   "lint-staged": {
     "*": [

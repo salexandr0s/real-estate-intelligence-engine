@@ -32,6 +32,29 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "ImmoRadar"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         PRODUCT_NAME: "ImmoRadar"
+    preBuildScripts:
+      - name: Bundle Local Runtime
+        script: |
+          if [ "${CONFIGURATION}" != "Release" ]; then
+            echo "Skipping bundled runtime for ${CONFIGURATION}"
+            exit 0
+          fi
+          export IMMORADAR_RUNTIME_BUNDLE_STRICT=1
+          bash "${SRCROOT}/../../scripts/runtime/build-runtime-bundle.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime"
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/manifest.json
+    postBuildScripts:
+      - name: Sign Bundled Runtime
+        script: |
+          if [ "${CONFIGURATION}" != "Release" ]; then
+            echo "Skipping bundled runtime signing for ${CONFIGURATION}"
+            exit 0
+          fi
+          bash "${SRCROOT}/../../scripts/runtime/sign-runtime-binaries.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime/.signed-stamp"
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/manifest.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/.signed-stamp
     dependencies:
       - sdk: MapKit.framework
     entitlements:

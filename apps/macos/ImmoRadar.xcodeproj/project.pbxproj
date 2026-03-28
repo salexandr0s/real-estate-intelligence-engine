@@ -850,9 +850,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 91B13094FFACD89B869EC517 /* Build configuration list for PBXNativeTarget "ImmoRadar" */;
 			buildPhases = (
+				146FC29EEF53A08417038EB3 /* Bundle Local Runtime */,
 				6B20DAA106966E3F558C3970 /* Sources */,
 				5EF6E76A576599FA645533BC /* Resources */,
 				BD669E4A4B782398C92358AE /* Frameworks */,
+				D326335BDAA87B4C27DB3B09 /* Sign Bundled Runtime */,
 			);
 			buildRules = (
 			);
@@ -914,6 +916,48 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		146FC29EEF53A08417038EB3 /* Bundle Local Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Local Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/manifest.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  echo \"Skipping bundled runtime for ${CONFIGURATION}\"\n  exit 0\nfi\nexport IMMORADAR_RUNTIME_BUNDLE_STRICT=1\nbash \"${SRCROOT}/../../scripts/runtime/build-runtime-bundle.sh\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime\"\n";
+		};
+		D326335BDAA87B4C27DB3B09 /* Sign Bundled Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/manifest.json",
+			);
+			name = "Sign Bundled Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/.signed-stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  echo \"Skipping bundled runtime signing for ${CONFIGURATION}\"\n  exit 0\nfi\nbash \"${SRCROOT}/../../scripts/runtime/sign-runtime-binaries.sh\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime/.signed-stamp\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6B20DAA106966E3F558C3970 /* Sources */ = {
