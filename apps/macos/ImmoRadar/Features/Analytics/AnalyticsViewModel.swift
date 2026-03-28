@@ -10,6 +10,7 @@ final class AnalyticsViewModel {
     var trendData: [DistrictTrendPoint] = []
     var temperatureData: [MarketTemperaturePoint] = []
     var isLoading: Bool = false
+    var hasCompletedInitialLoad: Bool = false
     var errorMessage: String?
 
     // MARK: - Computed
@@ -26,6 +27,10 @@ final class AnalyticsViewModel {
 
     var districtsWithDataCount: Int {
         districtBreakdown.filter(\.hasData).count
+    }
+
+    var isInitialLoading: Bool {
+        !hasCompletedInitialLoad
     }
 
     /// District-level breakdown aggregating across area/room buckets.
@@ -76,6 +81,10 @@ final class AnalyticsViewModel {
     func refresh(using client: APIClient) async {
         isLoading = true
         errorMessage = nil
+        defer {
+            isLoading = false
+            hasCompletedInitialLoad = true
+        }
 
         do {
             baselines = try await client.fetchBaselines()
@@ -94,8 +103,6 @@ final class AnalyticsViewModel {
         } catch {
             errorMessage = errorMessage ?? error.localizedDescription
         }
-
-        isLoading = false
     }
 
     func refreshTrends(using client: APIClient, districtNo: Int? = nil, months: Int? = nil) async {

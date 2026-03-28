@@ -205,6 +205,13 @@ final class ListingsViewModel {
         selectedListingID = listing.id
     }
 
+    func revealListing(id: Int) {
+        searchText = ""
+        clearFilters()
+        isMapMode = false
+        selectedListingID = id
+    }
+
     func exportCSV(using client: APIClient) async -> Data? {
         var query = ListingQuery()
         if let d = selectedDistrict { query.districts = [d] }

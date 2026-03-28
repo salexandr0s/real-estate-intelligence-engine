@@ -16,8 +16,7 @@ struct ImmoRadarApp: App {
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let listingId = SpotlightIndexer.listingID(from: activity) {
-                        appState.selectedNavItem = .listings
-                        appState.deepLinkListingId = listingId
+                        appState.openListing(listingId)
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .intentNavigate)) { notification in

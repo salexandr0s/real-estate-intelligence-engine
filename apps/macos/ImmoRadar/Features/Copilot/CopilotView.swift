@@ -26,11 +26,15 @@ struct CopilotView: View {
         }
     }
 
-    private var toolbarTitle: String {
+    private var fullToolbarTitle: String {
         guard let title = viewModel.activeConversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
             return "New session"
         }
         return title
+    }
+
+    private var toolbarTitle: String {
+        Self.truncatedToolbarTitle(fullToolbarTitle)
     }
 
     private var toolbarDetail: String {
@@ -79,7 +83,7 @@ struct CopilotView: View {
         .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(id: "sessionTitle", placement: .principal) {
-                CopilotToolbarTitleView(title: toolbarTitle, detail: toolbarDetail)
+                CopilotToolbarTitleView(title: toolbarTitle, fullTitle: fullToolbarTitle, detail: toolbarDetail)
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
@@ -230,6 +234,12 @@ struct CopilotView: View {
         }
 
         return .expanded
+    }
+
+    private static func truncatedToolbarTitle(_ title: String, maxCharacters: Int = 36) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > maxCharacters else { return trimmed }
+        return String(trimmed.prefix(maxCharacters - 1)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 }
 
@@ -415,6 +425,7 @@ private struct ConversationHistoryRow: View {
 
 private struct CopilotToolbarTitleView: View {
     let title: String
+    let fullTitle: String
     let detail: String
 
     var body: some View {
@@ -432,7 +443,7 @@ private struct CopilotToolbarTitleView: View {
                 .contentTransition(.opacity)
         }
         .frame(maxWidth: Theme.Copilot.toolbarChipMaxWidth)
-        .help("\(title) — \(detail)")
+        .help("\(fullTitle) — \(detail)")
     }
 }
 

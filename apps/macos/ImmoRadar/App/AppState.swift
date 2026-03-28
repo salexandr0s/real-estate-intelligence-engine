@@ -252,6 +252,11 @@ final class AppState {
         selectedNavItem = item
     }
 
+    func openListing(_ listingId: Int) {
+        deepLinkListingId = listingId
+        selectedNavItem = .listings
+    }
+
     func refreshConnection() async {
         connectionStatus = .connecting
         let connected = await apiClient.testConnection()

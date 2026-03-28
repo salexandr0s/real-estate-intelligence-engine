@@ -29,19 +29,22 @@ struct OutreachView: View {
                 Divider()
 
                 if viewModel.isLoadingList && viewModel.threads.isEmpty {
-                    ContentUnavailableView {
-                        Label("Loading Outreach", systemImage: "envelope.badge")
-                    } description: {
-                        Text("Loading mailbox status and active threads…")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay {
-                        ProgressView()
-                            .controlSize(.large)
-                            .offset(y: -54)
+                    OutreachInboxPlaceholder(alignment: .top) {
+                        ContentUnavailableView {
+                            Label("Loading Outreach", systemImage: "envelope.badge")
+                        } description: {
+                            Text("Loading mailbox status and active threads…")
+                        }
+                        .overlay {
+                            ProgressView()
+                                .controlSize(.large)
+                                .offset(y: -54)
+                        }
                     }
                 } else if viewModel.threads.isEmpty {
-                    OutreachEmptyListState(scope: viewModel.selectedScope, hasMailbox: !viewModel.mailboxes.isEmpty)
+                    OutreachInboxPlaceholder(alignment: .top) {
+                        OutreachEmptyListState(scope: viewModel.selectedScope, hasMailbox: !viewModel.mailboxes.isEmpty)
+                    }
                 } else {
                     OutreachThreadList(viewModel: viewModel, appState: appState)
                 }
@@ -84,6 +87,24 @@ struct OutreachView: View {
         .task {
             await viewModel.refresh(using: appState.apiClient)
         }
+    }
+}
+
+private struct OutreachInboxPlaceholder<Content: View>: View {
+    let alignment: Alignment
+    let content: Content
+
+    init(alignment: Alignment, @ViewBuilder content: () -> Content) {
+        self.alignment = alignment
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity)
+            .padding(.top, Theme.Spacing.xl)
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 }
 
@@ -301,8 +322,7 @@ private struct OutreachDetailPane: View {
                             listing: viewModel.selectedListing,
                             onOpenInApp: {
                                 if let listing = viewModel.selectedListing {
-                                    appState.selectedNavItem = .listings
-                                    appState.deepLinkListingId = listing.id
+                                    appState.openListing(listing.id)
                                 }
                             },
                             onOpenInBrowser: {

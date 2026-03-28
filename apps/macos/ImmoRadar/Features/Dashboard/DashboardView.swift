@@ -88,8 +88,7 @@ struct DashboardView: View {
                         filterLoadingStates: viewModel.filterLoadingStates,
                         isLoading: viewModel.isLoading,
                         onListingTap: { id in
-                            appState.deepLinkListingId = id
-                            appState.selectedNavItem = .listings
+                            appState.openListing(id)
                         },
                         onNavigateToFilters: {
                             appState.navigateTo(.filters)
@@ -152,8 +151,7 @@ struct DashboardView: View {
                 matchedFilterCount: viewModel.matchedFilterCount,
                 totalMatches: viewModel.totalUniqueMatches,
                 onOpenListing: {
-                    appState.deepLinkListingId = priorityListing.id
-                    appState.selectedNavItem = .listings
+                    appState.openListing(priorityListing.id)
                 },
                 onOpenFilters: {
                     appState.navigateTo(.filters)
@@ -174,8 +172,7 @@ struct DashboardView: View {
             listings: viewModel.topOpportunities(limit: limit),
             totalMatches: viewModel.totalUniqueMatches,
             onListingTap: { id in
-                appState.deepLinkListingId = id
-                appState.selectedNavItem = .listings
+                appState.openListing(id)
             }
         )
     }

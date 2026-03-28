@@ -64,8 +64,7 @@ struct AlertsView: View {
                     },
                     onOpenListing: {
                         guard let listingId = viewModel.selectedAlert?.listingId else { return }
-                        appState.deepLinkListingId = listingId
-                        appState.navigateTo(.listings)
+                        appState.openListing(listingId)
                     },
                     onOpenFilters: {
                         appState.navigateTo(.filters)

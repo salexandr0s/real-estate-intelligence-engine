@@ -129,6 +129,7 @@ struct ListingsView: View {
         }
         .task {
             await viewModel.refresh(using: appState.apiClient, cache: appState.localCache)
+            consumePendingDeepLinkIfNeeded()
         }
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {
@@ -136,10 +137,8 @@ struct ListingsView: View {
             }
         }
         .onChange(of: appState.deepLinkListingId) { _, newValue in
-            if let listingId = newValue {
-                viewModel.selectedListingID = listingId
-                showInspector = true
-                appState.deepLinkListingId = nil
+            if newValue != nil {
+                consumePendingDeepLinkIfNeeded()
             }
         }
         .onChange(of: exportError) { _, newValue in
@@ -165,6 +164,13 @@ struct ListingsView: View {
                 exportError = error.localizedDescription
             }
         }
+    }
+
+    private func consumePendingDeepLinkIfNeeded() {
+        guard let listingId = appState.deepLinkListingId else { return }
+        viewModel.revealListing(id: listingId)
+        showInspector = true
+        appState.deepLinkListingId = nil
     }
 }
 
