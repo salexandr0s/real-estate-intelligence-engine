@@ -424,11 +424,21 @@ actor APIClient {
                 name: dto.name,
                 isActive: dto.isActive,
                 healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
-                lastSuccessfulRun: dto.lastSuccessfulRun.map { Date.fromISO($0) },
+                lastSuccessfulRun: (dto.lastSuccessfulRun ?? dto.lastSuccessfulRunAt).map { Date.fromISO($0) },
                 crawlIntervalMinutes: dto.crawlIntervalMinutes,
                 lastErrorSummary: dto.lastErrorSummary,
                 totalListingsIngested: dto.totalListingsIngested ?? 0,
-                successRatePct: dto.successRatePct ?? 0.0
+                successRatePct: dto.successRatePct ?? 0.0,
+                lifecycleSummary: dto.lifecycleSummary.map { summary in
+                    Source.LifecycleSummary(
+                        explicitDead24h: summary.explicitDead24h,
+                        explicitDead7d: summary.explicitDead7d,
+                        staleExpired24h: summary.staleExpired24h,
+                        staleExpired7d: summary.staleExpired7d,
+                        lastExplicitDeadAt: summary.lastExplicitDeadAt.map(Date.fromISO),
+                        lastStaleExpiredAt: summary.lastStaleExpiredAt.map(Date.fromISO)
+                    )
+                }
             )
         }
     }

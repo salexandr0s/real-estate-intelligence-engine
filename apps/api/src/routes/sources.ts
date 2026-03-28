@@ -81,18 +81,26 @@ async function syncDiscoverySchedule(source: SourceRow): Promise<void> {
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/sources - List all sources with health status and health summary
   app.get('/v1/sources', async (_request, reply) => {
-    const [allSources, latestCanaries] = await Promise.all([
+    const [allSources, latestCanaries, listingCounts, lifecycleSummaries] = await Promise.all([
       sources.findAll(),
       canaryResults.findLatestPerSource(),
+      sources.findListingCounts(),
+      sources.findLifecycleSummaries(),
     ]);
 
     // Index latest canary results by source code for O(1) lookup
     const canaryBySource = new Map(latestCanaries.map((c) => [c.sourceCode, c]));
+    const listingCountBySource = new Map(listingCounts.map((row) => [row.sourceId, row]));
+    const lifecycleSummaryBySource = new Map(
+      lifecycleSummaries.map((row) => [row.sourceId, row]),
+    );
 
     const mappedData = await Promise.all(
       allSources.map(async (source) => {
         const lastCanary = canaryBySource.get(source.code) ?? null;
         const { successRate } = await scrapeRuns.getRecentSuccessRate(source.id);
+        const listingCount = listingCountBySource.get(source.id)?.totalListingsIngested ?? 0;
+        const lifecycleSummary = lifecycleSummaryBySource.get(source.id);
 
         return {
           id: source.id,
@@ -109,7 +117,19 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
           concurrencyLimit: source.concurrencyLimit,
           parserVersion: source.parserVersion,
           legalStatus: source.legalStatus,
+          lastSuccessfulRun: source.lastSuccessfulRunAt?.toISOString() ?? null,
           lastSuccessfulRunAt: source.lastSuccessfulRunAt?.toISOString() ?? null,
+          lastErrorSummary: lastCanary?.errorMessage ?? null,
+          totalListingsIngested: listingCount,
+          successRatePct: Math.round(successRate * 1000) / 10,
+          lifecycleSummary: {
+            explicitDead24h: lifecycleSummary?.explicitDead24h ?? 0,
+            explicitDead7d: lifecycleSummary?.explicitDead7d ?? 0,
+            staleExpired24h: lifecycleSummary?.staleExpired24h ?? 0,
+            staleExpired7d: lifecycleSummary?.staleExpired7d ?? 0,
+            lastExplicitDeadAt: lifecycleSummary?.lastExplicitDeadAt?.toISOString() ?? null,
+            lastStaleExpiredAt: lifecycleSummary?.lastStaleExpiredAt?.toISOString() ?? null,
+          },
           createdAt: source.createdAt.toISOString(),
           updatedAt: source.updatedAt.toISOString(),
           healthSummary: {

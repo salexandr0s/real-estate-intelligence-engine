@@ -3,6 +3,15 @@ import Foundation
 /// Scraping source configuration and health status.
 /// Maps to the `/v1/sources` API resource.
 struct Source: Identifiable, Codable, Hashable {
+    struct LifecycleSummary: Codable, Hashable {
+        let explicitDead24h: Int
+        let explicitDead7d: Int
+        let staleExpired24h: Int
+        let staleExpired7d: Int
+        let lastExplicitDeadAt: Date?
+        let lastStaleExpiredAt: Date?
+    }
+
     let id: Int
     let code: String
     let name: String
@@ -13,6 +22,7 @@ struct Source: Identifiable, Codable, Hashable {
     let lastErrorSummary: String?
     let totalListingsIngested: Int
     let successRatePct: Double
+    let lifecycleSummary: LifecycleSummary?
 }
 
 // MARK: - Mock Data
@@ -29,7 +39,15 @@ extension Source {
             crawlIntervalMinutes: 15,
             lastErrorSummary: nil,
             totalListingsIngested: 12_847,
-            successRatePct: 99.2
+            successRatePct: 99.2,
+            lifecycleSummary: LifecycleSummary(
+                explicitDead24h: 3,
+                explicitDead7d: 11,
+                staleExpired24h: 1,
+                staleExpired7d: 2,
+                lastExplicitDeadAt: Calendar.current.date(byAdding: .hour, value: -2, to: .now),
+                lastStaleExpiredAt: Calendar.current.date(byAdding: .day, value: -1, to: .now)
+            )
         ),
         Source(
             id: 2,
@@ -41,7 +59,15 @@ extension Source {
             crawlIntervalMinutes: 15,
             lastErrorSummary: nil,
             totalListingsIngested: 8_432,
-            successRatePct: 98.7
+            successRatePct: 98.7,
+            lifecycleSummary: LifecycleSummary(
+                explicitDead24h: 1,
+                explicitDead7d: 6,
+                staleExpired24h: 0,
+                staleExpired7d: 1,
+                lastExplicitDeadAt: Calendar.current.date(byAdding: .hour, value: -9, to: .now),
+                lastStaleExpiredAt: Calendar.current.date(byAdding: .day, value: -3, to: .now)
+            )
         ),
         Source(
             id: 3,
@@ -53,7 +79,15 @@ extension Source {
             crawlIntervalMinutes: 30,
             lastErrorSummary: "Elevated 429 rate (23%) in last 30 min",
             totalListingsIngested: 3_291,
-            successRatePct: 87.4
+            successRatePct: 87.4,
+            lifecycleSummary: LifecycleSummary(
+                explicitDead24h: 2,
+                explicitDead7d: 4,
+                staleExpired24h: 6,
+                staleExpired7d: 15,
+                lastExplicitDeadAt: Calendar.current.date(byAdding: .hour, value: -5, to: .now),
+                lastStaleExpiredAt: Calendar.current.date(byAdding: .minute, value: -40, to: .now)
+            )
         ),
         Source(
             id: 4,
@@ -65,7 +99,15 @@ extension Source {
             crawlIntervalMinutes: 60,
             lastErrorSummary: "Source adapter pending DOM update",
             totalListingsIngested: 1_104,
-            successRatePct: 0.0
+            successRatePct: 0.0,
+            lifecycleSummary: LifecycleSummary(
+                explicitDead24h: 0,
+                explicitDead7d: 0,
+                staleExpired24h: 0,
+                staleExpired7d: 0,
+                lastExplicitDeadAt: nil,
+                lastStaleExpiredAt: nil
+            )
         ),
         Source(
             id: 5,
@@ -77,7 +119,15 @@ extension Source {
             crawlIntervalMinutes: 60,
             lastErrorSummary: "CAPTCHA wall detected on discovery pages since 06:12 UTC",
             totalListingsIngested: 2_054,
-            successRatePct: 12.3
+            successRatePct: 12.3,
+            lifecycleSummary: LifecycleSummary(
+                explicitDead24h: 0,
+                explicitDead7d: 1,
+                staleExpired24h: 8,
+                staleExpired7d: 27,
+                lastExplicitDeadAt: Calendar.current.date(byAdding: .day, value: -2, to: .now),
+                lastStaleExpiredAt: Calendar.current.date(byAdding: .minute, value: -15, to: .now)
+            )
         ),
     ]
 }

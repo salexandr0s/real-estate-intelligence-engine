@@ -5,18 +5,19 @@
  * within the configured threshold (default: 7 days). For each stale listing:
  * 1. Mark as 'expired'
  * 2. Create a listing_version with version_reason 'status_change'
- * 3. Run filter matching to generate status_change alerts
+ *
+ * Expiry is a silent fallback only. Sources that are not healthy are excluded
+ * upstream from the stale query so we do not mass-expire listings during
+ * source outages or blocking events.
  */
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { Queue } from 'bullmq';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
-import type { StaleCheckJobData, AlertDeliveryJobData } from '@immoradar/scraper-core';
-import { listings, listingVersions, userFilters, alerts } from '@immoradar/db';
-import type { AlertChannel } from '@immoradar/contracts';
-import { buildAlertDedupeKey } from '@immoradar/contracts';
+import type { StaleCheckJobData } from '@immoradar/scraper-core';
+import { listings, listingVersions } from '@immoradar/db';
+import { computeContentFingerprint } from '@immoradar/normalization';
 
 const log = createLogger('worker:stale-check');
 
@@ -27,10 +28,6 @@ const MAX_EXPIRED_PER_RUN = 1000;
 export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
-  const deliveryQueue = new Queue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY, {
-    connection,
-    prefix,
-  });
 
   const worker = new Worker<StaleCheckJobData>(
     QUEUE_NAMES.STALE_CHECK,
@@ -41,7 +38,6 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
       log.info('Stale check started', { thresholdDays, batchSize });
 
       let totalExpired = 0;
-      let totalAlerts = 0;
 
       // Process in batches, capped to prevent unbounded runtime
       let batch = await listings.findStaleActive(thresholdDays, batchSize);
@@ -50,7 +46,38 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
         for (const listing of batch) {
           try {
             // 1. Mark as expired
-            const updated = await listings.markExpired(listing.id);
+            const expiredFingerprint = computeContentFingerprint({
+              title: listing.title,
+              description: listing.description ?? null,
+              listPriceEurCents: listing.listPriceEurCents ?? null,
+              livingAreaSqm: listing.livingAreaSqm ?? null,
+              usableAreaSqm: listing.usableAreaSqm ?? null,
+              rooms: listing.rooms ?? null,
+              propertyType: listing.propertyType,
+              propertySubtype: listing.propertySubtype ?? null,
+              districtNo: listing.districtNo ?? null,
+              postalCode: listing.postalCode ?? null,
+              city: listing.city,
+              contactName: listing.contactName ?? null,
+              contactCompany: listing.contactCompany ?? null,
+              contactEmail: listing.contactEmail ?? null,
+              contactPhone: listing.contactPhone ?? null,
+              hasBalcony: listing.hasBalcony ?? null,
+              hasTerrace: listing.hasTerrace ?? null,
+              hasGarden: listing.hasGarden ?? null,
+              hasElevator: listing.hasElevator ?? null,
+              parkingAvailable: listing.parkingAvailable ?? null,
+              isFurnished: listing.isFurnished ?? null,
+              listingStatus: 'expired',
+            });
+            const updated = await listings.updateLifecycleStatus({
+              id: listing.id,
+              currentRawListingId: listing.currentRawListingId,
+              latestScrapeRunId: listing.latestScrapeRunId,
+              listingStatus: 'expired',
+              sourceStatusRaw: 'expired_stale',
+              contentFingerprint: expiredFingerprint,
+            });
             if (!updated) continue; // Already changed by another process
 
             totalExpired++;
@@ -60,61 +87,17 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
               listingId: listing.id,
               rawListingId: listing.currentRawListingId,
               versionReason: 'status_change',
-              contentFingerprint: listing.contentFingerprint ?? '',
+              contentFingerprint: expiredFingerprint,
               listingStatus: 'expired',
               listPriceEurCents: listing.listPriceEurCents,
               livingAreaSqm: listing.livingAreaSqm,
               pricePerSqmEur: listing.pricePerSqmEur,
-              normalizedSnapshot: {},
+              normalizedSnapshot: {
+                ...listing.normalizedPayload,
+                listingStatus: 'expired',
+                sourceStatusRaw: 'expired_stale',
+              },
             });
-
-            // 3. Find matching filters and create status_change alerts
-            const matchResult = await userFilters.findMatchingFilters({
-              operationType: listing.operationType,
-              propertyType: listing.propertyType,
-              districtNo: listing.districtNo,
-              listPriceEurCents: listing.listPriceEurCents,
-              livingAreaSqm: listing.livingAreaSqm,
-              rooms: listing.rooms,
-              currentScore: listing.currentScore,
-              title: listing.title,
-              description: listing.description,
-            });
-
-            for (const match of matchResult.matched) {
-              const channels: string[] =
-                match.alertChannels.length > 0 ? match.alertChannels : ['in_app'];
-              const dedupeKey = buildAlertDedupeKey({
-                filterId: match.id,
-                listingId: listing.id,
-                alertType: 'status_change',
-              });
-
-              for (const channel of channels) {
-                const alertResult = await alerts.create({
-                  userId: match.userId,
-                  userFilterId: match.id,
-                  listingId: listing.id,
-                  listingVersionId: null,
-                  alertType: 'status_change',
-                  channel: channel as AlertChannel,
-                  dedupeKey,
-                  title: `Nicht mehr verfügbar: ${listing.title}`,
-                  body: `Dieses Inserat ist seit ${thresholdDays}+ Tagen nicht mehr sichtbar.`,
-                });
-
-                if (alertResult) {
-                  totalAlerts++;
-                  if (channel !== 'in_app') {
-                    await deliveryQueue.add(
-                      `deliver:${alertResult.id}`,
-                      { alertId: alertResult.id, channel, userId: match.userId },
-                      { attempts: 3, backoff: { type: 'exponential', delay: 5_000 } },
-                    );
-                  }
-                }
-              }
-            }
           } catch (err) {
             log.error('Failed to expire listing', {
               listingId: listing.id,
@@ -134,7 +117,7 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
         });
       }
 
-      log.info('Stale check complete', { totalExpired, totalAlerts });
+      log.info('Stale check complete', { totalExpired });
     },
     {
       connection,
@@ -149,13 +132,6 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
       error: err.message,
     });
   });
-
-  // Close the delivery queue when the worker closes
-  const origClose = worker.close.bind(worker);
-  worker.close = async (force?: boolean) => {
-    await deliveryQueue.close();
-    return origClose(force);
-  };
 
   return worker;
 }

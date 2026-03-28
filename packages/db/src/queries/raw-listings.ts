@@ -83,15 +83,19 @@ export async function upsertRawSnapshot(input: RawListingUpsert): Promise<RawLis
        response_status, response_headers, raw_payload,
        body_storage_key, screenshot_storage_key, har_storage_key,
        content_sha256, parser_version,
-       first_scrape_run_id, last_scrape_run_id
+       first_scrape_run_id, last_scrape_run_id,
+       is_deleted_at_source, meta
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-       $12, $13, $14, $15, $16, $17, $17
+       $12, $13, $14, $15, $16, $17, $17, $18, $19
      )
      ON CONFLICT (source_id, source_listing_key, content_sha256)
      DO UPDATE SET
        last_seen_at = NOW(),
        last_scrape_run_id = $17,
+       extraction_status = $8,
+       is_deleted_at_source = $18,
+       meta = $19,
        observation_count = raw_listings.observation_count + 1
      RETURNING *`,
     [
@@ -112,6 +116,8 @@ export async function upsertRawSnapshot(input: RawListingUpsert): Promise<RawLis
       input.contentSha256,
       input.parserVersion,
       input.scrapeRunId,
+      input.isDeletedAtSource ?? false,
+      JSON.stringify(input.meta ?? {}),
     ],
   );
   return toRawListingRow(rows[0]!);

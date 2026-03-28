@@ -75,6 +75,8 @@ export interface DetailCapture<T> {
   harStorageKey?: string | null;
   parserVersion: number;
   extractionStatus: ExtractionStatus;
+  /** Source-level availability detected independently of parser success. */
+  availabilityStatus?: SourceAvailability['status'];
   /** Document/PDF attachment URLs found on listing detail pages. */
   attachmentUrls?: Array<{ url: string; label?: string; type?: string }>;
 }
@@ -183,6 +185,8 @@ export interface RawListingUpsert {
   contentSha256: string;
   parserVersion: number;
   scrapeRunId: number;
+  isDeletedAtSource?: boolean;
+  meta?: Record<string, unknown>;
 }
 
 export interface RawListingRow {

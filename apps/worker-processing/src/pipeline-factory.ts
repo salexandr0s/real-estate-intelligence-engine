@@ -117,12 +117,40 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
           firstSeenAt: row.firstSeenAt,
           lastPriceChangeAt: row.lastPriceChangeAt,
           currentScore: row.currentScore ?? null,
+          title: row.title,
+          description: row.description ?? null,
+          operationType: row.operationType,
+          propertyType: row.propertyType,
+          districtNo: row.districtNo,
+          city: row.city,
+          livingAreaSqm: row.livingAreaSqm,
+          usableAreaSqm: row.usableAreaSqm,
+          rooms: row.rooms,
+          completenessScore: row.completenessScore,
+          canonicalUrl: row.canonicalUrl,
+          normalizedPayload: row.normalizedPayload,
+          propertySubtype: row.propertySubtype,
+          postalCode: row.postalCode,
+          contactName: row.contactName,
+          contactCompany: row.contactCompany,
+          contactEmail: row.contactEmail,
+          contactPhone: row.contactPhone,
+          hasBalcony: row.hasBalcony,
+          hasTerrace: row.hasTerrace,
+          hasGarden: row.hasGarden,
+          hasElevator: row.hasElevator,
+          parkingAvailable: row.parkingAvailable,
+          isFurnished: row.isFurnished,
         };
       },
       upsertListing: async (input) => {
         const existing = await listings.findBySourceKey(input.sourceId, input.sourceListingKey);
         const row = await listings.upsertListing(input);
         return { id: row.id, isNew: !existing };
+      },
+      updateLifecycleStatus: async (input) => {
+        const row = await listings.updateLifecycleStatus(input);
+        return row ? { id: row.id } : null;
       },
       appendListingVersion: async (input) => {
         const row = await listingVersions.appendVersion({

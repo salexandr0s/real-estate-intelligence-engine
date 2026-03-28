@@ -156,4 +156,5 @@ export interface NormalizationContext {
   scrapeRunId: number;
   canonicalUrl: string;
   detailUrl: string;
+  availabilityStatus?: import('./scraper.js').SourceAvailability['status'];
 }

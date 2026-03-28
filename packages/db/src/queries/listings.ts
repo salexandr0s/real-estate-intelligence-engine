@@ -654,6 +654,53 @@ export async function updateScore(
   return row ? toListingRow(row) : null;
 }
 
+export interface UpdateLifecycleStatusInput {
+  id: number;
+  currentRawListingId: number;
+  latestScrapeRunId: number;
+  listingStatus: ListingStatus;
+  sourceStatusRaw?: string | null;
+  contentFingerprint?: string | null;
+}
+
+/**
+ * Update lifecycle state from an explicit source observation even when full
+ * normalization cannot succeed (e.g. sold/removed detail page).
+ */
+export async function updateLifecycleStatus(
+  input: UpdateLifecycleStatusInput,
+): Promise<ListingRow | null> {
+  const rows = await query<ListingDbRow>(
+    `UPDATE listings
+     SET current_raw_listing_id = $2,
+         latest_scrape_run_id = $3,
+         listing_status = $4,
+         source_status_raw = $5,
+         content_fingerprint = COALESCE($6, content_fingerprint),
+         last_seen_at = NOW(),
+         last_status_change_at = CASE
+           WHEN listing_status IS DISTINCT FROM $4 THEN NOW()
+           ELSE last_status_change_at
+         END,
+         last_content_change_at = CASE
+           WHEN $6 IS NOT NULL AND content_fingerprint IS DISTINCT FROM $6 THEN NOW()
+           ELSE last_content_change_at
+         END
+     WHERE id = $1
+     RETURNING *`,
+    [
+      input.id,
+      input.currentRawListingId,
+      input.latestScrapeRunId,
+      input.listingStatus,
+      input.sourceStatusRaw ?? null,
+      input.contentFingerprint ?? null,
+    ],
+  );
+  const row = rows[0];
+  return row ? toListingRow(row) : null;
+}
+
 // ── Geocoding ───────────────────────────────────────────────────────────────
 
 export async function updateCoordinates(
@@ -833,10 +880,13 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
 /** Find active listings not observed within the threshold. */
 export async function findStaleActive(thresholdDays: number, limit = 100): Promise<ListingRow[]> {
   const rows = await query<ListingDbRow>(
-    `SELECT * FROM listings
-     WHERE listing_status = 'active'
-       AND last_seen_at < NOW() - make_interval(days => $1)
-     ORDER BY last_seen_at ASC
+    `SELECT l.*
+     FROM listings l
+     JOIN sources s ON s.id = l.source_id
+     WHERE l.listing_status = 'active'
+       AND s.health_status = 'healthy'
+       AND l.last_seen_at < NOW() - make_interval(days => $1)
+     ORDER BY l.last_seen_at ASC
      LIMIT $2`,
     [thresholdDays, limit],
   );
@@ -847,7 +897,8 @@ export async function findStaleActive(thresholdDays: number, limit = 100): Promi
 export async function markExpired(id: number): Promise<ListingRow | null> {
   const rows = await query<ListingDbRow>(
     `UPDATE listings
-     SET listing_status = 'expired'
+     SET listing_status = 'expired',
+         last_status_change_at = NOW()
      WHERE id = $1 AND listing_status = 'active'
      RETURNING *`,
     [id],

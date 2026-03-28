@@ -21,6 +21,8 @@ struct SourcesView: View {
 
                 SourcesSummaryBar(viewModel: viewModel)
 
+                SourcesLifecycleOpsCard(viewModel: viewModel)
+
                 if viewModel.sources.isEmpty && !viewModel.isLoading {
                     SourcesEmptyState()
                 } else {
@@ -87,7 +89,34 @@ private struct SourcesRuntimeCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                HStack(spacing: Theme.Spacing.xs) {
+                if let progress = appState.localRuntime.progressStatus {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(spacing: Theme.Spacing.sm) {
+                            if let fraction = progress.fractionCompleted {
+                                ProgressView(value: fraction)
+                                    .frame(width: 180)
+                            } else {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+
+                            Text(progress.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                        }
+
+                        Text(progress.detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, Theme.Spacing.xs)
+                }
+
+                Text(helperCopy)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                FlowLayout(spacing: Theme.Spacing.xs) {
                     ForEach(appState.localRuntime.componentStatuses) { component in
                         Label {
                             Text(component.kind.rawValue)
@@ -182,6 +211,19 @@ private struct SourcesRuntimeCard: View {
             return .scoreAverage
         }
     }
+
+    private var helperCopy: String {
+        switch appState.localRuntime.state {
+        case .stopped:
+            return "Press Run to start the local engine on this Mac. Data and artifacts stay local."
+        case .running:
+            return "The local engine stays active while the ImmoRadar app is running."
+        case .starting, .stopping:
+            return "ImmoRadar is managing everything locally: database, queue, API, and workers."
+        case .unavailable, .failed:
+            return "Open the logs in ~/Library/Logs/ImmoRadar if the local engine needs attention."
+        }
+    }
 }
 
 private struct SourcesSummaryBar: View {
@@ -219,6 +261,159 @@ private struct SourcesSummaryMetric: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle(.subtle, padding: Theme.Spacing.md, cornerRadius: Theme.Radius.lg)
+    }
+}
+
+private struct SourcesLifecycleOpsCard: View {
+    let viewModel: SourcesViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Dead Listing Resolution", systemImage: "waveform.path.ecg.rectangle")
+                        .font(.headline)
+                    Text("Explicit source detections vs stale fallback across the last 24 hours and 7 days.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: Theme.Spacing.sm) {
+                    SourcesLifecycleSummaryPill(
+                        title: "Explicit 24h",
+                        value: "\(viewModel.lifecycleOpsExplicit24hTotal)",
+                        tint: .secondary
+                    )
+                    SourcesLifecycleSummaryPill(
+                        title: "Stale 24h",
+                        value: "\(viewModel.lifecycleOpsStale24hTotal)",
+                        tint: viewModel.lifecycleOpsStale24hTotal > 0 ? .scoreAverage : .secondary
+                    )
+                }
+            }
+
+            if viewModel.sources.isEmpty && !viewModel.isLoading {
+                Text("Source lifecycle activity will appear here once sources begin ingesting listings.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            } else if !viewModel.hasLifecycleOpsActivity {
+                Text("No dead-listing lifecycle activity recorded in the last 7 days.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            } else {
+                VStack(spacing: Theme.Spacing.xs) {
+                    SourcesLifecycleHeaderRow()
+
+                    ForEach(viewModel.lifecycleOpsRows) { row in
+                        SourcesLifecycleDataRow(row: row)
+                    }
+                }
+            }
+        }
+        .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
+    }
+}
+
+private struct SourcesLifecycleSummaryPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(tint)
+        }
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+    }
+}
+
+private struct SourcesLifecycleHeaderRow: View {
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Text("Source")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            metricLabel("Exp 24h")
+            metricLabel("Exp 7d")
+            metricLabel("Stale 24h")
+            metricLabel("Stale 7d")
+            timeLabel("Last explicit")
+            timeLabel("Last stale")
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.tertiary)
+        .padding(.horizontal, Theme.Spacing.sm)
+    }
+
+    private func metricLabel(_ title: String) -> some View {
+        Text(title)
+            .frame(width: 60, alignment: .trailing)
+    }
+
+    private func timeLabel(_ title: String) -> some View {
+        Text(title)
+            .frame(width: 96, alignment: .trailing)
+    }
+}
+
+private struct SourcesLifecycleDataRow: View {
+    let row: SourcesViewModel.LifecycleOpsRow
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.sourceName)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                Text(statusCopy)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            metricValue(row.explicitDead24h, tint: .secondary)
+            metricValue(row.explicitDead7d, tint: .secondary)
+            metricValue(row.staleExpired24h, tint: row.staleExpired24h > 0 ? .scoreAverage : .secondary)
+            metricValue(row.staleExpired7d, tint: row.staleExpired7d > 0 ? .scoreAverage : .secondary)
+            timestampValue(row.lastExplicitDeadAt)
+            timestampValue(row.lastStaleExpiredAt)
+        }
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.35), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+    }
+
+    private var statusCopy: String {
+        if row.staleExpired7d > row.explicitDead7d {
+            return "Fallback expiry dominates"
+        }
+        if row.explicitDead7d > 0 {
+            return "Source lifecycle signals flowing"
+        }
+        return "Quiet over the last 7 days"
+    }
+
+    private func metricValue(_ value: Int, tint: Color) -> some View {
+        Text("\(value)")
+            .font(.caption.monospacedDigit().weight(.semibold))
+            .foregroundStyle(tint)
+            .frame(width: 60, alignment: .trailing)
+    }
+
+    private func timestampValue(_ date: Date?) -> some View {
+        Text(date.map(PriceFormatter.relativeDate) ?? "—")
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(width: 96, alignment: .trailing)
     }
 }
 

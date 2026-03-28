@@ -108,6 +108,7 @@ function createPipeline(persistAttachments = vi.fn()) {
         normalization: {
           findExistingListing: vi.fn().mockResolvedValue(null),
           upsertListing: vi.fn().mockResolvedValue({ id: 22, isNew: true }),
+          updateLifecycleStatus: vi.fn().mockResolvedValue({ id: 22 }),
           appendListingVersion: vi.fn().mockResolvedValue({ id: 33, versionNo: 1 }),
           updateScrapeRunNormalizationCounts: vi.fn().mockResolvedValue(undefined),
         },

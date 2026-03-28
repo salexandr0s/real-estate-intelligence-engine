@@ -85,6 +85,7 @@ export class FullIngestionPipeline {
         scrapeRunId,
         canonicalUrl: capture.canonicalUrl,
         detailUrl: capture.detailUrl,
+        availabilityStatus: capture.availabilityStatus,
       },
       scrapeRunId,
     );

@@ -48,7 +48,7 @@ export class IngestRawListing {
       detailUrl: capture.detailUrl,
       discoveryUrl: capture.discoveryUrl ?? null,
       payloadFormat: 'json',
-      extractionStatus: capture.extractionStatus,
+      extractionStatus: resolveRawExtractionStatus(capture),
       responseStatus: capture.responseStatus ?? null,
       responseHeaders: capture.responseHeaders ?? {},
       rawPayload: capture.payload as unknown as Record<string, unknown>,
@@ -58,6 +58,8 @@ export class IngestRawListing {
       contentSha256,
       parserVersion: capture.parserVersion,
       scrapeRunId,
+      isDeletedAtSource: isDeletedAtSource(capture.availabilityStatus),
+      meta: buildRawMeta(capture),
     };
 
     log.info('Upserting raw snapshot', {
@@ -95,4 +97,22 @@ export class IngestRawListing {
     const segments = parsed.pathname.split('/').filter(Boolean);
     return segments[segments.length - 1] ?? parsed.pathname;
   }
+}
+
+function resolveRawExtractionStatus(capture: DetailCapture<unknown>): RawListingUpsert['extractionStatus'] {
+  if (capture.availabilityStatus === 'not_found') return 'not_found';
+  if (capture.availabilityStatus === 'blocked') return 'blocked';
+  return capture.extractionStatus;
+}
+
+function isDeletedAtSource(status: DetailCapture<unknown>['availabilityStatus']): boolean {
+  return status === 'removed' || status === 'not_found';
+}
+
+function buildRawMeta(capture: DetailCapture<unknown>): Record<string, unknown> {
+  if (capture.availabilityStatus == null) return {};
+  return {
+    availabilityStatus: capture.availabilityStatus,
+    lifecycleEvidenceSource: 'adapter.detectAvailability',
+  };
 }

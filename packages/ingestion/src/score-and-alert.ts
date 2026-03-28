@@ -319,11 +319,17 @@ export class ScoreAndAlert {
       const matchReasons = this.buildMatchReasons(match, listing, score.overallScore);
 
       const channels: string[] = match.alertChannels.length > 0 ? match.alertChannels : ['in_app'];
+      const eventScopedAlert =
+        alertType === 'price_drop' ||
+        alertType === 'price_change' ||
+        alertType === 'score_upgrade' ||
+        alertType === 'status_change';
       const dedupeKey = buildAlertDedupeKey({
         filterId: match.filterId,
         listingId,
         alertType,
         scoreVersion: score.scoreVersion,
+        listingVersionId: eventScopedAlert ? listingVersionId : null,
       });
       const title = this.buildAlertTitle(alertType, listing.title);
       const body = this.buildAlertBody(alertType, listing);

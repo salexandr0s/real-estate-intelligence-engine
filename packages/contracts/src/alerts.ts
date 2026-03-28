@@ -101,6 +101,7 @@ export function buildAlertDedupeKey(params: {
   listingId: number;
   alertType: AlertType;
   scoreVersion?: number;
+  listingVersionId?: number | null;
 }): string {
   const parts = [
     `filter:${params.filterId}`,
@@ -109,6 +110,9 @@ export function buildAlertDedupeKey(params: {
   ];
   if (params.scoreVersion != null) {
     parts.push(`sv:${params.scoreVersion}`);
+  }
+  if (params.listingVersionId != null) {
+    parts.push(`lv:${params.listingVersionId}`);
   }
   return parts.join(':');
 }

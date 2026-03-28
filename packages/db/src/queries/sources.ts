@@ -53,6 +53,21 @@ function toSourceRow(row: SourceDbRow): SourceRow {
   };
 }
 
+export interface SourceListingCountRow {
+  sourceId: number;
+  totalListingsIngested: number;
+}
+
+export interface SourceLifecycleSummaryRow {
+  sourceId: number;
+  explicitDead24h: number;
+  explicitDead7d: number;
+  staleExpired24h: number;
+  staleExpired7d: number;
+  lastExplicitDeadAt: Date | null;
+  lastStaleExpiredAt: Date | null;
+}
+
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 export async function findAll(): Promise<SourceRow[]> {
@@ -71,6 +86,74 @@ export async function findActive(): Promise<SourceRow[]> {
     'SELECT * FROM sources WHERE is_active = TRUE ORDER BY priority ASC, code ASC',
   );
   return rows.map(toSourceRow);
+}
+
+export async function findListingCounts(): Promise<SourceListingCountRow[]> {
+  const rows = await query<{ source_id: string; total_listings_ingested: string }>(
+    `SELECT source_id, COUNT(*)::text AS total_listings_ingested
+     FROM listings
+     GROUP BY source_id`,
+  );
+
+  return rows.map((row) => ({
+    sourceId: Number(row.source_id),
+    totalListingsIngested: Number(row.total_listings_ingested),
+  }));
+}
+
+export async function findLifecycleSummaries(): Promise<SourceLifecycleSummaryRow[]> {
+  const rows = await query<{
+    source_id: string;
+    explicit_dead_24h: string;
+    explicit_dead_7d: string;
+    stale_expired_24h: string;
+    stale_expired_7d: string;
+    last_explicit_dead_at: Date | null;
+    last_stale_expired_at: Date | null;
+  }>(
+    `SELECT
+       s.id AS source_id,
+       COUNT(lv.id) FILTER (
+         WHERE lv.listing_status IN ('withdrawn', 'sold', 'rented')
+           AND lv.observed_at >= NOW() - INTERVAL '24 hours'
+       )::text AS explicit_dead_24h,
+       COUNT(lv.id) FILTER (
+         WHERE lv.listing_status IN ('withdrawn', 'sold', 'rented')
+           AND lv.observed_at >= NOW() - INTERVAL '7 days'
+       )::text AS explicit_dead_7d,
+       COUNT(lv.id) FILTER (
+         WHERE lv.listing_status = 'expired'
+           AND lv.observed_at >= NOW() - INTERVAL '24 hours'
+       )::text AS stale_expired_24h,
+       COUNT(lv.id) FILTER (
+         WHERE lv.listing_status = 'expired'
+           AND lv.observed_at >= NOW() - INTERVAL '7 days'
+       )::text AS stale_expired_7d,
+       MAX(lv.observed_at) FILTER (
+         WHERE lv.listing_status IN ('withdrawn', 'sold', 'rented')
+       ) AS last_explicit_dead_at,
+       MAX(lv.observed_at) FILTER (
+         WHERE lv.listing_status = 'expired'
+       ) AS last_stale_expired_at
+     FROM sources s
+     LEFT JOIN listings l
+       ON l.source_id = s.id
+     LEFT JOIN listing_versions lv
+       ON lv.listing_id = l.id
+      AND lv.version_reason = 'status_change'
+      AND lv.listing_status IN ('withdrawn', 'sold', 'rented', 'expired')
+     GROUP BY s.id`,
+  );
+
+  return rows.map((row) => ({
+    sourceId: Number(row.source_id),
+    explicitDead24h: Number(row.explicit_dead_24h),
+    explicitDead7d: Number(row.explicit_dead_7d),
+    staleExpired24h: Number(row.stale_expired_24h),
+    staleExpired7d: Number(row.stale_expired_7d),
+    lastExplicitDeadAt: row.last_explicit_dead_at,
+    lastStaleExpiredAt: row.last_stale_expired_at,
+  }));
 }
 
 export interface SourceCreateInput {

@@ -138,11 +138,18 @@ export function createDetailWorker(): Worker<DetailJobData> {
           sourceCode,
           scrapeRunId,
         });
+        const availability = adapter.detectAvailability({
+          page,
+          requestPlan: { url: fullUrl, metadata: { html } },
+          sourceCode,
+          scrapeRunId,
+        });
 
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = discoveryUrl;
         detailCapture.htmlStorageKey = htmlStorageKey ?? null;
         detailCapture.harStorageKey = harStorageKey ?? null;
+        detailCapture.availabilityStatus = availability.status;
 
         await processingQueue.add(
           `process:${sourceCode}`,

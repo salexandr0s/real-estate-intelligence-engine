@@ -3,6 +3,16 @@ import Foundation
 /// View model for scraping source health monitoring.
 @MainActor @Observable
 final class SourcesViewModel {
+    struct LifecycleOpsRow: Identifiable {
+        let id: Int
+        let sourceName: String
+        let explicitDead24h: Int
+        let explicitDead7d: Int
+        let staleExpired24h: Int
+        let staleExpired7d: Int
+        let lastExplicitDeadAt: Date?
+        let lastStaleExpiredAt: Date?
+    }
 
     // MARK: - State
 
@@ -65,6 +75,38 @@ final class SourcesViewModel {
         sources
             .filter { !$0.isActive }
             .sorted(by: sourceSort)
+    }
+
+    var lifecycleOpsRows: [LifecycleOpsRow] {
+        sources
+            .map { source in
+                let summary = source.lifecycleSummary
+                return LifecycleOpsRow(
+                    id: source.id,
+                    sourceName: source.name,
+                    explicitDead24h: summary?.explicitDead24h ?? 0,
+                    explicitDead7d: summary?.explicitDead7d ?? 0,
+                    staleExpired24h: summary?.staleExpired24h ?? 0,
+                    staleExpired7d: summary?.staleExpired7d ?? 0,
+                    lastExplicitDeadAt: summary?.lastExplicitDeadAt,
+                    lastStaleExpiredAt: summary?.lastStaleExpiredAt
+                )
+            }
+            .sorted(by: lifecycleOpsSort)
+    }
+
+    var hasLifecycleOpsActivity: Bool {
+        lifecycleOpsRows.contains { row in
+            row.explicitDead7d > 0 || row.staleExpired7d > 0
+        }
+    }
+
+    var lifecycleOpsExplicit24hTotal: Int {
+        lifecycleOpsRows.reduce(0) { $0 + $1.explicitDead24h }
+    }
+
+    var lifecycleOpsStale24hTotal: Int {
+        lifecycleOpsRows.reduce(0) { $0 + $1.staleExpired24h }
     }
 
     // MARK: - Actions
@@ -169,5 +211,18 @@ final class SourcesViewModel {
             return lhs.healthStatus.sortOrder < rhs.healthStatus.sortOrder
         }
         return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+
+    private func lifecycleOpsSort(lhs: LifecycleOpsRow, rhs: LifecycleOpsRow) -> Bool {
+        if lhs.staleExpired7d != rhs.staleExpired7d {
+            return lhs.staleExpired7d > rhs.staleExpired7d
+        }
+        if lhs.staleExpired24h != rhs.staleExpired24h {
+            return lhs.staleExpired24h > rhs.staleExpired24h
+        }
+        if lhs.explicitDead7d != rhs.explicitDead7d {
+            return lhs.explicitDead7d > rhs.explicitDead7d
+        }
+        return lhs.sourceName.localizedCaseInsensitiveCompare(rhs.sourceName) == .orderedAscending
     }
 }
