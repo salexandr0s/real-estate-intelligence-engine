@@ -7,7 +7,7 @@ import {
   idParamSchema,
   alertUpdateSchema,
   alertBulkUpdateSchema,
-  paginationQuerySchema,
+  alertListQuerySchema,
 } from '../schemas.js';
 
 function centsToEur(cents: number | null | undefined): number | null {
@@ -75,8 +75,23 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
         querystring: {
           type: 'object',
           properties: {
+            status: {
+              type: 'string',
+              enum: ['queued', 'sent', 'failed', 'dismissed', 'opened', 'suppressed'],
+              description: 'Optional alert status filter',
+            },
             limit: { type: 'integer', minimum: 1, maximum: 200, description: 'Page size' },
             cursor: { type: 'string', description: 'Pagination cursor' },
+            sortBy: {
+              type: 'string',
+              enum: ['age', 'district', 'price'],
+              description: 'Primary alert sort field',
+            },
+            sortDirection: {
+              type: 'string',
+              enum: ['asc', 'desc'],
+              description: 'Sort direction',
+            },
           },
           additionalProperties: true,
         },
@@ -84,9 +99,21 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const userId = request.userId;
-      const { limit, cursor } = parseOrThrow(paginationQuerySchema, request.query);
+      const { status, limit, cursor, sortBy, sortDirection } = parseOrThrow(
+        alertListQuerySchema,
+        request.query,
+      );
 
-      const result = await alerts.findByUser(userId, null, cursor ?? null, limit);
+      const result = await alerts.findByUser(
+        userId,
+        (status as AlertStatus | undefined) ?? null,
+        cursor ?? null,
+        limit,
+        {
+          sortBy,
+          sortDirection,
+        },
+      );
 
       return reply.send({
         data: result.data.map(mapAlertResponse),

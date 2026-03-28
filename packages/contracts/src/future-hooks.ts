@@ -11,15 +11,6 @@ export interface DuplicateClusterInput {
   listingId: number;
 }
 
-/** Investor feedback for scoring calibration */
-export interface InvestorFeedback {
-  listingId: number;
-  userId: number;
-  rating: 'interested' | 'not_interested' | 'bookmarked' | 'contacted';
-  notes?: string;
-  timestamp: string;
-}
-
 /** ML feature export row */
 export interface MLFeatureRow {
   listingId: number;

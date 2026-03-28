@@ -49,12 +49,6 @@ enum APIEndpoint {
 
     case exportListings(query: ListingQuery)
 
-    // MARK: - Feedback
-
-    case submitFeedback(body: Data)
-    case getFeedback(listingId: Int)
-    case deleteFeedback(listingId: Int)
-
     // MARK: - Dashboard
 
     case getDashboardStats
@@ -126,9 +120,6 @@ enum APIEndpoint {
         case .checkSavedListings: "/v1/saved-listings/check"
         case .exportSavedListings: "/v1/saved-listings/export"
         case .exportListings: "/v1/listings/export"
-        case .submitFeedback: "/v1/feedback"
-        case .getFeedback(let listingId): "/v1/feedback/\(listingId)"
-        case .deleteFeedback(let listingId): "/v1/feedback/\(listingId)"
         case .getDashboardStats: "/v1/dashboard/stats"
         case .getDashboardVelocity: "/v1/dashboard/velocity"
         case .getScoreDistribution: "/v1/analytics/score-distribution"
@@ -148,15 +139,14 @@ enum APIEndpoint {
              .listSavedListings, .checkSavedListings, .exportSavedListings, .exportListings,
              .getDashboardStats, .getDashboardVelocity,
              .getScoreDistribution, .getDistrictComparison,
-             .getBaselines, .getDistrictTrends, .getMarketTemperature,
-             .getFeedback:
+             .getBaselines, .getDistrictTrends, .getMarketTemperature:
             "GET"
         case .createFilter, .testFilter, .pauseAllSources, .resumeAllSources, .saveListing,
-             .submitFeedback, .createScrapeRun, .syncMailbox, .startOutreach, .sendOutreachFollowup:
+             .createScrapeRun, .syncMailbox, .startOutreach, .sendOutreachFollowup:
             "POST"
         case .updateFilter, .updateAlert, .bulkUpdateAlerts, .updateSource, .updateOutreachThread:
             "PATCH"
-        case .deleteFilter, .unsaveListing, .deleteFeedback:
+        case .deleteFilter, .unsaveListing:
             "DELETE"
         }
     }
@@ -166,7 +156,7 @@ enum APIEndpoint {
         case .createFilter(let body), .updateFilter(_, let body),
              .updateAlert(_, let body), .bulkUpdateAlerts(let body),
              .updateSource(_, let body),
-             .saveListing(let body), .submitFeedback(let body),
+             .saveListing(let body),
              .createScrapeRun(let body), .startOutreach(_, let body),
              .updateOutreachThread(_, let body):
             return body

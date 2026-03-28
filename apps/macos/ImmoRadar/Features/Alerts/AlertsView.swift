@@ -29,10 +29,7 @@ struct AlertsView: View {
                         onSwitchToAll: { viewModel.scope = .all },
                         onOpenFilters: { appState.navigateTo(.filters) },
                         onRefresh: {
-                            Task {
-                                await viewModel.refresh(using: appState.apiClient)
-                                await appState.refreshUnreadCount()
-                            }
+                            Task { await reloadAlerts() }
                         }
                     )
                 } else {
@@ -132,10 +129,7 @@ struct AlertsView: View {
             }
             ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
-                    Task {
-                        await viewModel.refresh(using: appState.apiClient)
-                        await appState.refreshUnreadCount()
-                    }
+                    Task { await reloadAlerts() }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -143,8 +137,7 @@ struct AlertsView: View {
             }
         }
         .task {
-            await viewModel.refresh(using: appState.apiClient)
-            await appState.refreshUnreadCount()
+            await reloadAlerts()
         }
         .onChange(of: viewModel.selectedAlertID) { _, newValue in
             if newValue != nil {
@@ -158,6 +151,12 @@ struct AlertsView: View {
         }
         .onChange(of: searchText) { _, newValue in
             viewModel.searchText = newValue
+        }
+        .onChange(of: viewModel.sortBy) { _, _ in
+            Task { await reloadAlerts() }
+        }
+        .onChange(of: viewModel.sortDirection) { _, _ in
+            Task { await reloadAlerts() }
         }
         .onDeleteCommand {
             if let id = viewModel.selectedAlertID,
@@ -194,10 +193,7 @@ struct AlertsView: View {
             .controlSize(.small)
 
             Button("Retry") {
-                Task {
-                    await viewModel.refresh(using: appState.apiClient)
-                    await appState.refreshUnreadCount()
-                }
+                Task { await reloadAlerts() }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -205,6 +201,11 @@ struct AlertsView: View {
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.vertical, Theme.Spacing.sm)
         .background(Color.red.opacity(0.08))
+    }
+
+    private func reloadAlerts() async {
+        await viewModel.refresh(using: appState.apiClient)
+        await appState.refreshUnreadCount()
     }
 }
 

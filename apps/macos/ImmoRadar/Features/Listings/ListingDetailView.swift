@@ -20,6 +20,7 @@ struct ListingDetailView: View {
     @State private var outreachErrorMessage: String?
     @State private var isSaved: Bool = false
     @State private var isSaving: Bool = false
+    @State private var actionErrorMessage: String?
 
     private var displayedListing: Listing {
         detailListing ?? listing
@@ -31,12 +32,10 @@ struct ListingDetailView: View {
                 // Header: status, title, price, score, metrics
                 ListingHeaderSection(
                     listing: displayedListing,
-                    isSaved: isSaved,
-                    cluster: cluster,
-                    onToggleSave: { Task { await toggleSave() } }
+                    cluster: cluster
                 )
 
-                // Actions (moved up for quick access)
+                // Browser and sharing actions
                 HStack(spacing: Theme.Spacing.sm) {
                     Button {
                         if let url = URL(string: displayedListing.canonicalUrl) {
@@ -69,7 +68,40 @@ struct ListingDetailView: View {
                     }
                 }
 
-                FeedbackSection(listingId: listing.id)
+                // Primary listing actions
+                HStack(spacing: Theme.Spacing.sm) {
+                    Button {
+                        Task { await toggleSave() }
+                    } label: {
+                        Label(
+                            isSaved ? "Saved to Watchlist" : "Save to Watchlist",
+                            systemImage: isSaved ? "bookmark.fill" : "bookmark"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.regular)
+                    .buttonStyle(.bordered)
+                    .tint(isSaved ? .orange : .accentColor)
+                    .disabled(isSaving)
+                    .help(isSaved ? "Remove from watchlist" : "Save this listing to the watchlist")
+
+                    Button {
+                        Task { await handleContactAction() }
+                    } label: {
+                        Label(contactButtonTitle, systemImage: contactButtonSystemImage)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.regular)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canContact || isLoadingOutreach)
+                    .help(contactButtonHelpText)
+                }
+
+                if let actionErrorMessage, !actionErrorMessage.isEmpty {
+                    Text(actionErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
 
                 // Key investor metrics ribbon
                 KeyMetricsRibbon(analysis: analysis, explanation: explanation)
@@ -186,6 +218,7 @@ struct ListingDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: listing.id) {
+            actionErrorMessage = nil
             async let l: Void = loadListingDetail()
             async let v: Void = loadVersions()
             async let e: Void = loadExplanation()
@@ -300,6 +333,7 @@ struct ListingDetailView: View {
 
         let wasSaved = isSaved
         isSaved.toggle()
+        actionErrorMessage = nil
 
         do {
             if wasSaved {
@@ -309,8 +343,40 @@ struct ListingDetailView: View {
             }
         } catch {
             isSaved = wasSaved
+            actionErrorMessage = wasSaved
+                ? "Could not remove the listing from the watchlist."
+                : "Could not save the listing to the watchlist."
             Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
         }
+    }
+
+    private var hasOutreachThread: Bool {
+        outreachThread != nil || displayedListing.outreachSummary != nil
+    }
+
+    private var canContact: Bool {
+        hasOutreachThread || displayedListing.contactEmail != nil
+    }
+
+    private var contactButtonTitle: String {
+        if isLoadingOutreach {
+            return "Contacting…"
+        }
+        return hasOutreachThread ? "Open Outreach" : "Contact"
+    }
+
+    private var contactButtonSystemImage: String {
+        hasOutreachThread ? "paperplane.circle.fill" : "paperplane"
+    }
+
+    private var contactButtonHelpText: String {
+        if hasOutreachThread {
+            return "Open the outreach workflow"
+        }
+        if displayedListing.contactEmail != nil {
+            return "Start outreach for this listing"
+        }
+        return "No contact email is available for this listing"
     }
 
     private func loadOutreachThread() async {
@@ -329,8 +395,25 @@ struct ListingDetailView: View {
         } catch {
             outreachThread = nil
             outreachErrorMessage = error.localizedDescription
+            actionErrorMessage = "Could not load the outreach thread."
             Log.ui.error("Failed to load outreach thread for listing \(self.listing.id): \(error, privacy: .public)")
         }
+    }
+
+    private func handleContactAction() async {
+        actionErrorMessage = nil
+
+        if hasOutreachThread {
+            appState.selectedNavItem = .outreach
+            return
+        }
+
+        guard displayedListing.contactEmail != nil else {
+            actionErrorMessage = "No contact email is available for this listing."
+            return
+        }
+
+        await startOutreach()
     }
 
     private func startOutreach() async {
@@ -338,6 +421,7 @@ struct ListingDetailView: View {
 
         isLoadingOutreach = true
         defer { isLoadingOutreach = false }
+        actionErrorMessage = nil
 
         do {
             let threadId = try await appState.apiClient.startOutreach(
@@ -354,8 +438,10 @@ struct ListingDetailView: View {
             detailListing = try await appState.apiClient.fetchListing(id: listing.id)
             outreachThread = try await appState.apiClient.fetchOutreachThread(id: threadId)
             outreachErrorMessage = nil
+            appState.selectedNavItem = .outreach
         } catch {
             outreachErrorMessage = error.localizedDescription
+            actionErrorMessage = "Could not start outreach for this listing."
             Log.ui.error("Failed to start outreach for listing \(self.listing.id): \(error, privacy: .public)")
         }
     }

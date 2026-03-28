@@ -338,10 +338,10 @@ GET /v1/alerts
 
 ### Query params
 - `status`
-- `channel`
-- `userFilterId`
 - `limit`
 - `cursor`
+- `sortBy` — `age | district | price`
+- `sortDirection` — `asc | desc`
 
 ## 8.2 Mark alert state
 ```http

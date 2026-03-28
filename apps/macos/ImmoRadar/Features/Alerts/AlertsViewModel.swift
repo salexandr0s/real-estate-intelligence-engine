@@ -29,6 +29,18 @@ final class AlertsViewModel {
     var scope: AlertsScope = .unread {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
+    var sortBy: AlertSortBy = .age {
+        didSet {
+            resortAlerts()
+            normalizeSelection(preferredID: selectedAlertID)
+        }
+    }
+    var sortDirection: AlertSortDirection = .desc {
+        didSet {
+            resortAlerts()
+            normalizeSelection(preferredID: selectedAlertID)
+        }
+    }
     var searchText: String = "" {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
@@ -75,6 +87,10 @@ final class AlertsViewModel {
         !alerts.isEmpty
     }
 
+    var sortDescription: String {
+        "\(sortBy.displayName) · \(sortDirection.displayName)"
+    }
+
     private func matchesSearch(_ alert: Alert) -> Bool {
         let query = searchText
         guard !query.isEmpty else { return true }
@@ -95,6 +111,8 @@ final class AlertsViewModel {
             alert.listing?.title,
             alert.listing?.districtName,
             alert.listing?.city,
+            alert.listing?.sourceCode,
+            alert.listing?.sourceDisplayName,
             keywords.joined(separator: " "),
             thresholdTokens.joined(separator: " "),
         ]
@@ -111,7 +129,22 @@ final class AlertsViewModel {
         errorMessage = nil
 
         do {
-            alerts = try await client.fetchAlerts(query: AlertQuery())
+            var allAlerts: [Alert] = []
+            var cursor: String? = nil
+
+            repeat {
+                var query = AlertQuery()
+                query.limit = 200
+                query.cursor = cursor
+                query.sortBy = sortBy
+                query.sortDirection = sortDirection
+
+                let response = try await client.fetchAlertsPaginated(query: query)
+                allAlerts.append(contentsOf: response.alerts)
+                cursor = response.nextCursor
+            } while cursor != nil
+
+            alerts = sortAlerts(allAlerts)
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -126,6 +159,7 @@ final class AlertsViewModel {
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
                 alerts[idx].status = .opened
             }
+            resortAlerts()
             normalizeSelection(preferredID: alert.id)
         } catch {
             errorMessage = error.localizedDescription
@@ -146,6 +180,7 @@ final class AlertsViewModel {
                     alerts[i].status = .opened
                 }
             }
+            resortAlerts()
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -166,6 +201,7 @@ final class AlertsViewModel {
                     alerts[i].status = .dismissed
                 }
             }
+            resortAlerts()
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -177,8 +213,9 @@ final class AlertsViewModel {
         if let existingIndex = alerts.firstIndex(where: { $0.id == alert.id }) {
             alerts[existingIndex] = alert
         } else {
-            alerts.insert(alert, at: 0)
+            alerts.append(alert)
         }
+        resortAlerts()
         normalizeSelection(preferredID: selectedAlertID)
     }
 
@@ -197,8 +234,8 @@ final class AlertsViewModel {
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
                 alerts[idx].status = .dismissed
             }
+            resortAlerts()
             normalizeSelection(preferredID: alert.id)
-            // Register undo: revert to previous status
             undoManager?.registerUndo(withTarget: self) { vm in
                 Task { @MainActor in
                     let revertBody = try? JSONEncoder().encode(APIAlertUpdateRequest(status: previousStatus.rawValue))
@@ -208,6 +245,7 @@ final class AlertsViewModel {
                     if let idx = vm.alerts.firstIndex(where: { $0.id == alert.id }) {
                         vm.alerts[idx].status = previousStatus
                     }
+                    vm.resortAlerts()
                     vm.normalizeSelection(preferredID: alert.id)
                 }
             }
@@ -219,6 +257,57 @@ final class AlertsViewModel {
 
     func clearError() {
         errorMessage = nil
+    }
+
+    func toggleSortDirection() {
+        sortDirection = sortDirection == .desc ? .asc : .desc
+    }
+
+    // MARK: - Sorting
+
+    private func sortAlerts(_ input: [Alert]) -> [Alert] {
+        input.sorted(by: compareAlerts)
+    }
+
+    private func resortAlerts() {
+        alerts = sortAlerts(alerts)
+    }
+
+    private func compareAlerts(_ lhs: Alert, _ rhs: Alert) -> Bool {
+        switch sortBy {
+        case .age:
+            if lhs.matchedAt != rhs.matchedAt {
+                return sortDirection == .asc ? lhs.matchedAt < rhs.matchedAt : lhs.matchedAt > rhs.matchedAt
+            }
+        case .district:
+            let lhsDistrict = districtSortKey(for: lhs)
+            let rhsDistrict = districtSortKey(for: rhs)
+            if lhsDistrict != rhsDistrict {
+                return sortDirection == .asc ? lhsDistrict < rhsDistrict : lhsDistrict > rhsDistrict
+            }
+        case .price:
+            let lhsPrice = priceSortKey(for: lhs)
+            let rhsPrice = priceSortKey(for: rhs)
+            if lhsPrice != rhsPrice {
+                return sortDirection == .asc ? lhsPrice < rhsPrice : lhsPrice > rhsPrice
+            }
+        }
+
+        return sortDirection == .asc ? lhs.id < rhs.id : lhs.id > rhs.id
+    }
+
+    private func districtSortKey(for alert: Alert) -> String {
+        if let location = alert.listing?.alertLocationLabel, !location.isEmpty {
+            return location.localizedLowercase
+        }
+        return sortDirection == .asc ? "~~~~" : ""
+    }
+
+    private func priceSortKey(for alert: Alert) -> Int {
+        if let price = alert.listing?.listPriceEur {
+            return price
+        }
+        return sortDirection == .asc ? Int.max : -1
     }
 
     private func normalizeSelection(preferredID: Int?) {

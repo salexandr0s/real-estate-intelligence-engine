@@ -20,7 +20,6 @@ import { metricsRoutes } from './routes/metrics.js';
 import { streamRoutes } from './routes/stream.js';
 import { poiRoutes } from './routes/pois.js';
 import { savedListingRoutes } from './routes/saved-listings.js';
-import { feedbackRoutes } from './routes/feedback.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { copilotRoutes } from './routes/copilot.js';
 import { deviceRoutes } from './routes/devices.js';
@@ -110,7 +109,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(streamRoutes);
   await app.register(poiRoutes);
   await app.register(savedListingRoutes);
-  await app.register(feedbackRoutes);
   await app.register(dashboardRoutes);
   await app.register(copilotRoutes);
   await app.register(deviceRoutes);

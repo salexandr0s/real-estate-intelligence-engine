@@ -344,6 +344,15 @@ actor APIClient {
         return response.data.map { $0.toDomain(decoder: decoder) }
     }
 
+    /// Fetch alerts with pagination metadata (cursor + data).
+    func fetchAlertsPaginated(query: AlertQuery = AlertQuery()) async throws -> (alerts: [Alert], nextCursor: String?) {
+        let response: PaginatedResponse<APIAlertResponse> = try await requestPaginated(
+            .listAlerts(query: query)
+        )
+        let alerts = response.data.map { $0.toDomain(decoder: decoder) }
+        return (alerts, response.meta?.nextCursor)
+    }
+
     /// Bulk update alert statuses. Returns the number of updated alerts.
     func bulkUpdateAlerts(ids: [Int]? = nil, filterStatus: String? = nil, action: String) async throws -> Int {
         struct BulkBody: Encodable {
@@ -372,35 +381,6 @@ actor APIClient {
     /// Export listings as CSV data.
     func exportListingsCSV(query: ListingQuery) async throws -> Data {
         return try await requestRawData(.exportListings(query: query))
-    }
-
-    /// Submit or update investor feedback for a listing.
-    func submitFeedback(listingId: Int, rating: String, notes: String?) async throws -> InvestorFeedback {
-        struct FeedbackBody: Encodable {
-            let listingId: Int
-            let rating: String
-            let notes: String?
-        }
-        let body = try encoder.encode(FeedbackBody(listingId: listingId, rating: rating, notes: notes))
-        let response: APIResponse<InvestorFeedback> = try await request(.submitFeedback(body: body))
-        return response.data
-    }
-
-    /// Fetch investor feedback for a listing. Returns nil if none exists.
-    func fetchFeedback(listingId: Int) async throws -> InvestorFeedback? {
-        struct NullableResponse: Codable, Sendable {
-            let data: InvestorFeedback?
-        }
-        let urlRequest = try buildRequest(for: .getFeedback(listingId: listingId))
-        let (data, response) = try await performRequest(urlRequest)
-        try validateResponse(response, data: data)
-        let parsed = try decoder.decode(NullableResponse.self, from: data)
-        return parsed.data
-    }
-
-    /// Remove investor feedback for a listing.
-    func deleteFeedback(listingId: Int) async throws {
-        try await requestVoid(.deleteFeedback(listingId: listingId))
     }
 
     func markAlertRead(id: Int) async throws {

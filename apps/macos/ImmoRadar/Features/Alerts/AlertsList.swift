@@ -9,6 +9,9 @@ struct AlertsList: View {
         List(viewModel.visibleAlerts, selection: $viewModel.selectedAlertID) { alert in
             AlertRow(alert: alert, isSelected: viewModel.selectedAlertID == alert.id)
                 .tag(alert.id)
+                .listRowInsets(EdgeInsets(top: 3, leading: Theme.Spacing.md, bottom: 3, trailing: Theme.Spacing.md))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
                 .contextMenu {
                     if alert.status == .unread {
                         Button {
@@ -33,6 +36,7 @@ struct AlertsList: View {
                     }
                 }
         }
-        .listStyle(.inset(alternatesRowBackgrounds: true))
+        .environment(\.controlActiveState, .inactive)
+        .listStyle(.inset(alternatesRowBackgrounds: false))
     }
 }

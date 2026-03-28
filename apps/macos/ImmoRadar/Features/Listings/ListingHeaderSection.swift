@@ -3,30 +3,15 @@ import SwiftUI
 /// Header section for the listing detail inspector showing status, title, price, score, and key metrics.
 struct ListingHeaderSection: View {
     let listing: Listing
-    var isSaved: Bool = false
     var cluster: ListingCluster?
-    var onToggleSave: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            // Row 1: Status + bookmark + source
+            // Row 1: Status + source
             HStack {
                 StatusBadge(listingStatus: listing.listingStatus)
 
                 Spacer()
-
-                if let onToggleSave {
-                    Button(
-                        isSaved ? "Remove from watchlist" : "Save to watchlist",
-                        systemImage: isSaved ? "bookmark.fill" : "bookmark"
-                    ) {
-                        onToggleSave()
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(isSaved ? .yellow : .secondary)
-                    .buttonStyle(.borderless)
-                    .help(isSaved ? "Remove from watchlist" : "Save to watchlist")
-                }
 
                 HStack(spacing: Theme.Spacing.xs) {
                     SourceLogo(sourceCode: listing.sourceCode, size: 14)

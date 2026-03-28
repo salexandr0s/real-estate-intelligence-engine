@@ -114,6 +114,63 @@ const ALERT_LISTING_JOIN = `
   ) pc ON true
 `;
 
+export type AlertSortBy = 'age' | 'district' | 'price';
+export type AlertSortDirection = 'asc' | 'desc';
+
+interface AlertListOptions {
+  sortBy?: AlertSortBy;
+  sortDirection?: AlertSortDirection;
+}
+
+interface AgeCursorPayload {
+  sortBy: 'age';
+  sortDirection: AlertSortDirection;
+  id: number;
+  matchedAt: string;
+}
+
+interface DistrictCursorPayload {
+  sortBy: 'district';
+  sortDirection: AlertSortDirection;
+  id: number;
+  districtKey: string;
+}
+
+interface PriceCursorPayload {
+  sortBy: 'price';
+  sortDirection: AlertSortDirection;
+  id: number;
+  priceKey: number;
+}
+
+type AlertCursorPayload = AgeCursorPayload | DistrictCursorPayload | PriceCursorPayload;
+
+const DISTRICT_SORT_SENTINEL_ASC = '~~~~';
+const DISTRICT_SORT_SENTINEL_DESC = '';
+const PRICE_SORT_SENTINEL_ASC = Number.MAX_SAFE_INTEGER;
+const PRICE_SORT_SENTINEL_DESC = -1;
+
+function normalizeDistrictSortKey(
+  row: Pick<AlertDbRow, 'listing_district_name' | 'listing_city'>,
+  direction: AlertSortDirection,
+): string {
+  return (
+    row.listing_district_name ??
+    row.listing_city ??
+    (direction === 'asc' ? DISTRICT_SORT_SENTINEL_ASC : DISTRICT_SORT_SENTINEL_DESC)
+  );
+}
+
+function normalizePriceSortKey(
+  row: Pick<AlertDbRow, 'listing_list_price_eur_cents'>,
+  direction: AlertSortDirection,
+): number {
+  if (row.listing_list_price_eur_cents != null) {
+    return Number(row.listing_list_price_eur_cents);
+  }
+  return direction === 'asc' ? PRICE_SORT_SENTINEL_ASC : PRICE_SORT_SENTINEL_DESC;
+}
+
 function toAlertListing(row: AlertDbRow): AlertRow['listing'] {
   if (
     row.listing_listing_uid == null ||
@@ -185,6 +242,128 @@ function toAlertRow(row: AlertDbRow): AlertRow {
   };
 }
 
+function decodeAlertCursor(cursor: string | null): AlertCursorPayload | null {
+  if (!cursor) return null;
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as AlertCursorPayload;
+    if (
+      !decoded ||
+      typeof decoded !== 'object' ||
+      (decoded.sortBy !== 'age' && decoded.sortBy !== 'district' && decoded.sortBy !== 'price') ||
+      (decoded.sortDirection !== 'asc' && decoded.sortDirection !== 'desc') ||
+      typeof decoded.id !== 'number'
+    ) {
+      return null;
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function encodeAlertCursor(payload: AlertCursorPayload): string {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+export function buildNextAlertCursor(
+  row: Pick<
+    AlertDbRow,
+    'id' | 'matched_at' | 'listing_district_name' | 'listing_city' | 'listing_list_price_eur_cents'
+  >,
+  sortBy: AlertSortBy,
+  sortDirection: AlertSortDirection,
+): string {
+  const id = Number(row.id);
+
+  switch (sortBy) {
+    case 'age':
+      return encodeAlertCursor({
+        sortBy,
+        sortDirection,
+        id,
+        matchedAt: row.matched_at.toISOString(),
+      });
+    case 'district':
+      return encodeAlertCursor({
+        sortBy,
+        sortDirection,
+        id,
+        districtKey: normalizeDistrictSortKey(row, sortDirection),
+      });
+    case 'price':
+      return encodeAlertCursor({
+        sortBy,
+        sortDirection,
+        id,
+        priceKey: normalizePriceSortKey(row, sortDirection),
+      });
+  }
+}
+
+export function buildAlertSortSpec(
+  sortBy: AlertSortBy = 'age',
+  sortDirection: AlertSortDirection = 'desc',
+  cursor: string | null,
+): {
+  cursorValues: [string | null, number | null];
+  cursorWhere: string;
+  orderBy: string;
+} {
+  const decodedCursor = decodeAlertCursor(cursor);
+  const parsedCursor =
+    decodedCursor?.sortBy == sortBy && decodedCursor.sortDirection == sortDirection
+      ? decodedCursor
+      : null;
+
+  switch (sortBy) {
+    case 'district': {
+      const districtExpr = `COALESCE(NULLIF(l.district_name, ''), NULLIF(l.city, ''), '${
+        sortDirection === 'asc' ? DISTRICT_SORT_SENTINEL_ASC : DISTRICT_SORT_SENTINEL_DESC
+      }')`;
+      return {
+        cursorValues: [
+          parsedCursor?.sortBy === 'district' ? parsedCursor.districtKey : null,
+          parsedCursor?.id ?? null,
+        ],
+        cursorWhere: `AND ($3::text IS NULL OR (${districtExpr}, a.id) ${
+          sortDirection === 'asc' ? '>' : '<'
+        } ($3::text, $4::bigint))`,
+        orderBy: `ORDER BY ${districtExpr} ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
+      };
+    }
+    case 'price': {
+      const priceExpr = `COALESCE(l.list_price_eur_cents, ${
+        sortDirection === 'asc' ? PRICE_SORT_SENTINEL_ASC : PRICE_SORT_SENTINEL_DESC
+      })`;
+      return {
+        cursorValues: [
+          parsedCursor?.sortBy === 'price' ? String(parsedCursor.priceKey) : null,
+          parsedCursor?.id ?? null,
+        ],
+        cursorWhere: `AND ($3::bigint IS NULL OR (${priceExpr}, a.id) ${
+          sortDirection === 'asc' ? '>' : '<'
+        } ($3::bigint, $4::bigint))`,
+        orderBy: `ORDER BY ${priceExpr} ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
+      };
+    }
+    case 'age':
+    default:
+      return {
+        cursorValues: [
+          parsedCursor?.sortBy === 'age' ? parsedCursor.matchedAt : null,
+          parsedCursor?.id ?? null,
+        ],
+        cursorWhere: `AND ($3::timestamptz IS NULL OR (a.matched_at, a.id) ${
+          sortDirection === 'asc' ? '>' : '<'
+        } ($3::timestamptz, $4::bigint))`,
+        orderBy: `ORDER BY a.matched_at ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
+      };
+  }
+}
+
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 /**
@@ -250,8 +429,11 @@ export async function findByUser(
   status: AlertStatus | null,
   cursor: string | null,
   limit = 25,
+  options: AlertListOptions = {},
 ): Promise<{ data: AlertRow[]; nextCursor: string | null }> {
-  const cursorId = cursor ? Number(Buffer.from(cursor, 'base64url').toString('utf8')) : null;
+  const sortBy = options.sortBy ?? 'age';
+  const sortDirection = options.sortDirection ?? 'desc';
+  const { cursorValues, cursorWhere, orderBy } = buildAlertSortSpec(sortBy, sortDirection, cursor);
 
   const rows = await query<AlertDbRow>(
     `SELECT ${ALERT_SELECT_WITH_LISTING}
@@ -259,10 +441,10 @@ export async function findByUser(
      ${ALERT_LISTING_JOIN}
      WHERE a.user_id = $1
        AND ($2::text IS NULL OR a.status = $2)
-       AND ($3::bigint IS NULL OR a.id < $3)
-     ORDER BY a.id DESC
-     LIMIT $4`,
-    [userId, status, cursorId, limit + 1],
+       ${cursorWhere}
+     ${orderBy}
+     LIMIT $5`,
+    [userId, status, ...cursorValues, limit + 1],
   );
 
   const hasMore = rows.length > limit;
@@ -272,7 +454,7 @@ export async function findByUser(
   let nextCursorOut: string | null = null;
   if (hasMore && resultRows.length > 0) {
     const lastRow = resultRows[resultRows.length - 1]!;
-    nextCursorOut = Buffer.from(lastRow.id).toString('base64url');
+    nextCursorOut = buildNextAlertCursor(lastRow, sortBy, sortDirection);
   }
 
   return { data, nextCursor: nextCursorOut };

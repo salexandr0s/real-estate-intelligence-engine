@@ -27,6 +27,8 @@ const FILTER_KINDS = ['listing_search', 'alert'] as const;
 const ALERT_FREQUENCIES = ['instant', 'hourly_digest', 'daily_digest', 'manual'] as const;
 const ALERT_CHANNELS = ['in_app', 'email', 'push', 'webhook'] as const;
 const ALERT_STATUSES = ['queued', 'sent', 'failed', 'dismissed', 'opened', 'suppressed'] as const;
+const ALERT_SORT_BY_VALUES = ['age', 'district', 'price'] as const;
+const SORT_DIRECTIONS = ['asc', 'desc'] as const;
 const OUTREACH_THREAD_SCOPES = ['open', 'closed', 'all'] as const;
 const OUTREACH_THREAD_ACTIONS = ['pause', 'resume', 'close', 'retry'] as const;
 
@@ -78,6 +80,14 @@ export const idParamSchema = z.object({
 export const paginationQuerySchema = z.object({
   limit: optionalQueryLimit,
   cursor: z.string().optional(),
+});
+
+export const alertListQuerySchema = z.object({
+  status: z.enum(ALERT_STATUSES).optional(),
+  limit: optionalQueryLimit,
+  cursor: z.string().optional(),
+  sortBy: z.enum(ALERT_SORT_BY_VALUES).default('age'),
+  sortDirection: z.enum(SORT_DIRECTIONS).default('desc'),
 });
 
 export const listingSearchQuerySchema = z
@@ -190,14 +200,6 @@ export const highScoreQuerySchema = z.object({
   minScore: z.preprocess(absentToUndefined, z.coerce.number().min(0).max(100).optional()),
   limit: optionalQueryLimit,
   cursor: z.string().optional(),
-});
-
-const FEEDBACK_RATINGS = ['interested', 'not_interested', 'bookmarked', 'contacted'] as const;
-
-export const feedbackCreateSchema = z.object({
-  listingId: z.number().int(),
-  rating: z.enum(FEEDBACK_RATINGS),
-  notes: z.string().max(2000).optional(),
 });
 
 export const alertBulkUpdateSchema = z

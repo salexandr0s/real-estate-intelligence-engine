@@ -111,16 +111,29 @@ struct AlertRow: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 headlineRow
                 contextRow
+                filterRow
                 summaryRow
                 metadataRow
-
-                if isSelected, let reasons = alert.matchReasons {
-                    AlertMatchReasonChips(reasons: reasons)
-                        .padding(.top, Theme.Spacing.xxs)
-                }
             }
         }
+        .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.sm)
+        .background {
+            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .fill(
+                    isSelected
+                    ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+                    : Color.clear
+                )
+        }
+        .overlay(alignment: .leading) {
+            if isSelected {
+                RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.65))
+                    .frame(width: 3)
+                    .padding(.vertical, 8)
+            }
+        }
         .opacity(alert.status == .dismissed ? 0.72 : 1.0)
     }
 
@@ -133,7 +146,12 @@ struct AlertRow: View {
 
     @ViewBuilder
     private var leadingVisual: some View {
-        if let score = alert.listing?.currentScore {
+        if let sourceCode = alert.listing?.sourceCode {
+            SourceLogo(sourceCode: sourceCode, size: 18)
+                .frame(width: 30, height: 30)
+                .padding(.top, 2)
+                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else if let score = alert.listing?.currentScore {
             ScoreIndicator(score: score, size: .compact)
                 .frame(width: 34)
                 .padding(.top, 2)
@@ -163,23 +181,26 @@ struct AlertRow: View {
     }
 
     private var contextRow: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Label(presentation.type.title, systemImage: presentation.type.icon)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(presentation.type.tint)
+        HStack(spacing: Theme.Spacing.xs) {
+            AlertMetaPill(text: presentation.type.title, systemImage: presentation.type.icon, tint: presentation.type.tint)
 
-            if let district = alert.listing?.districtName ?? alert.listing?.city {
-                Label(district, systemImage: "mappin")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if let sourceCode = alert.listing?.sourceCode {
+                AlertSourcePill(sourceCode: sourceCode, label: alert.listing?.sourceDisplayName ?? sourceCode.capitalized)
             }
 
-            if let filterName = alert.filterName {
-                Label(filterName, systemImage: "line.3.horizontal.decrease.circle")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+            if let location = alert.listing?.alertLocationLabel {
+                AlertMetaPill(text: location, systemImage: "mappin", tint: .secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var filterRow: some View {
+        if let filterName = alert.filterName {
+            Label(filterName, systemImage: "line.3.horizontal.decrease.circle")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
         }
     }
 
@@ -192,7 +213,7 @@ struct AlertRow: View {
 
     @ViewBuilder
     private var metadataRow: some View {
-        HStack(spacing: Theme.Spacing.sm) {
+        HStack(alignment: .center, spacing: Theme.Spacing.sm) {
             if let listing = alert.listing {
                 Text(PriceFormatter.format(eur: listing.listPriceEur))
                     .font(.caption.monospacedDigit().bold())
@@ -212,6 +233,12 @@ struct AlertRow: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
+
+                if let score = listing.currentScore {
+                    Text("Score \(score.formatted(.number.precision(.fractionLength(1))))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer(minLength: Theme.Spacing.sm)
@@ -222,5 +249,39 @@ struct AlertRow: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+}
+
+private struct AlertMetaPill: View {
+    let text: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, Theme.Spacing.sm)
+            .padding(.vertical, Theme.Spacing.xxs)
+            .background(tint.opacity(0.10), in: Capsule())
+            .lineLimit(1)
+    }
+}
+
+private struct AlertSourcePill: View {
+    let sourceCode: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.xxs) {
+            SourceLogo(sourceCode: sourceCode, size: 12)
+            Text(label)
+                .lineLimit(1)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xxs)
+        .background(Color.secondary.opacity(0.08), in: Capsule())
     }
 }

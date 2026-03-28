@@ -73,6 +73,21 @@ struct AlertInspectorContent: View {
                 .lineLimit(3)
 
             HStack(spacing: Theme.Spacing.sm) {
+                if let sourceCode = alert.listing?.sourceCode {
+                    HStack(spacing: Theme.Spacing.xxs) {
+                        SourceLogo(sourceCode: sourceCode, size: 14)
+                        Text(alert.listing?.sourceDisplayName ?? sourceCode.capitalized)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                if let location = alert.listing?.alertLocationLabel {
+                    Label(location, systemImage: "mappin")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let filterName = alert.filterName {
                     Label(filterName, systemImage: "line.3.horizontal.decrease.circle")
                         .font(.caption)
@@ -163,6 +178,14 @@ struct AlertInspectorContent: View {
         inspectorSection(title: "Details", systemImage: "info.circle") {
             InspectorDetailRow(label: "Status", value: AlertPresentation.make(for: alert).status.title)
             InspectorDetailRow(label: "Matched", value: PriceFormatter.formatDateTime(alert.matchedAt))
+
+            if let source = alert.listing?.sourceDisplayName {
+                InspectorDetailRow(label: "Source", value: source)
+            }
+
+            if let location = alert.listing?.alertLocationLabel {
+                InspectorDetailRow(label: "Location", value: location)
+            }
 
             if let filterName = alert.filterName {
                 InspectorDetailRow(label: "Filter", value: filterName)

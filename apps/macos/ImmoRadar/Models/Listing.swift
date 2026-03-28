@@ -59,6 +59,35 @@ struct Listing: Identifiable, Codable, Hashable {
         contactName != nil || contactCompany != nil || contactEmail != nil || contactPhone != nil
     }
 
+    var alertLocationLabel: String? {
+        districtName ?? city
+    }
+
+    var sourceDisplayName: String {
+        switch sourceCode.lowercased() {
+        case "willhaben":
+            "Willhaben"
+        case "immoscout", "immoscout24":
+            "ImmoScout24"
+        case "derstandard":
+            "Der Standard"
+        case "findmyhome":
+            "FindMyHome"
+        case "openimmo":
+            "OpenImmo"
+        case "remax":
+            "RE/MAX"
+        case "wohnnet":
+            "wohnnet"
+        case "bazar":
+            "Bazar"
+        case "immoworld", "immo-world":
+            "Immo-World"
+        default:
+            sourceCode.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
     /// Transient flag set client-side when this listing has matching alerts.
     var hasAlertMatch: Bool = false
 
