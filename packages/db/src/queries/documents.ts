@@ -117,6 +117,48 @@ export interface UpsertDocumentInput {
 }
 
 export async function upsertDocument(input: UpsertDocumentInput): Promise<DocumentRow> {
+  if (input.checksum == null) {
+    const existingByUrl = await query<DocumentDbRow>(
+      `SELECT * FROM listing_documents
+       WHERE listing_id = $1 AND url = $2
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [input.listingId, input.url],
+    );
+
+    const existing = existingByUrl[0];
+    if (existing) {
+      const rows = await query<DocumentDbRow>(
+        `UPDATE listing_documents SET
+           mime_type = COALESCE($2, mime_type),
+           size_bytes = COALESCE($3, size_bytes),
+           storage_key = COALESCE($4, storage_key),
+           document_type = COALESCE($5, document_type),
+           label = COALESCE($6, label),
+           page_count = COALESCE($7, page_count),
+           status = CASE
+             WHEN status IN ('downloaded', 'extracted') AND $8 = 'pending' THEN status
+             ELSE COALESCE($8, status)
+           END,
+           last_seen_at = NOW(),
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          existing.id,
+          input.mimeType ?? null,
+          input.sizeBytes ?? null,
+          input.storageKey ?? null,
+          input.documentType ?? 'unknown',
+          input.label ?? null,
+          input.pageCount ?? null,
+          input.status ?? 'pending',
+        ],
+      );
+      return toDocumentRow(rows[0]!);
+    }
+  }
+
   const rows = await query<DocumentDbRow>(
     `INSERT INTO listing_documents (
        listing_id, url, checksum, mime_type, size_bytes,
@@ -130,7 +172,11 @@ export async function upsertDocument(input: UpsertDocumentInput): Promise<Docume
        document_type = COALESCE(EXCLUDED.document_type, listing_documents.document_type),
        label = COALESCE(EXCLUDED.label, listing_documents.label),
        page_count = COALESCE(EXCLUDED.page_count, listing_documents.page_count),
-       status = COALESCE(EXCLUDED.status, listing_documents.status),
+       status = CASE
+         WHEN listing_documents.status IN ('downloaded', 'extracted') AND EXCLUDED.status = 'pending'
+           THEN listing_documents.status
+         ELSE COALESCE(EXCLUDED.status, listing_documents.status)
+       END,
        last_seen_at = NOW(),
        updated_at = NOW()
      RETURNING *`,
@@ -163,6 +209,20 @@ export async function findByListingId(listingId: number): Promise<DocumentRow[]>
     [listingId],
   );
   return rows.map(toDocumentRow);
+}
+
+export async function findByListingIdAndUrl(
+  listingId: number,
+  url: string,
+): Promise<DocumentRow | null> {
+  const rows = await query<DocumentDbRow>(
+    `SELECT * FROM listing_documents
+     WHERE listing_id = $1 AND url = $2
+     ORDER BY created_at ASC
+     LIMIT 1`,
+    [listingId, url],
+  );
+  return rows[0] ? toDocumentRow(rows[0]) : null;
 }
 
 export async function updateStatus(

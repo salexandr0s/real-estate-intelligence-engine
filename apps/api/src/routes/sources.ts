@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
+import type { SourceRow } from '@immoradar/contracts';
 import { NotFoundError } from '@immoradar/observability';
 import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
@@ -27,6 +28,54 @@ function getDiscoveryQueue(): Queue<DiscoveryJobData> {
     });
   }
   return discoveryQueue;
+}
+
+function intervalToCron(minutes: number): string {
+  if (minutes <= 0) return '*/30 * * * *';
+  if (minutes < 60) return `*/${minutes} * * * *`;
+  const hours = Math.round(minutes / 60);
+  if (hours >= 24) return '0 0 * * *';
+  return `0 */${hours} * * *`;
+}
+
+async function syncDiscoverySchedule(source: SourceRow): Promise<void> {
+  const queue = getDiscoveryQueue();
+  const schedulerId = `discovery-${source.code}`;
+
+  if (!source.isActive) {
+    try {
+      await queue.removeJobScheduler(schedulerId);
+    } catch {
+      // Scheduler may not exist yet; removing a missing schedule is still a successful sync.
+    }
+    return;
+  }
+
+  const crawlMinutes = source.crawlIntervalMinutes ?? 30;
+  const cronPattern = intervalToCron(crawlMinutes);
+
+  const sourceConfig = source.config as Record<string, unknown> | null;
+  const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
+  const maxPagesPerRun =
+    (crawlProfile?.maxPagesPerRun as number) ??
+    (crawlProfile?.maxPages as number) ??
+    100;
+
+  await queue.upsertJobScheduler(
+    schedulerId,
+    { pattern: cronPattern },
+    {
+      name: `discovery:${source.code}`,
+      data: {
+        sourceCode: source.code,
+        sourceId: source.id,
+        scrapeRunId: 0,
+        page: 1,
+        maxPages: maxPagesPerRun,
+        maxPagesPerRun,
+      },
+    },
+  );
 }
 
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
@@ -103,6 +152,8 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       throw new NotFoundError('Source', id);
     }
 
+    await syncDiscoverySchedule(updated);
+
     return reply.send({
       data: {
         id: updated.id,
@@ -130,12 +181,16 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/sources/pause-all - Pause all sources
   app.post('/v1/sources/pause-all', async (_request, reply) => {
     const affected = await sources.updateAllActive(false);
+    const updatedSources = await sources.findAll();
+    await Promise.all(updatedSources.map(syncDiscoverySchedule));
     return reply.send({ data: { affected }, meta: {} });
   });
 
   // POST /v1/sources/resume-all - Resume all sources
   app.post('/v1/sources/resume-all', async (_request, reply) => {
     const affected = await sources.updateAllActive(true);
+    const updatedSources = await sources.findAll();
+    await Promise.all(updatedSources.map(syncDiscoverySchedule));
     return reply.send({ data: { affected }, meta: {} });
   });
 

@@ -42,7 +42,7 @@ extension StatusBadge {
         switch healthStatus {
         case .healthy: self.icon = "checkmark.circle.fill"
         case .degraded: self.icon = "exclamationmark.triangle.fill"
-        case .failing: self.icon = "xmark.circle.fill"
+        case .blocked: self.icon = "xmark.octagon.fill"
         case .disabled: self.icon = "minus.circle.fill"
         case .unknown: self.icon = nil
         }
@@ -71,7 +71,7 @@ extension StatusBadge {
     VStack(spacing: 12) {
         StatusBadge(healthStatus: .healthy)
         StatusBadge(healthStatus: .degraded)
-        StatusBadge(healthStatus: .failing)
+        StatusBadge(healthStatus: .blocked)
         StatusBadge(healthStatus: .disabled)
         StatusBadge(listingStatus: .active)
         StatusBadge(listingStatus: .sold)

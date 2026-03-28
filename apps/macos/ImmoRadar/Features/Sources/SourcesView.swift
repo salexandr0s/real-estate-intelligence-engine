@@ -17,6 +17,8 @@ struct SourcesView: View {
                     }
                 }
 
+                SourcesRuntimeCard(viewModel: viewModel)
+
                 SourcesSummaryBar(viewModel: viewModel)
 
                 if viewModel.sources.isEmpty && !viewModel.isLoading {
@@ -61,6 +63,124 @@ struct SourcesView: View {
         .task {
             await viewModel.refresh(using: appState.apiClient)
         }
+        .task(id: appState.apiBaseURL) {
+            while !Task.isCancelled {
+                await appState.localRuntime.refreshStatus(apiBaseURL: appState.apiBaseURL)
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
+private struct SourcesRuntimeCard: View {
+    @Environment(AppState.self) private var appState
+    let viewModel: SourcesViewModel
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Spacing.lg) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Label(appState.localRuntime.state.title, systemImage: statusIcon)
+                    .font(.headline)
+                    .foregroundStyle(statusColor)
+
+                Text(appState.localRuntime.state.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: Theme.Spacing.xs) {
+                    ForEach(appState.localRuntime.componentStatuses) { component in
+                        Label {
+                            Text(component.kind.rawValue)
+                        } icon: {
+                            Circle()
+                                .fill(component.isRunning ? Color.scoreGood : Color.secondary.opacity(0.5))
+                                .frame(width: 8, height: 8)
+                        }
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(component.isRunning ? .primary : .secondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: Theme.Spacing.sm) {
+                Button {
+                    Task {
+                        appState.loadConnectionSecretForUserAction()
+                        await appState.localRuntime.start(
+                            apiBaseURL: appState.apiBaseURL,
+                            authToken: appState.apiToken
+                        )
+                        await appState.refreshConnection()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Run", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(appState.localRuntime.isBusy || !canRun)
+
+                Button {
+                    Task {
+                        await appState.localRuntime.stop()
+                        await appState.refreshConnection()
+                    }
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.localRuntime.isBusy || !canStop)
+            }
+        }
+        .padding(Theme.Spacing.lg)
+        .cardStyle(.subtle, padding: 0, cornerRadius: Theme.Radius.lg)
+    }
+
+    private var canRun: Bool {
+        switch appState.localRuntime.state {
+        case .stopped, .failed:
+            return true
+        case .unavailable, .starting, .running, .stopping:
+            return false
+        }
+    }
+
+    private var canStop: Bool {
+        switch appState.localRuntime.state {
+        case .running, .failed:
+            return true
+        case .stopped, .starting, .stopping, .unavailable:
+            return false
+        }
+    }
+
+    private var statusIcon: String {
+        switch appState.localRuntime.state {
+        case .running:
+            return "bolt.fill"
+        case .starting:
+            return "arrow.triangle.2.circlepath"
+        case .stopping:
+            return "stopwatch"
+        case .stopped:
+            return "pause.circle"
+        case .unavailable, .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch appState.localRuntime.state {
+        case .running:
+            return .scoreGood
+        case .starting, .stopping:
+            return .accentColor
+        case .stopped:
+            return .secondary
+        case .unavailable, .failed:
+            return .scoreAverage
+        }
     }
 }
 
@@ -72,7 +192,7 @@ private struct SourcesSummaryBar: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.md) {
             SourcesSummaryMetric(title: "Active Sources", value: "\(viewModel.activeCount)", detail: "currently scheduled", icon: "bolt.fill", tint: .accentColor)
-            SourcesSummaryMetric(title: "Needs Attention", value: "\(viewModel.attentionCount)", detail: "failing or degraded", icon: "exclamationmark.triangle.fill", tint: viewModel.attentionCount > 0 ? .scoreAverage : .secondary)
+            SourcesSummaryMetric(title: "Needs Attention", value: "\(viewModel.attentionCount)", detail: "blocked or degraded", icon: "exclamationmark.triangle.fill", tint: viewModel.attentionCount > 0 ? .scoreAverage : .secondary)
             SourcesSummaryMetric(title: "Healthy", value: "\(viewModel.healthyCount)", detail: "running cleanly", icon: "checkmark.circle.fill", tint: .scoreGood)
             SourcesSummaryMetric(title: "Total Ingested", value: PriceFormatter.formatCompact(viewModel.totalListingsIngested), detail: "all sources combined", icon: "tray.full.fill", tint: .secondary)
         }
@@ -153,6 +273,10 @@ private struct SourcesListContent: View {
                 SourcesSection(title: "Needs Attention", subtitle: "Sources that need review before they become silent failures.", sources: viewModel.needsAttentionSources, viewModel: viewModel)
             }
 
+            if !viewModel.unknownSources.isEmpty {
+                SourcesSection(title: "Unknown", subtitle: "Sources that are active but have not yet established a current health classification.", sources: viewModel.unknownSources, viewModel: viewModel)
+            }
+
             if !viewModel.healthySources.isEmpty {
                 SourcesSection(title: "Healthy", subtitle: "Sources running normally with recent successful runs.", sources: viewModel.healthySources, viewModel: viewModel)
             }
@@ -200,7 +324,7 @@ private struct SourceDetailCard: View {
     @State private var isActive: Bool = false
     @State private var isHovered: Bool = false
 
-    private static let intervalPresets = [15, 30, 60, 120]
+    private static let preferredIntervalPresets = [60, 360, 720, 1440]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -281,7 +405,7 @@ private struct SourceDetailCard: View {
                         .foregroundStyle(.secondary)
 
                     Picker("", selection: $selectedInterval) {
-                        ForEach(Self.intervalPresets, id: \.self) { minutes in
+                        ForEach(intervalOptions, id: \.self) { minutes in
                             Text(formatInterval(minutes)).tag(minutes)
                         }
                     }
@@ -408,8 +532,8 @@ private struct SourceDetailCard: View {
 
     private var readinessText: String {
         switch source.healthStatus {
-        case .failing:
-            return source.lastErrorSummary ?? "Failing health checks and needs intervention."
+        case .blocked:
+            return source.lastErrorSummary ?? "Blocked or repeatedly failing. Intervention is required before the source goes silent."
         case .degraded:
             return source.lastErrorSummary ?? "Running with elevated risk or reduced success rate."
         case .healthy:
@@ -418,7 +542,7 @@ private struct SourceDetailCard: View {
             }
             return "Healthy, but no successful run has been recorded yet."
         case .disabled:
-            return "Source is paused and not participating in scheduled runs."
+            return "Source is disabled and removed from scheduled runs."
         case .unknown:
             return "Source health has not been determined yet."
         }
@@ -426,6 +550,11 @@ private struct SourceDetailCard: View {
 
     private var intervalLabel: String {
         formatInterval(source.crawlIntervalMinutes)
+    }
+
+    private var intervalOptions: [Int] {
+        Set(Self.preferredIntervalPresets + [source.crawlIntervalMinutes])
+            .sorted()
     }
 
     private func loadScrapeRunsIfNeeded() async {
@@ -456,6 +585,14 @@ private struct SourceDetailCard: View {
     private func formatInterval(_ minutes: Int) -> String {
         if minutes < 60 {
             return "\(minutes)m"
+        }
+        if minutes % 1440 == 0 {
+            let days = minutes / 1440
+            return "\(days)d"
+        }
+        if minutes % 60 != 0 {
+            let hours = Double(minutes) / 60
+            return "\(hours.formatted(.number.precision(.fractionLength(1))))h"
         }
         let hours = minutes / 60
         return "\(hours)h"

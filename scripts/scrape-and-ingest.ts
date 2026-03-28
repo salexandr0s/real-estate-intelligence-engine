@@ -327,6 +327,9 @@ async function main(): Promise<void> {
       ingested === 0 && failed > 0 ? 'failed' : failed > 0 ? 'partial' : 'succeeded';
 
     await scrapeRuns.finish(run.id, finalStatus, metrics);
+    if (!dryRun) {
+      await sources.applyRunOutcome(source.id, finalStatus, new Date());
+    }
 
     // 10. Print summary
     const duration = runCtx.getDurationFormatted();

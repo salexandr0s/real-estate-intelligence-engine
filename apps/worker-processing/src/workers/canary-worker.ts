@@ -43,6 +43,7 @@ import {
   FindMyHomeMapper,
   OpenImmoMapper,
   RemaxMapper,
+  EdikteMapper,
 } from '@immoradar/normalization';
 import { scoreListing } from '@immoradar/scoring';
 
@@ -58,6 +59,7 @@ const normalizerRegistry = new Map<string, BaseSourceMapper>([
   ['findmyhome', new FindMyHomeMapper()],
   ['openimmo', new OpenImmoMapper()],
   ['remax', new RemaxMapper()],
+  ['edikte', new EdikteMapper()],
 ]);
 
 export function createCanaryWorker(): Worker<CanaryJobData> {

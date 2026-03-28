@@ -30,16 +30,10 @@ final class AlertsViewModel {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
     var sortBy: AlertSortBy = .age {
-        didSet {
-            resortAlerts()
-            normalizeSelection(preferredID: selectedAlertID)
-        }
+        didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
     var sortDirection: AlertSortDirection = .desc {
-        didSet {
-            resortAlerts()
-            normalizeSelection(preferredID: selectedAlertID)
-        }
+        didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
     var searchText: String = "" {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
@@ -144,7 +138,7 @@ final class AlertsViewModel {
                 cursor = response.nextCursor
             } while cursor != nil
 
-            alerts = sortAlerts(allAlerts)
+            alerts = allAlerts
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -159,7 +153,6 @@ final class AlertsViewModel {
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
                 alerts[idx].status = .opened
             }
-            resortAlerts()
             normalizeSelection(preferredID: alert.id)
         } catch {
             errorMessage = error.localizedDescription
@@ -180,7 +173,6 @@ final class AlertsViewModel {
                     alerts[i].status = .opened
                 }
             }
-            resortAlerts()
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -201,7 +193,6 @@ final class AlertsViewModel {
                     alerts[i].status = .dismissed
                 }
             }
-            resortAlerts()
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             errorMessage = error.localizedDescription
@@ -213,9 +204,18 @@ final class AlertsViewModel {
         if let existingIndex = alerts.firstIndex(where: { $0.id == alert.id }) {
             alerts[existingIndex] = alert
         } else {
-            alerts.append(alert)
+            switch sortBy {
+            case .age:
+                if sortDirection == .desc {
+                    alerts.insert(alert, at: 0)
+                } else {
+                    alerts.append(alert)
+                }
+            case .district, .price:
+                alerts.append(alert)
+                alerts = sortAlerts(alerts)
+            }
         }
-        resortAlerts()
         normalizeSelection(preferredID: selectedAlertID)
     }
 
@@ -234,7 +234,6 @@ final class AlertsViewModel {
             if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
                 alerts[idx].status = .dismissed
             }
-            resortAlerts()
             normalizeSelection(preferredID: alert.id)
             undoManager?.registerUndo(withTarget: self) { vm in
                 Task { @MainActor in
@@ -245,7 +244,6 @@ final class AlertsViewModel {
                     if let idx = vm.alerts.firstIndex(where: { $0.id == alert.id }) {
                         vm.alerts[idx].status = previousStatus
                     }
-                    vm.resortAlerts()
                     vm.normalizeSelection(preferredID: alert.id)
                 }
             }
@@ -267,10 +265,6 @@ final class AlertsViewModel {
 
     private func sortAlerts(_ input: [Alert]) -> [Alert] {
         input.sorted(by: compareAlerts)
-    }
-
-    private func resortAlerts() {
-        alerts = sortAlerts(alerts)
     }
 
     private func compareAlerts(_ lhs: Alert, _ rhs: Alert) -> Bool {

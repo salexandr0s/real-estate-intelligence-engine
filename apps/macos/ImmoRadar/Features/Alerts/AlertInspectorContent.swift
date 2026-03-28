@@ -150,9 +150,11 @@ struct AlertInspectorContent: View {
                         }
 
                         HStack(spacing: Theme.Spacing.sm) {
-                            Label(listing.districtName ?? listing.city, systemImage: "mappin")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if let location = listing.alertLocationLabel {
+                                Label(location, systemImage: "mappin")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
 
                             if let area = listing.livingAreaSqm {
                                 Text(PriceFormatter.formatArea(area))

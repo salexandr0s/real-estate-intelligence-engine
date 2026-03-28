@@ -309,10 +309,13 @@ async function enqueueAttachmentDocuments(
       listingId: listing.id,
       url: attachment.url,
       label: attachment.label ?? null,
+      mimeType: attachment.type ?? null,
       documentType: attachment.type ?? 'unknown',
     });
 
-    await docQueue.add(`doc:${doc.id}`, { documentId: doc.id }, DEFAULT_JOB_RETRY_OPTS);
+    if (doc.status !== 'extracted') {
+      await docQueue.add(`doc:${doc.id}`, { documentId: doc.id }, DEFAULT_JOB_RETRY_OPTS);
+    }
 
     log.info('Enqueued document for processing', {
       documentId: doc.id,

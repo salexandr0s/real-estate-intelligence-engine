@@ -201,12 +201,7 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
         await scrapeRuns.finish(scrapeRunId, finalStatus, metrics);
 
         // Update source health and detect transitions
-        if (finalStatus === 'succeeded') {
-          await sources.updateHealthStatus(sourceId, 'healthy', new Date());
-        }
-
-        // Check health transitions and log for monitoring
-        const healthResult = await sources.checkAndUpdateHealth(sourceId);
+        const healthResult = await sources.applyRunOutcome(sourceId, finalStatus, new Date());
         if (healthResult.changed) {
           const severity =
             healthResult.newStatus === 'blocked' || healthResult.newStatus === 'disabled'

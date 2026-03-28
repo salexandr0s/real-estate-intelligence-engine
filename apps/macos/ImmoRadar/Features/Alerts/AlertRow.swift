@@ -118,20 +118,10 @@ struct AlertRow: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.sm)
-        .background {
-            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                .fill(
-                    isSelected
-                    ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
-                    : Color.clear
-                )
-        }
-        .overlay(alignment: .leading) {
+        .overlay {
             if isSelected {
-                RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.65))
-                    .frame(width: 3)
-                    .padding(.vertical, 8)
+                RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
             }
         }
         .opacity(alert.status == .dismissed ? 0.72 : 1.0)

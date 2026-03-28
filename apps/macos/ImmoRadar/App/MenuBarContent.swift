@@ -31,7 +31,7 @@ struct MenuBarContent: View {
 
         Button("Refresh") {
             Task {
-                await appState.refreshConnection()
+                await appState.refreshConnection(userInitiated: true)
             }
         }
         .keyboardShortcut("r", modifiers: .command)

@@ -13,8 +13,9 @@ import {
   QUEUE_NAMES,
   getRedisConnection,
   getQueuePrefix,
+  DEFAULT_JOB_RETRY_OPTS,
 } from '@immoradar/scraper-core';
-import type { AlertDeliveryJobData } from '@immoradar/scraper-core';
+import type { AlertDeliveryJobData, DocumentProcessingJobData } from '@immoradar/scraper-core';
 import {
   BaseSourceMapper,
   WillhabenMapper,
@@ -36,6 +37,7 @@ import {
   marketBaselines,
   userFilters,
   alerts,
+  documents,
   proximity,
   listingPois,
   sources,
@@ -67,6 +69,7 @@ const GEOCODE_PRECISION_SCORES: Record<string, number> = {
 };
 
 let _deliveryQueue: Queue<AlertDeliveryJobData> | null = null;
+let _documentQueue: Queue<DocumentProcessingJobData> | null = null;
 
 function getDeliveryQueue(): Queue<AlertDeliveryJobData> {
   if (!_deliveryQueue) {
@@ -76,6 +79,16 @@ function getDeliveryQueue(): Queue<AlertDeliveryJobData> {
     });
   }
   return _deliveryQueue;
+}
+
+function getDocumentQueue(): Queue<DocumentProcessingJobData> {
+  if (!_documentQueue) {
+    _documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
+      connection: getRedisConnection() as ConnectionOptions,
+      prefix: getQueuePrefix(),
+    });
+  }
+  return _documentQueue;
 }
 
 export function buildPipelineDeps(): FullIngestionPipelineDeps {
@@ -212,6 +225,25 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
           { attempts: 3, backoff: { type: 'exponential', delay: 5_000 } },
         );
       },
+    },
+    persistAttachments: async (listingId, attachments) => {
+      for (const attachment of attachments) {
+        const doc = await documents.upsertDocument({
+          listingId,
+          url: attachment.url,
+          label: attachment.label ?? null,
+          mimeType: attachment.type ?? null,
+          documentType: attachment.type ?? 'unknown',
+        });
+
+        if (doc.status !== 'extracted') {
+          await getDocumentQueue().add(
+            `doc:${doc.id}`,
+            { documentId: doc.id },
+            DEFAULT_JOB_RETRY_OPTS,
+          );
+        }
+      }
     },
     getSourceHealthScore: async (sourceId: number) => {
       const source = await sources.findById(sourceId);

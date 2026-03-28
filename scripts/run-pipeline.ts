@@ -348,6 +348,9 @@ async function runScrape(
       const finalStatus =
         ingested === 0 && failed > 0 ? 'failed' : failed > 0 ? 'partial' : 'succeeded';
       await scrapeRuns.finish(run.id, finalStatus, metrics);
+      if (!dryRun) {
+        await sources.applyRunOutcome(source.id, finalStatus, new Date());
+      }
 
       log.info(`[scrape:${sourceCode}] Done: ${ingested} ingested, ${failed} failed`);
 

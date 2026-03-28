@@ -1,5 +1,11 @@
 import { query } from '../client.js';
-import type { SourceRow, SourceHealthStatus, ScrapeMode, LegalStatus } from '@immoradar/contracts';
+import type {
+  SourceRow,
+  SourceHealthStatus,
+  ScrapeMode,
+  LegalStatus,
+  ScrapeRunStatus,
+} from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
 
@@ -258,4 +264,47 @@ export async function checkAndUpdateHealth(sourceId: number): Promise<{
   }
 
   return { previousStatus, newStatus, changed: newStatus !== previousStatus };
+}
+
+/**
+ * Applies a scrape-run outcome to source health/freshness metadata.
+ *
+ * Successful and partial runs both count as freshness-bearing observations and
+ * immediately recover the source to healthy. Failed / rate-limited runs feed
+ * the existing consecutive-failure health transition logic. Cancelled/running
+ * runs leave source health unchanged.
+ */
+export async function applyRunOutcome(
+  sourceId: number,
+  status: ScrapeRunStatus,
+  completedAt: Date = new Date(),
+): Promise<{
+  previousStatus: SourceHealthStatus;
+  newStatus: SourceHealthStatus;
+  changed: boolean;
+}> {
+  const source = await findById(sourceId);
+  if (!source) {
+    return { previousStatus: 'unknown', newStatus: 'unknown', changed: false };
+  }
+
+  if (status === 'succeeded' || status === 'partial') {
+    const previousStatus = source.healthStatus;
+    await updateHealthStatus(sourceId, 'healthy', completedAt);
+    return {
+      previousStatus,
+      newStatus: 'healthy',
+      changed: previousStatus !== 'healthy',
+    };
+  }
+
+  if (status === 'failed' || status === 'rate_limited') {
+    return checkAndUpdateHealth(sourceId);
+  }
+
+  return {
+    previousStatus: source.healthStatus,
+    newStatus: source.healthStatus,
+    changed: false,
+  };
 }

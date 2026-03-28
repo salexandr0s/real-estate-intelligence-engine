@@ -60,6 +60,12 @@ enum ClaudeAuthHelper {
         readCredentials()?.subscriptionType
     }
 
+    /// Loads availability and plan metadata in a single keychain/file read.
+    static func loadSubscriptionStatus() -> (isAvailable: Bool, subscriptionType: String?) {
+        let creds = readCredentials()
+        return (creds != nil, creds?.subscriptionType)
+    }
+
     // MARK: - Internal
 
     private struct Credentials {

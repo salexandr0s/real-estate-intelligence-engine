@@ -30,6 +30,10 @@ export interface FullIngestionPipelineDeps {
   raw: RawIngestionDeps;
   normalization: NormalizationDeps;
   scoreAndAlert: ScoreAndAlertDeps;
+  persistAttachments?: (
+    listingId: number,
+    attachments: Array<{ url: string; label?: string; type?: string }>,
+  ) => Promise<void>;
   /** Look up source health score (0-100) by source ID. Falls back to 90 if not provided. */
   getSourceHealthScore?: (sourceId: number) => Promise<number>;
   /** Look up geocode precision score (0-100) by listing ID. Falls back to 75 if not provided. */
@@ -40,6 +44,10 @@ export class FullIngestionPipeline {
   private readonly rawIngestor: IngestRawListing;
   private readonly normalizer: NormalizeAndUpsert;
   private readonly scorer: ScoreAndAlert;
+  private readonly persistAttachments: (
+    listingId: number,
+    attachments: Array<{ url: string; label?: string; type?: string }>,
+  ) => Promise<void>;
   private readonly getSourceHealthScore: (sourceId: number) => Promise<number>;
   private readonly getLocationConfidence: (listingId: number) => Promise<number>;
 
@@ -47,6 +55,7 @@ export class FullIngestionPipeline {
     this.rawIngestor = new IngestRawListing(deps.raw);
     this.normalizer = new NormalizeAndUpsert(normalizers, deps.normalization);
     this.scorer = new ScoreAndAlert(deps.scoreAndAlert);
+    this.persistAttachments = deps.persistAttachments ?? (async () => {});
     this.getSourceHealthScore = deps.getSourceHealthScore ?? (async () => 90);
     this.getLocationConfidence = deps.getLocationConfidence ?? (async () => 75);
   }
@@ -118,6 +127,22 @@ export class FullIngestionPipeline {
         log.error('Scoring failed, continuing without score', {
           listingId: normResult.listingId,
           errorClass: 'scoring_failure',
+        });
+      }
+    }
+
+    // Stage 4: Persist attachment documents once the listing exists
+    if (normResult.listingId > 0 && (capture.attachmentUrls?.length ?? 0) > 0) {
+      try {
+        await this.persistAttachments(normResult.listingId, capture.attachmentUrls ?? []);
+        log.info('Stage 4 complete: attachments persisted', {
+          listingId: normResult.listingId,
+          attachmentCount: capture.attachmentUrls?.length ?? 0,
+        });
+      } catch (_err) {
+        log.error('Attachment persistence failed, continuing without document enqueue', {
+          listingId: normResult.listingId,
+          errorClass: 'attachment_persistence_failure',
         });
       }
     }

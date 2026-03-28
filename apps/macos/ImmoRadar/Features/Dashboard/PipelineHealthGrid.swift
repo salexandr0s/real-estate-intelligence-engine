@@ -15,7 +15,7 @@ struct PipelineHealthGrid: View {
         sources.count(where: { $0.isActive })
     }
 
-    /// Sort: failing/degraded first, then healthy, then disabled.
+    /// Sort: blocked/degraded first, then unknown, then healthy, then disabled.
     private var sortedSources: [Source] {
         sources.sorted { a, b in
             a.healthStatus.sortOrder < b.healthStatus.sortOrder
@@ -66,9 +66,9 @@ struct PipelineHealthGrid: View {
                                 }
                             }
 
-                            // Error summary for degraded/failing sources
+                            // Error summary for degraded/blocked sources
                             if let error = source.lastErrorSummary,
-                               source.healthStatus == .degraded || source.healthStatus == .failing {
+                               source.healthStatus == .degraded || source.healthStatus == .blocked {
                                 Text(error)
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)

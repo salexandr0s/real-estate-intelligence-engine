@@ -1,5 +1,4 @@
 import type { AlertChannel, AlertStatus, AlertType } from './domain.js';
-import type { ListingSearchResult } from './filtering.js';
 
 // ── Match Reasons ────────────────────────────────────────────────────────────
 
@@ -42,6 +41,32 @@ export interface AlertCreate {
 
 // ── Alert Row ───────────────────────────────────────────────────────────────
 
+export interface AlertListingSummary {
+  id: number;
+  listingUid?: string | null;
+  sourceCode?: string | null;
+  canonicalUrl?: string | null;
+  title?: string | null;
+  operationType?: string | null;
+  propertyType?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  districtNo?: number | null;
+  districtName?: string | null;
+  listPriceEurCents?: number | null;
+  livingAreaSqm?: number | null;
+  rooms?: number | null;
+  pricePerSqmEur?: number | null;
+  currentScore?: number | null;
+  firstSeenAt?: Date | null;
+  listingStatus?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geocodePrecision?: string | null;
+  lastPriceChangePct?: number | null;
+  lastPriceChangeAt?: Date | null;
+}
+
 export interface AlertRow {
   id: number;
   userId: number;
@@ -65,8 +90,8 @@ export interface AlertRow {
   updatedAt: Date;
   /** Present only when query JOINs user_filters (e.g. findByUser). */
   filterName?: string | null;
-  /** Embedded canonical listing summary for alert UIs. */
-  listing?: ListingSearchResult | null;
+  /** Embedded listing snapshot for alert UIs; relaxed so alerts keep context even when some listing fields are missing. */
+  listing?: AlertListingSummary | null;
 }
 
 // ── Dedupe Key Builder ──────────────────────────────────────────────────────

@@ -33,16 +33,7 @@ final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "apiBaseURL") }
     }
 
-    var apiToken: String {
-        get { KeychainHelper.get(key: "apiToken") ?? "" }
-        set {
-            _ = persistSecret(
-                value: newValue,
-                key: "apiToken",
-                label: "API token"
-            )
-        }
-    }
+    var apiToken: String = ""
 
     var refreshIntervalSeconds: Int {
         get { UserDefaults.standard.integer(forKey: "refreshInterval").clamped(to: 10...3600, default: 60) }
@@ -71,7 +62,7 @@ final class AppState {
 
     // MARK: - Copilot Provider
     // These are stored properties so @Observable tracks changes correctly.
-    // They sync to UserDefaults/Keychain in didSet.
+    // Keychain-backed values are loaded lazily to avoid access prompts during app init.
 
     var copilotProvider: CopilotProvider = {
         let raw = UserDefaults.standard.string(forKey: "copilotProvider") ?? "anthropic"
@@ -80,25 +71,9 @@ final class AppState {
         didSet { UserDefaults.standard.set(copilotProvider.rawValue, forKey: "copilotProvider") }
     }
 
-    var anthropicApiKey: String = KeychainHelper.get(key: "anthropicApiKey") ?? "" {
-        didSet {
-            _ = persistSecret(
-                value: anthropicApiKey,
-                key: "anthropicApiKey",
-                label: "Anthropic API key"
-            )
-        }
-    }
+    var anthropicApiKey: String = ""
 
-    var openaiApiKey: String = KeychainHelper.get(key: "openaiApiKey") ?? "" {
-        didSet {
-            _ = persistSecret(
-                value: openaiApiKey,
-                key: "openaiApiKey",
-                label: "OpenAI API key"
-            )
-        }
-    }
+    var openaiApiKey: String = ""
 
     var copilotModel: String = UserDefaults.standard.string(forKey: "copilotModel") ?? "" {
         didSet { UserDefaults.standard.set(copilotModel, forKey: "copilotModel") }
@@ -108,21 +83,46 @@ final class AppState {
     var claudeSubscriptionAvailable: Bool = false
     var claudeSubscriptionType: String?
 
+    private var didLoadConnectionSecrets = false
+    private var didLoadConnectionSecretsWithInteraction = false
+    private var didLoadCopilotSecrets = false
+    private var didLoadCopilotSecretsWithInteraction = false
+    private var didLoadClaudeSubscription = false
+    private static let staleSecretsCleanupVersionKey = "appState.didRunStaleSecretsCleanup.v1"
+
     /// The active API key for the current provider, resolving Claude subscription OAuth.
     var activeCopilotApiKey: String {
         switch copilotProvider {
         case .anthropic:
+            loadCopilotSecretsIfNeeded(allowUserInteraction: true)
             return anthropicApiKey
         case .openai:
+            loadCopilotSecretsIfNeeded(allowUserInteraction: true)
             return openaiApiKey
         case .claudeSubscription:
             return ClaudeAuthHelper.loadOAuthToken() ?? ""
         }
     }
 
+    func loadSettingsSecretsIfNeeded() {
+        loadConnectionSecretsIfNeeded(allowUserInteraction: true)
+        loadCopilotSecretsIfNeeded(allowUserInteraction: true)
+    }
+
+    func loadConnectionSecretForUserAction() {
+        loadConnectionSecretsIfNeeded(allowUserInteraction: true)
+    }
+
+    func loadClaudeSubscriptionIfNeeded() {
+        guard !didLoadClaudeSubscription else { return }
+        refreshClaudeSubscription()
+    }
+
     func refreshClaudeSubscription() {
-        claudeSubscriptionAvailable = ClaudeAuthHelper.isAvailable
-        claudeSubscriptionType = ClaudeAuthHelper.subscriptionType
+        let status = ClaudeAuthHelper.loadSubscriptionStatus()
+        claudeSubscriptionAvailable = status.isAvailable
+        claudeSubscriptionType = status.subscriptionType
+        didLoadClaudeSubscription = true
     }
 
     func clearSettingsError() {
@@ -170,9 +170,12 @@ final class AppState {
             return
         }
 
+        apiToken = normalizedToken
+        didLoadConnectionSecrets = true
+        didLoadConnectionSecretsWithInteraction = true
         UserDefaults.standard.set(normalizedBaseURL, forKey: "apiBaseURL")
         await apiClient.updateBaseURL(normalizedBaseURL)
-        await apiClient.updateAuthToken(normalizedToken.isEmpty ? nil : normalizedToken)
+        await apiClient.updateAuthToken(normalizedToken.isEmpty ? "dev-token" : normalizedToken)
 
         alertStream.disconnect()
         await refreshConnection()
@@ -199,6 +202,9 @@ final class AppState {
             ) else {
                 return
             }
+            anthropicApiKey = normalizedAnthropicKey
+            didLoadCopilotSecrets = true
+            didLoadCopilotSecretsWithInteraction = true
         case .openai:
             guard persistSecret(
                 value: normalizedOpenAIKey,
@@ -207,6 +213,9 @@ final class AppState {
             ) else {
                 return
             }
+            openaiApiKey = normalizedOpenAIKey
+            didLoadCopilotSecrets = true
+            didLoadCopilotSecretsWithInteraction = true
         case .claudeSubscription:
             break
         }
@@ -226,15 +235,15 @@ final class AppState {
     // MARK: - Cache
 
     let localCache = LocalCache()
+    let localRuntime = LocalRuntimeService()
 
     // MARK: - Init
 
     init() {
         let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
-        let token = KeychainHelper.get(key: "apiToken") ?? ""
         self.apiClient = APIClient(
             baseURL: baseURL,
-            authToken: token.isEmpty ? "dev-token" : token
+            authToken: "dev-token"
         )
 
         // Request notification permission on launch
@@ -242,8 +251,7 @@ final class AppState {
             NotificationManager.shared.requestPermission()
         }
 
-        // Check for Claude subscription
-        refreshClaudeSubscription()
+        runSilentStaleSecretsCleanupIfNeeded()
     }
 
     // MARK: - Actions
@@ -257,7 +265,10 @@ final class AppState {
         selectedNavItem = .listings
     }
 
-    func refreshConnection() async {
+    func refreshConnection(userInitiated: Bool = false) async {
+        loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
+        await apiClient.updateAuthToken(apiToken.isEmpty ? "dev-token" : apiToken)
+
         connectionStatus = .connecting
         let connected = await apiClient.testConnection()
         connectionStatus = connected ? .connected : .disconnected
@@ -305,6 +316,12 @@ final class AppState {
         }
     }
 
+    func cleanupStoredSecrets() {
+        cleanupIfEmpty(key: "apiToken", allowUserInteraction: true)
+        cleanupIfEmpty(key: "anthropicApiKey", allowUserInteraction: true)
+        cleanupIfEmpty(key: "openaiApiKey", allowUserInteraction: true)
+    }
+
     @discardableResult
     private func persistSecret(
         value: String,
@@ -313,12 +330,16 @@ final class AppState {
         syncLiveAuthToken: Bool = true
     ) -> Bool {
         do {
-            try KeychainHelper.set(key: key, value: value)
+            if value.isEmpty {
+                _ = KeychainHelper.delete(key: key)
+            } else {
+                try KeychainHelper.set(key: key, value: value)
+            }
             settingsErrorMessage = nil
 
             if syncLiveAuthToken, key == "apiToken" {
                 Task {
-                    await apiClient.updateAuthToken(value.isEmpty ? nil : value)
+                    await apiClient.updateAuthToken(value.isEmpty ? "dev-token" : value)
                 }
             }
 
@@ -327,5 +348,68 @@ final class AppState {
             settingsErrorMessage = "Couldn’t save \(label). \(error.localizedDescription)"
             return false
         }
+    }
+
+    private func loadConnectionSecretsIfNeeded(allowUserInteraction: Bool) {
+        if didLoadConnectionSecrets && (!allowUserInteraction || didLoadConnectionSecretsWithInteraction) {
+            return
+        }
+
+        apiToken = KeychainHelper.get(
+            key: "apiToken",
+            allowUserInteraction: allowUserInteraction
+        ) ?? ""
+        if allowUserInteraction, apiToken.isEmpty {
+            _ = KeychainHelper.delete(key: "apiToken")
+        }
+        didLoadConnectionSecrets = true
+        didLoadConnectionSecretsWithInteraction = allowUserInteraction
+    }
+
+    private func loadCopilotSecretsIfNeeded(allowUserInteraction: Bool) {
+        if didLoadCopilotSecrets && (!allowUserInteraction || didLoadCopilotSecretsWithInteraction) {
+            return
+        }
+
+        anthropicApiKey = KeychainHelper.get(
+            key: "anthropicApiKey",
+            allowUserInteraction: allowUserInteraction
+        ) ?? ""
+        openaiApiKey = KeychainHelper.get(
+            key: "openaiApiKey",
+            allowUserInteraction: allowUserInteraction
+        ) ?? ""
+        if allowUserInteraction {
+            if anthropicApiKey.isEmpty {
+                _ = KeychainHelper.delete(key: "anthropicApiKey")
+            }
+            if openaiApiKey.isEmpty {
+                _ = KeychainHelper.delete(key: "openaiApiKey")
+            }
+        }
+        didLoadCopilotSecrets = true
+        didLoadCopilotSecretsWithInteraction = allowUserInteraction
+    }
+
+    private func runSilentStaleSecretsCleanupIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.staleSecretsCleanupVersionKey) else { return }
+
+        cleanupIfEmpty(key: "apiToken", allowUserInteraction: false)
+        cleanupIfEmpty(key: "anthropicApiKey", allowUserInteraction: false)
+        cleanupIfEmpty(key: "openaiApiKey", allowUserInteraction: false)
+
+        UserDefaults.standard.set(true, forKey: Self.staleSecretsCleanupVersionKey)
+    }
+
+    private func cleanupIfEmpty(key: String, allowUserInteraction: Bool) {
+        guard let value = KeychainHelper.get(
+            key: key,
+            allowUserInteraction: allowUserInteraction
+        ) else {
+            return
+        }
+
+        guard value.isEmpty else { return }
+        _ = KeychainHelper.delete(key: key)
     }
 }

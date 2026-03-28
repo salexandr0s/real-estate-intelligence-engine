@@ -8,14 +8,18 @@ enum KeychainHelper {
 
     // MARK: - Read
 
-    static func get(key: String) -> String? {
-        let query: [String: Any] = [
+    static func get(key: String, allowUserInteraction: Bool = true) -> String? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+
+        query[kSecUseAuthenticationUI as String] = allowUserInteraction
+            ? kSecUseAuthenticationUIAllow
+            : kSecUseAuthenticationUIFail
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

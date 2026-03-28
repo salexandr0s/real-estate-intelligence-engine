@@ -23,12 +23,12 @@ final class SourcesViewModel {
         sources.count(where: { $0.healthStatus == .degraded })
     }
 
-    var failingCount: Int {
-        sources.count(where: { $0.healthStatus == .failing })
+    var blockedCount: Int {
+        sources.count(where: { $0.healthStatus == .blocked })
     }
 
     var attentionCount: Int {
-        sources.count(where: { $0.healthStatus == .failing || $0.healthStatus == .degraded })
+        sources.count(where: { $0.healthStatus == .blocked || $0.healthStatus == .degraded })
     }
 
     var activeCount: Int {
@@ -45,7 +45,13 @@ final class SourcesViewModel {
 
     var needsAttentionSources: [Source] {
         sources
-            .filter { $0.isActive && ($0.healthStatus == .failing || $0.healthStatus == .degraded) }
+            .filter { $0.isActive && ($0.healthStatus == .blocked || $0.healthStatus == .degraded) }
+            .sorted(by: sourceSort)
+    }
+
+    var unknownSources: [Source] {
+        sources
+            .filter { $0.isActive && $0.healthStatus == .unknown }
             .sorted(by: sourceSort)
     }
 

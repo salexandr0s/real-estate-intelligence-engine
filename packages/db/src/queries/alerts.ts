@@ -1,6 +1,7 @@
 import { query } from '../client.js';
 import type {
   AlertCreate,
+  AlertListingSummary,
   AlertRow,
   AlertStatus,
   AlertType,
@@ -171,29 +172,16 @@ function normalizePriceSortKey(
   return direction === 'asc' ? PRICE_SORT_SENTINEL_ASC : PRICE_SORT_SENTINEL_DESC;
 }
 
-function toAlertListing(row: AlertDbRow): AlertRow['listing'] {
-  if (
-    row.listing_listing_uid == null ||
-    row.listing_canonical_url == null ||
-    row.listing_title == null ||
-    row.listing_operation_type == null ||
-    row.listing_property_type == null ||
-    row.listing_city == null ||
-    row.listing_first_seen_at == null ||
-    row.listing_listing_status == null
-  ) {
-    return null;
-  }
-
+function toAlertListing(row: AlertDbRow): AlertListingSummary | null {
   return {
     id: Number(row.listing_id),
-    listingUid: row.listing_listing_uid,
-    sourceCode: row.listing_source_code ?? undefined,
-    canonicalUrl: row.listing_canonical_url,
-    title: row.listing_title,
-    operationType: row.listing_operation_type,
-    propertyType: row.listing_property_type,
-    city: row.listing_city,
+    listingUid: row.listing_listing_uid ?? null,
+    sourceCode: row.listing_source_code ?? null,
+    canonicalUrl: row.listing_canonical_url ?? null,
+    title: row.listing_title ?? null,
+    operationType: row.listing_operation_type ?? null,
+    propertyType: row.listing_property_type ?? null,
+    city: row.listing_city ?? null,
     postalCode: row.listing_postal_code ?? null,
     districtNo: row.listing_district_no ?? null,
     districtName: row.listing_district_name ?? null,
@@ -204,8 +192,8 @@ function toAlertListing(row: AlertDbRow): AlertRow['listing'] {
     pricePerSqmEur:
       row.listing_price_per_sqm_eur != null ? Number(row.listing_price_per_sqm_eur) : null,
     currentScore: row.listing_current_score != null ? Number(row.listing_current_score) : null,
-    firstSeenAt: row.listing_first_seen_at,
-    listingStatus: row.listing_listing_status,
+    firstSeenAt: row.listing_first_seen_at ?? null,
+    listingStatus: row.listing_listing_status ?? null,
     latitude: row.listing_latitude != null ? Number(row.listing_latitude) : null,
     longitude: row.listing_longitude != null ? Number(row.listing_longitude) : null,
     geocodePrecision: row.listing_geocode_precision ?? null,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@immoradar/observability';
-import type { AlertRow, AlertStatus, ListingSearchResult } from '@immoradar/contracts';
+import type { AlertListingSummary, AlertRow, AlertStatus } from '@immoradar/contracts';
 import { alerts } from '@immoradar/db';
 import {
   parseOrThrow,
@@ -15,7 +15,7 @@ function centsToEur(cents: number | null | undefined): number | null {
   return cents / 100;
 }
 
-function mapListingSummary(listing: ListingSearchResult) {
+function mapListingSummary(listing: AlertListingSummary) {
   return {
     id: listing.id,
     listingUid: listing.listingUid,
@@ -34,7 +34,7 @@ function mapListingSummary(listing: ListingSearchResult) {
     rooms: listing.rooms,
     pricePerSqmEur: listing.pricePerSqmEur,
     currentScore: listing.currentScore,
-    firstSeenAt: listing.firstSeenAt.toISOString(),
+    firstSeenAt: listing.firstSeenAt?.toISOString() ?? null,
     listingStatus: listing.listingStatus,
     latitude: listing.latitude,
     longitude: listing.longitude,

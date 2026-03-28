@@ -72,7 +72,7 @@ extension Source {
             code: "bazar",
             name: "bazar.at",
             isActive: true,
-            healthStatus: .failing,
+            healthStatus: .blocked,
             lastSuccessfulRun: Calendar.current.date(byAdding: .hour, value: -18, to: .now) ?? .now,
             crawlIntervalMinutes: 60,
             lastErrorSummary: "CAPTCHA wall detected on discovery pages since 06:12 UTC",

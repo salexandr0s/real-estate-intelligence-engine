@@ -36,7 +36,6 @@ struct AlertsList: View {
                     }
                 }
         }
-        .environment(\.controlActiveState, .inactive)
         .listStyle(.inset(alternatesRowBackgrounds: false))
     }
 }

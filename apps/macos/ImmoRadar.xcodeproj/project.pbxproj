@@ -173,6 +173,7 @@
 		C6E181A2E61B7836AFD73C67 /* PriceTrendBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264BC84F1820EC445B5075EF /* PriceTrendBadge.swift */; };
 		C8155A2DF4557CDD92655982 /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D05E317415F3FADCEBC71821 /* CopilotProvider.swift */; };
 		C8F4A042EE092EF1380D392D /* PriceHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558A4105212B10DEE5A40483 /* PriceHistoryView.swift */; };
+		C8FA87BD122E38348129711C /* LocalRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC6DBE60C79922ECF7E7D63 /* LocalRuntimeService.swift */; };
 		CA68E3B14CBB57F1F8215558 /* ScoreBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD70C07F84B1256AD4D9E6CA /* ScoreBar.swift */; };
 		CC48D0E77587BBC9F731FFED /* ListingHeaderSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85391B4FF07FD117D5DAE9AE /* ListingHeaderSection.swift */; };
 		CC9F675197908B5D55A069EE /* ViennaPOIStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF8EB43D9646A704597A1B8 /* ViennaPOIStore.swift */; };
@@ -432,6 +433,7 @@
 		FF775280027AE27C8EEF7007 /* AnalysisLegalRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisLegalRentCard.swift; sourceTree = "<group>"; };
 		FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsFilterBar.swift; sourceTree = "<group>"; };
 		FFA1AEC6E1FC6947B91DD83E /* ScrapeRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRun.swift; sourceTree = "<group>"; };
+		FFC6DBE60C79922ECF7E7D63 /* LocalRuntimeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuntimeService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -779,6 +781,7 @@
 				A4697F9A383EBF92F606A4EC /* AlertStreamService.swift */,
 				4018BCCA75DE984FC5F4D440 /* CacheManager.swift */,
 				D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */,
+				FFC6DBE60C79922ECF7E7D63 /* LocalRuntimeService.swift */,
 				D441B787954106ED54C49791 /* NotificationManager.swift */,
 				C4A52FB3F1D98A5F88CD9745 /* SpotlightIndexer.swift */,
 			);
@@ -872,8 +875,8 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					70FF8B76102F8E820C191D48 = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = 97MH8853HX;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -1044,6 +1047,7 @@
 				2C30D987AB5C9BD3E0669E94 /* ListingsView.swift in Sources */,
 				D5315D0133D9C5F59F9357CA /* ListingsViewModel.swift in Sources */,
 				59687438CC6AE9BB4AD43CAA /* LocalCache.swift in Sources */,
+				C8FA87BD122E38348129711C /* LocalRuntimeService.swift in Sources */,
 				97BD51DD4EBF633F5B964ABA /* Logging.swift in Sources */,
 				8583726C3B68750E59A5E1E8 /* MapSelectionOverlay.swift in Sources */,
 				CFCFFF7B13A11B669648005A /* MapStatusBar.swift in Sources */,
@@ -1178,11 +1182,12 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 97MH8853HX;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1248,11 +1253,12 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 97MH8853HX;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

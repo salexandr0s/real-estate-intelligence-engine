@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showSettingsError: Bool = false
     @State private var didLoadDrafts = false
+    @State private var cleanupStatusMessage: String?
 
     @State private var apiBaseURLDraft = ""
     @State private var apiTokenDraft = ""
@@ -158,11 +159,39 @@ struct SettingsView: View {
                     Toggle("Score Changes", isOn: $state.notifyOnScoreChange)
                 }
             }
+
+            Section("Stored Secrets") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Clean stale credentials")
+                        Text("Removes empty keychain entries left by older builds.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Clean Up") {
+                        appState.cleanupStoredSecrets()
+                        syncDraftsFromAppState()
+                        cleanupStatusMessage = "Stored secrets checked and stale empty entries removed."
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if let cleanupStatusMessage {
+                    Text(cleanupStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
-        .task {
+        .onAppear {
             loadDraftsIfNeeded()
+        }
+        .onChange(of: copilotProviderDraft) { _, newValue in
+            guard newValue == .claudeSubscription else { return }
+            appState.loadClaudeSubscriptionIfNeeded()
         }
         .onChange(of: appState.settingsErrorMessage) { _, newValue in
             showSettingsError = newValue != nil
@@ -180,7 +209,11 @@ struct SettingsView: View {
 
     private func loadDraftsIfNeeded() {
         guard !didLoadDrafts else { return }
+        appState.loadSettingsSecretsIfNeeded()
         syncDraftsFromAppState()
+        if copilotProviderDraft == .claudeSubscription {
+            appState.loadClaudeSubscriptionIfNeeded()
+        }
         didLoadDrafts = true
     }
 

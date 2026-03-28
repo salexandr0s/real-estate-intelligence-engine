@@ -43,7 +43,7 @@ enum Theme {
         switch status {
         case .healthy: .sourceHealthy
         case .degraded: .sourceDegraded
-        case .failing: .sourceFailing
+        case .blocked: .sourceFailing
         case .disabled: .sourceDisabled
         case .unknown: .secondary
         }
@@ -55,7 +55,7 @@ enum Theme {
         switch status {
         case .healthy: return Color.sourceHealthyHC
         case .degraded: return Color.sourceDegradedHC
-        case .failing: return Color.sourceFailingHC
+        case .blocked: return Color.sourceFailingHC
         case .disabled: return Color(nsColor: .systemGray)
         case .unknown: return Color.primary
         }
