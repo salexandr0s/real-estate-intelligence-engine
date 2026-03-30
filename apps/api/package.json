@@ -18,7 +18,7 @@
     "@immoradar/copilot": "*",
     "@immoradar/observability": "*",
     "@immoradar/outreach": "*",
-    "fastify": "^5.2.1",
+    "fastify": "^5.8.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {

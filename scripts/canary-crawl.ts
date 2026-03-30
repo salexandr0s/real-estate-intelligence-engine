@@ -17,7 +17,7 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 
-import { loadConfig } from '@immoradar/config';
+import { loadCanaryConfig } from '@immoradar/config';
 import { createLogger } from '@immoradar/observability';
 import {
   PerDomainRateLimiter,
@@ -79,7 +79,7 @@ interface CanaryResult {
 
 async function main(): Promise<void> {
   const { sourceCode, pages } = parseArgs();
-  loadConfig();
+  const config = loadCanaryConfig();
 
   log.info('Starting canary crawl', { sourceCode, pages });
 
@@ -106,21 +106,22 @@ async function main(): Promise<void> {
   let detailFailed = 0;
 
   try {
-    const config = loadConfig();
     const viewport = pickRandomViewport();
     const userAgent = pickRandomUserAgent();
 
     browser = await chromium.launch({ headless: config.playwright.headless });
     context = await browser.newContext({
       viewport,
-      locale: DEFAULT_BROWSER_CONTEXT_CONFIG.locale,
-      timezoneId: DEFAULT_BROWSER_CONTEXT_CONFIG.timezoneId,
+      locale: config.playwright.locale,
+      timezoneId: config.playwright.timezoneId,
       userAgent,
       javaScriptEnabled: DEFAULT_BROWSER_CONTEXT_CONFIG.javaScriptEnabled,
     });
     await setupRequestInterception(context);
 
     const page = await context.newPage();
+    page.setDefaultTimeout(config.playwright.defaultTimeoutMs);
+    page.setDefaultNavigationTimeout(config.playwright.navigationTimeoutMs);
 
     // ── Discovery phase ──────────────────────────────────────────────────
 

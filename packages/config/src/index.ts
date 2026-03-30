@@ -35,6 +35,38 @@ function envStringList(key: string, fallback: string[]): string[] {
   return fallback;
 }
 
+export interface PlaywrightConfig {
+  browser: string;
+  headless: boolean;
+  defaultTimeoutMs: number;
+  navigationTimeoutMs: number;
+  locale: string;
+  timezoneId: string;
+  maxContextsPerWorker: number;
+  captureScreenshotOnFailure: boolean;
+  captureHtmlOnFailure: boolean;
+  captureHarOnFailure: boolean;
+}
+
+export interface ScraperConfig {
+  defaultRateLimitRpm: number;
+  defaultConcurrencyPerSource: number;
+  cooldownAfterBlockMs: number;
+  jitterMinMs: number;
+  jitterMaxMs: number;
+  canaryEnabled: boolean;
+  detailWorkerConcurrency: number;
+  browserRuntime: 'playwright' | 'patchright';
+  patchrightSourceCodes: string[];
+}
+
+export interface CanaryConfig {
+  nodeEnv: string;
+  logLevel: string;
+  playwright: PlaywrightConfig;
+  scraper: ScraperConfig;
+}
+
 export interface AppConfig {
   nodeEnv: string;
   logLevel: string;
@@ -67,29 +99,8 @@ export interface AppConfig {
     secretKey: string;
     forcePathStyle: boolean;
   };
-  playwright: {
-    browser: string;
-    headless: boolean;
-    defaultTimeoutMs: number;
-    navigationTimeoutMs: number;
-    locale: string;
-    timezoneId: string;
-    maxContextsPerWorker: number;
-    captureScreenshotOnFailure: boolean;
-    captureHtmlOnFailure: boolean;
-    captureHarOnFailure: boolean;
-  };
-  scraper: {
-    defaultRateLimitRpm: number;
-    defaultConcurrencyPerSource: number;
-    cooldownAfterBlockMs: number;
-    jitterMinMs: number;
-    jitterMaxMs: number;
-    canaryEnabled: boolean;
-    detailWorkerConcurrency: number;
-    browserRuntime: 'playwright' | 'patchright';
-    patchrightSourceCodes: string[];
-  };
+  playwright: PlaywrightConfig;
+  scraper: ScraperConfig;
   scheduler: {
     enabled: boolean;
     staleThresholdDays: number;
@@ -154,6 +165,52 @@ export interface AppConfig {
 }
 
 let _config: AppConfig | null = null;
+let _canaryConfig: CanaryConfig | null = null;
+
+function loadPlaywrightConfig(): PlaywrightConfig {
+  return {
+    browser: envStr('PLAYWRIGHT_BROWSER', 'chromium'),
+    headless: envBool('PLAYWRIGHT_HEADLESS', true),
+    defaultTimeoutMs: envInt('PLAYWRIGHT_DEFAULT_TIMEOUT_MS', 30000),
+    navigationTimeoutMs: envInt('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', 45000),
+    locale: envStr('PLAYWRIGHT_LOCALE', 'de-AT'),
+    timezoneId: envStr('PLAYWRIGHT_TIMEZONE_ID', 'Europe/Vienna'),
+    maxContextsPerWorker: envInt('PLAYWRIGHT_MAX_CONTEXTS_PER_WORKER', 2),
+    captureScreenshotOnFailure: envBool('PLAYWRIGHT_CAPTURE_SCREENSHOT_ON_FAILURE', true),
+    captureHtmlOnFailure: envBool('PLAYWRIGHT_CAPTURE_HTML_ON_FAILURE', true),
+    captureHarOnFailure: envBool('PLAYWRIGHT_CAPTURE_HAR_ON_FAILURE', false),
+  };
+}
+
+function loadScraperConfig(): ScraperConfig {
+  return {
+    defaultRateLimitRpm: envInt('SCRAPER_DEFAULT_RATE_LIMIT_RPM', 12),
+    defaultConcurrencyPerSource: envInt('SCRAPER_DEFAULT_CONCURRENCY_PER_SOURCE', 1),
+    cooldownAfterBlockMs: envInt('SCRAPER_COOLDOWN_AFTER_BLOCK_MS', 900000),
+    jitterMinMs: envInt('SCRAPER_JITTER_MIN_MS', 2000),
+    jitterMaxMs: envInt('SCRAPER_JITTER_MAX_MS', 7000),
+    canaryEnabled: envBool('SCRAPER_CANARY_ENABLED', true),
+    detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
+    browserRuntime:
+      envStr('SCRAPER_BROWSER_RUNTIME', 'playwright') === 'patchright'
+        ? 'patchright'
+        : 'playwright',
+    patchrightSourceCodes: envStringList('SCRAPER_PATCHRIGHT_SOURCES', []),
+  };
+}
+
+export function loadCanaryConfig(): CanaryConfig {
+  if (_canaryConfig) return _canaryConfig;
+
+  _canaryConfig = {
+    nodeEnv: envStr('NODE_ENV', 'development'),
+    logLevel: envStr('LOG_LEVEL', 'info'),
+    playwright: loadPlaywrightConfig(),
+    scraper: loadScraperConfig(),
+  };
+
+  return _canaryConfig;
+}
 
 export function loadConfig(): AppConfig {
   if (_config) return _config;
@@ -201,32 +258,8 @@ export function loadConfig(): AppConfig {
       secretKey: envStr('S3_SECRET_KEY', 'minioadmin'),
       forcePathStyle: envBool('S3_FORCE_PATH_STYLE', true),
     },
-    playwright: {
-      browser: envStr('PLAYWRIGHT_BROWSER', 'chromium'),
-      headless: envBool('PLAYWRIGHT_HEADLESS', true),
-      defaultTimeoutMs: envInt('PLAYWRIGHT_DEFAULT_TIMEOUT_MS', 30000),
-      navigationTimeoutMs: envInt('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', 45000),
-      locale: envStr('PLAYWRIGHT_LOCALE', 'de-AT'),
-      timezoneId: envStr('PLAYWRIGHT_TIMEZONE_ID', 'Europe/Vienna'),
-      maxContextsPerWorker: envInt('PLAYWRIGHT_MAX_CONTEXTS_PER_WORKER', 2),
-      captureScreenshotOnFailure: envBool('PLAYWRIGHT_CAPTURE_SCREENSHOT_ON_FAILURE', true),
-      captureHtmlOnFailure: envBool('PLAYWRIGHT_CAPTURE_HTML_ON_FAILURE', true),
-      captureHarOnFailure: envBool('PLAYWRIGHT_CAPTURE_HAR_ON_FAILURE', false),
-    },
-    scraper: {
-      defaultRateLimitRpm: envInt('SCRAPER_DEFAULT_RATE_LIMIT_RPM', 12),
-      defaultConcurrencyPerSource: envInt('SCRAPER_DEFAULT_CONCURRENCY_PER_SOURCE', 1),
-      cooldownAfterBlockMs: envInt('SCRAPER_COOLDOWN_AFTER_BLOCK_MS', 900000),
-      jitterMinMs: envInt('SCRAPER_JITTER_MIN_MS', 2000),
-      jitterMaxMs: envInt('SCRAPER_JITTER_MAX_MS', 7000),
-      canaryEnabled: envBool('SCRAPER_CANARY_ENABLED', true),
-      detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
-      browserRuntime:
-        envStr('SCRAPER_BROWSER_RUNTIME', 'playwright') === 'patchright'
-          ? 'patchright'
-          : 'playwright',
-      patchrightSourceCodes: envStringList('SCRAPER_PATCHRIGHT_SOURCES', []),
-    },
+    playwright: loadPlaywrightConfig(),
+    scraper: loadScraperConfig(),
     scheduler: {
       enabled: envBool('SCHEDULER_ENABLED', true),
       staleThresholdDays: envInt('STALE_THRESHOLD_DAYS', 7),
@@ -316,4 +349,5 @@ export function loadConfig(): AppConfig {
 
 export function resetConfig(): void {
   _config = null;
+  _canaryConfig = null;
 }
