@@ -12,6 +12,8 @@ CONFIGURATION="${IMMORADAR_CONFIGURATION:-Release}"
 VOLNAME="${IMMORADAR_DMG_VOLUME_NAME:-ImmoRadar}"
 DMG_NAME="${IMMORADAR_DMG_NAME:-ImmoRadar-macOS.dmg}"
 CODE_SIGNING_ALLOWED="${IMMORADAR_CODE_SIGNING_ALLOWED:-YES}"
+SIGNING_KEYCHAIN_PATH="${IMMORADAR_SIGNING_KEYCHAIN_PATH:-}"
+SIGNING_KEYCHAIN_PASSWORD="${IMMORADAR_SIGNING_KEYCHAIN_PASSWORD:-}"
 NOTARIZE="${IMMORADAR_NOTARIZE:-0}"
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
@@ -29,13 +31,19 @@ require_command xcodebuild
 require_command xcodegen
 require_command hdiutil
 
+if [[ "$CODE_SIGNING_ALLOWED" == "YES" && ( -n "$SIGNING_KEYCHAIN_PATH" || -n "$SIGNING_KEYCHAIN_PASSWORD" ) ]]; then
+  : "${IMMORADAR_SIGNING_KEYCHAIN_PATH:?IMMORADAR_SIGNING_KEYCHAIN_PATH is required when preparing a signing keychain}"
+  : "${IMMORADAR_SIGNING_KEYCHAIN_PASSWORD:?IMMORADAR_SIGNING_KEYCHAIN_PASSWORD is required when preparing a signing keychain}"
+  "$SCRIPT_DIR/prepare-signing-keychain.sh" "$SIGNING_KEYCHAIN_PATH" "$SIGNING_KEYCHAIN_PASSWORD"
+fi
+
 mkdir -p "$RELEASE_ROOT"
 rm -rf "$STAGING_DIR" "$DMG_PATH" "$DERIVED_DATA_PATH"
 
 (
   cd "$REPO_ROOT/apps/macos"
   xcodegen generate >/dev/null
-  xcodebuild \
+  IMMORADAR_ENABLE_RUNTIME_CODESIGN=YES xcodebuild \
     -scheme "$SCHEME" \
     -project "$PROJECT_PATH" \
     -configuration "$CONFIGURATION" \

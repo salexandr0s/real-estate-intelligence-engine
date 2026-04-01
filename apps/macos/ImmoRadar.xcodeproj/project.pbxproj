@@ -878,7 +878,6 @@
 				TargetAttributes = {
 					70FF8B76102F8E820C191D48 = {
 						DevelopmentTeam = 97MH8853HX;
-						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -955,7 +954,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  echo \"Skipping bundled runtime signing for ${CONFIGURATION}\"\n  exit 0\nfi\nbash \"${SRCROOT}/../../scripts/runtime/sign-runtime-binaries.sh\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime/.signed-stamp\"\n";
+			shellScript = "if [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  echo \"Skipping bundled runtime signing for ${CONFIGURATION}\"\n  exit 0\nfi\nif [ \"${IMMORADAR_ENABLE_RUNTIME_CODESIGN:-NO}\" != \"YES\" ]; then\n  echo \"Skipping bundled runtime signing; set IMMORADAR_ENABLE_RUNTIME_CODESIGN=YES for release packaging\"\n  exit 0\nfi\nbash \"${SRCROOT}/../../scripts/runtime/sign-runtime-binaries.sh\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime/.signed-stamp\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1226,13 +1225,13 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 97MH8853HX;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

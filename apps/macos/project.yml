@@ -13,10 +13,16 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "97MH8853HX"
-    CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "Developer ID Application"
-    ENABLE_HARDENED_RUNTIME: true
     SWIFT_STRICT_CONCURRENCY: complete
+  configs:
+    Debug:
+      CODE_SIGNING_ALLOWED: false
+      CODE_SIGNING_REQUIRED: false
+      ENABLE_HARDENED_RUNTIME: false
+    Release:
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: "Developer ID Application"
+      ENABLE_HARDENED_RUNTIME: true
 targets:
   ImmoRadar:
     type: application
@@ -48,6 +54,10 @@ targets:
         script: |
           if [ "${CONFIGURATION}" != "Release" ]; then
             echo "Skipping bundled runtime signing for ${CONFIGURATION}"
+            exit 0
+          fi
+          if [ "${IMMORADAR_ENABLE_RUNTIME_CODESIGN:-NO}" != "YES" ]; then
+            echo "Skipping bundled runtime signing; set IMMORADAR_ENABLE_RUNTIME_CODESIGN=YES for release packaging"
             exit 0
           fi
           bash "${SRCROOT}/../../scripts/runtime/sign-runtime-binaries.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime/.signed-stamp"
