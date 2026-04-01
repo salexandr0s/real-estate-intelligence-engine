@@ -17,9 +17,8 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# Install curl for the HEALTHCHECK probe
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# Remove npm from the runtime image; the container only needs Node.js to start the API.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy the entire built workspace (node_modules symlinks need full tree)
 COPY --from=builder /app /app
@@ -29,6 +28,6 @@ ENV NODE_ENV=production
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD node -e "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok ? 0 : 1)).catch(()=>process.exit(1))"
 
 CMD ["node", "apps/api/dist/main.js"]
