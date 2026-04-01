@@ -6,6 +6,8 @@ struct OutreachView: View {
     @State private var viewModel = OutreachViewModel()
 
     var body: some View {
+        @Bindable var bindableViewModel = viewModel
+
         HSplitView {
             VStack(spacing: 0) {
                 OutreachMailboxHeader(
@@ -18,9 +20,9 @@ struct OutreachView: View {
                 Divider()
 
                 OutreachScopePicker(
-                    scope: viewModel.selectedScope,
-                    onChange: { scope in
-                        Task { await viewModel.setScope(scope, using: appState.apiClient) }
+                    scope: $bindableViewModel.selectedScope,
+                    onChange: { _ in
+                        Task { await viewModel.refresh(using: appState.apiClient) }
                     }
                 )
                 .padding(.horizontal, Theme.Spacing.lg)
@@ -86,7 +88,18 @@ struct OutreachView: View {
         }
         .task {
             await viewModel.refresh(using: appState.apiClient)
+            await consumePendingDeepLinkIfNeeded()
         }
+        .onChange(of: appState.deepLinkOutreachThreadId) { _, newValue in
+            guard newValue != nil else { return }
+            Task { await consumePendingDeepLinkIfNeeded() }
+        }
+    }
+
+    private func consumePendingDeepLinkIfNeeded() async {
+        guard let threadID = appState.deepLinkOutreachThreadId else { return }
+        await viewModel.openThread(id: threadID, using: appState.apiClient)
+        appState.deepLinkOutreachThreadId = nil
     }
 }
 
@@ -187,17 +200,20 @@ private struct OutreachMailboxHeader: View {
 }
 
 private struct OutreachScopePicker: View {
-    let scope: OutreachScope
+    @Binding var scope: OutreachScope
     let onChange: @Sendable (OutreachScope) -> Void
 
     var body: some View {
-        Picker("Thread Scope", selection: Binding(get: { scope }, set: onChange)) {
+        Picker("Thread Scope", selection: $scope) {
             Text("Open").tag(OutreachScope.open)
             Text("Closed").tag(OutreachScope.closed)
             Text("All").tag(OutreachScope.all)
         }
         .pickerStyle(.segmented)
         .accessibilityLabel("Thread scope")
+        .onChange(of: scope) { _, newValue in
+            onChange(newValue)
+        }
     }
 }
 
@@ -577,7 +593,7 @@ private struct OutreachEventTimeline: View {
                 ForEach(events) { event in
                     VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                         HStack(alignment: .top) {
-                            Text(event.eventType.replacingOccurrences(of: "_", with: " ").capitalized)
+                            Text(event.eventType.replacing("_", with: " ").capitalized)
                                 .font(.subheadline)
                                 .adaptiveFontWeight(.medium)
                             Spacer()

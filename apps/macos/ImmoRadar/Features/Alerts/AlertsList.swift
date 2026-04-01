@@ -7,7 +7,7 @@ struct AlertsList: View {
 
     var body: some View {
         List(viewModel.visibleAlerts, selection: $viewModel.selectedAlertID) { alert in
-            AlertRow(alert: alert, isSelected: viewModel.selectedAlertID == alert.id)
+            AlertRow(alert: alert)
                 .tag(alert.id)
                 .listRowInsets(EdgeInsets(top: 3, leading: Theme.Spacing.md, bottom: 3, trailing: Theme.Spacing.md))
                 .listRowSeparator(.hidden)

@@ -9,7 +9,7 @@ struct OpportunityCard: View {
     var isHovered: Bool = false
 
     private var isNew: Bool {
-        Calendar.current.dateComponents([.hour], from: listing.firstSeenAt, to: .now).hour ?? 99 < 24
+        listing.wasSeenWithinLast24Hours
     }
 
     var body: some View {

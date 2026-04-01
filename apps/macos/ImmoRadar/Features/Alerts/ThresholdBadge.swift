@@ -7,9 +7,9 @@ struct ThresholdBadge: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.xxs) {
             Image(systemName: "checkmark")
-                .font(.system(size: 8, weight: .bold))
+                .font(.caption.bold())
             Text(label)
-                .font(.caption2)
+                .font(.caption)
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xxs)

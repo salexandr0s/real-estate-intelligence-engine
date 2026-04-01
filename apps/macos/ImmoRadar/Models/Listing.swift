@@ -26,7 +26,7 @@ struct Listing: Identifiable, Codable, Hashable {
     let geocodeSource: String?
     let lastPriceChangePct: Double?
     let lastPriceChangeAt: Date?
-    let firstSeenAt: Date
+    let firstSeenAt: Date?
     let listingStatus: ListingStatus
     let contactName: String?
     let contactCompany: String?
@@ -39,6 +39,15 @@ struct Listing: Identifiable, Codable, Hashable {
 
     /// Unknown prices sort last when descending and first when ascending.
     var sortableListPriceEur: Int { listPriceEur ?? -1 }
+
+    var firstSeenSortDate: Date {
+        firstSeenAt ?? .distantPast
+    }
+
+    var wasSeenWithinLast24Hours: Bool {
+        guard let firstSeenAt else { return false }
+        return Calendar.current.dateComponents([.hour], from: firstSeenAt, to: .now).hour ?? 99 < 24
+    }
 
     /// Map coordinate derived from latitude/longitude, nil if unavailable.
     var coordinate: CLLocationCoordinate2D? {
@@ -84,7 +93,7 @@ struct Listing: Identifiable, Codable, Hashable {
         case "immoworld", "immo-world":
             "Immo-World"
         default:
-            sourceCode.replacingOccurrences(of: "_", with: " ").capitalized
+            sourceCode.replacing("_", with: " ").capitalized
         }
     }
 
@@ -114,7 +123,7 @@ struct Listing: Identifiable, Codable, Hashable {
         geocodeSource: String?,
         lastPriceChangePct: Double?,
         lastPriceChangeAt: Date?,
-        firstSeenAt: Date,
+        firstSeenAt: Date?,
         listingStatus: ListingStatus,
         contactName: String? = nil,
         contactCompany: String? = nil,
@@ -439,7 +448,7 @@ struct OutreachMessage: Identifiable, Codable, Hashable, Sendable {
     let fromEmail: String?
     let toEmail: String?
     let matchStrategy: String
-    let occurredAt: Date
+    let occurredAt: Date?
     let errorMessage: String?
     let attachments: [OutreachAttachment]
 }
@@ -450,7 +459,7 @@ struct OutreachEvent: Identifiable, Codable, Hashable, Sendable {
     let fromState: String?
     let toState: String?
     let payload: [String: String]?
-    let occurredAt: Date
+    let occurredAt: Date?
 }
 
 struct OutreachThread: Identifiable, Codable, Hashable, Sendable {
@@ -466,7 +475,7 @@ struct OutreachThread: Identifiable, Codable, Hashable, Sendable {
     let nextActionAt: Date?
     let lastInboundAt: Date?
     let lastOutboundAt: Date?
-    let updatedAt: Date
+    let updatedAt: Date?
     let messages: [OutreachMessage]
     let events: [OutreachEvent]
 }
@@ -484,7 +493,7 @@ struct OutreachThreadSummary: Identifiable, Codable, Hashable, Sendable {
     let nextActionAt: Date?
     let lastInboundAt: Date?
     let lastOutboundAt: Date?
-    let updatedAt: Date
+    let updatedAt: Date?
 }
 
 struct OutreachStartInput: Codable, Sendable {

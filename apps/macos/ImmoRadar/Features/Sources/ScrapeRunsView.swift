@@ -45,7 +45,7 @@ private struct ScrapeRunRow: View {
 
                 Spacer()
 
-                Text(run.triggerType.replacingOccurrences(of: "_", with: " ").capitalized)
+                Text(run.triggerType.replacing("_", with: " ").capitalized)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -79,7 +79,7 @@ private struct ScrapeRunRow: View {
     }
 
     private var statusTitle: String {
-        run.status.replacingOccurrences(of: "_", with: " ").capitalized
+        run.status.replacing("_", with: " ").capitalized
     }
 
     private var statusIcon: String {

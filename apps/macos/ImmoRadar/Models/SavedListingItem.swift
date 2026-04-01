@@ -28,7 +28,7 @@ struct SavedListingItem: Identifiable, Codable, Sendable {
         let listingStatus: String
     }
 
-    var parsedSavedAt: Date {
+    var parsedSavedAt: Date? {
         Date.fromISO(savedAt)
     }
 }

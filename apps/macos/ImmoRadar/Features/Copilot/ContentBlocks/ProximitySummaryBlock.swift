@@ -70,7 +70,7 @@ struct ProximitySummaryBlock: View {
                 SummaryNote(text: data.summary)
 
                 if !primaryHighlights.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: Theme.Spacing.sm) {
                             ForEach(primaryHighlights) { item in
                                 ProximityHighlightBadge(item: item)
@@ -78,6 +78,7 @@ struct ProximitySummaryBlock: View {
                         }
                         .padding(.vertical, 1)
                     }
+                    .scrollIndicators(.hidden)
                 }
 
                 if !data.nearest.isEmpty {

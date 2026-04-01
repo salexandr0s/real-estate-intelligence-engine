@@ -128,7 +128,7 @@ actor APIClient {
                 p25PpsqmEur: dto.p25PpsqmEur,
                 p75PpsqmEur: dto.p75PpsqmEur,
                 stddevPpsqmEur: dto.stddevPpsqmEur,
-                baselineDate: dto.baselineDate.map { Date.fromISO($0) } ?? .now
+                baselineDate: dto.baselineDate.flatMap(Date.fromISO)
             )
         }
     }
@@ -424,7 +424,7 @@ actor APIClient {
                 name: dto.name,
                 isActive: dto.isActive,
                 healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
-                lastSuccessfulRun: (dto.lastSuccessfulRun ?? dto.lastSuccessfulRunAt).map { Date.fromISO($0) },
+                lastSuccessfulRun: (dto.lastSuccessfulRun ?? dto.lastSuccessfulRunAt).flatMap(Date.fromISO),
                 crawlIntervalMinutes: dto.crawlIntervalMinutes,
                 lastErrorSummary: dto.lastErrorSummary,
                 totalListingsIngested: dto.totalListingsIngested ?? 0,
@@ -435,8 +435,8 @@ actor APIClient {
                         explicitDead7d: summary.explicitDead7d,
                         staleExpired24h: summary.staleExpired24h,
                         staleExpired7d: summary.staleExpired7d,
-                        lastExplicitDeadAt: summary.lastExplicitDeadAt.map(Date.fromISO),
-                        lastStaleExpiredAt: summary.lastStaleExpiredAt.map(Date.fromISO)
+                        lastExplicitDeadAt: summary.lastExplicitDeadAt.flatMap(Date.fromISO),
+                        lastStaleExpiredAt: summary.lastStaleExpiredAt.flatMap(Date.fromISO)
                     )
                 }
             )

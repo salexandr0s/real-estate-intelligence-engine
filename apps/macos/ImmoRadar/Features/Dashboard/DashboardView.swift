@@ -1,15 +1,15 @@
 import SwiftUI
 
+private enum DashboardLayoutMode {
+    case compact
+    case medium
+    case expanded
+}
+
 /// Dashboard — a calm briefing page that answers what deserves the next click.
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = DashboardViewModel()
-
-    private enum LayoutMode {
-        case compact
-        case medium
-        case expanded
-    }
 
     private var summaryCards: [DashboardViewModel.SummaryCard] {
         viewModel.summaryCards(unreadAlertCount: appState.unreadAlertCount)
@@ -19,91 +19,13 @@ struct DashboardView: View {
         GeometryReader { proxy in
             let layoutMode = layoutMode(for: proxy.size.width)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Dashboard.sectionSpacing) {
-                    DashboardOverviewHeader(
-                        lastRefresh: viewModel.lastRefreshDate,
-                        totalMatches: viewModel.totalUniqueMatches,
-                        isLoading: viewModel.isLoading
-                    )
-
-                    if let error = viewModel.errorMessage {
-                        DashboardErrorBanner(message: error) {
-                            Task { await viewModel.refresh(using: appState.apiClient) }
-                        }
-                    }
-
-                    focusPanel
-
-                    if layoutMode == .expanded {
-                        HStack(alignment: .top, spacing: Theme.Dashboard.gridSpacing) {
-                            topOpportunitiesPanel(limit: 5)
-                                .frame(maxWidth: .infinity, minHeight: Theme.Dashboard.secondaryRowMinHeight, alignment: .topLeading)
-                                .layoutPriority(1)
-
-                            DashboardSignalsPanel(
-                                cards: summaryCards,
-                                snapshot: viewModel.activitySnapshot,
-                                onCardNavigate: { cardId in
-                                    switch cardId {
-                                    case "active-listings", "new-this-week", "high-score":
-                                        appState.navigateTo(.listings)
-                                    case "unread-alerts":
-                                        appState.navigateTo(.alerts)
-                                    default:
-                                        break
-                                    }
-                                }
-                            )
-                            .frame(width: Theme.Dashboard.sideColumnWidth, alignment: .topLeading)
-                        }
-                    } else {
-                        topOpportunitiesPanel(limit: 4)
-                        DashboardSignalsPanel(
-                            cards: summaryCards,
-                            snapshot: viewModel.activitySnapshot,
-                            onCardNavigate: { cardId in
-                                switch cardId {
-                                case "active-listings", "new-this-week", "high-score":
-                                    appState.navigateTo(.listings)
-                                case "unread-alerts":
-                                    appState.navigateTo(.alerts)
-                                default:
-                                    break
-                                }
-                            }
-                        )
-                    }
-
-                    DashboardFilterCoveragePanel(
-                        summary: viewModel.filterCoverageSummary,
-                        rows: viewModel.filterCoverageRows,
-                        onOpenFilters: { appState.navigateTo(.filters) }
-                    )
-
-                    ForYouSection(
-                        activeFilters: Array(viewModel.dashboardFilters.prefix(4)),
-                        totalActiveFilterCount: viewModel.dashboardFilters.count,
-                        filterListings: viewModel.filterListings,
-                        filterLoadingStates: viewModel.filterLoadingStates,
-                        isLoading: viewModel.isLoading,
-                        onListingTap: { id in
-                            appState.openListing(id)
-                        },
-                        onNavigateToFilters: {
-                            appState.navigateTo(.filters)
-                        },
-                        onNavigateToListings: {
-                            appState.navigateTo(.listings)
-                        }
-                    )
-                }
-                .frame(maxWidth: Theme.Dashboard.contentMaxWidth, alignment: .leading)
-                .padding(.horizontal, Theme.Spacing.xl)
-                .padding(.top, Theme.Spacing.lg)
-                .padding(.bottom, Theme.Spacing.xxxl)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
+            DashboardContent(
+                viewModel: viewModel,
+                appState: appState,
+                layoutMode: layoutMode,
+                summaryCards: summaryCards,
+                focusPanel: focusPanel
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
         }
@@ -131,7 +53,7 @@ struct DashboardView: View {
         }
     }
 
-    private func layoutMode(for width: CGFloat) -> LayoutMode {
+    private func layoutMode(for width: CGFloat) -> DashboardLayoutMode {
         if width < Theme.Dashboard.compactBreakpoint {
             return .compact
         }
@@ -167,12 +89,104 @@ struct DashboardView: View {
         }
     }
 
-    private func topOpportunitiesPanel(limit: Int) -> some View {
+}
+
+private struct DashboardContent<FocusPanel: View>: View {
+    let viewModel: DashboardViewModel
+    let appState: AppState
+    let layoutMode: DashboardLayoutMode
+    let summaryCards: [DashboardViewModel.SummaryCard]
+    let focusPanel: FocusPanel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Dashboard.sectionSpacing) {
+                DashboardOverviewHeader(
+                    lastRefresh: viewModel.lastRefreshDate,
+                    totalMatches: viewModel.totalUniqueMatches,
+                    isLoading: viewModel.isLoading
+                )
+
+                if let error = viewModel.errorMessage {
+                    DashboardErrorBanner(message: error) {
+                        Task { await viewModel.refresh(using: appState.apiClient) }
+                    }
+                }
+
+                focusPanel
+                opportunitiesAndSignals
+
+                DashboardFilterCoveragePanel(
+                    summary: viewModel.filterCoverageSummary,
+                    rows: viewModel.filterCoverageRows,
+                    onOpenFilters: { appState.navigateTo(.filters) }
+                )
+
+                ForYouSection(
+                    activeFilters: Array(viewModel.dashboardFilters.prefix(4)),
+                    totalActiveFilterCount: viewModel.dashboardFilters.count,
+                    filterListings: viewModel.filterListings,
+                    filterLoadingStates: viewModel.filterLoadingStates,
+                    isLoading: viewModel.isLoading,
+                    onListingTap: { id in
+                        appState.openListing(id)
+                    },
+                    onNavigateToFilters: {
+                        appState.navigateTo(.filters)
+                    },
+                    onNavigateToListings: {
+                        appState.navigateTo(.listings)
+                    }
+                )
+            }
+            .frame(maxWidth: Theme.Dashboard.contentMaxWidth, alignment: .leading)
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.xxxl)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    @ViewBuilder
+    private var opportunitiesAndSignals: some View {
+        if layoutMode == .expanded {
+            HStack(alignment: .top, spacing: Theme.Dashboard.gridSpacing) {
+                topOpportunitiesSection(limit: 5)
+                    .frame(maxWidth: .infinity, minHeight: Theme.Dashboard.secondaryRowMinHeight, alignment: .topLeading)
+                    .layoutPriority(1)
+
+                signalsPanel
+                    .frame(width: Theme.Dashboard.sideColumnWidth, alignment: .topLeading)
+            }
+        } else {
+            topOpportunitiesSection(limit: 4)
+            signalsPanel
+        }
+    }
+
+    private func topOpportunitiesSection(limit: Int) -> some View {
         TopOpportunitiesSection(
             listings: viewModel.topOpportunities(limit: limit),
             totalMatches: viewModel.totalUniqueMatches,
             onListingTap: { id in
                 appState.openListing(id)
+            }
+        )
+    }
+
+    private var signalsPanel: some View {
+        DashboardSignalsPanel(
+            cards: summaryCards,
+            snapshot: viewModel.activitySnapshot,
+            onCardNavigate: { cardId in
+                switch cardId {
+                case "active-listings", "new-this-week", "high-score":
+                    appState.navigateTo(.listings)
+                case "unread-alerts":
+                    appState.navigateTo(.alerts)
+                default:
+                    break
+                }
             }
         )
     }

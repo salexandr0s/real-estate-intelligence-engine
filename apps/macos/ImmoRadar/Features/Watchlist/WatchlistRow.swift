@@ -16,6 +16,19 @@ struct WatchlistRow: View {
         notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    init(
+        item: SavedListingItem,
+        isSavingNotes: Bool,
+        onSaveNotes: @escaping (String?) -> Void,
+        onUnsave: @escaping () -> Void
+    ) {
+        self.item = item
+        self.isSavingNotes = isSavingNotes
+        self.onSaveNotes = onSaveNotes
+        self.onUnsave = onUnsave
+        _notesDraft = State(initialValue: item.notes ?? "")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .top, spacing: Theme.Spacing.md) {
@@ -105,9 +118,6 @@ struct WatchlistRow: View {
             notesSection
         }
         .padding(.vertical, Theme.Spacing.sm)
-        .onAppear {
-            notesDraft = item.notes ?? ""
-        }
         .onChange(of: item.notes) { _, newValue in
             if !isEditingNotes {
                 notesDraft = newValue ?? ""
@@ -192,7 +202,7 @@ struct WatchlistRow: View {
         } else if let notes = item.notes, !notes.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text("Investor note")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
                 Text(notes)
                     .font(.caption)

@@ -7,6 +7,17 @@ struct ListingAnnotation: View {
     let isSelected: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var accessibilityValue: String {
+        [
+            listing.listPriceEur.map(PriceFormatter.format(eur:)),
+            listing.currentScore.map { "Score \($0.formatted(.number.precision(.fractionLength(0))))" },
+            listing.districtName,
+            precisionLabel
+        ]
+        .compactMap { $0 }
+        .joined(separator: ", ")
+    }
+
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
@@ -45,6 +56,10 @@ struct ListingAnnotation: View {
                 calloutCard
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(listing.title)
+        .accessibilityValue(accessibilityValue.isEmpty ? "No additional details" : accessibilityValue)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isSelected)
     }
 
@@ -68,19 +83,19 @@ struct ListingAnnotation: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(listing.title)
                 .font(.caption)
-                .fontWeight(.medium)
+                .adaptiveFontWeight(.medium)
                 .lineLimit(2)
                 .frame(maxWidth: 180, alignment: .leading)
 
             HStack(spacing: Theme.Spacing.sm) {
                 Text(PriceFormatter.format(eur: listing.listPriceEur))
                     .font(.caption2)
-                    .fontWeight(.semibold)
+                    .adaptiveFontWeight(.semibold)
 
                 if let score = listing.currentScore {
                     Text(score, format: .number.precision(.fractionLength(0)))
                         .font(.caption2)
-                        .fontWeight(.bold)
+                        .bold()
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)

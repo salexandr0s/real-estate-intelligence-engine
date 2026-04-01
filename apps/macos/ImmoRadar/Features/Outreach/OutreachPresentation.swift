@@ -28,7 +28,7 @@ struct OutreachWorkflowPresentation {
         case "failed":
             return .init(title: "Needs Retry", icon: "exclamationmark.triangle.fill", tint: .scorePoor, background: Color.scorePoor.opacity(0.10), border: Color.scorePoor.opacity(0.16))
         default:
-            return .init(title: state.replacingOccurrences(of: "_", with: " ").capitalized, icon: "circle", tint: .secondary, background: Color.secondary.opacity(0.08), border: Color.secondary.opacity(0.14))
+            return .init(title: state.replacing("_", with: " ").capitalized, icon: "circle", tint: .secondary, background: Color.secondary.opacity(0.08), border: Color.secondary.opacity(0.14))
         }
     }
 }

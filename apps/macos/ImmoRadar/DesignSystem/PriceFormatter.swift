@@ -132,6 +132,11 @@ enum PriceFormatter {
         return dateFormatter.string(from: date)
     }
 
+    static func relativeDate(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        return relativeDate(date)
+    }
+
     private static let dateFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateStyle = .medium
@@ -145,6 +150,11 @@ enum PriceFormatter {
         dateFormatter.string(from: date)
     }
 
+    static func formatDate(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        return formatDate(date)
+    }
+
     private static let dateTimeFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "dd.MM.yyyy HH:mm"
@@ -155,5 +165,10 @@ enum PriceFormatter {
     /// Date with time: "20.03.2026 14:32"
     static func formatDateTime(_ date: Date) -> String {
         dateTimeFormatter.string(from: date)
+    }
+
+    static func formatDateTime(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        return formatDateTime(date)
     }
 }

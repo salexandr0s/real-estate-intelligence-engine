@@ -63,6 +63,33 @@ final class OutreachViewModel {
         await loadThread(id: id, using: client)
     }
 
+    func openThread(id: Int, using client: APIClient) async {
+        selectedScope = .all
+
+        if mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
+            isLoadingList = true
+            pageErrorMessage = nil
+
+            do {
+                async let mailboxRows = client.fetchMailboxes()
+                async let threadResult = client.fetchOutreachThreads(scope: .all)
+                let (loadedMailboxes, loadedThreadsResult) = try await (mailboxRows, threadResult)
+
+                mailboxes = loadedMailboxes
+                threads = loadedThreadsResult.threads
+                nextCursor = loadedThreadsResult.nextCursor
+                hasLoaded = true
+            } catch {
+                pageErrorMessage = mailboxErrorMessage(for: error)
+            }
+
+            isLoadingList = false
+        }
+
+        selectedThreadID = id
+        await loadThread(id: id, using: client)
+    }
+
     func syncPrimaryMailbox(using client: APIClient) async {
         guard let mailbox = selectedMailbox else { return }
         isSyncingMailbox = true

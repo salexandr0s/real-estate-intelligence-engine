@@ -66,7 +66,7 @@ struct CrossSourceComparisonBlockView: View {
     }
 
     private var summaryStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: Theme.Spacing.sm) {
                 SummaryBadge(
                     title: "Portals",
@@ -95,6 +95,7 @@ struct CrossSourceComparisonBlockView: View {
             }
             .padding(.vertical, 1)
         }
+        .scrollIndicators(.hidden)
     }
 
     private var ledger: some View {

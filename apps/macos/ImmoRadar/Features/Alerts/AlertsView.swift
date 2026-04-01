@@ -11,35 +11,13 @@ struct AlertsView: View {
 
     var body: some View {
         HSplitView {
-            VStack(spacing: 0) {
-                AlertsFilterBar(viewModel: viewModel)
-                Divider()
-
-                if let error = viewModel.errorMessage {
-                    errorBanner(error)
-                    Divider()
-                }
-
-                if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
-                    AlertsEmptyState(
-                        scope: viewModel.scope,
-                        hasAnyAlerts: viewModel.hasAnyAlerts,
-                        hasSearch: !viewModel.searchText.isEmpty,
-                        onClearSearch: { searchText = "" },
-                        onSwitchToAll: { viewModel.scope = .all },
-                        onOpenFilters: { appState.navigateTo(.filters) },
-                        onRefresh: {
-                            Task { await reloadAlerts() }
-                        }
-                    )
-                } else {
-                    AlertsList(
-                        viewModel: viewModel,
-                        appState: appState,
-                        undoManager: undoManager
-                    )
-                }
-            }
+            AlertsPrimaryPane(
+                viewModel: viewModel,
+                appState: appState,
+                undoManager: undoManager,
+                searchText: $searchText,
+                onReload: reloadAlerts
+            )
             .frame(minWidth: 440)
 
             if showInspector {
@@ -169,7 +147,67 @@ struct AlertsView: View {
         }
     }
 
-    private func errorBanner(_ error: String) -> some View {
+    private func reloadAlerts() async {
+        await viewModel.refresh(using: appState.apiClient)
+        await appState.refreshUnreadCount()
+    }
+}
+
+private struct AlertsPrimaryPane: View {
+    @Bindable var viewModel: AlertsViewModel
+    let appState: AppState
+    let undoManager: UndoManager?
+    @Binding var searchText: String
+    let onReload: () async -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            AlertsFilterBar(viewModel: viewModel)
+            Divider()
+
+            if let error = viewModel.errorMessage {
+                AlertsErrorBanner(error: error) {
+                    Task { await onReload() }
+                } onDismiss: {
+                    viewModel.clearError()
+                }
+                Divider()
+            }
+
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
+            AlertsEmptyState(
+                scope: viewModel.scope,
+                hasAnyAlerts: viewModel.hasAnyAlerts,
+                hasSearch: !viewModel.searchText.isEmpty,
+                onClearSearch: { searchText = "" },
+                onSwitchToAll: { viewModel.scope = .all },
+                onOpenFilters: { appState.navigateTo(.filters) },
+                onRefresh: {
+                    Task { await onReload() }
+                }
+            )
+        } else {
+            AlertsList(
+                viewModel: viewModel,
+                appState: appState,
+                undoManager: undoManager
+            )
+        }
+    }
+}
+
+private struct AlertsErrorBanner: View {
+    let error: String
+    let onRetry: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
@@ -186,26 +224,17 @@ struct AlertsView: View {
 
             Spacer()
 
-            Button("Dismiss") {
-                viewModel.clearError()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            Button("Dismiss", action: onDismiss)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
 
-            Button("Retry") {
-                Task { await reloadAlerts() }
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            Button("Retry", action: onRetry)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.vertical, Theme.Spacing.sm)
         .background(Color.red.opacity(0.08))
-    }
-
-    private func reloadAlerts() async {
-        await viewModel.refresh(using: appState.apiClient)
-        await appState.refreshUnreadCount()
     }
 }
 

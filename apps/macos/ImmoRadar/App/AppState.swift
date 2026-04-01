@@ -13,6 +13,8 @@ final class AppState {
 
     /// Listing ID for cross-feature deep linking (e.g. copilot chat -> listing detail).
     var deepLinkListingId: Int?
+    /// Outreach thread ID for cross-feature deep linking (e.g. listing detail -> outreach).
+    var deepLinkOutreachThreadId: Int?
 
     // MARK: - Connection
 
@@ -263,6 +265,11 @@ final class AppState {
     func openListing(_ listingId: Int) {
         deepLinkListingId = listingId
         selectedNavItem = .listings
+    }
+
+    func openOutreachThread(_ threadId: Int) {
+        deepLinkOutreachThreadId = threadId
+        selectedNavItem = .outreach
     }
 
     func refreshConnection(userInitiated: Bool = false) async {

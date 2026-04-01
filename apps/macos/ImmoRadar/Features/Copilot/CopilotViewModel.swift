@@ -444,7 +444,7 @@ final class CopilotViewModel {
 
     private static func defaultConversationTitle(from prompt: String) -> String {
         let singleLine = prompt
-            .replacingOccurrences(of: "\n", with: " ")
+            .replacing("\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return String(singleLine.prefix(48)).trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -32,16 +32,16 @@ struct AlertsFilterBar: View {
                             .pickerStyle(.segmented)
                             .frame(width: 240)
 
-                            Button {
-                                viewModel.toggleSortDirection()
-                            } label: {
-                                Image(systemName: viewModel.sortDirection.iconName)
-                                    .frame(width: 20, height: 20)
-                            }
+                            Button(
+                                "Sort \(viewModel.sortDirection.displayName)",
+                                systemImage: viewModel.sortDirection.iconName,
+                                action: viewModel.toggleSortDirection
+                            )
+                            .labelStyle(.iconOnly)
+                            .frame(width: 20, height: 20)
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("Toggle sort direction")
-                            .accessibilityLabel("Sort \(viewModel.sortDirection.displayName)")
                         }
                     }
                 }

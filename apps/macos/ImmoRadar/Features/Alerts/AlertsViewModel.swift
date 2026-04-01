@@ -270,8 +270,10 @@ final class AlertsViewModel {
     private func compareAlerts(_ lhs: Alert, _ rhs: Alert) -> Bool {
         switch sortBy {
         case .age:
-            if lhs.matchedAt != rhs.matchedAt {
-                return sortDirection == .asc ? lhs.matchedAt < rhs.matchedAt : lhs.matchedAt > rhs.matchedAt
+            if lhs.matchedAtSortDate != rhs.matchedAtSortDate {
+                return sortDirection == .asc
+                    ? lhs.matchedAtSortDate < rhs.matchedAtSortDate
+                    : lhs.matchedAtSortDate > rhs.matchedAtSortDate
             }
         case .district:
             let lhsDistrict = districtSortKey(for: lhs)

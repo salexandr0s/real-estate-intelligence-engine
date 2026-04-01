@@ -35,67 +35,19 @@ struct ListingDetailView: View {
                     cluster: cluster
                 )
 
-                // Browser and sharing actions
-                HStack(spacing: Theme.Spacing.sm) {
-                    Button {
-                        if let url = URL(string: displayedListing.canonicalUrl) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    } label: {
-                        Label("Open in Browser", systemImage: "safari")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.regular)
-                    .buttonStyle(.borderedProminent)
+                ListingExternalActionsBar(listing: displayedListing)
 
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(displayedListing.canonicalUrl, forType: .string)
-                    } label: {
-                        Label("Copy URL", systemImage: "doc.on.doc")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.regular)
-                    .buttonStyle(.bordered)
-
-                    if let shareURL = URL(string: displayedListing.canonicalUrl) {
-                        ShareLink(item: shareURL) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .controlSize(.regular)
-                        .buttonStyle(.bordered)
-                    }
-                }
-
-                // Primary listing actions
-                HStack(spacing: Theme.Spacing.sm) {
-                    Button {
-                        Task { await toggleSave() }
-                    } label: {
-                        Label(
-                            isSaved ? "Saved to Watchlist" : "Save to Watchlist",
-                            systemImage: isSaved ? "bookmark.fill" : "bookmark"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.regular)
-                    .buttonStyle(.bordered)
-                    .tint(isSaved ? .orange : .accentColor)
-                    .disabled(isSaving)
-                    .help(isSaved ? "Remove from watchlist" : "Save this listing to the watchlist")
-
-                    Button {
-                        Task { await handleContactAction() }
-                    } label: {
-                        Label(contactButtonTitle, systemImage: contactButtonSystemImage)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.regular)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canContact || isLoadingOutreach)
-                    .help(contactButtonHelpText)
-                }
+                ListingPrimaryActionsBar(
+                    isSaved: isSaved,
+                    isSaving: isSaving,
+                    canContact: canContact,
+                    isLoadingOutreach: isLoadingOutreach,
+                    contactButtonTitle: contactButtonTitle,
+                    contactButtonSystemImage: contactButtonSystemImage,
+                    contactButtonHelpText: contactButtonHelpText,
+                    onToggleSave: { Task { await toggleSave() } },
+                    onContact: { Task { await handleContactAction() } }
+                )
 
                 if let actionErrorMessage, !actionErrorMessage.isEmpty {
                     Text(actionErrorMessage)
@@ -106,53 +58,10 @@ struct ListingDetailView: View {
                 // Key investor metrics ribbon
                 KeyMetricsRibbon(analysis: analysis, explanation: explanation)
 
-                // Investor analysis cards
-                if isLoadingAnalysis && analysis == nil {
-                    ProgressView("Loading analysis\u{2026}")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, Theme.Spacing.md)
-                } else if let analysis {
-                    if let rent = analysis.marketRentContext {
-                        AnalysisMarketRentCard(rent: rent)
-                    }
-
-                    if let metrics = analysis.investorMetrics {
-                        AnalysisInvestorMetricsCard(metrics: metrics)
-                    }
-
-                    if let sale = analysis.marketSaleContext {
-                        AnalysisSaleContextCard(sale: sale)
-                    }
-
-                    if let legal = analysis.legalRentSummary {
-                        AnalysisLegalRentCard(legal: legal)
-                    }
-
-                    // Risk + Upside flags side-by-side when both present
-                    if !analysis.riskFlags.isEmpty && !analysis.upsideFlags.isEmpty {
-                        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-                            AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
-                                .frame(maxWidth: .infinity)
-                            AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
-                                .frame(maxWidth: .infinity)
-                        }
-                    } else {
-                        if !analysis.riskFlags.isEmpty {
-                            AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
-                        }
-                        if !analysis.upsideFlags.isEmpty {
-                            AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
-                        }
-                    }
-
-                    if !analysis.missingData.isEmpty {
-                        AnalysisMissingDataList(items: analysis.missingData)
-                    }
-
-                    if !analysis.assumptions.isEmpty {
-                        AnalysisAssumptionsList(items: analysis.assumptions)
-                    }
-                }
+                ListingAnalysisSection(
+                    analysis: analysis,
+                    isLoadingAnalysis: isLoadingAnalysis
+                )
 
                 // Price history
                 PriceHistoryView(versions: priceVersions)
@@ -219,15 +128,18 @@ struct ListingDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: listing.id) {
             actionErrorMessage = nil
-            async let l: Void = loadListingDetail()
+
+            await loadListingDetail()
+
             async let v: Void = loadVersions()
             async let e: Void = loadExplanation()
             async let c: Void = loadCluster()
             async let s: Void = checkIfSaved()
             async let a: Void = loadAnalysis()
             async let d: Void = loadDocuments()
-            async let o: Void = loadOutreachThread()
-            _ = await (l, v, e, c, s, a, d, o)
+            _ = await (v, e, c, s, a, d)
+
+            await loadOutreachThread()
         }
     }
 
@@ -253,19 +165,19 @@ struct ListingDetailView: View {
         do {
             let versions = try await appState.apiClient.fetchListingVersions(id: listing.id)
             priceVersions = versions.compactMap { v -> PriceVersion? in
-                guard let priceEurCents = v.listPriceEurCents else { return nil }
+                guard let priceEurCents = v.listPriceEurCents, let observedAt = v.observedAt else { return nil }
                 return PriceVersion(
-                    date: v.observedAt,
+                    date: observedAt,
                     priceEur: priceEurCents / 100,
                     reason: v.versionReason
                 )
             }
         } catch {
             Log.ui.error("Failed to load price versions for listing \(self.listing.id): \(error, privacy: .public)")
-            if let listPriceEur = listing.listPriceEur {
+            if let listPriceEur = listing.listPriceEur, let firstSeenAt = listing.firstSeenAt {
                 priceVersions = [
                     PriceVersion(
-                        date: listing.firstSeenAt,
+                        date: firstSeenAt,
                         priceEur: listPriceEur,
                         reason: "Current price"
                     )
@@ -403,8 +315,8 @@ struct ListingDetailView: View {
     private func handleContactAction() async {
         actionErrorMessage = nil
 
-        if hasOutreachThread {
-            appState.selectedNavItem = .outreach
+        if let threadID = outreachThread?.id ?? displayedListing.outreachSummary?.threadId {
+            appState.openOutreachThread(threadID)
             return
         }
 
@@ -438,7 +350,7 @@ struct ListingDetailView: View {
             detailListing = try await appState.apiClient.fetchListing(id: listing.id)
             outreachThread = try await appState.apiClient.fetchOutreachThread(id: threadId)
             outreachErrorMessage = nil
-            appState.selectedNavItem = .outreach
+            appState.openOutreachThread(threadId)
         } catch {
             outreachErrorMessage = error.localizedDescription
             actionErrorMessage = "Could not start outreach for this listing."
@@ -569,6 +481,135 @@ private struct OutreachDetailSection: View {
         }
         .padding()
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct ListingExternalActionsBar: View {
+    let listing: Listing
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Button {
+                if let url = URL(string: listing.canonicalUrl) {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label("Open in Browser", systemImage: "safari")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.regular)
+            .buttonStyle(.borderedProminent)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(listing.canonicalUrl, forType: .string)
+            } label: {
+                Label("Copy URL", systemImage: "doc.on.doc")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.regular)
+            .buttonStyle(.bordered)
+
+            if let shareURL = URL(string: listing.canonicalUrl) {
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .controlSize(.regular)
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+}
+
+private struct ListingPrimaryActionsBar: View {
+    let isSaved: Bool
+    let isSaving: Bool
+    let canContact: Bool
+    let isLoadingOutreach: Bool
+    let contactButtonTitle: String
+    let contactButtonSystemImage: String
+    let contactButtonHelpText: String
+    let onToggleSave: () -> Void
+    let onContact: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Button(action: onToggleSave) {
+                Label(
+                    isSaved ? "Saved to Watchlist" : "Save to Watchlist",
+                    systemImage: isSaved ? "bookmark.fill" : "bookmark"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .controlSize(.regular)
+            .buttonStyle(.bordered)
+            .tint(isSaved ? .orange : .accentColor)
+            .disabled(isSaving)
+            .help(isSaved ? "Remove from watchlist" : "Save this listing to the watchlist")
+
+            Button(action: onContact) {
+                Label(contactButtonTitle, systemImage: contactButtonSystemImage)
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.regular)
+            .buttonStyle(.borderedProminent)
+            .disabled(!canContact || isLoadingOutreach)
+            .help(contactButtonHelpText)
+        }
+    }
+}
+
+private struct ListingAnalysisSection: View {
+    let analysis: ListingAnalysis?
+    let isLoadingAnalysis: Bool
+
+    var body: some View {
+        if isLoadingAnalysis && analysis == nil {
+            ProgressView("Loading analysis…")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, Theme.Spacing.md)
+        } else if let analysis {
+            if let rent = analysis.marketRentContext {
+                AnalysisMarketRentCard(rent: rent)
+            }
+
+            if let metrics = analysis.investorMetrics {
+                AnalysisInvestorMetricsCard(metrics: metrics)
+            }
+
+            if let sale = analysis.marketSaleContext {
+                AnalysisSaleContextCard(sale: sale)
+            }
+
+            if let legal = analysis.legalRentSummary {
+                AnalysisLegalRentCard(legal: legal)
+            }
+
+            if !analysis.riskFlags.isEmpty && !analysis.upsideFlags.isEmpty {
+                HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+                    AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
+                        .frame(maxWidth: .infinity)
+                    AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
+                        .frame(maxWidth: .infinity)
+                }
+            } else {
+                if !analysis.riskFlags.isEmpty {
+                    AnalysisFlagsList(title: "Risk Flags", flags: analysis.riskFlags, color: .red)
+                }
+                if !analysis.upsideFlags.isEmpty {
+                    AnalysisFlagsList(title: "Upside Flags", flags: analysis.upsideFlags, color: .green)
+                }
+            }
+
+            if !analysis.missingData.isEmpty {
+                AnalysisMissingDataList(items: analysis.missingData)
+            }
+
+            if !analysis.assumptions.isEmpty {
+                AnalysisAssumptionsList(items: analysis.assumptions)
+            }
+        }
     }
 }
 

@@ -7,7 +7,7 @@ struct ListingVersion: Identifiable, Codable {
     let versionNo: Int
     let versionReason: String
     let listPriceEurCents: Int?
-    let observedAt: Date
+    let observedAt: Date?
 }
 
 // MARK: - API DTO

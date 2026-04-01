@@ -18,7 +18,7 @@ struct MarketBaseline: Identifiable, Codable, Hashable {
     let p25PpsqmEur: Double?
     let p75PpsqmEur: Double?
     let stddevPpsqmEur: Double?
-    let baselineDate: Date
+    let baselineDate: Date?
 }
 
 // MARK: - Mock Data

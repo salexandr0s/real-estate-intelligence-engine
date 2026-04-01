@@ -58,7 +58,7 @@ struct ListingMapView: View {
 
                 if !listing.hasExactLocation {
                     Text("Approximate location (\(listing.geocodePrecision ?? "unknown") precision)")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             } else {

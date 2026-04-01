@@ -59,7 +59,7 @@ struct CopilotInputBar: View {
         .shadow(color: shadowColor, radius: isFocused ? 14 : 10, y: 4)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isFocused)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: trimmedText.isEmpty)
-        .onAppear { isFocused = true }
+        .task { isFocused = true }
     }
 
     @ViewBuilder

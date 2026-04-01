@@ -96,7 +96,6 @@ struct AlertPresentation {
 
 struct AlertRow: View {
     let alert: Alert
-    var isSelected: Bool = false
 
     private var presentation: AlertPresentation {
         AlertPresentation.make(for: alert)
@@ -118,12 +117,6 @@ struct AlertRow: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.sm)
-        .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-            }
-        }
         .opacity(alert.status == .dismissed ? 0.72 : 1.0)
     }
 

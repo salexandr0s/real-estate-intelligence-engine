@@ -9,11 +9,11 @@ struct PriceTrendBadge: View {
     var body: some View {
         HStack(spacing: 2) {
             Image(systemName: isDecrease ? "arrow.down.right" : "arrow.up.right")
-                .font(.system(size: 7, weight: .bold))
+                .font(.caption.bold())
             let pct = Text(abs(changePct), format: .number.precision(.fractionLength(1)))
             let suffix = Text("%")
             Text("\(pct)\(suffix)")
-                .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                .font(.caption.monospacedDigit().bold())
         }
         .foregroundStyle(isDecrease ? .green : .red)
         .padding(.horizontal, 4)

@@ -9,9 +9,13 @@ struct Filter: Identifiable, Codable, Hashable {
     var isActive: Bool
     var criteria: FilterCriteria
     var alertFrequency: AlertFrequency
-    let createdAt: Date
-    var updatedAt: Date
+    let createdAt: Date?
+    var updatedAt: Date?
     var matchCount: Int?
+
+    var updatedAtSortDate: Date {
+        updatedAt ?? .distantPast
+    }
 }
 
 // MARK: - Mock Data

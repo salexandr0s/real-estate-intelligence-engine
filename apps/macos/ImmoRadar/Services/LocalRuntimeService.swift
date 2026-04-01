@@ -555,8 +555,8 @@ final class LocalRuntimeService {
             process.terminate()
         }
 
-        let deadline = Date().addingTimeInterval(8)
-        while processes.values.contains(where: \.isRunning), Date() < deadline {
+        let deadline = Date.now.addingTimeInterval(8)
+        while processes.values.contains(where: \.isRunning), Date.now < deadline {
             refreshComponentStatuses()
             try? await Task.sleep(for: .milliseconds(200))
         }
@@ -577,8 +577,8 @@ final class LocalRuntimeService {
     }
 
     private func waitForAPI(baseURL: URL) async throws {
-        let deadline = Date().addingTimeInterval(20)
-        while Date() < deadline {
+        let deadline = Date.now.addingTimeInterval(20)
+        while Date.now < deadline {
             if await Self.isAPIHealthy(baseURL: baseURL) {
                 return
             }
@@ -588,8 +588,8 @@ final class LocalRuntimeService {
     }
 
     private func waitForTCP(service: String, host: String, port: Int) async throws {
-        let deadline = Date().addingTimeInterval(20)
-        while Date() < deadline {
+        let deadline = Date.now.addingTimeInterval(20)
+        while Date.now < deadline {
             if await Self.isTCPPortOpen(host: host, port: port) {
                 return
             }

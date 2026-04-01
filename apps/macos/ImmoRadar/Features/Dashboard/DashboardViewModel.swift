@@ -111,7 +111,7 @@ final class DashboardViewModel {
             let lhsCount = displayedMatchCount(for: lhs)
             let rhsCount = displayedMatchCount(for: rhs)
             if lhsCount == rhsCount {
-                return lhs.updatedAt > rhs.updatedAt
+                return lhs.updatedAtSortDate > rhs.updatedAtSortDate
             }
             return lhsCount > rhsCount
         }
@@ -130,7 +130,7 @@ final class DashboardViewModel {
         let lhsScore = lhs.currentScore ?? 0
         let rhsScore = rhs.currentScore ?? 0
         if lhsScore == rhsScore {
-            return lhs.firstSeenAt > rhs.firstSeenAt
+            return lhs.firstSeenSortDate > rhs.firstSeenSortDate
         }
         return lhsScore > rhsScore
     }
@@ -185,7 +185,7 @@ final class DashboardViewModel {
 
     var activitySnapshot: ActivitySnapshot {
         let newListings = uniqueMatchedListings.count { listing in
-            Calendar.current.dateComponents([.hour], from: listing.firstSeenAt, to: .now).hour ?? 999 < 24
+            listing.wasSeenWithinLast24Hours
         }
 
         let priceDrops = uniqueMatchedListings.count { listing in

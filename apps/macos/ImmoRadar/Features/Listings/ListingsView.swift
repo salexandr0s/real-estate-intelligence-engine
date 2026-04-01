@@ -10,66 +10,7 @@ struct ListingsView: View {
 
     var body: some View {
         HSplitView {
-            VStack(spacing: 0) {
-                ListingsFilterBar(viewModel: viewModel)
-                Divider()
-                if let error = viewModel.errorMessage {
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                            .accessibilityHidden(true)
-                        Text(error)
-                            .font(.callout)
-                        Spacer()
-                        Button("Retry") {
-                            Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    .padding(.horizontal, Theme.Spacing.lg)
-                    .padding(.vertical, Theme.Spacing.sm)
-                    .background(Color.red.opacity(0.1))
-                    Divider()
-                }
-                if viewModel.isLoading && viewModel.listings.isEmpty {
-                    ContentUnavailableView {
-                        Label("Loading Listings", systemImage: "building.2")
-                    } description: {
-                        Text("Fetching listings from the server\u{2026}")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay {
-                        ProgressView()
-                            .controlSize(.large)
-                            .offset(y: -60)
-                    }
-                } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
-                    ContentUnavailableView {
-                        Label(
-                            viewModel.hasActiveFilters ? "No Matching Listings" : "No Listings",
-                            systemImage: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle" : "building.2"
-                        )
-                    } description: {
-                        Text(
-                            viewModel.hasActiveFilters
-                                ? "No listings match your current filters."
-                                : "No listings available yet."
-                        )
-                    } actions: {
-                        if viewModel.hasActiveFilters {
-                            Button("Clear Filters") {
-                                viewModel.clearFilters()
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.isMapMode {
-                    ListingsMapView(viewModel: viewModel)
-                } else {
-                    ListingsTable(viewModel: viewModel)
-                }
-            }
+            ListingsPrimaryPane(viewModel: viewModel, appState: appState)
             .frame(minWidth: 400, maxHeight: .infinity)
 
             if showInspector {
@@ -171,6 +112,90 @@ struct ListingsView: View {
         viewModel.revealListing(id: listingId)
         showInspector = true
         appState.deepLinkListingId = nil
+    }
+}
+
+private struct ListingsPrimaryPane: View {
+    @Bindable var viewModel: ListingsViewModel
+    let appState: AppState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ListingsFilterBar(viewModel: viewModel)
+            Divider()
+
+            if let error = viewModel.errorMessage {
+                ListingsErrorBanner(error: error) {
+                    Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                }
+                Divider()
+            }
+
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.isLoading && viewModel.listings.isEmpty {
+            ContentUnavailableView {
+                Label("Loading Listings", systemImage: "building.2")
+            } description: {
+                Text("Fetching listings from the server\u{2026}")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                ProgressView()
+                    .controlSize(.large)
+                    .offset(y: -60)
+            }
+        } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
+            ContentUnavailableView {
+                Label(
+                    viewModel.hasActiveFilters ? "No Matching Listings" : "No Listings",
+                    systemImage: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle" : "building.2"
+                )
+            } description: {
+                Text(
+                    viewModel.hasActiveFilters
+                        ? "No listings match your current filters."
+                        : "No listings available yet."
+                )
+            } actions: {
+                if viewModel.hasActiveFilters {
+                    Button("Clear Filters") {
+                        viewModel.clearFilters()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.isMapMode {
+            ListingsMapView(viewModel: viewModel)
+        } else {
+            ListingsTable(viewModel: viewModel)
+        }
+    }
+}
+
+private struct ListingsErrorBanner: View {
+    let error: String
+    let onRetry: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+                .accessibilityHidden(true)
+            Text(error)
+                .font(.callout)
+            Spacer()
+            Button("Retry", action: onRetry)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Color.red.opacity(0.1))
     }
 }
 

@@ -73,8 +73,8 @@ actor CacheManager {
 
     private func cacheFileURL(for key: String) -> URL {
         let safeKey = key
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
+            .replacing("/", with: "_")
+            .replacing(":", with: "_")
         return cacheDirectory.appendingPathComponent("\(safeKey).json")
     }
 

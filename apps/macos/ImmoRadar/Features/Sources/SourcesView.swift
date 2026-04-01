@@ -106,14 +106,14 @@ private struct SourcesRuntimeCard: View {
                         }
 
                         Text(progress.detail)
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.top, Theme.Spacing.xs)
                 }
 
                 Text(helperCopy)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
 
                 FlowLayout(spacing: Theme.Spacing.xs) {
@@ -125,7 +125,7 @@ private struct SourcesRuntimeCard: View {
                                 .fill(component.isRunning ? Color.scoreGood : Color.secondary.opacity(0.5))
                                 .frame(width: 8, height: 8)
                         }
-                        .font(.caption2.weight(.medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(component.isRunning ? .primary : .secondary)
                     }
                 }
@@ -521,6 +521,13 @@ private struct SourceDetailCard: View {
 
     private static let preferredIntervalPresets = [60, 360, 720, 1440]
 
+    init(source: Source, viewModel: SourcesViewModel) {
+        self.source = source
+        self.viewModel = viewModel
+        _selectedInterval = State(initialValue: source.crawlIntervalMinutes)
+        _isActive = State(initialValue: source.isActive)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -563,7 +570,7 @@ private struct SourceDetailCard: View {
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                         Text("\(source.successRatePct.formatted(.number.precision(.fractionLength(1))))% success")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
 
@@ -697,10 +704,6 @@ private struct SourceDetailCard: View {
         }
         .shadow(color: .black.opacity(0.04), radius: 8, y: 4)
         .onHover { isHovered = $0 }
-        .onAppear {
-            selectedInterval = source.crawlIntervalMinutes
-            isActive = source.isActive
-        }
         .onChange(of: source.crawlIntervalMinutes) { _, newValue in
             selectedInterval = newValue
         }

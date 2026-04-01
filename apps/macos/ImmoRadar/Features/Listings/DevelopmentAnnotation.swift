@@ -5,16 +5,31 @@ struct DevelopmentAnnotation: View {
     let development: WienDevelopment
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+    @State private var isPopoverPresented = false
+
+    private var showsHoverCard: Bool {
+        isHovered && !isPopoverPresented
+    }
 
     var body: some View {
         VStack(spacing: 2) {
-            if isHovered {
+            if showsHoverCard {
                 DevelopmentPopover(development: development)
                     .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottom)))
                     .zIndex(100)
             }
 
-            marker
+            Button {
+                isPopoverPresented.toggle()
+            } label: {
+                marker
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
+                DevelopmentPopover(development: development)
+            }
+            .accessibilityLabel(development.name)
+            .accessibilityHint("Shows project details")
         }
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovered)
@@ -22,9 +37,9 @@ struct DevelopmentAnnotation: View {
 
     private var marker: some View {
         Image(systemName: "building.2.fill")
-            .font(.system(size: 8)) // Fixed size: map marker icon
+            .font(.caption.bold())
             .foregroundStyle(.white)
-            .frame(width: 16, height: 16)
+            .frame(width: 18, height: 18)
             .background(development.statusColor, in: RoundedRectangle(cornerRadius: 3))
             .overlay { RoundedRectangle(cornerRadius: 3).stroke(.white, lineWidth: 0.5) }
     }

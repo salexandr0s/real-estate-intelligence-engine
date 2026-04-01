@@ -5,24 +5,34 @@ import SwiftUI
 struct DashboardPriceTrendChart: View {
     let data: [DistrictTrendPoint]
 
-    private var chartData: [DistrictTrendPoint] {
+    private struct ChartPoint: Identifiable {
+        let point: DistrictTrendPoint
+        let parsedDate: Date
+
+        var id: String { point.id }
+    }
+
+    private var chartData: [ChartPoint] {
         let countByDistrict = Dictionary(grouping: data, by: \.districtNo)
             .mapValues(\.count)
             .sorted { $0.value > $1.value }
         let topDistricts = Set(countByDistrict.prefix(5).map(\.key))
-        return data.filter { topDistricts.contains($0.districtNo) }
+        return data.compactMap { point in
+            guard topDistricts.contains(point.districtNo), let parsedDate = point.parsedDate else { return nil }
+            return ChartPoint(point: point, parsedDate: parsedDate)
+        }
     }
 
     /// Latest data point per district for endpoint annotations.
-    private var latestPoints: [Int: DistrictTrendPoint] {
-        var result: [Int: DistrictTrendPoint] = [:]
+    private var latestPoints: [Int: ChartPoint] {
+        var result: [Int: ChartPoint] = [:]
         for point in chartData {
-            if let existing = result[point.districtNo] {
+            if let existing = result[point.point.districtNo] {
                 if point.parsedDate > existing.parsedDate {
-                    result[point.districtNo] = point
+                    result[point.point.districtNo] = point
                 }
             } else {
-                result[point.districtNo] = point
+                result[point.point.districtNo] = point
             }
         }
         return result
@@ -47,10 +57,10 @@ struct DashboardPriceTrendChart: View {
             } else {
                 Chart {
                     ForEach(chartData) { point in
-                        let label = districtLabel(point.districtNo)
+                        let label = districtLabel(point.point.districtNo)
 
                         // P25–P75 confidence band
-                        if let p25 = point.avgP25, let p75 = point.avgP75 {
+                        if let p25 = point.point.avgP25, let p75 = point.point.avgP75 {
                             AreaMark(
                                 x: .value("Date", point.parsedDate),
                                 yStart: .value("P25", p25),
@@ -64,7 +74,7 @@ struct DashboardPriceTrendChart: View {
                         // Price trend line
                         LineMark(
                             x: .value("Date", point.parsedDate),
-                            y: .value("EUR/m\u{00B2}", point.avgMedianPpsqm)
+                            y: .value("EUR/m\u{00B2}", point.point.avgMedianPpsqm)
                         )
                         .foregroundStyle(by: .value("District", label))
                         .interpolationMethod(.catmullRom)
@@ -75,12 +85,12 @@ struct DashboardPriceTrendChart: View {
                     ForEach(Array(latestPoints.values), id: \.id) { point in
                         PointMark(
                             x: .value("Date", point.parsedDate),
-                            y: .value("EUR/m\u{00B2}", point.avgMedianPpsqm)
+                            y: .value("EUR/m\u{00B2}", point.point.avgMedianPpsqm)
                         )
-                        .foregroundStyle(by: .value("District", districtLabel(point.districtNo)))
+                        .foregroundStyle(by: .value("District", districtLabel(point.point.districtNo)))
                         .symbolSize(20)
                         .annotation(position: .top, spacing: 2) {
-                            Text(PriceFormatter.formatCompact(Int(point.avgMedianPpsqm)))
+                            Text(PriceFormatter.formatCompact(Int(point.point.avgMedianPpsqm)))
                                 .font(Theme.chartAnnotationFont)
                                 .foregroundStyle(.secondary)
                         }

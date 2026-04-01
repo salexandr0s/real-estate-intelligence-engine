@@ -198,7 +198,7 @@ enum ClaudeAuthHelper {
 
         oauth["accessToken"] = accessToken
         if let expiresIn = json["expires_in"] as? Double {
-            oauth["expiresAt"] = (Date().timeIntervalSince1970 + expiresIn) * 1000.0
+            oauth["expiresAt"] = (Date.now.timeIntervalSince1970 + expiresIn) * 1000.0
         }
         if let newRefresh = json["refresh_token"] as? String {
             oauth["refreshToken"] = newRefresh
@@ -231,7 +231,7 @@ enum ClaudeAuthHelper {
 
             oauth["accessToken"] = accessToken
             if let expiresIn = json["expires_in"] as? Double {
-                oauth["expiresAt"] = (Date().timeIntervalSince1970 + expiresIn) * 1000.0
+                oauth["expiresAt"] = (Date.now.timeIntervalSince1970 + expiresIn) * 1000.0
             }
             if let newRefresh = json["refresh_token"] as? String {
                 oauth["refreshToken"] = newRefresh

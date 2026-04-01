@@ -53,7 +53,7 @@ struct AlertListingSummary: Codable, Hashable {
         case "immoworld", "immo-world":
             "Immo-World"
         default:
-            sourceCode.replacingOccurrences(of: "_", with: " ").capitalized
+            sourceCode.replacing("_", with: " ").capitalized
         }
     }
 
@@ -152,11 +152,15 @@ struct Alert: Identifiable, Codable, Hashable {
     var status: AlertStatus
     let title: String
     let body: String
-    let matchedAt: Date
+    let matchedAt: Date?
     let filterName: String?
     let listingId: Int?
     let matchReasons: AlertMatchReasons?
     let listing: AlertListingSummary?
+
+    var matchedAtSortDate: Date {
+        matchedAt ?? .distantPast
+    }
 }
 
 // MARK: - Mock Data

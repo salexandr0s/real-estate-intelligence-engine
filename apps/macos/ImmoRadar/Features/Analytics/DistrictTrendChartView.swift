@@ -8,13 +8,23 @@ struct DistrictTrendChartView: View {
     var onMonthsChanged: ((Int) -> Void)?
     @State private var selectedMonths: Int = 12
 
-    private var filteredData: [DistrictTrendPoint] {
+    private struct ChartPoint: Identifiable {
+        let point: DistrictTrendPoint
+        let parsedDate: Date
+
+        var id: String { point.id }
+    }
+
+    private var filteredData: [ChartPoint] {
         var result = data
         if let district = selectedDistrictNo {
             result = result.filter { $0.districtNo == district }
         }
         let cutoff = Calendar.current.date(byAdding: .month, value: -selectedMonths, to: .now) ?? .distantPast
-        return result.filter { $0.parsedDate >= cutoff }
+        return result.compactMap { point in
+            guard let parsedDate = point.parsedDate, parsedDate >= cutoff else { return nil }
+            return ChartPoint(point: point, parsedDate: parsedDate)
+        }
     }
 
     private var availableDistricts: [Int] {
@@ -82,12 +92,12 @@ struct DistrictTrendChartView: View {
                 Chart(filteredData) { point in
                     LineMark(
                         x: .value("Date", point.parsedDate),
-                        y: .value("EUR/m²", point.avgMedianPpsqm)
+                        y: .value("EUR/m²", point.point.avgMedianPpsqm)
                     )
-                    .foregroundStyle(by: .value("District", point.districtLabel))
+                    .foregroundStyle(by: .value("District", point.point.districtLabel))
                     .interpolationMethod(.catmullRom)
 
-                    if let p25 = point.avgP25, let p75 = point.avgP75,
+                    if let p25 = point.point.avgP25, let p75 = point.point.avgP75,
                        selectedDistrictNo != nil {
                         AreaMark(
                             x: .value("Date", point.parsedDate),

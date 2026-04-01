@@ -81,13 +81,13 @@ struct APIAlertListingSummaryResponse: Codable {
             rooms: rooms,
             pricePerSqmEur: pricePerSqmEur,
             currentScore: currentScore,
-            firstSeenAt: firstSeenAt.map(Date.fromISO),
+            firstSeenAt: firstSeenAt.flatMap(Date.fromISO),
             listingStatus: listingStatus,
             latitude: latitude,
             longitude: longitude,
             geocodePrecision: geocodePrecision,
             lastPriceChangePct: lastPriceChangePct,
-            lastPriceChangeAt: lastPriceChangeAt.map(Date.fromISO)
+            lastPriceChangeAt: lastPriceChangeAt.flatMap(Date.fromISO)
         )
     }
 }

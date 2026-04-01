@@ -41,7 +41,7 @@ struct APIListingResponse: Codable {
         }
 
         let date = Date.fromISO(firstSeenAt)
-        let priceChangeDate = lastPriceChangeAt.map { Date.fromISO($0) }
+        let priceChangeDate = lastPriceChangeAt.flatMap(Date.fromISO)
         let status = ListingStatus(rawValue: listingStatus ?? "active") ?? .active
 
         let resolvedPriceEur: Int?
@@ -102,7 +102,7 @@ struct APIMailboxResponse: Codable, Sendable {
             displayName: displayName,
             syncStatus: syncStatus,
             pollIntervalSeconds: pollIntervalSeconds,
-            lastSuccessfulSyncAt: lastSuccessfulSyncAt.map { Date.fromISO($0) },
+            lastSuccessfulSyncAt: lastSuccessfulSyncAt.flatMap(Date.fromISO),
             lastErrorMessage: lastErrorMessage
         )
     }
@@ -121,9 +121,9 @@ struct APIOutreachSummaryResponse: Codable, Sendable {
             threadId: threadId,
             workflowState: workflowState,
             unreadInboundCount: unreadInboundCount,
-            nextActionAt: nextActionAt.map { Date.fromISO($0) },
-            lastInboundAt: lastInboundAt.map { Date.fromISO($0) },
-            lastOutboundAt: lastOutboundAt.map { Date.fromISO($0) }
+            nextActionAt: nextActionAt.flatMap(Date.fromISO),
+            lastInboundAt: lastInboundAt.flatMap(Date.fromISO),
+            lastOutboundAt: lastOutboundAt.flatMap(Date.fromISO)
         )
     }
 }
@@ -214,9 +214,9 @@ struct APIOutreachThreadSummaryResponse: Codable, Sendable {
             contactPhone: contactPhone,
             workflowState: workflowState,
             unreadInboundCount: unreadInboundCount,
-            nextActionAt: nextActionAt.map { Date.fromISO($0) },
-            lastInboundAt: lastInboundAt.map { Date.fromISO($0) },
-            lastOutboundAt: lastOutboundAt.map { Date.fromISO($0) },
+            nextActionAt: nextActionAt.flatMap(Date.fromISO),
+            lastInboundAt: lastInboundAt.flatMap(Date.fromISO),
+            lastOutboundAt: lastOutboundAt.flatMap(Date.fromISO),
             updatedAt: Date.fromISO(updatedAt)
         )
     }
@@ -250,9 +250,9 @@ struct APIOutreachThreadResponse: Codable, Sendable {
             contactPhone: contactPhone,
             workflowState: workflowState,
             unreadInboundCount: unreadInboundCount,
-            nextActionAt: nextActionAt.map { Date.fromISO($0) },
-            lastInboundAt: lastInboundAt.map { Date.fromISO($0) },
-            lastOutboundAt: lastOutboundAt.map { Date.fromISO($0) },
+            nextActionAt: nextActionAt.flatMap(Date.fromISO),
+            lastInboundAt: lastInboundAt.flatMap(Date.fromISO),
+            lastOutboundAt: lastOutboundAt.flatMap(Date.fromISO),
             updatedAt: Date.fromISO(updatedAt),
             messages: messages.map { $0.toDomain() },
             events: events.map { $0.toDomain() }

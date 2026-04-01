@@ -22,7 +22,7 @@ struct ListingComparisonBlockView: View {
             header
 
             if !data.callouts.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: Theme.Spacing.sm) {
                         ForEach(data.callouts) { callout in
                             ComparisonVerdictStrip(callout: callout, onListingTap: onListingTap)
@@ -30,6 +30,7 @@ struct ListingComparisonBlockView: View {
                     }
                     .padding(.vertical, 1)
                 }
+                .scrollIndicators(.hidden)
             }
 
             comparisonMatrix

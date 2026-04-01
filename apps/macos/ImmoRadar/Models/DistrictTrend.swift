@@ -14,8 +14,8 @@ struct DistrictTrendPoint: Identifiable, Codable, Sendable {
 
     /// Parse the date string ("2026-03-01") into a Date.
     /// Uses a dedicated formatter without fractional seconds.
-    var parsedDate: Date {
-        DistrictTrendPoint.dateFormatter.date(from: date) ?? .now
+    var parsedDate: Date? {
+        DistrictTrendPoint.dateFormatter.date(from: date)
     }
 
     var districtLabel: String {

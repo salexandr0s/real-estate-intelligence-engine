@@ -218,16 +218,22 @@ private struct FilterRow: View {
 
             Spacer()
 
-            // Test button
-            if isTesting {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Button("Test Filter", systemImage: "magnifyingglass", action: onTest)
-                    .labelStyle(.iconOnly)
+            HStack(spacing: Theme.Spacing.xs) {
+                Button("Edit", systemImage: "pencil", action: onEdit)
                     .font(.caption)
                     .buttonStyle(.borderless)
-                .help("Test filter against current listings")
+                    .help("Edit filter")
+
+                if isTesting {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button("Test Filter", systemImage: "magnifyingglass", action: onTest)
+                        .labelStyle(.iconOnly)
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .help("Test filter against current listings")
+                }
             }
 
             // Match count badge

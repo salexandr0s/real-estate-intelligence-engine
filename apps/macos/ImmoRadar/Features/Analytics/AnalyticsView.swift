@@ -461,27 +461,25 @@ private struct AnalyticsDistrictMap: View {
                         let path = districtPath(for: boundary, in: frame)
                         let isActive = selectedDistrictNo == boundary.id || effectiveHoveredDistrictNo == boundary.id
 
-                        path
-                            .fill(fillColor(for: district, isActive: isActive))
-                            .overlay {
-                                path.stroke(strokeColor(for: district, isActive: isActive), lineWidth: isActive ? 2 : 1)
-                            }
+                        Button {
+                            toggleDistrictSelection(boundary.id)
+                        } label: {
+                            path
+                                .fill(fillColor(for: district, isActive: isActive))
+                                .overlay {
+                                    path.stroke(strokeColor(for: district, isActive: isActive), lineWidth: isActive ? 2 : 1)
+                                }
+                        }
+                        .buttonStyle(.plain)
                             .contentShape(path)
                             .onHover { inside in
                                 if selectedDistrictNo == nil {
                                     hoveredDistrictNo = inside ? boundary.id : nil
                                 }
                             }
-                            .onTapGesture {
-                                toggleDistrictSelection(boundary.id)
-                            }
                             .accessibilityElement()
                             .accessibilityLabel(district.districtLabel)
                             .accessibilityValue(isActive ? "Selected" : "Not selected")
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction {
-                                toggleDistrictSelection(boundary.id)
-                            }
 
                         Text(boundary.id <= 9 ? "\(boundary.id)" : boundary.id.formatted())
                             .font(.caption2.weight(.bold))

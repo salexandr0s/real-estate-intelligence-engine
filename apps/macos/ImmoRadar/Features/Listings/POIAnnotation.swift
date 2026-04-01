@@ -6,11 +6,14 @@ struct POIAnnotation: View {
 
     var body: some View {
         Image(systemName: poi.category.systemImage)
-            .font(.system(size: 8)) // Fixed size: map marker icon
+            .font(.caption.bold())
             .foregroundStyle(.white)
-            .frame(width: 16, height: 16)
+            .frame(width: 18, height: 18)
             .background(poi.category.tintColor, in: Circle())
             .overlay { Circle().stroke(.white, lineWidth: 0.5) }
+            .accessibilityElement()
+            .accessibilityLabel(poi.name)
+            .accessibilityValue(poi.category.displayName)
     }
 }
 
