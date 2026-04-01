@@ -18,7 +18,6 @@
 		0799F469A02E3D9310FCF08C /* CopilotStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE509E2262A38FA7B860300 /* CopilotStreamEvent.swift */; };
 		09505EFE9E18867CAD6A4AF3 /* ScoreIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E3F95A7671BD234E2BC2B4 /* ScoreIndicator.swift */; };
 		09C4525F58A67DC344DE9C2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 31A79A472F6256DC8EA62B21 /* Assets.xcassets */; };
-		09F601A041D59C0E550E0C45 /* icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 81897AEF6AAF60906BBE5030 /* icon.icon */; };
 		0B57A25967AB929406487AB9 /* ListingsFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */; };
 		0DD8170EEBD143BC769B7DE3 /* DetailRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1729A9A111EC818DDEC2A28 /* DetailRow.swift */; };
 		0F598CDF1074AF6B832692B8 /* ListingVelocityPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6068E10A8E79C015FBEE5F07 /* ListingVelocityPoint.swift */; };
@@ -906,7 +905,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				09C4525F58A67DC344DE9C2A /* Assets.xcassets in Resources */,
-				09F601A041D59C0E550E0C45 /* icon.icon in Resources */,
 				74BFF634E2A0856A5E2A38AF /* vienna-boundary.geojson in Resources */,
 				5B841E8E787691D1FAF964A4 /* vienna-developments.geojson in Resources */,
 				5B2DA7BED5F3A00F390B2730 /* vienna-districts.geojson in Resources */,

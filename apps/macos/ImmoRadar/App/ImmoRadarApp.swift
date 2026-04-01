@@ -8,7 +8,7 @@ struct ImmoRadarApp: App {
     var body: some Scene {
         // MARK: - Main Window
 
-        WindowGroup {
+        Window("ImmoRadar", id: "main") {
             ContentView()
                 .environment(appState)
                 .task {

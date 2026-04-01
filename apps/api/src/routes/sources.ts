@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { ConnectionOptions } from 'bullmq';
 import { Queue } from 'bullmq';
-import type { SourceRow } from '@immoradar/contracts';
-import { NotFoundError } from '@immoradar/observability';
+import type { ScrapeRunMetrics, SourceRow } from '@immoradar/contracts';
+import { NotFoundError, TransientError, createLogger } from '@immoradar/observability';
 import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
 import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
 import type { DiscoveryJobData } from '@immoradar/scraper-core';
@@ -17,6 +17,22 @@ import {
 
 // Lazily-initialized shared queue for discovery jobs (avoids one Redis connection per request)
 let discoveryQueue: Queue<DiscoveryJobData> | null = null;
+const logger = createLogger('api:sources');
+const SCRAPE_QUEUE_READY_TIMEOUT_MS = 5_000;
+const SCRAPE_QUEUE_UNAVAILABLE_MESSAGE =
+  'Scrape queue is unavailable. Check Redis and the scraper worker, then try again.';
+const EMPTY_SCRAPE_RUN_METRICS: ScrapeRunMetrics = {
+  pagesFetched: 0,
+  listingsDiscovered: 0,
+  rawSnapshotsCreated: 0,
+  normalizedCreated: 0,
+  normalizedUpdated: 0,
+  http2xx: 0,
+  http4xx: 0,
+  http5xx: 0,
+  captchaCount: 0,
+  retryCount: 0,
+};
 
 function getDiscoveryQueue(): Queue<DiscoveryJobData> {
   if (!discoveryQueue) {
@@ -28,6 +44,23 @@ function getDiscoveryQueue(): Queue<DiscoveryJobData> {
     });
   }
   return discoveryQueue;
+}
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => Error,
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(onTimeout()), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 }
 
 function intervalToCron(minutes: number): string {
@@ -57,9 +90,7 @@ async function syncDiscoverySchedule(source: SourceRow): Promise<void> {
   const sourceConfig = source.config as Record<string, unknown> | null;
   const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
   const maxPagesPerRun =
-    (crawlProfile?.maxPagesPerRun as number) ??
-    (crawlProfile?.maxPages as number) ??
-    100;
+    (crawlProfile?.maxPagesPerRun as number) ?? (crawlProfile?.maxPages as number) ?? 100;
 
   await queue.upsertJobScheduler(
     schedulerId,
@@ -91,9 +122,7 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     // Index latest canary results by source code for O(1) lookup
     const canaryBySource = new Map(latestCanaries.map((c) => [c.sourceCode, c]));
     const listingCountBySource = new Map(listingCounts.map((row) => [row.sourceId, row]));
-    const lifecycleSummaryBySource = new Map(
-      lifecycleSummaries.map((row) => [row.sourceId, row]),
-    );
+    const lifecycleSummaryBySource = new Map(lifecycleSummaries.map((row) => [row.sourceId, row]));
 
     const mappedData = await Promise.all(
       allSources.map(async (source) => {
@@ -357,6 +386,16 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       throw new NotFoundError('Source', sourceCode);
     }
 
+    const queue = getDiscoveryQueue();
+    await withTimeout(
+      queue.waitUntilReady(),
+      SCRAPE_QUEUE_READY_TIMEOUT_MS,
+      () =>
+        new TransientError(SCRAPE_QUEUE_UNAVAILABLE_MESSAGE, 'scrape_queue_unavailable', {
+          sourceCode: source.code,
+        }),
+    );
+
     // Create scrape run record
     const run = await scrapeRuns.create({
       sourceId: source.id,
@@ -366,10 +405,6 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       workerVersion: '1.0.0',
       browserType: 'chromium',
     });
-    await scrapeRuns.start(run.id);
-
-    // Enqueue discovery job via BullMQ (shared queue instance)
-    const queue = getDiscoveryQueue();
 
     const sourceConfig = source.config as Record<string, unknown> | null;
     const crawlProfile =
@@ -384,14 +419,37 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         ? rawMaxPagesPerRun
         : 100;
 
-    await queue.add(`discovery:${source.code}`, {
-      sourceCode: source.code,
-      sourceId: source.id,
-      scrapeRunId: run.id,
-      page: 1,
-      maxPages: maxPagesPerRun, // legacy field, kept for compat
-      maxPagesPerRun,
-    });
+    try {
+      await queue.add(`discovery:${source.code}`, {
+        sourceCode: source.code,
+        sourceId: source.id,
+        scrapeRunId: run.id,
+        page: 1,
+        maxPages: maxPagesPerRun, // legacy field, kept for compat
+        maxPagesPerRun,
+      });
+    } catch (error) {
+      logger.error('Failed to enqueue manual scrape run', {
+        sourceCode: source.code,
+        scrapeRunId: run.id,
+        sourceId: source.id,
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      await scrapeRuns.finish(
+        run.id,
+        'failed',
+        EMPTY_SCRAPE_RUN_METRICS,
+        'scrape_queue_unavailable',
+        SCRAPE_QUEUE_UNAVAILABLE_MESSAGE,
+      );
+
+      throw new TransientError(SCRAPE_QUEUE_UNAVAILABLE_MESSAGE, 'scrape_queue_unavailable', {
+        sourceCode: source.code,
+        scrapeRunId: run.id,
+      });
+    }
 
     return reply.status(201).send({
       data: {

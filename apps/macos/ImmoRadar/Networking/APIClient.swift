@@ -404,7 +404,11 @@ actor APIClient {
     /// Trigger a manual scrape run for the given source code.
     func triggerScrapeRun(sourceCode: String) async throws {
         let body = try encoder.encode(["sourceCode": sourceCode])
-        try await requestVoid(.createScrapeRun(body: body))
+        var request = try buildRequest(for: .createScrapeRun(body: body))
+        request.timeoutInterval = 12
+
+        let (data, response) = try await performRequest(request)
+        try validateResponse(response, data: data)
     }
 
     func pauseAllSources() async throws {

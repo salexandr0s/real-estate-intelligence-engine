@@ -230,8 +230,12 @@ final class LocalRuntimeService {
         do {
             _ = try Self.discoverLaunchContext(apiBaseURL: apiBaseURL, authToken: "dev-token")
             let managedCount = processes.values.count(where: \.isRunning)
-            state = managedCount > 0 ? .running : .stopped
-            if managedCount == 0 {
+            if managedCount > 0 {
+                state = .running
+            } else if case .failed = state {
+                // Preserve the last startup/runtime failure until the user retries or services recover.
+            } else {
+                state = .stopped
                 progressStatus = nil
             }
         } catch let error as RuntimeError {
@@ -494,19 +498,34 @@ final class LocalRuntimeService {
         process.standardOutput = logHandle
         process.standardError = logHandle
 
-        let status = await withCheckedContinuation { (continuation: CheckedContinuation<Int32, Never>) in
-            process.terminationHandler = { terminatedProcess in
-                continuation.resume(returning: terminatedProcess.terminationStatus)
+        let timeoutSeconds: TimeInterval = 45
+        let timeoutMessage =
+            "Migrations timed out after \(Int(timeoutSeconds)) seconds. Check ~/Library/Logs/ImmoRadar/\(logFileName)."
+        do {
+            try process.run()
+        } catch {
+            try? logHandle.close()
+            throw RuntimeError.commandFailed("Migrations failed. Check ~/Library/Logs/ImmoRadar/\(logFileName).")
+        }
+
+        let deadline = Date.now.addingTimeInterval(timeoutSeconds)
+        while process.isRunning && Date.now < deadline {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+
+        if process.isRunning {
+            process.interrupt()
+            try? await Task.sleep(for: .milliseconds(150))
+            if process.isRunning {
+                process.terminate()
             }
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(returning: 1)
-            }
+            try? logHandle.close()
+            throw RuntimeError.commandFailed(timeoutMessage)
         }
 
         try? logHandle.close()
 
+        let status = process.terminationStatus
         guard status == 0 else {
             throw RuntimeError.commandFailed("Migrations failed. Check ~/Library/Logs/ImmoRadar/\(logFileName).")
         }
@@ -699,18 +718,26 @@ final class LocalRuntimeService {
 
     private static func runtimeRootCandidates() -> [URL] {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-        let bundleURL = Bundle.main.bundleURL.deletingLastPathComponent()
+        let bundleURL = Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .standardizedFileURL
 
         return ancestorURLs(of: cwd) + ancestorURLs(of: bundleURL)
     }
 
     private static func ancestorURLs(of start: URL) -> [URL] {
         var results: [URL] = []
+        var seenPaths = Set<String>()
         var current = start.standardizedFileURL
+
         while true {
+            let currentPath = current.path
+            guard seenPaths.insert(currentPath).inserted else { break }
+
             results.append(current)
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path { break }
+
+            let parent = current.deletingLastPathComponent().standardizedFileURL
+            if parent.path == currentPath { break }
             current = parent
         }
         return results

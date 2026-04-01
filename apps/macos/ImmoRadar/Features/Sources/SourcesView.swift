@@ -427,7 +427,7 @@ private struct SourcesErrorBanner: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(Color.scoreAverage)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Couldn’t refresh source health.")
+                Text("Couldn’t complete the last sources action.")
                     .font(.callout.weight(.semibold))
                 Text(message)
                     .font(.caption)
