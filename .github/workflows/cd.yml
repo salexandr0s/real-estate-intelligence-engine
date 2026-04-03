@@ -81,6 +81,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
 
       - name: Generate worker-scraper SARIF report
         id: report_worker_scraper
@@ -93,6 +94,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
 
       - name: Generate worker-processing SARIF report
         id: report_worker_processing
@@ -105,6 +107,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
 
       - name: Upload API SARIF to code scanning
         if: always() && hashFiles('.trivy/api.sarif') != ''
@@ -139,6 +142,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
           skip-setup-trivy: true
 
       - name: Enforce worker-scraper vulnerability gate
@@ -153,6 +157,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
           skip-setup-trivy: true
 
       - name: Enforce worker-processing vulnerability gate
@@ -167,6 +172,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          cache: false
           skip-setup-trivy: true
 
       - name: Upload scan artifacts
