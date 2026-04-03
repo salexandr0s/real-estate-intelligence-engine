@@ -10,6 +10,9 @@ on:
         description: 'Source code to canary (leave empty for all)'
         required: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   canary:
     runs-on: ubuntu-latest

@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -175,7 +178,7 @@ jobs:
           name: trivy-scan-results
           path: .trivy/
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
       - name: Fail if any image scan reported HIGH/CRITICAL vulnerabilities
         if: always()
