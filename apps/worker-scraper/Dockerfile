@@ -28,9 +28,12 @@ RUN mkdir -p /runtime/apps /runtime/packages \
 
 # ── Runtime ─────────────────────────────────────────────────────────
 # Playwright base image includes Chromium and system dependencies.
-FROM mcr.microsoft.com/playwright:v1.52.0-noble
+FROM mcr.microsoft.com/playwright:v1.58.2-noble
 
 WORKDIR /app
+
+# Remove npm from the runtime image; the container only needs Node.js to start the worker.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --chown=pwuser:pwuser --from=builder /runtime /app
 

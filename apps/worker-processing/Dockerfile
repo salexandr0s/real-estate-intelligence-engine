@@ -31,6 +31,9 @@ FROM node:22-slim
 
 WORKDIR /app
 
+# Remove npm from the runtime image; the container only needs Node.js to start the worker.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 COPY --chown=node:node --from=builder /runtime /app
 
 ENV NODE_ENV=production

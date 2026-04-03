@@ -11,6 +11,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -68,41 +69,104 @@ jobs:
       - name: Prepare scan artifact directory
         run: mkdir -p .trivy
 
-      - name: Scan API image for vulnerabilities
-        id: scan_api
-        continue-on-error: true
+      - name: Generate API SARIF report
+        id: report_api
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
           format: sarif
           output: .trivy/api.sarif
-          exit-code: 1
+          exit-code: 0
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          scanners: vuln
 
-      - name: Scan worker-scraper image for vulnerabilities
-        id: scan_worker_scraper
-        continue-on-error: true
+      - name: Generate worker-scraper SARIF report
+        id: report_worker_scraper
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
           format: sarif
           output: .trivy/worker-scraper.sarif
-          exit-code: 1
+          exit-code: 0
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          scanners: vuln
 
-      - name: Scan worker-processing image for vulnerabilities
-        id: scan_worker_processing
-        continue-on-error: true
+      - name: Generate worker-processing SARIF report
+        id: report_worker_processing
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
           format: sarif
           output: .trivy/worker-processing.sarif
+          exit-code: 0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln
+
+      - name: Upload API SARIF to code scanning
+        if: always() && hashFiles('.trivy/api.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d4b3ca9fa7f69d38bfcd667bdc45bc373d16277e
+        with:
+          sarif_file: .trivy/api.sarif
+          category: container-api
+
+      - name: Upload worker-scraper SARIF to code scanning
+        if: always() && hashFiles('.trivy/worker-scraper.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d4b3ca9fa7f69d38bfcd667bdc45bc373d16277e
+        with:
+          sarif_file: .trivy/worker-scraper.sarif
+          category: container-worker-scraper
+
+      - name: Upload worker-processing SARIF to code scanning
+        if: always() && hashFiles('.trivy/worker-processing.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d4b3ca9fa7f69d38bfcd667bdc45bc373d16277e
+        with:
+          sarif_file: .trivy/worker-processing.sarif
+          category: container-worker-processing
+
+      - name: Enforce API vulnerability gate
+        id: scan_api
+        if: always()
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          format: table
           exit-code: 1
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          scanners: vuln
+          skip-setup-trivy: true
+
+      - name: Enforce worker-scraper vulnerability gate
+        id: scan_worker_scraper
+        if: always()
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln
+          skip-setup-trivy: true
+
+      - name: Enforce worker-processing vulnerability gate
+        id: scan_worker_processing
+        if: always()
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln
+          skip-setup-trivy: true
 
       - name: Upload scan artifacts
         if: always()
