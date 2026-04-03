@@ -17,20 +17,20 @@
     "@immoradar/outreach": "*",
     "@immoradar/scoring": "*",
     "@immoradar/scraper-core": "*",
-    "@immoradar/source-willhaben": "*",
-    "@immoradar/source-immoscout24": "*",
-    "@immoradar/source-wohnnet": "*",
     "@immoradar/source-derstandard": "*",
+    "@immoradar/source-edikte": "*",
     "@immoradar/source-findmyhome": "*",
+    "@immoradar/source-immoscout24": "*",
     "@immoradar/source-openimmo": "*",
     "@immoradar/source-remax": "*",
-    "@immoradar/source-edikte": "*",
+    "@immoradar/source-willhaben": "*",
+    "@immoradar/source-wohnnet": "*",
     "bullmq": "^5.71.0",
     "imapflow": "^1.0.190",
+    "ioredis": "^5.10.1",
     "mailparser": "^3.7.5",
     "nodemailer": "^7.0.6",
-    "playwright": "^1.58.2",
-    "ioredis": "^5.10.1"
+    "playwright": "^1.58.2"
   },
   "devDependencies": {
     "tsx": "^4.19.0"
