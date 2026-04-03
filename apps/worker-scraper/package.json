@@ -20,8 +20,8 @@
     "@immoradar/source-wohnnet": "*",
     "bullmq": "^5.71.0",
     "ioredis": "^5.10.1",
-    "patchright": "^1.58.2",
-    "playwright": "^1.58.2"
+    "patchright": "^1.59.1",
+    "playwright": "^1.59.1"
   },
   "devDependencies": {
     "tsx": "^4.19.0"
