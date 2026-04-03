@@ -28,7 +28,7 @@ RUN mkdir -p /runtime/apps /runtime/packages \
 
 # ── Runtime ─────────────────────────────────────────────────────────
 # Playwright base image includes Chromium and system dependencies.
-FROM mcr.microsoft.com/playwright:v1.59.1-noble
+FROM mcr.microsoft.com/playwright:v1.58.2-noble
 
 WORKDIR /app
 
