@@ -18,6 +18,7 @@ Use `claudecodex-vault.sh` to store each secret:
 ~/.claude/claudecodex-vault.sh set DATABASE_URL "postgres://immoradar:PASSWORD@localhost:5432/immoradar"
 ~/.claude/claudecodex-vault.sh set REDIS_URL "redis://localhost:6379/0"
 ~/.claude/claudecodex-vault.sh set API_BEARER_TOKEN "GENERATE_A_SECURE_TOKEN_HERE"
+~/.claude/claudecodex-vault.sh set METRICS_TOKEN "GENERATE_A_SEPARATE_METRICS_TOKEN_HERE"
 ~/.claude/claudecodex-vault.sh set S3_ACCESS_KEY "minioadmin"
 ~/.claude/claudecodex-vault.sh set S3_SECRET_KEY "GENERATE_A_SECURE_KEY_HERE"
 ```
@@ -28,7 +29,7 @@ Use `claudecodex-vault.sh` to store each secret:
 ~/.claude/claudecodex-vault.sh list
 ```
 
-This lists all keys stored in the `claudecodex.keychain-db`. Verify all five secrets appear.
+This lists all keys stored in the `claudecodex.keychain-db`. Verify all six secrets appear.
 
 ## Step 3: Shell environment export
 
@@ -39,6 +40,7 @@ The `~/.zprofile` file exports Keychain secrets as environment variables on shel
 export DATABASE_URL="$(~/.claude/claudecodex-vault.sh get DATABASE_URL)"
 export REDIS_URL="$(~/.claude/claudecodex-vault.sh get REDIS_URL)"
 export API_BEARER_TOKEN="$(~/.claude/claudecodex-vault.sh get API_BEARER_TOKEN)"
+export METRICS_TOKEN="$(~/.claude/claudecodex-vault.sh get METRICS_TOKEN)"
 export S3_ACCESS_KEY="$(~/.claude/claudecodex-vault.sh get S3_ACCESS_KEY)"
 export S3_SECRET_KEY="$(~/.claude/claudecodex-vault.sh get S3_SECRET_KEY)"
 ```
@@ -60,6 +62,7 @@ services:
       - DATABASE_URL
       - REDIS_URL
       - API_BEARER_TOKEN
+      - METRICS_TOKEN
   worker-scraper:
     environment:
       - DATABASE_URL
@@ -80,7 +83,7 @@ When no `=value` is provided, Docker Compose passes through the host's env var.
 
 ```bash
 # Verify secrets are in the shell environment
-env | grep -E 'DATABASE_URL|REDIS_URL|API_BEARER_TOKEN|S3_ACCESS_KEY|S3_SECRET_KEY'
+env | grep -E 'DATABASE_URL|REDIS_URL|API_BEARER_TOKEN|METRICS_TOKEN|S3_ACCESS_KEY|S3_SECRET_KEY'
 
 # Verify Docker Compose interpolates correctly (shows values, do not share output)
 docker compose config | grep -i password
@@ -109,3 +112,4 @@ See `docs/secrets-strategy.md` for rotation frequency and the full secrets inven
 - Secrets are stored in the macOS Keychain, not in plain text files
 - The Keychain requires user login to unlock, adding a layer of physical security
 - Docker Compose passes secrets via environment variables, not bind-mounted files
+- `/metrics` requires `Authorization: Bearer <METRICS_TOKEN>` in production

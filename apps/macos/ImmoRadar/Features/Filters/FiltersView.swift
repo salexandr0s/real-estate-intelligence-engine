@@ -43,17 +43,17 @@ struct FiltersView: View {
                 .help("Create a new filter")
             }
         }
-        .sheet(isPresented: $viewModel.showingEditor) {
+        .sheet(item: $viewModel.editorPresentation) { presentation in
             FilterEditorSheet(
                 viewModel: viewModel,
-                editingFilter: viewModel.editingFilter,
-                pendingDraft: viewModel.pendingDraft
+                presentation: presentation
             )
         }
-        .sheet(isPresented: $viewModel.showingTestResults) {
+        .sheet(item: $viewModel.testResultsPresentation) { _ in
             FilterTestResultsSheet(viewModel: viewModel)
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
         .onChange(of: viewModel.testErrorMessage) { _, newValue in
@@ -183,14 +183,17 @@ private struct FilterRow: View {
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
             // Active toggle
-            Button(action: onToggle) {
-                Circle()
-                    .fill(filter.isActive ? Color.green : Color.gray)
-                    .frame(width: 10, height: 10)
-            }
+            Button(
+                filter.isActive ? "Deactivate Filter" : "Activate Filter",
+                systemImage: filter.isActive ? "checkmark.circle.fill" : "circle",
+                action: onToggle
+            )
+            .labelStyle(.iconOnly)
+            .font(.caption)
+            .foregroundStyle(filter.isActive ? .green : .secondary)
             .buttonStyle(.plain)
-            .accessibilityLabel(filter.isActive ? "Active" : "Inactive")
-            .help(filter.isActive ? "Active" : "Inactive")
+            .accessibilityValue(filter.isActive ? "Active" : "Inactive")
+            .help(filter.isActive ? "Filter active" : "Filter inactive")
 
             // Filter info
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
@@ -258,9 +261,6 @@ private struct FilterRow: View {
         .background(isHovered ? Color(nsColor: .separatorColor).opacity(0.05) : .clear)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: onEdit)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction(.default, onEdit)
     }
 }
 
@@ -354,16 +354,10 @@ private struct FilterEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
 
-    init(viewModel: FiltersViewModel, editingFilter: Filter?, pendingDraft: FilterDraft? = nil) {
+    init(viewModel: FiltersViewModel, presentation: FilterEditorPresentation) {
         self.viewModel = viewModel
-        self.editingFilter = editingFilter
-        if let pending = pendingDraft {
-            self._draft = State(initialValue: pending)
-        } else if let existing = editingFilter {
-            self._draft = State(initialValue: FilterDraft.from(existing))
-        } else {
-            self._draft = State(initialValue: FilterDraft())
-        }
+        self.editingFilter = presentation.editingFilter
+        self._draft = State(initialValue: presentation.initialDraft)
     }
 
     var body: some View {
@@ -440,7 +434,7 @@ private struct FilterEditorSheet: View {
                             Text("Property types")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            PropertyTypeGrid(draft: draft, propertyTypeBinding: propertyTypeBinding)
+                            PropertyTypeGrid(draft: draft)
                         }
 
                         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -518,9 +512,6 @@ private struct FilterEditorSheet: View {
                     if draft.isValid {
                         Task {
                             await viewModel.saveFilter(draft, using: appState.apiClient)
-                            if viewModel.errorMessage == nil {
-                                dismiss()
-                            }
                         }
                     } else {
                         showsValidation = true
@@ -532,19 +523,6 @@ private struct FilterEditorSheet: View {
             .padding(Theme.Spacing.lg)
         }
         .frame(width: 620, height: 720)
-    }
-
-    private func propertyTypeBinding(_ type: PropertyType) -> Binding<Bool> {
-        Binding(
-            get: { draft.selectedPropertyTypes.contains(type) },
-            set: { selected in
-                if selected {
-                    draft.selectedPropertyTypes.insert(type)
-                } else {
-                    draft.selectedPropertyTypes.remove(type)
-                }
-            }
-        )
     }
 
     private func numericField(
@@ -626,17 +604,29 @@ private struct FilterBuilderSection<Content: View>: View {
 
 private struct PropertyTypeGrid: View {
     @Bindable var draft: FilterDraft
-    let propertyTypeBinding: (PropertyType) -> Binding<Bool>
 
     private let columns = [GridItem(.adaptive(minimum: 120), spacing: Theme.Spacing.sm)]
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.sm) {
             ForEach(PropertyType.allCases) { propType in
-                Toggle(propType.displayName, isOn: propertyTypeBinding(propType))
+                Toggle(propType.displayName, isOn: selectionBinding(for: propType))
                     .toggleStyle(.checkbox)
             }
         }
+    }
+
+    private func selectionBinding(for propertyType: PropertyType) -> Binding<Bool> {
+        Binding(
+            get: { draft.selectedPropertyTypes.contains(propertyType) },
+            set: { isSelected in
+                if isSelected {
+                    draft.selectedPropertyTypes.insert(propertyType)
+                } else {
+                    draft.selectedPropertyTypes.remove(propertyType)
+                }
+            }
+        )
     }
 }
 
@@ -650,7 +640,7 @@ private struct DistrictGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.xs) {
             ForEach(ViennaDistricts.all, id: \.number) { district in
-                Toggle(isOn: districtBinding(district.number)) {
+                Toggle(isOn: selectionBinding(for: district.number)) {
                     Text("\(district.number). \(district.name)")
                         .font(.caption)
                         .lineLimit(1)
@@ -660,14 +650,14 @@ private struct DistrictGrid: View {
         }
     }
 
-    private func districtBinding(_ number: Int) -> Binding<Bool> {
+    private func selectionBinding(for districtNumber: Int) -> Binding<Bool> {
         Binding(
-            get: { selected.contains(number) },
-            set: { isOn in
-                if isOn {
-                    selected.insert(number)
+            get: { selected.contains(districtNumber) },
+            set: { isSelected in
+                if isSelected {
+                    selected.insert(districtNumber)
                 } else {
-                    selected.remove(number)
+                    selected.remove(districtNumber)
                 }
             }
         )

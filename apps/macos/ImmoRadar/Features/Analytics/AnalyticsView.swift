@@ -72,6 +72,7 @@ struct AnalyticsView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
     }
@@ -126,10 +127,17 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var errorBanner: some View {
-        if let error = viewModel.errorMessage {
-            AnalyticsErrorBanner(message: error) {
-                Task { await viewModel.refresh(using: appState.apiClient) }
-            }
+        if let error = viewModel.errorMessage,
+           !AppErrorPresentation.isConnectionIssue(message: error) {
+            InlineWarningBanner(
+                title: "Couldn’t load analytics.",
+                message: error,
+                actions: [
+                    .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                        Task { await viewModel.refresh(using: appState.apiClient) }
+                    },
+                ]
+            )
         }
     }
 }
@@ -909,32 +917,6 @@ private struct AnalyticsEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dashboardPanelStyle(cornerRadius: Theme.Dashboard.panelRadius, tone: .neutral)
-    }
-}
-
-private struct AnalyticsErrorBanner: View {
-    let message: String
-    let onRetry: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.scoreAverage)
-
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Spacer()
-
-            Button("Retry", action: onRetry)
-                .controlSize(.small)
-                .buttonStyle(.borderedProminent)
-        }
-        .padding(Theme.Spacing.md)
-        .background(Color.scoreAverage.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 }
 

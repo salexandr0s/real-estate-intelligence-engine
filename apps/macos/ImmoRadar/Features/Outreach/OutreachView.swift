@@ -87,6 +87,7 @@ struct OutreachView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
             await consumePendingDeepLinkIfNeeded()
         }

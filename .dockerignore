@@ -5,3 +5,15 @@ apps/macos
 assets
 immoradar
 .env*
+.build
+coverage
+tests
+real-estate-intel
+raw-html
+screenshots
+har
+**/raw-html
+**/screenshots
+**/har
+*.log
+**/.DS_Store

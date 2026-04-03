@@ -170,6 +170,9 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH" >/dev/null
 
+echo "Running install-and-boot smoke test for $DMG_PATH"
+bash "$SCRIPT_DIR/smoke-test-macos-app.sh" "$DMG_PATH"
+
 if [[ "$NOTARIZE" == "1" ]]; then
   require_command xcrun
   : "${APPLE_ID:?APPLE_ID is required for notarization}"

@@ -3,184 +3,336 @@ import SwiftUI
 // MARK: - App State
 
 /// Central observable state for the application.
-/// Tracks navigation, connection status, and global counters.
+/// Owns long-lived services plus feature-scoped child state models.
 @MainActor @Observable
 final class AppState {
+    private static let connectionStaleSecretsCleanupVersionKey =
+        "appState.didRunStaleSecretsCleanup.connection.v1"
+    private static let copilotStaleSecretsCleanupVersionKey =
+        "appState.didRunStaleSecretsCleanup.copilot.v1"
 
-    // MARK: - Navigation
-
-    var selectedNavItem: NavigationItem = .dashboard
-
-    /// Listing ID for cross-feature deep linking (e.g. copilot chat -> listing detail).
-    var deepLinkListingId: Int?
-    /// Outreach thread ID for cross-feature deep linking (e.g. listing detail -> outreach).
-    var deepLinkOutreachThreadId: Int?
-
-    // MARK: - Connection
-
-    var connectionStatus: ConnectionStatus = .disconnected
-
-    // MARK: - Alerts
-
-    var unreadAlertCount: Int = 0
-
-    // MARK: - Settings Errors
-
-    var settingsErrorMessage: String?
-
-    // MARK: - Settings
-
-    var apiBaseURL: String {
-        get { UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080" }
-        set { UserDefaults.standard.set(newValue, forKey: "apiBaseURL") }
+    private static var isSmokeTest: Bool {
+        ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] == "1"
     }
 
-    var apiToken: String = ""
+    let navigationState: NavigationState
+    let connectionState: ConnectionState
+    let runtimeState: RuntimeState
+    let alertsState: AlertsState
+    let copilotSettingsState: CopilotSettingsState
+
+    // MARK: - Services
+
+    let apiClient: APIClient
+    let alertStream = AlertStreamService()
+    let localCache = LocalCache()
+
+    @ObservationIgnored
+    private let launchMode: AppLaunchMode
+
+    @ObservationIgnored
+    private var didPerformInitialLaunch = false
+
+    @ObservationIgnored
+    private var managedRuntimeTransitionTask: Task<Bool, Never>?
+
+    @ObservationIgnored
+    private var managedRuntimeTransitionID: UUID?
+
+    // MARK: - Compatibility Forwards
+
+    var selectedNavItem: NavigationItem {
+        get { navigationState.selectedNavItem }
+        set { navigationState.selectedNavItem = newValue }
+    }
+
+    var deepLinkListingId: Int? {
+        get { navigationState.deepLinkListingId }
+        set { navigationState.deepLinkListingId = newValue }
+    }
+
+    var deepLinkOutreachThreadId: Int? {
+        get { navigationState.deepLinkOutreachThreadId }
+        set { navigationState.deepLinkOutreachThreadId = newValue }
+    }
+
+    var connectionStatus: ConnectionStatus {
+        get { connectionState.connectionStatus }
+        set { connectionState.connectionStatus = newValue }
+    }
+
+    var bundledLaunchExperienceState: BundledLaunchExperienceState {
+        get { runtimeState.bundledLaunchExperienceState }
+        set { runtimeState.bundledLaunchExperienceState = newValue }
+    }
+
+    var unreadAlertCount: Int {
+        get { alertsState.unreadAlertCount }
+        set { alertsState.unreadAlertCount = newValue }
+    }
+
+    var settingsErrorMessage: String? {
+        let connectionError = connectionState.settingsErrorMessage
+        let runtimeError = runtimeState.settingsErrorMessage
+        let copilotError = copilotSettingsState.settingsErrorMessage
+        return connectionError ?? runtimeError ?? copilotError
+    }
+
+    var hasCompletedBundledSetup: Bool {
+        get { runtimeState.hasCompletedBundledSetup }
+        set { runtimeState.hasCompletedBundledSetup = newValue }
+    }
+
+    var hasEnabledMonitoring: Bool {
+        get { runtimeState.hasEnabledMonitoring }
+        set { runtimeState.hasEnabledMonitoring = newValue }
+    }
+
+    var hasDismissedInitialMonitoringPrompt: Bool {
+        get { runtimeState.hasDismissedInitialMonitoringPrompt }
+        set { runtimeState.hasDismissedInitialMonitoringPrompt = newValue }
+    }
+
+    var apiBaseURL: String {
+        get { connectionState.apiBaseURL }
+        set { connectionState.updateAPIBaseURL(newValue) }
+    }
+
+    var apiToken: String {
+        get { connectionState.apiToken }
+        set { connectionState.updateAPIToken(newValue) }
+    }
 
     var refreshIntervalSeconds: Int {
-        get { UserDefaults.standard.integer(forKey: "refreshInterval").clamped(to: 10...3600, default: 60) }
-        set { UserDefaults.standard.set(newValue, forKey: "refreshInterval") }
+        get { connectionState.refreshIntervalSeconds }
+        set {
+            connectionState.refreshIntervalSeconds = newValue
+            startBackgroundRefreshTasksIfNeeded()
+        }
     }
 
     var notificationsEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "notificationsEnabled") }
-        set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
+        get { alertsState.notificationsEnabled }
+        set { alertsState.notificationsEnabled = newValue }
     }
 
     var notifyOnNewMatch: Bool {
-        get { UserDefaults.standard.object(forKey: "notifyOnNewMatch") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "notifyOnNewMatch") }
+        get { alertsState.notifyOnNewMatch }
+        set { alertsState.notifyOnNewMatch = newValue }
     }
 
     var notifyOnPriceDrop: Bool {
-        get { UserDefaults.standard.object(forKey: "notifyOnPriceDrop") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "notifyOnPriceDrop") }
+        get { alertsState.notifyOnPriceDrop }
+        set { alertsState.notifyOnPriceDrop = newValue }
     }
 
     var notifyOnScoreChange: Bool {
-        get { UserDefaults.standard.object(forKey: "notifyOnScoreChange") as? Bool ?? false }
-        set { UserDefaults.standard.set(newValue, forKey: "notifyOnScoreChange") }
+        get { alertsState.notifyOnScoreChange }
+        set { alertsState.notifyOnScoreChange = newValue }
     }
 
-    // MARK: - Copilot Provider
-    // These are stored properties so @Observable tracks changes correctly.
-    // Keychain-backed values are loaded lazily to avoid access prompts during app init.
-
-    var copilotProvider: CopilotProvider = {
-        let raw = UserDefaults.standard.string(forKey: "copilotProvider") ?? "anthropic"
-        return CopilotProvider(rawValue: raw) ?? .anthropic
-    }() {
-        didSet { UserDefaults.standard.set(copilotProvider.rawValue, forKey: "copilotProvider") }
+    var copilotProvider: CopilotProvider {
+        get { copilotSettingsState.copilotProvider }
+        set { copilotSettingsState.copilotProvider = newValue }
     }
 
-    var anthropicApiKey: String = ""
-
-    var openaiApiKey: String = ""
-
-    var copilotModel: String = UserDefaults.standard.string(forKey: "copilotModel") ?? "" {
-        didSet { UserDefaults.standard.set(copilotModel, forKey: "copilotModel") }
+    var anthropicApiKey: String {
+        get { copilotSettingsState.anthropicApiKey }
+        set { copilotSettingsState.anthropicApiKey = newValue }
     }
 
-    /// Cached Claude subscription status (checked once at init, refreshable).
-    var claudeSubscriptionAvailable: Bool = false
-    var claudeSubscriptionType: String?
+    var openaiApiKey: String {
+        get { copilotSettingsState.openaiApiKey }
+        set { copilotSettingsState.openaiApiKey = newValue }
+    }
 
-    private var didLoadConnectionSecrets = false
-    private var didLoadConnectionSecretsWithInteraction = false
-    private var didLoadCopilotSecrets = false
-    private var didLoadCopilotSecretsWithInteraction = false
-    private var didLoadClaudeSubscription = false
-    private static let staleSecretsCleanupVersionKey = "appState.didRunStaleSecretsCleanup.v1"
+    var copilotModel: String {
+        get { copilotSettingsState.copilotModel }
+        set { copilotSettingsState.copilotModel = newValue }
+    }
+
+    var claudeSubscriptionAvailable: Bool {
+        get { copilotSettingsState.claudeSubscriptionAvailable }
+        set { copilotSettingsState.claudeSubscriptionAvailable = newValue }
+    }
+
+    var claudeSubscriptionType: String? {
+        get { copilotSettingsState.claudeSubscriptionType }
+        set { copilotSettingsState.claudeSubscriptionType = newValue }
+    }
+
+    var hasActiveBackgroundRefreshTasks: Bool {
+        connectionState.hasActiveRefreshTask || runtimeState.hasActiveStatusRefreshTask
+    }
+
+    var allowsAutomaticFeatureLoads: Bool {
+        launchMode.allowsInitialLaunchSideEffects
+    }
+
+    var usesManagedLocalRuntime: Bool {
+        LocalRuntimeAuth.isLoopbackBaseURL(connectionState.apiBaseURL)
+    }
+
+    var preferredLocalRuntimeBootMode: LocalRuntimeService.BootMode {
+        runtimeState.preferredLocalRuntimeBootMode
+    }
+
+    var shouldPresentBundledLaunchExperience: Bool {
+        runtimeState.shouldPresentBundledLaunchExperience(usesManagedLocalRuntime: usesManagedLocalRuntime)
+    }
+
+    var shouldShowMonitoringPausedBanner: Bool {
+        runtimeState.shouldShowMonitoringPausedBanner(usesManagedLocalRuntime: usesManagedLocalRuntime)
+    }
+
+    var localEngineExperienceState: LocalEngineExperienceState {
+        runtimeState.localEngineExperienceState(usesManagedLocalRuntime: usesManagedLocalRuntime)
+    }
+
+    var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
+        runtimeState.localRuntimeDiagnostics(apiBaseURL: connectionState.apiBaseURL)
+    }
+
+    var localRuntime: LocalRuntimeService {
+        runtimeState.localRuntime
+    }
+
+    var globalConnectionWarningMessage: String? {
+        guard !shouldPresentBundledLaunchExperience,
+              let message = connectionState.connectionStatus.message else {
+            return nil
+        }
+
+        let standardized = AppErrorPresentation.standardized(message: message)
+        guard AppErrorPresentation.isConnectionIssue(message: standardized) else {
+            return nil
+        }
+
+        return standardized
+    }
 
     /// The active API key for the current provider, resolving Claude subscription OAuth.
     var activeCopilotApiKey: String {
-        switch copilotProvider {
-        case .anthropic:
-            loadCopilotSecretsIfNeeded(allowUserInteraction: true)
-            return anthropicApiKey
-        case .openai:
-            loadCopilotSecretsIfNeeded(allowUserInteraction: true)
-            return openaiApiKey
-        case .claudeSubscription:
-            return ClaudeAuthHelper.loadOAuthToken() ?? ""
+        copilotSettingsState.activeAPIKey()
+    }
+
+    // MARK: - Init
+
+    init(launchMode: AppLaunchMode = .current) {
+        self.launchMode = launchMode
+
+        let navigationState = NavigationState()
+        let connectionState = ConnectionState()
+        let runtimeState = RuntimeState(isSmokeTest: Self.isSmokeTest)
+        let alertsState = AlertsState()
+        let copilotSettingsState = CopilotSettingsState()
+
+        self.navigationState = navigationState
+        self.connectionState = connectionState
+        self.runtimeState = runtimeState
+        self.alertsState = alertsState
+        self.copilotSettingsState = copilotSettingsState
+
+        let initialAuthToken: String? = if launchMode == .production {
+            ConnectionState.initialStoredAuthToken(isSmokeTest: Self.isSmokeTest)
+        } else {
+            nil
+        }
+
+        self.apiClient = APIClient(
+            baseURL: connectionState.apiBaseURL,
+            authToken: initialAuthToken
+        )
+
+        connectionState.onRefreshIntervalChange = { [weak self] in
+            self?.startBackgroundRefreshTasksIfNeeded()
+        }
+
+        if launchMode.shouldRequestNotificationPermission,
+           !Self.isSmokeTest,
+           alertsState.notificationsEnabled {
+            NotificationManager.shared.requestPermission()
+        }
+
+        if launchMode == .production, !Self.isSmokeTest {
+            runSilentStaleSecretsCleanupIfNeeded()
         }
     }
 
+    // MARK: - Settings
+
     func loadSettingsSecretsIfNeeded() {
-        loadConnectionSecretsIfNeeded(allowUserInteraction: true)
-        loadCopilotSecretsIfNeeded(allowUserInteraction: true)
+        connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: true)
+        copilotSettingsState.loadCopilotSecretsIfNeeded(allowUserInteraction: true)
     }
 
     func loadConnectionSecretForUserAction() {
-        loadConnectionSecretsIfNeeded(allowUserInteraction: true)
+        connectionState.loadConnectionSecretForUserAction()
     }
 
     func loadClaudeSubscriptionIfNeeded() {
-        guard !didLoadClaudeSubscription else { return }
-        refreshClaudeSubscription()
+        copilotSettingsState.loadClaudeSubscriptionIfNeeded()
     }
 
     func refreshClaudeSubscription() {
-        let status = ClaudeAuthHelper.loadSubscriptionStatus()
-        claudeSubscriptionAvailable = status.isAvailable
-        claudeSubscriptionType = status.subscriptionType
-        didLoadClaudeSubscription = true
+        copilotSettingsState.refreshClaudeSubscription()
     }
 
     func clearSettingsError() {
-        settingsErrorMessage = nil
+        connectionState.clearSettingsError()
+        runtimeState.clearSettingsError()
+        copilotSettingsState.clearSettingsError()
     }
 
     func testConnection(baseURL: String, token: String) async {
-        let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !normalizedBaseURL.isEmpty else {
-            settingsErrorMessage = "Base URL is required."
-            connectionStatus = .disconnected
-            return
-        }
-
-        settingsErrorMessage = nil
-        connectionStatus = .connecting
-
-        let client = APIClient(
-            baseURL: normalizedBaseURL,
-            authToken: normalizedToken.isEmpty ? nil : normalizedToken
-        )
-        let connected = await client.testConnection()
-        connectionStatus = connected ? .connected : .disconnected
+        await connectionState.testConnection(baseURL: baseURL, token: token)
     }
 
     func applyConnectionSettings(baseURL: String, token: String) async {
+        let previousBaseURL = connectionState.apiBaseURL
         let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !normalizedBaseURL.isEmpty else {
-            settingsErrorMessage = "Base URL is required."
+            connectionState.settingsErrorMessage = "Base URL is required."
             return
         }
 
         clearSettingsError()
 
-        guard persistSecret(
-            value: normalizedToken,
-            key: "apiToken",
-            label: "API token",
-            syncLiveAuthToken: false
-        ) else {
-            return
+        guard connectionState.persistAPIToken(normalizedToken) else { return }
+
+        connectionState.updateAPIToken(normalizedToken)
+        connectionState.markSecretsLoaded(withUserInteraction: true)
+        connectionState.updateAPIBaseURL(normalizedBaseURL)
+
+        let appliedBaseURL = connectionState.apiBaseURL
+        let appliedAuthToken = connectionState.resolvedConnectionAuthToken(
+            for: appliedBaseURL,
+            userToken: normalizedToken,
+            allowUserInteraction: true
+        )
+
+        await apiClient.updateBaseURL(appliedBaseURL)
+        await apiClient.updateAuthToken(appliedAuthToken)
+
+        alertsState.disconnectStream(alertStream)
+        await refreshConnection()
+
+        let movedBetweenRuntimeModes =
+            LocalRuntimeAuth.isLoopbackBaseURL(previousBaseURL) != LocalRuntimeAuth.isLoopbackBaseURL(appliedBaseURL)
+        if movedBetweenRuntimeModes {
+            didPerformInitialLaunch = false
+            runtimeState.bundledLaunchExperienceState = .checking
+
+            if LocalRuntimeAuth.isLoopbackBaseURL(appliedBaseURL) {
+                await performInitialLaunchIfNeeded()
+            } else {
+                runtimeState.bundledLaunchExperienceState = .ready
+            }
         }
 
-        apiToken = normalizedToken
-        didLoadConnectionSecrets = true
-        didLoadConnectionSecretsWithInteraction = true
-        UserDefaults.standard.set(normalizedBaseURL, forKey: "apiBaseURL")
-        await apiClient.updateBaseURL(normalizedBaseURL)
-        await apiClient.updateAuthToken(normalizedToken.isEmpty ? "dev-token" : normalizedToken)
-
-        alertStream.disconnect()
-        await refreshConnection()
+        startBackgroundRefreshTasksIfNeeded()
     }
 
     func applyCopilotSettings(
@@ -189,234 +341,316 @@ final class AppState {
         openAIKey: String,
         model: String
     ) async {
-        clearSettingsError()
-
-        let normalizedAnthropicKey = anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedOpenAIKey = openAIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        switch provider {
-        case .anthropic:
-            guard persistSecret(
-                value: normalizedAnthropicKey,
-                key: "anthropicApiKey",
-                label: "Anthropic API key"
-            ) else {
-                return
-            }
-            anthropicApiKey = normalizedAnthropicKey
-            didLoadCopilotSecrets = true
-            didLoadCopilotSecretsWithInteraction = true
-        case .openai:
-            guard persistSecret(
-                value: normalizedOpenAIKey,
-                key: "openaiApiKey",
-                label: "OpenAI API key"
-            ) else {
-                return
-            }
-            openaiApiKey = normalizedOpenAIKey
-            didLoadCopilotSecrets = true
-            didLoadCopilotSecretsWithInteraction = true
-        case .claudeSubscription:
-            break
-        }
-
-        copilotProvider = provider
-        copilotModel = normalizedModel
-    }
-
-    // MARK: - API Client
-
-    let apiClient: APIClient
-
-    // MARK: - Streaming
-
-    let alertStream = AlertStreamService()
-
-    // MARK: - Cache
-
-    let localCache = LocalCache()
-    let localRuntime = LocalRuntimeService()
-
-    // MARK: - Init
-
-    init() {
-        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
-        self.apiClient = APIClient(
-            baseURL: baseURL,
-            authToken: "dev-token"
+        _ = await copilotSettingsState.applySettings(
+            provider: provider,
+            anthropicKey: anthropicKey,
+            openAIKey: openAIKey,
+            model: model
         )
-
-        // Request notification permission on launch
-        if UserDefaults.standard.bool(forKey: "notificationsEnabled") {
-            NotificationManager.shared.requestPermission()
-        }
-
-        runSilentStaleSecretsCleanupIfNeeded()
     }
 
-    // MARK: - Actions
+    func cleanupStoredSecrets() {
+        connectionState.cleanupStoredSecrets()
+        copilotSettingsState.cleanupStoredSecrets()
+    }
+
+    func resolvedConnectionAuthToken(allowUserInteraction: Bool = true) -> String? {
+        connectionState.resolvedConnectionAuthToken(allowUserInteraction: allowUserInteraction)
+    }
+
+    // MARK: - Background Refresh
+
+    func startBackgroundRefreshTasksIfNeeded() {
+        let allowsBackgroundRefreshTasks = launchMode.allowsBackgroundRefreshTasks
+
+        connectionState.startRefreshTaskIfNeeded(
+            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks
+        ) { [weak self] in
+            guard let self else { return }
+            await self.refreshConnection()
+        }
+
+        runtimeState.startStatusRefreshTaskIfNeeded(
+            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks,
+            usesManagedLocalRuntime: usesManagedLocalRuntime,
+            apiBaseURL: connectionState.apiBaseURL
+        )
+    }
+
+    func stopBackgroundRefreshTasks() {
+        connectionState.stopRefreshTask()
+        runtimeState.stopStatusRefreshTask()
+    }
+
+    // MARK: - Navigation
 
     func navigateTo(_ item: NavigationItem) {
-        selectedNavItem = item
+        navigationState.navigateTo(item)
     }
 
     func openListing(_ listingId: Int) {
-        deepLinkListingId = listingId
-        selectedNavItem = .listings
+        navigationState.openListing(listingId)
     }
 
     func openOutreachThread(_ threadId: Int) {
-        deepLinkOutreachThreadId = threadId
-        selectedNavItem = .outreach
+        navigationState.openOutreachThread(threadId)
     }
 
+    // MARK: - Lifecycle
+
+    func performInitialLaunchIfNeeded() async {
+        guard !didPerformInitialLaunch else { return }
+        didPerformInitialLaunch = true
+
+        guard launchMode.allowsInitialLaunchSideEffects else {
+            runtimeState.bundledLaunchExperienceState = .ready
+            return
+        }
+
+        if usesManagedLocalRuntime {
+            await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
+            _ = await startManagedLocalRuntime(
+                bootMode: preferredLocalRuntimeBootMode,
+                restartExistingRuntime: false,
+                userInitiated: false
+            )
+        } else {
+            runtimeState.bundledLaunchExperienceState = .ready
+            await refreshConnection()
+        }
+
+        startBackgroundRefreshTasksIfNeeded()
+    }
+
+    func retryBundledLaunch() async {
+        guard usesManagedLocalRuntime else { return }
+        _ = await startManagedLocalRuntime(
+            bootMode: preferredLocalRuntimeBootMode,
+            restartExistingRuntime: true,
+            userInitiated: true
+        )
+    }
+
+    func startMonitoring() async {
+        guard usesManagedLocalRuntime else { return }
+
+        let didStart = await startManagedLocalRuntime(
+            bootMode: .active,
+            restartExistingRuntime: true,
+            userInitiated: true
+        )
+
+        guard didStart else { return }
+        runtimeState.hasEnabledMonitoring = true
+        runtimeState.hasDismissedInitialMonitoringPrompt = true
+        runtimeState.bundledLaunchExperienceState = .ready
+    }
+
+    func pauseMonitoring() async {
+        guard usesManagedLocalRuntime else { return }
+
+        let didStart = await startManagedLocalRuntime(
+            bootMode: .setup,
+            restartExistingRuntime: true,
+            userInitiated: true
+        )
+
+        guard didStart else { return }
+        runtimeState.hasEnabledMonitoring = false
+        runtimeState.hasDismissedInitialMonitoringPrompt = true
+        runtimeState.bundledLaunchExperienceState = .ready
+    }
+
+    func restartLocalEngine() async {
+        guard usesManagedLocalRuntime else { return }
+        _ = await startManagedLocalRuntime(
+            bootMode: preferredLocalRuntimeBootMode,
+            restartExistingRuntime: true,
+            userInitiated: true
+        )
+    }
+
+    func dismissInitialMonitoringPrompt() {
+        runtimeState.hasDismissedInitialMonitoringPrompt = true
+        runtimeState.bundledLaunchExperienceState = .ready
+    }
+
+    func openLocalEngineDiagnostics() {
+        navigationState.selectedNavItem = .sources
+        runtimeState.bundledLaunchExperienceState = .ready
+    }
+
+    func openLocalEngineLogs() {
+        runtimeState.openLocalEngineLogs()
+    }
+
+    func openLocalEngineDataFolder() {
+        runtimeState.openLocalEngineDataFolder()
+    }
+
+    func resetLocalEngine() async {
+        runtimeState.bundledLaunchExperienceState = .starting
+        stopBackgroundRefreshTasks()
+        alertsState.disconnectStream(alertStream)
+
+        do {
+            try await runtimeState.localRuntime.resetLocalEngine()
+            runtimeState.hasCompletedBundledSetup = false
+            runtimeState.hasEnabledMonitoring = false
+            runtimeState.hasDismissedInitialMonitoringPrompt = false
+            alertsState.unreadAlertCount = 0
+            await apiClient.updateAuthToken(nil)
+
+            _ = await startManagedLocalRuntime(
+                bootMode: .setup,
+                restartExistingRuntime: false,
+                userInitiated: true
+            )
+        } catch {
+            runtimeState.bundledLaunchExperienceState = .needsAttention(error.localizedDescription)
+            startBackgroundRefreshTasksIfNeeded()
+        }
+    }
+
+    func prepareForTermination() async {
+        stopBackgroundRefreshTasks()
+        alertsState.disconnectStream(alertStream)
+    }
+
+    // MARK: - Connection / Alerts
+
     func refreshConnection(userInitiated: Bool = false) async {
-        loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
-        await apiClient.updateAuthToken(apiToken.isEmpty ? "dev-token" : apiToken)
+        connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
+        let authToken = connectionState.resolvedConnectionAuthToken(allowUserInteraction: userInitiated)
+        await apiClient.updateAuthToken(authToken)
 
-        connectionStatus = .connecting
-        let connected = await apiClient.testConnection()
-        connectionStatus = connected ? .connected : .disconnected
+        connectionState.connectionStatus = .connecting
+        let connectionResult = await apiClient.testConnection()
 
-        if connected {
-            await refreshUnreadCount()
-            if !alertStream.isConnected {
-                alertStream.connect(baseURL: apiBaseURL, token: apiToken.isEmpty ? "dev-token" : apiToken)
-            }
-        } else if alertStream.isConnected {
-            alertStream.disconnect()
+        switch connectionResult {
+        case .success:
+            connectionState.connectionStatus = .connected
+            await alertsState.refreshUnreadCount(using: apiClient)
+            alertsState.connectStreamIfNeeded(
+                alertStream,
+                baseURL: connectionState.apiBaseURL,
+                token: authToken
+            )
+        case .failure(let error):
+            connectionState.connectionStatus = .error(AppErrorPresentation.message(for: error))
+            alertsState.disconnectStream(alertStream)
         }
     }
 
     func handleStreamAlert(_ alert: Alert) {
-        unreadAlertCount += 1
-
-        guard notificationsEnabled else { return }
-
-        let shouldNotify: Bool
-        switch alert.alertType {
-        case .newMatch:
-            shouldNotify = notifyOnNewMatch
-        case .priceDrop:
-            shouldNotify = notifyOnPriceDrop
-        case .scoreUpgrade, .scoreDowngrade:
-            shouldNotify = notifyOnScoreChange
-        case .statusChange:
-            shouldNotify = notifyOnNewMatch
-        }
-
-        if shouldNotify {
-            NotificationManager.shared.postAlertNotification(
-                title: alert.title,
-                body: alert.body
-            )
-        }
+        alertsState.handleStreamAlert(alert)
     }
 
     func refreshUnreadCount() async {
-        do {
-            unreadAlertCount = try await apiClient.fetchUnreadCount()
-        } catch {
-            // Silently fail — count stays at last known value
-        }
+        await alertsState.refreshUnreadCount(using: apiClient)
     }
 
-    func cleanupStoredSecrets() {
-        cleanupIfEmpty(key: "apiToken", allowUserInteraction: true)
-        cleanupIfEmpty(key: "anthropicApiKey", allowUserInteraction: true)
-        cleanupIfEmpty(key: "openaiApiKey", allowUserInteraction: true)
-    }
+    // MARK: - Internal Helpers
 
-    @discardableResult
-    private func persistSecret(
-        value: String,
-        key: String,
-        label: String,
-        syncLiveAuthToken: Bool = true
-    ) -> Bool {
-        do {
-            if value.isEmpty {
-                _ = KeychainHelper.delete(key: key)
-            } else {
-                try KeychainHelper.set(key: key, value: value)
+    private func startManagedLocalRuntime(
+        bootMode: LocalRuntimeService.BootMode,
+        restartExistingRuntime: Bool,
+        userInitiated: Bool
+    ) async -> Bool {
+        if let managedRuntimeTransitionTask {
+            let activeResult = await managedRuntimeTransitionTask.value
+            if !restartExistingRuntime {
+                return activeResult
             }
-            settingsErrorMessage = nil
+        }
 
-            if syncLiveAuthToken, key == "apiToken" {
-                Task {
-                    await apiClient.updateAuthToken(value.isEmpty ? "dev-token" : value)
+        let transitionID = UUID()
+        let task = Task { @MainActor [weak self] () -> Bool in
+            guard let self else { return false }
+            defer {
+                if self.managedRuntimeTransitionID == transitionID {
+                    self.managedRuntimeTransitionTask = nil
+                    self.managedRuntimeTransitionID = nil
                 }
             }
 
+            return await self.performManagedLocalRuntimeTransition(
+                bootMode: bootMode,
+                restartExistingRuntime: restartExistingRuntime,
+                userInitiated: userInitiated
+            )
+        }
+
+        managedRuntimeTransitionID = transitionID
+        managedRuntimeTransitionTask = task
+        return await task.value
+    }
+
+    private func performManagedLocalRuntimeTransition(
+        bootMode: LocalRuntimeService.BootMode,
+        restartExistingRuntime: Bool,
+        userInitiated: Bool
+    ) async -> Bool {
+        stopBackgroundRefreshTasks()
+        defer { startBackgroundRefreshTasksIfNeeded() }
+
+        guard usesManagedLocalRuntime else {
+            runtimeState.bundledLaunchExperienceState = .ready
+            await refreshConnection(userInitiated: userInitiated)
             return true
-        } catch {
-            settingsErrorMessage = "Couldn’t save \(label). \(error.localizedDescription)"
+        }
+
+        runtimeState.bundledLaunchExperienceState = .starting
+
+        let startPolicy: LocalRuntimeService.StartPolicy = restartExistingRuntime ? .forceRestart : .ifNeeded
+        await runtimeState.localRuntime.start(
+            apiBaseURL: connectionState.apiBaseURL,
+            bootMode: bootMode,
+            policy: startPolicy
+        )
+        await refreshConnection(userInitiated: userInitiated)
+
+        switch runtimeState.localRuntime.state {
+        case .failed(let message), .unavailable(let message):
+            runtimeState.bundledLaunchExperienceState = .needsAttention(message)
+            return false
+        case .starting, .stopping, .stopped:
+            runtimeState.bundledLaunchExperienceState = .needsAttention(
+                "ImmoRadar couldn’t finish starting the local engine. Check diagnostics and try again."
+            )
+            return false
+        case .running:
+            break
+        }
+
+        guard connectionState.connectionStatus == .connected else {
+            runtimeState.bundledLaunchExperienceState = .needsAttention(
+                "ImmoRadar started the local engine but couldn’t connect to it yet."
+            )
             return false
         }
-    }
 
-    private func loadConnectionSecretsIfNeeded(allowUserInteraction: Bool) {
-        if didLoadConnectionSecrets && (!allowUserInteraction || didLoadConnectionSecretsWithInteraction) {
-            return
+        runtimeState.hasCompletedBundledSetup = true
+
+        if bootMode == .active {
+            runtimeState.hasEnabledMonitoring = true
+            runtimeState.hasDismissedInitialMonitoringPrompt = true
+            runtimeState.bundledLaunchExperienceState = .ready
+        } else if runtimeState.hasDismissedInitialMonitoringPrompt {
+            runtimeState.bundledLaunchExperienceState = .ready
+        } else {
+            runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring
         }
 
-        apiToken = KeychainHelper.get(
-            key: "apiToken",
-            allowUserInteraction: allowUserInteraction
-        ) ?? ""
-        if allowUserInteraction, apiToken.isEmpty {
-            _ = KeychainHelper.delete(key: "apiToken")
-        }
-        didLoadConnectionSecrets = true
-        didLoadConnectionSecretsWithInteraction = allowUserInteraction
-    }
-
-    private func loadCopilotSecretsIfNeeded(allowUserInteraction: Bool) {
-        if didLoadCopilotSecrets && (!allowUserInteraction || didLoadCopilotSecretsWithInteraction) {
-            return
-        }
-
-        anthropicApiKey = KeychainHelper.get(
-            key: "anthropicApiKey",
-            allowUserInteraction: allowUserInteraction
-        ) ?? ""
-        openaiApiKey = KeychainHelper.get(
-            key: "openaiApiKey",
-            allowUserInteraction: allowUserInteraction
-        ) ?? ""
-        if allowUserInteraction {
-            if anthropicApiKey.isEmpty {
-                _ = KeychainHelper.delete(key: "anthropicApiKey")
-            }
-            if openaiApiKey.isEmpty {
-                _ = KeychainHelper.delete(key: "openaiApiKey")
-            }
-        }
-        didLoadCopilotSecrets = true
-        didLoadCopilotSecretsWithInteraction = allowUserInteraction
+        return true
     }
 
     private func runSilentStaleSecretsCleanupIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: Self.staleSecretsCleanupVersionKey) else { return }
-
-        cleanupIfEmpty(key: "apiToken", allowUserInteraction: false)
-        cleanupIfEmpty(key: "anthropicApiKey", allowUserInteraction: false)
-        cleanupIfEmpty(key: "openaiApiKey", allowUserInteraction: false)
-
-        UserDefaults.standard.set(true, forKey: Self.staleSecretsCleanupVersionKey)
-    }
-
-    private func cleanupIfEmpty(key: String, allowUserInteraction: Bool) {
-        guard let value = KeychainHelper.get(
-            key: key,
-            allowUserInteraction: allowUserInteraction
-        ) else {
-            return
-        }
-
-        guard value.isEmpty else { return }
-        _ = KeychainHelper.delete(key: key)
+        connectionState.runSilentStaleSecretsCleanupIfNeeded(
+            versionKey: Self.connectionStaleSecretsCleanupVersionKey
+        )
+        copilotSettingsState.runSilentStaleSecretsCleanupIfNeeded(
+            versionKey: Self.copilotStaleSecretsCleanupVersionKey
+        )
     }
 }

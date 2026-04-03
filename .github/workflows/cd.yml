@@ -10,19 +10,21 @@ jobs:
     permissions:
       contents: read
       packages: write
-    steps:
-      - uses: actions/checkout@v4
+      id-token: write
 
-      - uses: docker/login-action@v3
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
-      # Build and push API
-      - uses: docker/build-push-action@v6
+      - name: Build and push API image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: apps/api/Dockerfile
@@ -32,9 +34,11 @@ jobs:
             ghcr.io/${{ github.repository }}/api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
 
-      # Build and push worker-scraper
-      - uses: docker/build-push-action@v6
+      - name: Build and push worker-scraper image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: apps/worker-scraper/Dockerfile
@@ -44,9 +48,11 @@ jobs:
             ghcr.io/${{ github.repository }}/worker-scraper:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
 
-      # Build and push worker-processing
-      - uses: docker/build-push-action@v6
+      - name: Build and push worker-processing image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: apps/worker-processing/Dockerfile
@@ -56,13 +62,63 @@ jobs:
             ghcr.io/${{ github.repository }}/worker-processing:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
 
-      # Scan API image for known vulnerabilities
+      - name: Prepare scan artifact directory
+        run: mkdir -p .trivy
+
       - name: Scan API image for vulnerabilities
-        uses: aquasecurity/trivy-action@v0.35.0
+        id: scan_api
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
-          format: table
+          format: sarif
+          output: .trivy/api.sarif
           exit-code: 1
-          severity: CRITICAL,HIGH
+          severity: HIGH,CRITICAL
           ignore-unfixed: true
+
+      - name: Scan worker-scraper image for vulnerabilities
+        id: scan_worker_scraper
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
+          format: sarif
+          output: .trivy/worker-scraper.sarif
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Scan worker-processing image for vulnerabilities
+        id: scan_worker_processing
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
+          format: sarif
+          output: .trivy/worker-processing.sarif
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trivy-scan-results
+          path: .trivy/*.sarif
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail if any image scan reported HIGH/CRITICAL vulnerabilities
+        if: always()
+        run: |
+          if [ "${{ steps.scan_api.outcome }}" != "success" ] || \
+             [ "${{ steps.scan_worker_scraper.outcome }}" != "success" ] || \
+             [ "${{ steps.scan_worker_processing.outcome }}" != "success" ]; then
+            echo "One or more container scans failed."
+            exit 1
+          fi

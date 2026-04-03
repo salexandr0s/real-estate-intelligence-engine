@@ -72,6 +72,12 @@ Recommended production services:
 - `grafana`
 - `loki` (optional)
 
+Security defaults:
+
+- keep `API_TRUST_PROXY=false` unless a real reverse proxy is terminating traffic in front of the API
+- keep `/docs` bearer-protected in production unless you have an explicit public-docs override and network controls
+- scrape `/metrics` on the main API port with a dedicated bearer token instead of exposing a separate unauthenticated metrics port
+
 ## 2.3 Production (scaled)
 If needed later, separate:
 

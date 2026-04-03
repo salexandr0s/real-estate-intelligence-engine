@@ -129,10 +129,9 @@ struct ListingsTable: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .onAppear {
-            if isLast, viewModel.hasMore {
-                Task { await viewModel.loadMore(using: appState.apiClient) }
-            }
+        .task(id: isLast ? listing.id : nil) {
+            guard isLast, viewModel.hasMore else { return }
+            await viewModel.loadMore(using: appState.apiClient)
         }
     }
 

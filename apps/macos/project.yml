@@ -67,8 +67,31 @@ targets:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/.signed-stamp
     dependencies:
       - sdk: MapKit.framework
+    scheme:
+      testTargets:
+        - ImmoRadarTests
     entitlements:
       path: ImmoRadar/ImmoRadar.entitlements
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.network.client: true
+  ImmoRadarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ImmoRadarTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: ImmoRadar
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path"
+          - "@executable_path/../Frameworks"
+          - "@loader_path/../Frameworks"
+          - "@loader_path/../../../../MacOS"
+        PRODUCT_BUNDLE_IDENTIFIER: com.immoradar.app.tests
+        PRODUCT_NAME: ImmoRadarTests

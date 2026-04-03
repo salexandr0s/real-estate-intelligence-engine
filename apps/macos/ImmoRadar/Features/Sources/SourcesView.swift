@@ -9,12 +9,20 @@ struct SourcesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                if let error = viewModel.errorMessage {
-                    SourcesErrorBanner(message: error) {
-                        Task { await viewModel.refresh(using: appState.apiClient) }
-                    } onDismiss: {
-                        viewModel.clearError()
-                    }
+                if let error = viewModel.errorMessage,
+                   !AppErrorPresentation.isConnectionIssue(message: error) {
+                    InlineWarningBanner(
+                        title: "Couldn’t complete the last sources action.",
+                        message: error,
+                        actions: [
+                            .init("Dismiss") {
+                                viewModel.clearError()
+                            },
+                            .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                                Task { await viewModel.refresh(using: appState.apiClient) }
+                            },
+                        ]
+                    )
                 }
 
                 SourcesRuntimeCard(viewModel: viewModel)
@@ -63,13 +71,8 @@ struct SourcesView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
-        }
-        .task(id: appState.apiBaseURL) {
-            while !Task.isCancelled {
-                await appState.localRuntime.refreshStatus(apiBaseURL: appState.apiBaseURL)
-                try? await Task.sleep(for: .seconds(5))
-            }
         }
     }
 }
@@ -79,161 +82,288 @@ private struct SourcesRuntimeCard: View {
     let viewModel: SourcesViewModel
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Label(appState.localRuntime.state.title, systemImage: statusIcon)
-                    .font(.headline)
-                    .foregroundStyle(statusColor)
+        let diagnostics = appState.localRuntimeDiagnostics
 
-                Text(appState.localRuntime.state.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            HStack(alignment: .top, spacing: Theme.Spacing.lg) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Label(statusTitle, systemImage: statusIcon)
+                        .font(.headline)
+                        .foregroundStyle(statusColor)
 
-                if let progress = appState.localRuntime.progressStatus {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        HStack(spacing: Theme.Spacing.sm) {
-                            if let fraction = progress.fractionCompleted {
-                                ProgressView(value: fraction)
-                                    .frame(width: 180)
-                            } else {
-                                ProgressView()
-                                    .controlSize(.small)
+                    Text(statusDetail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    if let progress = appState.localRuntime.progressStatus {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            HStack(spacing: Theme.Spacing.sm) {
+                                if let fraction = progress.fractionCompleted {
+                                    ProgressView(value: fraction)
+                                        .frame(width: 180)
+                                } else {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
+
+                                Text(progress.title)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.primary)
                             }
 
-                            Text(progress.title)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.primary)
+                            Text(progress.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-
-                        Text(progress.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .padding(.top, Theme.Spacing.xs)
                     }
-                    .padding(.top, Theme.Spacing.xs)
+
+                    Text(helperCopy)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    if appState.usesManagedLocalRuntime {
+                        FlowLayout(spacing: Theme.Spacing.xs) {
+                            ForEach(appState.localRuntime.componentStatuses) { component in
+                                Label {
+                                    Text(component.kind.rawValue)
+                                } icon: {
+                                    Circle()
+                                        .fill(component.isRunning ? Color.scoreGood : Color.secondary.opacity(0.5))
+                                        .frame(width: 8, height: 8)
+                                }
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(component.isRunning ? .primary : .secondary)
+                            }
+                        }
+                    }
                 }
 
-                Text(helperCopy)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                Spacer()
 
-                FlowLayout(spacing: Theme.Spacing.xs) {
-                    ForEach(appState.localRuntime.componentStatuses) { component in
-                        Label {
-                            Text(component.kind.rawValue)
-                        } icon: {
-                            Circle()
-                                .fill(component.isRunning ? Color.scoreGood : Color.secondary.opacity(0.5))
-                                .frame(width: 8, height: 8)
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(component.isRunning ? .primary : .secondary)
-                    }
+                VStack(alignment: .trailing, spacing: Theme.Spacing.sm) {
+                    primaryActions
                 }
             }
 
-            Spacer()
+            Divider()
 
-            HStack(spacing: Theme.Spacing.sm) {
-                Button {
-                    Task {
-                        appState.loadConnectionSecretForUserAction()
-                        await appState.localRuntime.start(
-                            apiBaseURL: appState.apiBaseURL,
-                            authToken: appState.apiToken
-                        )
-                        await appState.refreshConnection()
-                        await viewModel.refresh(using: appState.apiClient)
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.md) {
+                    Label(diagnostics.runtimeDescription, systemImage: "externaldrive.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let version = diagnostics.runtimeVersion {
+                        Text(version)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
-                } label: {
-                    Label("Run", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(appState.localRuntime.isBusy || !canRun)
 
-                Button {
-                    Task {
-                        await appState.localRuntime.stop()
-                        await appState.refreshConnection()
+                HStack(spacing: Theme.Spacing.sm) {
+                    Button("Reveal Logs") {
+                        appState.openLocalEngineLogs()
                     }
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    .buttonStyle(.bordered)
+
+                    if appState.usesManagedLocalRuntime {
+                        Button("Reveal Data Folder") {
+                            appState.openLocalEngineDataFolder()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Reset Local Engine", role: .destructive) {
+                            Task { await appState.resetLocalEngine() }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .disabled(appState.localRuntime.isBusy || !canStop)
+
+                if let message = diagnostics.lastErrorMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             }
         }
         .padding(Theme.Spacing.lg)
         .cardStyle(.subtle, padding: 0, cornerRadius: Theme.Radius.lg)
     }
 
-    private var canRun: Bool {
-        switch appState.localRuntime.state {
-        case .stopped, .failed:
-            return true
-        case .unavailable, .starting, .running, .stopping:
-            return false
+    @ViewBuilder
+    private var primaryActions: some View {
+        if appState.usesManagedLocalRuntime {
+            switch appState.localEngineExperienceState {
+            case .starting:
+                Button {
+                    Task { await appState.restartLocalEngine() }
+                } label: {
+                    Label("Starting…", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .disabled(true)
+
+            case .ready, .monitoringPaused:
+                Button {
+                    Task {
+                        await appState.startMonitoring()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Start Monitoring", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    Task {
+                        await appState.restartLocalEngine()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Restart Engine", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+            case .monitoringActive:
+                Button {
+                    Task {
+                        await appState.pauseMonitoring()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Pause Monitoring", systemImage: "pause.fill")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    Task {
+                        await appState.restartLocalEngine()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Restart Engine", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+            case .needsAttention:
+                Button {
+                    Task {
+                        await appState.retryBundledLaunch()
+                        await viewModel.refresh(using: appState.apiClient)
+                    }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Open Diagnostics") {
+                    appState.openLocalEngineDiagnostics()
+                }
+                .buttonStyle(.bordered)
+
+            case .externalConnection:
+                EmptyView()
+            }
+        } else {
+            Button("Open Settings") {
+                appState.navigateTo(.settings)
+            }
+            .buttonStyle(.bordered)
         }
     }
 
-    private var canStop: Bool {
-        switch appState.localRuntime.state {
-        case .running, .failed:
-            return true
-        case .stopped, .starting, .stopping, .unavailable:
-            return false
+    private var statusTitle: String {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return "Local engine is starting"
+        case .ready:
+            return "Local engine is ready"
+        case .monitoringPaused:
+            return "Monitoring is paused"
+        case .monitoringActive:
+            return "Monitoring is active"
+        case .needsAttention:
+            return "Local engine needs attention"
+        case .externalConnection:
+            return "Connected to an external ImmoRadar API"
+        }
+    }
+
+    private var statusDetail: String {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return appState.localRuntime.state.detail
+        case .ready:
+            return "The local runtime is healthy on this Mac and waiting for your decision about automatic monitoring."
+        case .monitoringPaused:
+            return "The local runtime is running, but automatic discovery is paused until you start monitoring."
+        case .monitoringActive:
+            return "The local runtime is actively scheduling background discovery while the app stays open."
+        case .needsAttention:
+            return appState.localRuntime.state.detail
+        case .externalConnection:
+            return "This Mac app is using another ImmoRadar server instead of its bundled local engine."
         }
     }
 
     private var statusIcon: String {
-        switch appState.localRuntime.state {
-        case .running:
-            return "bolt.fill"
+        switch appState.localEngineExperienceState {
         case .starting:
-            return "arrow.triangle.2.circlepath"
-        case .stopping:
-            return "stopwatch"
-        case .stopped:
-            return "pause.circle"
-        case .unavailable, .failed:
+            return "arrow.triangle.2.circlepath.circle.fill"
+        case .ready:
+            return "checkmark.circle.fill"
+        case .monitoringPaused:
+            return "pause.circle.fill"
+        case .monitoringActive:
+            return "bolt.circle.fill"
+        case .needsAttention:
             return "exclamationmark.triangle.fill"
+        case .externalConnection:
+            return "network"
         }
     }
 
     private var statusColor: Color {
-        switch appState.localRuntime.state {
-        case .running:
-            return .scoreGood
-        case .starting, .stopping:
+        switch appState.localEngineExperienceState {
+        case .starting:
             return .accentColor
-        case .stopped:
+        case .ready, .monitoringActive:
+            return .scoreGood
+        case .monitoringPaused, .externalConnection:
             return .secondary
-        case .unavailable, .failed:
+        case .needsAttention:
             return .scoreAverage
         }
     }
 
     private var helperCopy: String {
-        switch appState.localRuntime.state {
-        case .stopped:
-            return "Press Run to start the local engine on this Mac. Data and artifacts stay local."
-        case .running:
-            return "The local engine stays active while the ImmoRadar app is running."
-        case .starting, .stopping:
-            return "ImmoRadar is managing everything locally: database, queue, API, and workers."
-        case .unavailable, .failed:
-            return "Open the logs in ~/Library/Logs/ImmoRadar if the local engine needs attention."
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return "ImmoRadar is handling local startup automatically: database, queue, API, and workers."
+        case .ready:
+            return "Everything is ready locally. Turn on monitoring when you want background discovery to begin."
+        case .monitoringPaused:
+            return "Browsing stays available while monitoring is paused. You can turn it on at any time."
+        case .monitoringActive:
+            return "Automatic monitoring stays active while the ImmoRadar app is open on this Mac."
+        case .needsAttention:
+            return "Use the diagnostics below if the local engine needs attention."
+        case .externalConnection:
+            return "Advanced connection mode is intended for people who want this app to talk to another ImmoRadar server."
         }
     }
 }
 
 private struct SourcesSummaryBar: View {
+    @Environment(AppState.self) private var appState
     let viewModel: SourcesViewModel
 
     private let columns = [GridItem(.adaptive(minimum: 180, maximum: 260), spacing: Theme.Spacing.md)]
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.md) {
-            SourcesSummaryMetric(title: "Active Sources", value: "\(viewModel.activeCount)", detail: "currently scheduled", icon: "bolt.fill", tint: .accentColor)
+            SourcesSummaryMetric(title: "Active Sources", value: "\(viewModel.activeCount)", detail: appState.hasEnabledMonitoring ? "currently scheduled" : "configured, monitoring paused", icon: "bolt.fill", tint: .accentColor)
             SourcesSummaryMetric(title: "Needs Attention", value: "\(viewModel.attentionCount)", detail: "blocked or degraded", icon: "exclamationmark.triangle.fill", tint: viewModel.attentionCount > 0 ? .scoreAverage : .secondary)
             SourcesSummaryMetric(title: "Healthy", value: "\(viewModel.healthyCount)", detail: "running cleanly", icon: "checkmark.circle.fill", tint: .scoreGood)
             SourcesSummaryMetric(title: "Total Ingested", value: PriceFormatter.formatCompact(viewModel.totalListingsIngested), detail: "all sources combined", icon: "tray.full.fill", tint: .secondary)
@@ -414,36 +544,6 @@ private struct SourcesLifecycleDataRow: View {
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
             .frame(width: 96, alignment: .trailing)
-    }
-}
-
-private struct SourcesErrorBanner: View {
-    let message: String
-    let onRetry: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.scoreAverage)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Couldn’t complete the last sources action.")
-                    .font(.callout.weight(.semibold))
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            Spacer()
-            Button("Dismiss", action: onDismiss)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            Button("Retry", action: onRetry)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-        }
-        .padding(Theme.Spacing.md)
-        .background(Color.scoreAverage.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
     }
 }
 

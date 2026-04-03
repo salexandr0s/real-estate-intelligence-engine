@@ -66,15 +66,14 @@ struct GetAlertCountIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
-        let token = KeychainHelper.get(key: "apiToken")
+        let token = LocalRuntimeAuth.preferredToken(
+            for: baseURL,
+            userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
+            allowUserInteraction: false
+        )
         let client = APIClient(baseURL: baseURL, authToken: token)
-        do {
-            let alerts = try await client.fetchAlerts(query: AlertQuery())
-            let unread = alerts.count(where: { $0.status == .unread })
-            return .result(value: unread)
-        } catch {
-            return .result(value: 0)
-        }
+        let unread = try await client.fetchUnreadCount()
+        return .result(value: unread)
     }
 }
 
@@ -87,14 +86,14 @@ struct GetListingCountIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
-        let token = KeychainHelper.get(key: "apiToken")
+        let token = LocalRuntimeAuth.preferredToken(
+            for: baseURL,
+            userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
+            allowUserInteraction: false
+        )
         let client = APIClient(baseURL: baseURL, authToken: token)
-        do {
-            let response = try await client.fetchListingsPaginated(query: ListingQuery())
-            return .result(value: response.listings.count)
-        } catch {
-            return .result(value: 0)
-        }
+        let stats = try await client.fetchDashboardStats()
+        return .result(value: stats.totalActive)
     }
 }
 

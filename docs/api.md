@@ -28,7 +28,7 @@ application/json
 Authentication:
 
 - bearer token for remote deployments
-- localhost token or loopback auth for local single-user deployments
+- dedicated localhost bearer token for managed local-runtime deployments
 
 ---
 
@@ -59,9 +59,15 @@ Authorization: Bearer <token>
 
 ## 3.2 Token storage
 - macOS app stores token in Keychain
+- managed local-runtime launches use a separate Keychain-stored loopback token
 - server validates token via local auth table, OIDC, or static service token in single-user mode
 
-## 3.3 Roles
+## 3.3 Operational endpoints
+- `/health` stays unauthenticated
+- `/metrics` is only registered when Prometheus is enabled
+- production `/metrics` requires `Authorization: Bearer <METRICS_TOKEN>`
+- non-production `/metrics` allows loopback-only access when no metrics token is configured
+## 3.4 Roles
 Recommended initial roles:
 
 - `owner`

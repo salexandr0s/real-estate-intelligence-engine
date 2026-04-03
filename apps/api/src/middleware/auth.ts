@@ -15,7 +15,7 @@ declare module 'fastify' {
   }
 }
 
-const SKIP_AUTH_PATHS = new Set(['/health', '/metrics']);
+const SKIP_AUTH_PATHS = new Set(['/health']);
 
 export function registerAuth(app: FastifyInstance): void {
   const config = loadConfig();
@@ -25,7 +25,11 @@ export function registerAuth(app: FastifyInstance): void {
   app.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     // Skip auth for health check, metrics, docs, and similar paths
     const urlPath = request.url.split('?')[0]!;
-    if (SKIP_AUTH_PATHS.has(urlPath) || (urlPath.startsWith('/docs') && config.api.docsPublic)) {
+    if (
+      SKIP_AUTH_PATHS.has(urlPath) ||
+      urlPath === '/metrics' ||
+      (urlPath.startsWith('/docs') && config.api.docsPublic)
+    ) {
       request.userId = 0;
       return;
     }

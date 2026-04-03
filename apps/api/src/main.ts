@@ -17,6 +17,16 @@ async function main(): Promise<void> {
     port: config.api.port,
   } as Record<string, unknown>);
 
+  if (config.nodeEnv === 'production' && config.api.trustProxy !== false) {
+    logger.warn('API trustProxy is enabled in production', {
+      trustProxy: config.api.trustProxy,
+    } as Record<string, unknown>);
+  }
+
+  if (config.nodeEnv === 'production' && config.api.docsPublic) {
+    logger.warn('API docs are public in production via explicit override');
+  }
+
   const app = await buildApp();
 
   // Verify DB connection

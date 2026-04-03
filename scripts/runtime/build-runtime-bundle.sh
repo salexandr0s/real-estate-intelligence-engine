@@ -235,7 +235,7 @@ prune_runtime_payload() {
     "$OUTPUT_DIR/apps/worker-scraper/src" \
     "$OUTPUT_DIR/infra/postgres/lib/postgresql/pgxs"
 
-  find "$OUTPUT_DIR/node_modules" -type d \( \
+  find "$OUTPUT_DIR/apps" "$OUTPUT_DIR/packages" -type d \( \
     -name test -o \
     -name tests -o \
     -name __tests__ -o \
@@ -256,6 +256,13 @@ prune_runtime_payload() {
     "$OUTPUT_DIR/apps/api/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-processing/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-scraper/Dockerfile"
+}
+
+verify_runtime_modules() {
+  (
+    cd "$OUTPUT_DIR"
+    ./bin/node -e "require('./node_modules/yaml/dist/index.js')"
+  ) >/dev/null
 }
 
 NODE_BIN="${IMMORADAR_NODE_BINARY:-$(command -v node || true)}"
@@ -327,6 +334,7 @@ find "$OUTPUT_DIR/infra/postgres/lib/postgresql" -type f -name '*.dylib' -exec c
 bundle_runtime_dependencies
 rewrite_macho_paths
 adhoc_sign_runtime
+verify_runtime_modules
 
 if [[ -d "$PLAYWRIGHT_CACHE_DIR" ]]; then
   rsync -a "$PLAYWRIGHT_CACHE_DIR/" "$OUTPUT_DIR/playwright-browsers/"

@@ -5,21 +5,23 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        List(selection: Bindable(appState).selectedNavItem) {
+        @Bindable var navigationState = appState.navigationState
+
+        List(selection: $navigationState.selectedNavItem) {
             Section("Workspace") {
                 ForEach([NavigationItem.dashboard, .listings, .watchlist, .outreach, .filters, .copilot]) { item in
-                    SidebarRow(item: item, unreadAlertCount: appState.unreadAlertCount)
+                    SidebarRow(item: item, unreadAlertCount: appState.alertsState.unreadAlertCount)
                 }
             }
 
             Section("Monitoring") {
                 ForEach([NavigationItem.alerts, .sources, .analytics]) { item in
-                    SidebarRow(item: item, unreadAlertCount: appState.unreadAlertCount)
+                    SidebarRow(item: item, unreadAlertCount: appState.alertsState.unreadAlertCount)
                 }
             }
 
             Section {
-                SidebarRow(item: .settings, unreadAlertCount: appState.unreadAlertCount)
+                SidebarRow(item: .settings, unreadAlertCount: appState.alertsState.unreadAlertCount)
             }
         }
         .listStyle(.sidebar)

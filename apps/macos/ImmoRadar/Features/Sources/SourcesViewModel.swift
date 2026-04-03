@@ -119,7 +119,7 @@ final class SourcesViewModel {
             sources = try await client.fetchSources()
             sources.sort(by: sourceSort)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoading = false
@@ -140,7 +140,7 @@ final class SourcesViewModel {
             if let idx = sources.firstIndex(where: { $0.id == source.id }) {
                 sources[idx].isActive = !newActive
             }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -159,7 +159,7 @@ final class SourcesViewModel {
             for i in sources.indices where i < backup.count {
                 sources[i].isActive = backup[i]
             }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -173,7 +173,7 @@ final class SourcesViewModel {
             if let idx = sources.firstIndex(where: { $0.id == source.id }) {
                 sources[idx].crawlIntervalMinutes = previous
             }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -183,7 +183,7 @@ final class SourcesViewModel {
         do {
             try await client.triggerScrapeRun(sourceCode: source.code)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
         runningSourceIDs.remove(source.id)
     }
@@ -198,7 +198,7 @@ final class SourcesViewModel {
             let runs = Array(allRuns.filter { $0.sourceCode == sourceCode }.prefix(limit))
             return .success(runs)
         } catch {
-            Log.ui.error("Failed to load scrape runs for \(sourceCode, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            Log.ui.error("Failed to load scrape runs for \(sourceCode, privacy: .public): \(AppErrorPresentation.message(for: error), privacy: .public)")
             return .failure(error)
         }
     }

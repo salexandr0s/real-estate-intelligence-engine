@@ -25,8 +25,29 @@ import type {
   CanaryJobData,
 } from '@immoradar/scraper-core';
 import { sources, scrapeRuns } from '@immoradar/db';
+import {
+  shouldClearAutomatedSchedules,
+  shouldRegisterAutomatedSchedules,
+} from './runtime-boot-mode.js';
 
 const log = createLogger('scheduler');
+
+const SYSTEM_SCHEDULER_IDS = {
+  baseline: 'baseline-hourly',
+  cluster: 'cluster-daily',
+  geocode: 'geocode-enqueue-periodic',
+  staleCheck: 'stale-check-periodic',
+  canary: 'canary-periodic',
+} as const;
+
+type SchedulerQueues = {
+  discoveryQueue: Queue<DiscoveryJobData>;
+  baselineQueue: Queue<BaselineJobData>;
+  clusterQueue: Queue<ClusterJobData>;
+  geocodeEnqueueQueue: Queue<GeocodeEnqueueJobData>;
+  staleCheckQueue: Queue<StaleCheckJobData>;
+  canaryQueue: Queue<CanaryJobData>;
+};
 
 /**
  * Convert crawlIntervalMinutes to a cron pattern.
@@ -41,45 +62,73 @@ function intervalToCron(minutes: number): string {
   return `0 */${hours} * * *`;
 }
 
+async function removeSchedulerIfPresent(queue: Queue, schedulerId: string): Promise<void> {
+  try {
+    await queue.removeJobScheduler(schedulerId);
+  } catch {
+    // Removing a missing scheduler is still a successful sync.
+  }
+}
+
+async function clearAutomatedSchedulers(queues: SchedulerQueues): Promise<void> {
+  await Promise.all([
+    removeSchedulerIfPresent(queues.baselineQueue, SYSTEM_SCHEDULER_IDS.baseline),
+    removeSchedulerIfPresent(queues.clusterQueue, SYSTEM_SCHEDULER_IDS.cluster),
+    removeSchedulerIfPresent(queues.geocodeEnqueueQueue, SYSTEM_SCHEDULER_IDS.geocode),
+    removeSchedulerIfPresent(queues.staleCheckQueue, SYSTEM_SCHEDULER_IDS.staleCheck),
+    removeSchedulerIfPresent(queues.canaryQueue, SYSTEM_SCHEDULER_IDS.canary),
+  ]);
+
+  const knownSources = await sources.findAll();
+  await Promise.all(
+    knownSources.map((source) =>
+      removeSchedulerIfPresent(queues.discoveryQueue, `discovery-${source.code}`),
+    ),
+  );
+}
+
 export async function startScheduler(): Promise<void> {
   const config = loadConfig();
-  if (!config.scheduler.enabled) {
-    log.info('Scheduler disabled via config');
-    return;
-  }
-
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
 
-  const discoveryQueue = new Queue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY, {
-    connection,
-    prefix,
-  });
+  const queues: SchedulerQueues = {
+    discoveryQueue: new Queue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY, {
+      connection,
+      prefix,
+    }),
+    baselineQueue: new Queue<BaselineJobData>(QUEUE_NAMES.BASELINE, {
+      connection,
+      prefix,
+    }),
+    clusterQueue: new Queue<ClusterJobData>(QUEUE_NAMES.CLUSTER, {
+      connection,
+      prefix,
+    }),
+    geocodeEnqueueQueue: new Queue<GeocodeEnqueueJobData>(QUEUE_NAMES.GEOCODE_ENQUEUE, {
+      connection,
+      prefix,
+    }),
+    staleCheckQueue: new Queue<StaleCheckJobData>(QUEUE_NAMES.STALE_CHECK, {
+      connection,
+      prefix,
+    }),
+    canaryQueue: new Queue<CanaryJobData>(QUEUE_NAMES.CANARY, {
+      connection,
+      prefix,
+    }),
+  };
 
-  const baselineQueue = new Queue<BaselineJobData>(QUEUE_NAMES.BASELINE, {
-    connection,
-    prefix,
-  });
+  if (shouldClearAutomatedSchedules(config)) {
+    await clearAutomatedSchedulers(queues);
+    log.info('Runtime boot mode is setup; automated monitoring schedules cleared');
+    return;
+  }
 
-  const clusterQueue = new Queue<ClusterJobData>(QUEUE_NAMES.CLUSTER, {
-    connection,
-    prefix,
-  });
-
-  const geocodeEnqueueQueue = new Queue<GeocodeEnqueueJobData>(QUEUE_NAMES.GEOCODE_ENQUEUE, {
-    connection,
-    prefix,
-  });
-
-  const staleCheckQueue = new Queue<StaleCheckJobData>(QUEUE_NAMES.STALE_CHECK, {
-    connection,
-    prefix,
-  });
-
-  const canaryQueue = new Queue<CanaryJobData>(QUEUE_NAMES.CANARY, {
-    connection,
-    prefix,
-  });
+  if (!shouldRegisterAutomatedSchedules(config)) {
+    log.info('Scheduler disabled via config');
+    return;
+  }
 
   // ── Cancel zombie runs from previous crashes ───────────────────────────────
 
@@ -93,8 +142,8 @@ export async function startScheduler(): Promise<void> {
   // ── Pipeline infrastructure schedules ──────────────────────────────────────
 
   // Baseline recomputation every hour
-  await baselineQueue.upsertJobScheduler(
-    'baseline-hourly',
+  await queues.baselineQueue.upsertJobScheduler(
+    SYSTEM_SCHEDULER_IDS.baseline,
     { pattern: '0 * * * *' },
     {
       name: 'baseline:recompute',
@@ -104,8 +153,8 @@ export async function startScheduler(): Promise<void> {
   log.info('Baseline scheduler registered (hourly)');
 
   // Cluster rebuild daily at 03:00
-  await clusterQueue.upsertJobScheduler(
-    'cluster-daily',
+  await queues.clusterQueue.upsertJobScheduler(
+    SYSTEM_SCHEDULER_IDS.cluster,
     { pattern: '0 3 * * *' },
     {
       name: 'cluster:rebuild',
@@ -115,8 +164,8 @@ export async function startScheduler(): Promise<void> {
   log.info('Cluster scheduler registered (daily 03:00)');
 
   // Geocoding enqueue every 30 minutes
-  await geocodeEnqueueQueue.upsertJobScheduler(
-    'geocode-enqueue-periodic',
+  await queues.geocodeEnqueueQueue.upsertJobScheduler(
+    SYSTEM_SCHEDULER_IDS.geocode,
     { pattern: '*/30 * * * *' },
     {
       name: 'geocode:enqueue',
@@ -126,8 +175,8 @@ export async function startScheduler(): Promise<void> {
   log.info('Geocode enqueue scheduler registered (every 30 min)');
 
   // Stale listing detection every 6 hours
-  await staleCheckQueue.upsertJobScheduler(
-    'stale-check-periodic',
+  await queues.staleCheckQueue.upsertJobScheduler(
+    SYSTEM_SCHEDULER_IDS.staleCheck,
     { pattern: '0 */6 * * *' },
     {
       name: 'stale:check',
@@ -141,8 +190,8 @@ export async function startScheduler(): Promise<void> {
 
   // Canary health check every 2 hours (if enabled)
   if (config.scraper.canaryEnabled) {
-    await canaryQueue.upsertJobScheduler(
-      'canary-periodic',
+    await queues.canaryQueue.upsertJobScheduler(
+      SYSTEM_SCHEDULER_IDS.canary,
       { pattern: '0 */2 * * *' },
       {
         name: 'canary:check',
@@ -150,6 +199,8 @@ export async function startScheduler(): Promise<void> {
       },
     );
     log.info('Canary scheduler registered (every 2 hours)');
+  } else {
+    await removeSchedulerIfPresent(queues.canaryQueue, SYSTEM_SCHEDULER_IDS.canary);
   }
 
   // ── Per-source discovery schedules ─────────────────────────────────────────
@@ -168,7 +219,7 @@ export async function startScheduler(): Promise<void> {
       (crawlProfile?.maxPages as number) ?? // backward compat with old config
       100;
 
-    await discoveryQueue.upsertJobScheduler(
+    await queues.discoveryQueue.upsertJobScheduler(
       `discovery-${source.code}`,
       { pattern: cronPattern },
       {

@@ -195,13 +195,19 @@ final class CopilotViewModel {
             context = ctx
         }
 
+        guard let authToken = appState.resolvedConnectionAuthToken() else {
+            errorMessage = "API token required."
+            finalizeStream()
+            return
+        }
+
         streamTask = Task {
             var didFinalize = false
 
             do {
                 let stream = streamService.stream(
                     baseURL: appState.apiBaseURL,
-                    token: appState.apiToken.isEmpty ? "dev-token" : appState.apiToken,
+                    token: authToken,
                     messages: serializedMessages,
                     context: context,
                     provider: appState.copilotProvider.apiProvider,

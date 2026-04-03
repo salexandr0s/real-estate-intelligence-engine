@@ -89,19 +89,19 @@ final class AnalyticsViewModel {
         do {
             baselines = try await client.fetchBaselines()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         do {
             trendData = try await client.fetchDistrictTrends()
         } catch {
-            errorMessage = errorMessage ?? error.localizedDescription
+            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
         }
 
         do {
             temperatureData = try await client.fetchMarketTemperature()
         } catch {
-            errorMessage = errorMessage ?? error.localizedDescription
+            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
         }
     }
 
@@ -109,7 +109,7 @@ final class AnalyticsViewModel {
         do {
             trendData = try await client.fetchDistrictTrends(districtNo: districtNo, months: months)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 

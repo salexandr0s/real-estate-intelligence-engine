@@ -69,6 +69,7 @@ struct ListingsView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient, cache: appState.localCache)
             consumePendingDeepLinkIfNeeded()
         }
@@ -124,10 +125,22 @@ private struct ListingsPrimaryPane: View {
             ListingsFilterBar(viewModel: viewModel)
             Divider()
 
-            if let error = viewModel.errorMessage {
-                ListingsErrorBanner(error: error) {
-                    Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
-                }
+            if let error = viewModel.errorMessage,
+               !AppErrorPresentation.isConnectionIssue(message: error) {
+                InlineWarningBanner(
+                    title: "Couldn’t load listings.",
+                    message: error,
+                    actions: [
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                            Task {
+                                await viewModel.refresh(
+                                    using: appState.apiClient,
+                                    cache: appState.localCache
+                                )
+                            }
+                        },
+                    ]
+                )
                 Divider()
             }
 
@@ -174,28 +187,6 @@ private struct ListingsPrimaryPane: View {
         } else {
             ListingsTable(viewModel: viewModel)
         }
-    }
-}
-
-private struct ListingsErrorBanner: View {
-    let error: String
-    let onRetry: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-                .accessibilityHidden(true)
-            Text(error)
-                .font(.callout)
-            Spacer()
-            Button("Retry", action: onRetry)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Color.red.opacity(0.1))
     }
 }
 

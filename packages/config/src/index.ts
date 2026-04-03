@@ -67,6 +67,8 @@ export interface CanaryConfig {
   scraper: ScraperConfig;
 }
 
+export type RuntimeBootMode = 'setup' | 'active';
+
 export interface AppConfig {
   nodeEnv: string;
   logLevel: string;
@@ -81,6 +83,7 @@ export interface AppConfig {
     rateLimitWindowMs: number;
     trustProxy: boolean | number | string;
     docsPublic: boolean;
+    allowPublicDocsInProduction: boolean;
   };
   database: {
     url: string;
@@ -90,6 +93,10 @@ export interface AppConfig {
   redis: {
     url: string;
     prefix: string;
+  };
+  observability: {
+    prometheusEnabled: boolean;
+    metricsToken: string;
   };
   s3: {
     endpoint: string;
@@ -101,6 +108,13 @@ export interface AppConfig {
   };
   playwright: PlaywrightConfig;
   scraper: ScraperConfig;
+  documents: {
+    downloadTimeoutMs: number;
+    maxBytes: number;
+  };
+  runtime: {
+    bootMode: RuntimeBootMode;
+  };
   scheduler: {
     enabled: boolean;
     staleThresholdDays: number;
@@ -182,6 +196,11 @@ function loadPlaywrightConfig(): PlaywrightConfig {
   };
 }
 
+function loadRuntimeBootMode(): RuntimeBootMode {
+  const raw = envStr('IMMORADAR_RUNTIME_BOOT_MODE', 'active');
+  return raw === 'setup' ? 'setup' : 'active';
+}
+
 function loadScraperConfig(): ScraperConfig {
   return {
     defaultRateLimitRpm: envInt('SCRAPER_DEFAULT_RATE_LIMIT_RPM', 12),
@@ -216,6 +235,9 @@ export function loadConfig(): AppConfig {
   if (_config) return _config;
 
   const nodeEnv = envStr('NODE_ENV', 'development');
+  const docsPublic = envBool('API_DOCS_PUBLIC', nodeEnv !== 'production');
+  const allowPublicDocsInProduction = envBool('API_DOCS_PUBLIC_PRODUCTION_OVERRIDE', false);
+  const metricsToken = envStr('METRICS_TOKEN', '');
 
   _config = {
     nodeEnv,
@@ -233,13 +255,14 @@ export function loadConfig(): AppConfig {
       rateLimitMax: envInt('API_RATE_LIMIT_MAX', 100),
       rateLimitWindowMs: envInt('API_RATE_LIMIT_WINDOW_MS', 60000),
       trustProxy: (() => {
-        const raw = envStr('API_TRUST_PROXY', '1');
+        const raw = envStr('API_TRUST_PROXY', 'false');
         if (raw === 'true') return true;
         if (raw === 'false') return false;
         const n = parseInt(raw, 10);
         return Number.isNaN(n) ? raw : n;
       })(),
-      docsPublic: envBool('API_DOCS_PUBLIC', nodeEnv !== 'production'),
+      docsPublic,
+      allowPublicDocsInProduction,
     },
     database: {
       url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/immoradar'),
@@ -249,6 +272,10 @@ export function loadConfig(): AppConfig {
     redis: {
       url: envStr('REDIS_URL', 'redis://localhost:6379'),
       prefix: envStr('BULLMQ_PREFIX', 'immoradar'),
+    },
+    observability: {
+      prometheusEnabled: envBool('PROMETHEUS_ENABLED', true),
+      metricsToken,
     },
     s3: {
       endpoint: envStr('S3_ENDPOINT', 'http://localhost:9000'),
@@ -260,6 +287,13 @@ export function loadConfig(): AppConfig {
     },
     playwright: loadPlaywrightConfig(),
     scraper: loadScraperConfig(),
+    documents: {
+      downloadTimeoutMs: envInt('DOCUMENT_DOWNLOAD_TIMEOUT_MS', 20000),
+      maxBytes: envInt('DOCUMENT_MAX_BYTES', 25000000),
+    },
+    runtime: {
+      bootMode: loadRuntimeBootMode(),
+    },
     scheduler: {
       enabled: envBool('SCHEDULER_ENABLED', true),
       staleThresholdDays: envInt('STALE_THRESHOLD_DAYS', 7),
@@ -329,6 +363,14 @@ export function loadConfig(): AppConfig {
 
   // Production safety: refuse to start without encrypted connections
   if (nodeEnv === 'production') {
+    if (_config.observability.prometheusEnabled && !_config.observability.metricsToken) {
+      throw new Error('METRICS_TOKEN is required when PROMETHEUS_ENABLED=true in production');
+    }
+    if (_config.api.docsPublic && !_config.api.allowPublicDocsInProduction) {
+      throw new Error(
+        'API_DOCS_PUBLIC=true is blocked in production unless API_DOCS_PUBLIC_PRODUCTION_OVERRIDE=true',
+      );
+    }
     const dbUrl = new URL(_config.database.url);
     const sslmode = dbUrl.searchParams.get('sslmode');
     const ssl = dbUrl.searchParams.get('ssl');

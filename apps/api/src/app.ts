@@ -49,7 +49,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: config.api.corsOrigins,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Copilot-Api-Key'],
-    credentials: true,
+    credentials: false,
   });
 
   // Rate limiting
@@ -105,7 +105,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(alertRoutes);
   await app.register(sourceRoutes);
   await app.register(analyticsRoutes);
-  await app.register(metricsRoutes);
+  if (config.observability.prometheusEnabled) {
+    await app.register(metricsRoutes);
+  }
   await app.register(streamRoutes);
   await app.register(poiRoutes);
   await app.register(savedListingRoutes);

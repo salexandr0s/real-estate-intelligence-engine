@@ -8,9 +8,9 @@ struct CopilotView: View {
     @State private var availableWidth: CGFloat = Theme.Copilot.inlineInspectorBreakpoint
     @State private var showInspector: Bool = false
     @State private var showHistorySheet: Bool = false
-    @State private var showRenameSheet = false
+    @State private var inspectorSheet: InspectorSheetPresentation?
+    @State private var renameConversation: CopilotConversationSummary?
     @State private var renameDraft = ""
-    @State private var renameTargetID: UUID?
 
     private enum LayoutMode {
         case compact
@@ -76,6 +76,7 @@ struct CopilotView: View {
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: layoutMode)
             .task(id: proxy.size.width) {
                 availableWidth = proxy.size.width
+                syncInspectorPresentation()
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showInspector)
@@ -105,6 +106,7 @@ struct CopilotView: View {
                 Button {
                     withAdaptiveAnimation(reduceMotion, .easeInOut(duration: 0.18)) {
                         showInspector.toggle()
+                        syncInspectorPresentation()
                     }
                 } label: {
                     Label("Inspector", systemImage: "sidebar.trailing")
@@ -120,7 +122,7 @@ struct CopilotView: View {
             historySidebar
                 .frame(minWidth: 320, idealWidth: 360, maxWidth: 420, maxHeight: .infinity)
         }
-        .sheet(isPresented: inlineInspectorIsUnavailable) {
+        .sheet(item: $inspectorSheet) { _ in
             NavigationStack {
                 inspectorPanel
                     .navigationTitle("Listing Inspector")
@@ -128,30 +130,39 @@ struct CopilotView: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done") {
                                 showInspector = false
+                                inspectorSheet = nil
                             }
                         }
                     }
             }
             .frame(minWidth: 540, minHeight: 620)
         }
-        .sheet(isPresented: $showRenameSheet) {
+        .sheet(item: $renameConversation) { conversation in
             RenameConversationSheet(
                 title: $renameDraft,
                 onCancel: {
-                    showRenameSheet = false
-                    renameTargetID = nil
+                    renameConversation = nil
                 },
                 onSave: {
                     Task {
-                        if let targetID = renameTargetID, targetID != viewModel.activeConversationID {
-                            await viewModel.selectConversation(id: targetID)
+                        if conversation.id != viewModel.activeConversationID {
+                            await viewModel.selectConversation(id: conversation.id)
                         }
                         await viewModel.renameActiveConversation(to: renameDraft)
-                        showRenameSheet = false
-                        renameTargetID = nil
+                        renameConversation = nil
                     }
                 }
             )
+        }
+        .onChange(of: showInspector) { _, _ in
+            syncInspectorPresentation()
+        }
+        .onChange(of: availableWidth) { _, _ in
+            syncInspectorPresentation()
+        }
+        .onChange(of: inspectorSheet) { _, newValue in
+            guard newValue == nil, compactWidthBand != .expanded else { return }
+            showInspector = false
         }
     }
 
@@ -163,17 +174,19 @@ struct CopilotView: View {
         layoutMode(for: availableWidth)
     }
 
-    private var inlineInspectorIsUnavailable: Binding<Bool> {
-        Binding(
-            get: {
-                showInspector && compactWidthBand != .expanded
-            },
-            set: { isPresented in
-                if !isPresented {
-                    showInspector = false
-                }
+    private func syncInspectorPresentation() {
+        guard compactWidthBand != .expanded else {
+            inspectorSheet = nil
+            return
+        }
+
+        if showInspector {
+            if inspectorSheet == nil {
+                inspectorSheet = InspectorSheetPresentation()
             }
-        )
+        } else {
+            inspectorSheet = nil
+        }
     }
 
     private var historySidebar: some View {
@@ -184,9 +197,8 @@ struct CopilotView: View {
                 Task { await viewModel.selectConversation(id: id) }
             },
             onRenameConversation: { summary in
-                renameTargetID = summary.id
                 renameDraft = summary.title
-                showRenameSheet = true
+                renameConversation = summary
             },
             onDeleteConversation: { summary in
                 Task { await viewModel.deleteConversation(id: summary.id) }
@@ -241,6 +253,10 @@ struct CopilotView: View {
         guard trimmed.count > maxCharacters else { return trimmed }
         return String(trimmed.prefix(maxCharacters - 1)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
+}
+
+private struct InspectorSheetPresentation: Identifiable, Equatable {
+    let id = UUID()
 }
 
 private struct ToolbarHistoryButton: View {
@@ -381,7 +397,7 @@ private struct ConversationHistoryRow: View {
                 Spacer(minLength: Theme.Spacing.sm)
 
                 Text(PriceFormatter.relativeDate(summary.updatedAt))
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
             }
 
@@ -391,7 +407,7 @@ private struct ConversationHistoryRow: View {
                 .lineLimit(2)
 
             Text("\(summary.messageCount) message\(summary.messageCount == 1 ? "" : "s")")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, Theme.Spacing.md)

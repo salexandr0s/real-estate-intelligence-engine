@@ -479,12 +479,12 @@ actor APIClient {
 
     // MARK: - Connection Test
 
-    func testConnection() async -> Bool {
+    func testConnection() async -> Result<Void, Error> {
         do {
             let _ = try await fetchUnreadCount()
-            return true
+            return .success(())
         } catch {
-            return false
+            return .failure(error)
         }
     }
 

@@ -9,12 +9,11 @@ final class FiltersViewModel {
     var filters: [Filter] = []
     var isLoading: Bool = false
     var errorMessage: String?
-    var showingEditor: Bool = false
-    var editingFilter: Filter?
+    var editorPresentation: FilterEditorPresentation?
 
     // MARK: - Test Filter State
 
-    var showingTestResults: Bool = false
+    var testResultsPresentation: FilterTestResultsPresentation?
     var testingFilterId: Int?
     var testResultListings: [Listing] = []
     var isTestingFilter: Bool = false
@@ -29,7 +28,7 @@ final class FiltersViewModel {
         do {
             filters = try await client.fetchFilters()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoading = false
@@ -46,7 +45,7 @@ final class FiltersViewModel {
             if let idx = filters.firstIndex(where: { $0.id == filter.id }) {
                 filters[idx].isActive = !newActive
             }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -66,18 +65,22 @@ final class FiltersViewModel {
         } catch {
             // Revert optimistic delete on failure
             filters = backup
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
     func startNewFilter() {
-        editingFilter = nil
-        showingEditor = true
+        editorPresentation = FilterEditorPresentation(
+            editingFilter: nil,
+            initialDraft: FilterDraft()
+        )
     }
 
     func startEditing(_ filter: Filter) {
-        editingFilter = filter
-        showingEditor = true
+        editorPresentation = FilterEditorPresentation(
+            editingFilter: filter,
+            initialDraft: FilterDraft.from(filter)
+        )
     }
 
     func testFilter(_ filter: Filter, using client: APIClient) async {
@@ -87,28 +90,26 @@ final class FiltersViewModel {
         defer { isTestingFilter = false }
         do {
             testResultListings = try await client.testFilter(id: filter.id)
-            showingTestResults = true
+            testResultsPresentation = FilterTestResultsPresentation()
         } catch {
-            testErrorMessage = error.localizedDescription
+            testErrorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
     func duplicateFilter(_ filter: Filter) {
         let draft = FilterDraft.from(filter)
         draft.name = "Copy of \(filter.name)"
-        pendingDraft = draft
-        editingFilter = nil
-        showingEditor = true
+        editorPresentation = FilterEditorPresentation(
+            editingFilter: nil,
+            initialDraft: draft
+        )
     }
-
-    /// Transient draft for the duplicate flow, consumed by the editor sheet on presentation.
-    var pendingDraft: FilterDraft?
 
     func saveFilter(_ draft: FilterDraft, using client: APIClient) async {
         errorMessage = nil
         let apiRequest = draft.toAPICreateRequest()
         do {
-            if let existing = editingFilter {
+            if let existing = editorPresentation?.editingFilter {
                 let updated = try await client.updateFilterFull(id: existing.id, apiRequest: apiRequest)
                 if let index = filters.firstIndex(where: { $0.id == existing.id }) {
                     filters[index] = updated
@@ -117,11 +118,9 @@ final class FiltersViewModel {
                 let created = try await client.createFilterFromDraft(apiRequest)
                 filters.append(created)
             }
-            showingEditor = false
-            editingFilter = nil
-            pendingDraft = nil
+            editorPresentation = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 }

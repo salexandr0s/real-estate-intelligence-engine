@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { isUrlAllowed, isUrlAllowedAsync } from '../delivery/webhook.js';
+import {
+  isUrlAllowed,
+  isUrlAllowedAsync,
+  validateOutboundUrl,
+  resolveRedirectTarget,
+} from '../index.js';
 
 describe('isUrlAllowed (sync)', () => {
   // ── Allowed URLs ─────────────────────────────────────────────────────────
@@ -122,20 +127,20 @@ vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(),
 }));
 
+async function mockDns(results: Array<{ address: string; family: number }>): Promise<void> {
+  const dns = await import('node:dns/promises');
+  vi.mocked(dns.lookup).mockResolvedValue(results as never);
+}
+
+async function mockDnsError(): Promise<void> {
+  const dns = await import('node:dns/promises');
+  vi.mocked(dns.lookup).mockRejectedValue(new Error('ENOTFOUND'));
+}
+
 describe('isUrlAllowedAsync (with DNS resolution)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  async function mockDns(results: Array<{ address: string; family: number }>): Promise<void> {
-    const dns = await import('node:dns/promises');
-    vi.mocked(dns.lookup).mockResolvedValue(results as never);
-  }
-
-  async function mockDnsError(): Promise<void> {
-    const dns = await import('node:dns/promises');
-    vi.mocked(dns.lookup).mockRejectedValue(new Error('ENOTFOUND'));
-  }
 
   it('blocks when DNS resolves to 127.0.0.1', async () => {
     await mockDns([{ address: '127.0.0.1', family: 4 }]);
@@ -175,5 +180,44 @@ describe('isUrlAllowedAsync (with DNS resolution)', () => {
     const dns = await import('node:dns/promises');
     expect(await isUrlAllowedAsync('http://localhost/hook')).toBe(false);
     expect(dns.lookup).not.toHaveBeenCalled();
+  });
+});
+
+describe('validateOutboundUrl', () => {
+  it('rejects non-allowlisted hosts', async () => {
+    const result = await validateOutboundUrl('https://files.example.com/doc.pdf', {
+      allowedHosts: ['example.com'],
+      hostMismatchErrorCode: 'blocked_host_mismatch',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errorCode).toBe('blocked_host_mismatch');
+    }
+  });
+
+  it('allows exact allowlisted hosts after DNS validation', async () => {
+    await mockDns([{ address: '203.0.113.50', family: 4 }]);
+    const result = await validateOutboundUrl('https://files.example.com/doc.pdf', {
+      allowedHosts: ['files.example.com'],
+    });
+
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('resolveRedirectTarget', () => {
+  it('resolves relative redirects against the current URL', () => {
+    const current = new URL('https://example.com/docs/start');
+    const target = resolveRedirectTarget(current, '/files/final.pdf');
+
+    expect(target?.toString()).toBe('https://example.com/files/final.pdf');
+  });
+
+  it('returns null for invalid redirect locations', () => {
+    const current = new URL('https://example.com/docs/start');
+    const target = resolveRedirectTarget(current, 'http://%zz');
+
+    expect(target).toBeNull();
   });
 });

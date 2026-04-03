@@ -10,6 +10,9 @@ describe('API endpoints', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
+    delete process.env.METRICS_TOKEN;
+    delete process.env.API_DOCS_PUBLIC;
+    process.env.PROMETHEUS_ENABLED = 'true';
     resetConfig();
     app = await buildApp();
     await app.ready();
@@ -17,6 +20,10 @@ describe('API endpoints', () => {
 
   afterAll(async () => {
     await app.close();
+    delete process.env.METRICS_TOKEN;
+    delete process.env.API_DOCS_PUBLIC;
+    delete process.env.PROMETHEUS_ENABLED;
+    resetConfig();
   });
 
   // ── Health & Metrics ───────────────────────────────────────────────────────
@@ -31,10 +38,19 @@ describe('API endpoints', () => {
   });
 
   describe('GET /metrics', () => {
-    it('returns prometheus text format without auth', async () => {
+    it('returns prometheus text format for loopback requests without auth in non-production', async () => {
       const res = await app.inject({ method: 'GET', url: '/metrics' });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/');
+    });
+
+    it('rejects non-loopback requests when no metrics token is configured', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/metrics',
+        remoteAddress: '203.0.113.10',
+      });
+      expect(res.statusCode).toBe(403);
     });
   });
 
@@ -87,6 +103,31 @@ describe('API endpoints', () => {
         url: '/metrics',
       });
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('GET /metrics (disabled)', () => {
+    let disabledApp: FastifyInstance;
+
+    beforeAll(async () => {
+      process.env.PROMETHEUS_ENABLED = 'false';
+      resetConfig();
+      disabledApp = await buildApp();
+      await disabledApp.ready();
+    });
+
+    afterAll(async () => {
+      await disabledApp.close();
+      process.env.PROMETHEUS_ENABLED = 'true';
+      resetConfig();
+    });
+
+    it('returns 404 when metrics are disabled', async () => {
+      const res = await disabledApp.inject({
+        method: 'GET',
+        url: '/metrics',
+      });
+      expect(res.statusCode).toBe(404);
     });
   });
 

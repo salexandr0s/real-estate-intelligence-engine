@@ -24,14 +24,14 @@ final class DashboardViewModel {
         async let filtersTask = client.fetchFilters()
 
         do { stats = try await statsTask } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         do {
             let allFilters = try await filtersTask
             activeFilters = allFilters.filter(\.isActive)
         } catch {
-            errorMessage = errorMessage ?? error.localizedDescription
+            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
             activeFilters = []
         }
 

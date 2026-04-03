@@ -5,19 +5,37 @@ struct SettingsView: View {
     @State private var showSettingsError = false
     @State private var didLoadDraft = false
     @State private var cleanupStatusMessage: String?
+    @State private var showAdvancedConnectionSettings = false
     @State private var draft = SettingsDraft()
 
     var body: some View {
-        @Bindable var state = appState
+        @Bindable var connectionState = appState.connectionState
+        @Bindable var alertsState = appState.alertsState
 
         Form {
-            SettingsConnectionSection(
-                draft: $draft,
-                connectionStatus: appState.connectionStatus,
-                hasChanges: draft.hasConnectionChanges(comparedTo: appState),
-                onApply: applyConnectionSettings,
-                onTest: testConnectionSettings
-            )
+            if appState.usesManagedLocalRuntime {
+                SettingsLocalEngineSection(showAdvancedConnectionSettings: $showAdvancedConnectionSettings)
+
+                if showAdvancedConnectionSettings {
+                    SettingsConnectionSection(
+                        title: "Advanced Connection Settings",
+                        draft: $draft,
+                        connectionStatus: appState.connectionStatus,
+                        hasChanges: draft.hasConnectionChanges(comparedTo: appState),
+                        onApply: applyConnectionSettings,
+                        onTest: testConnectionSettings
+                    )
+                }
+            } else {
+                SettingsConnectionSection(
+                    title: "API Connection",
+                    draft: $draft,
+                    connectionStatus: appState.connectionStatus,
+                    hasChanges: draft.hasConnectionChanges(comparedTo: appState),
+                    onApply: applyConnectionSettings,
+                    onTest: testConnectionSettings
+                )
+            }
 
             SettingsAISection(
                 draft: $draft,
@@ -28,19 +46,19 @@ struct SettingsView: View {
 
             Section("Refresh") {
                 Stepper(
-                    "Interval: \(appState.refreshIntervalSeconds)s",
-                    value: $state.refreshIntervalSeconds,
+                    "Interval: \(connectionState.refreshIntervalSeconds)s",
+                    value: $connectionState.refreshIntervalSeconds,
                     in: 10...3600,
                     step: 10
                 )
             }
 
             Section("Notifications") {
-                Toggle("Enable Notifications", isOn: $state.notificationsEnabled)
-                if appState.notificationsEnabled {
-                    Toggle("New Matches", isOn: $state.notifyOnNewMatch)
-                    Toggle("Price Drops", isOn: $state.notifyOnPriceDrop)
-                    Toggle("Score Changes", isOn: $state.notifyOnScoreChange)
+                Toggle("Enable Notifications", isOn: $alertsState.notificationsEnabled)
+                if alertsState.notificationsEnabled {
+                    Toggle("New Matches", isOn: $alertsState.notifyOnNewMatch)
+                    Toggle("Price Drops", isOn: $alertsState.notifyOnPriceDrop)
+                    Toggle("Score Changes", isOn: $alertsState.notifyOnScoreChange)
                 }
             }
 
@@ -52,6 +70,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             loadDraftIfNeeded()
         }
         .onChange(of: draft.copilotProvider) { _, newValue in
@@ -118,7 +137,7 @@ struct SettingsView: View {
             await appState.applyCopilotSettings(
                 provider: draft.copilotProvider,
                 anthropicKey: draft.anthropicApiKey,
-                openAIKey: draft.openaiApiKey,
+                openAIKey: draft.openaiKey,
                 model: draft.copilotModel
             )
             if appState.settingsErrorMessage == nil {
@@ -133,7 +152,7 @@ private struct SettingsDraft: Equatable {
     var apiToken = ""
     var copilotProvider: CopilotProvider = .anthropic
     var anthropicApiKey = ""
-    var openaiApiKey = ""
+    var openaiKey = ""
     var copilotModel = ""
 
     @MainActor static func from(_ appState: AppState) -> Self {
@@ -142,7 +161,7 @@ private struct SettingsDraft: Equatable {
             apiToken: appState.apiToken,
             copilotProvider: appState.copilotProvider,
             anthropicApiKey: appState.anthropicApiKey,
-            openaiApiKey: appState.openaiApiKey,
+            openaiKey: appState.openaiApiKey,
             copilotModel: appState.copilotModel
         )
     }
@@ -154,7 +173,7 @@ private struct SettingsDraft: Equatable {
     @MainActor func hasAIChanges(comparedTo appState: AppState) -> Bool {
         copilotProvider != appState.copilotProvider
             || anthropicApiKey != appState.anthropicApiKey
-            || openaiApiKey != appState.openaiApiKey
+            || openaiKey != appState.openaiApiKey
             || copilotModel != appState.copilotModel
     }
 
@@ -168,7 +187,152 @@ private struct SettingsDraft: Equatable {
     }
 }
 
+private struct SettingsLocalEngineSection: View {
+    @Environment(AppState.self) private var appState
+    @Binding var showAdvancedConnectionSettings: Bool
+
+    var body: some View {
+        let diagnostics = appState.localRuntimeDiagnostics
+
+        Section("Local Engine") {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Label(statusTitle, systemImage: statusIcon)
+                    .font(.headline)
+                    .foregroundStyle(statusTint)
+
+                Text(statusSubtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: Theme.Spacing.sm) {
+                    Label(diagnostics.runtimeDescription, systemImage: "externaldrive.fill")
+                    if let version = diagnostics.runtimeVersion {
+                        Text(version)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if let message = diagnostics.lastErrorMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            HStack(spacing: Theme.Spacing.sm) {
+                if appState.hasEnabledMonitoring {
+                    Button("Pause Monitoring") {
+                        Task { await appState.pauseMonitoring() }
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button("Start Monitoring") {
+                        Task { await appState.startMonitoring() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Button("Restart Engine") {
+                    Task { await appState.restartLocalEngine() }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack(spacing: Theme.Spacing.sm) {
+                Button("Reveal Logs") {
+                    appState.openLocalEngineLogs()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Reveal Data Folder") {
+                    appState.openLocalEngineDataFolder()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Reset Local Engine", role: .destructive) {
+                    Task { await appState.resetLocalEngine() }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Toggle("Show advanced connection settings", isOn: $showAdvancedConnectionSettings)
+                .toggleStyle(.switch)
+
+            Text("Most people can leave advanced connection settings alone. They are only needed if you want this app to talk to a different ImmoRadar server.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var statusTitle: String {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return "Local engine is starting"
+        case .ready:
+            return "Local engine is ready"
+        case .monitoringPaused:
+            return "Monitoring is paused"
+        case .monitoringActive:
+            return "Monitoring is active"
+        case .needsAttention:
+            return "Local engine needs attention"
+        case .externalConnection:
+            return "External ImmoRadar connection"
+        }
+    }
+
+    private var statusSubtitle: String {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return "ImmoRadar is preparing the local database, API, and workers on this Mac."
+        case .ready:
+            return "The local engine is healthy and waiting for you to decide whether automatic monitoring should begin."
+        case .monitoringPaused:
+            return "Automatic discovery is paused, but the local engine is still available for browsing existing data."
+        case .monitoringActive:
+            return "Automatic monitoring is enabled and the bundled local engine is running in the background while the app is open."
+        case .needsAttention:
+            return "Review the diagnostics below, then retry or reset the local engine if needed."
+        case .externalConnection:
+            return "This app is currently talking to an external ImmoRadar API instead of the built-in local engine."
+        }
+    }
+
+    private var statusIcon: String {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return "arrow.triangle.2.circlepath.circle.fill"
+        case .ready:
+            return "checkmark.circle.fill"
+        case .monitoringPaused:
+            return "pause.circle.fill"
+        case .monitoringActive:
+            return "bolt.circle.fill"
+        case .needsAttention:
+            return "exclamationmark.triangle.fill"
+        case .externalConnection:
+            return "network"
+        }
+    }
+
+    private var statusTint: Color {
+        switch appState.localEngineExperienceState {
+        case .starting:
+            return .accentColor
+        case .ready, .monitoringActive:
+            return .scoreGood
+        case .monitoringPaused, .externalConnection:
+            return .secondary
+        case .needsAttention:
+            return .scoreAverage
+        }
+    }
+}
+
 private struct SettingsConnectionSection: View {
+    let title: String
     @Binding var draft: SettingsDraft
     let connectionStatus: ConnectionStatus
     let hasChanges: Bool
@@ -176,7 +340,7 @@ private struct SettingsConnectionSection: View {
     let onTest: () -> Void
 
     var body: some View {
-        Section("API Connection") {
+        Section(title) {
             TextField("Base URL", text: $draft.apiBaseURL)
                 .textFieldStyle(.roundedBorder)
 
@@ -196,6 +360,10 @@ private struct SettingsConnectionSection: View {
                 Button("Test Connection", action: onTest)
                     .buttonStyle(.bordered)
             }
+
+            Text("Use these settings only if you intentionally want the app to connect to another ImmoRadar server.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -247,9 +415,9 @@ private struct SettingsAISection: View {
         }
 
         if draft.copilotProvider == .openai {
-            SecureField("OpenAI API Key", text: $draft.openaiApiKey)
+            SecureField("OpenAI API Key", text: $draft.openaiKey)
                 .textFieldStyle(.roundedBorder)
-            if draft.openaiApiKey.isEmpty {
+            if draft.openaiKey.isEmpty {
                 Label("Get your API key from platform.openai.com", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)

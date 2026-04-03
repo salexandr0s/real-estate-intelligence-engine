@@ -10,19 +10,23 @@ struct WatchlistView: View {
     @State private var exportError: String?
     @State private var showExportError: Bool = false
 
+    private var filteredItems: [SavedListingItem] {
+        viewModel.filteredSavedListings(matching: searchText)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let error = viewModel.errorMessage {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(Theme.Spacing.md)
-                .background(Color.orange.opacity(0.08))
+            if let error = viewModel.errorMessage,
+               !AppErrorPresentation.isConnectionIssue(message: error) {
+                InlineWarningBanner(
+                    title: "Couldn’t load the watchlist.",
+                    message: error,
+                    actions: [
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                            Task { await viewModel.refresh(using: appState.apiClient) }
+                        },
+                    ]
+                )
             }
 
             if viewModel.savedListings.isEmpty && !viewModel.isLoading {
@@ -32,9 +36,10 @@ struct WatchlistView: View {
                     Text("Save listings from the detail view to track them here.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !viewModel.savedListings.isEmpty && filteredItems.isEmpty && !searchText.isEmpty {
+                ContentUnavailableView.search
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let filteredItems = viewModel.filteredSavedListings(matching: searchText)
-
                 List(filteredItems, selection: $selectedItemID) { item in
                     WatchlistRow(
                         item: item,
@@ -91,6 +96,7 @@ struct WatchlistView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
         .onChange(of: exportError) { _, newValue in

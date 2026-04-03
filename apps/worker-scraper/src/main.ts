@@ -24,6 +24,7 @@ async function main(): Promise<void> {
   logger.info('Scraper worker starting', {
     nodeEnv: config.nodeEnv,
     redisUrl: redactUrl(config.redis.url),
+    runtimeBootMode: config.runtime.bootMode,
   } as Record<string, unknown>);
 
   const discoveryWorker = createDiscoveryWorker();

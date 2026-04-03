@@ -60,10 +60,14 @@ struct CrossSourceComparisonView: View {
                     Spacer(minLength: 0)
 
                     if let url = URL(string: member.canonicalUrl) {
+                        let openListingLabel = "Open \(member.sourceName) listing"
                         Link(destination: url) {
-                            Image(systemName: "arrow.up.right.square")
+                            Label(openListingLabel, systemImage: "arrow.up.right.square")
                                 .font(.caption)
                         }
+                        .labelStyle(.iconOnly)
+                        .accessibilityLabel(openListingLabel)
+                        .help(openListingLabel)
                         .buttonStyle(.plain)
                     }
                 }

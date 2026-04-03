@@ -30,7 +30,7 @@ final class WatchlistViewModel {
             savedListings = response.data
             nextCursor = response.meta?.nextCursor
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoading = false
@@ -52,7 +52,7 @@ final class WatchlistViewModel {
                 undoManager?.setActionName("Remove from Watchlist")
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -72,7 +72,7 @@ final class WatchlistViewModel {
             if let rollbackIndex = savedListings.firstIndex(where: { $0.listingId == listingId }) {
                 savedListings[rollbackIndex].notes = previousNotes
             }
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         savingNotesListingId = nil
@@ -82,7 +82,7 @@ final class WatchlistViewModel {
         do {
             return try await client.requestRawData(.exportSavedListings)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
             return nil
         }
     }

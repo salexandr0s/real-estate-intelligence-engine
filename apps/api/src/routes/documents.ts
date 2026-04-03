@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { documents } from '@immoradar/db';
+import { createLogger } from '@immoradar/observability';
 import { parseOrThrow, idParamSchema } from '../schemas.js';
+
+const log = createLogger('api:documents');
 
 export async function documentRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/listings/:id/documents - List documents for a listing
@@ -21,7 +24,6 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
-
       try {
         const docs = await documents.findByListingId(id);
 
@@ -37,8 +39,13 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         }));
 
         return reply.send({ data, meta: {} });
-      } catch {
-        return reply.send({ data: [], meta: {} });
+      } catch (error) {
+        log.error('Failed to load listing documents', {
+          listingId: id,
+          errorClass: error instanceof Error ? error.name : 'UnknownError',
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
       }
     },
   );
@@ -61,7 +68,6 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { id } = parseOrThrow(idParamSchema, request.params);
-
       try {
         const facts = await documents.findFactsByDocumentId(id);
 
@@ -75,8 +81,13 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
         }));
 
         return reply.send({ data, meta: {} });
-      } catch {
-        return reply.send({ data: [], meta: {} });
+      } catch (error) {
+        log.error('Failed to load document facts', {
+          documentId: id,
+          errorClass: error instanceof Error ? error.name : 'UnknownError',
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
       }
     },
   );

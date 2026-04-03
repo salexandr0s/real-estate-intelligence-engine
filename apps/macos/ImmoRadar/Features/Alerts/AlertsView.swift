@@ -115,6 +115,7 @@ struct AlertsView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await reloadAlerts()
         }
         .onChange(of: viewModel.selectedAlertID) { _, newValue in
@@ -165,12 +166,20 @@ private struct AlertsPrimaryPane: View {
             AlertsFilterBar(viewModel: viewModel)
             Divider()
 
-            if let error = viewModel.errorMessage {
-                AlertsErrorBanner(error: error) {
-                    Task { await onReload() }
-                } onDismiss: {
-                    viewModel.clearError()
-                }
+            if let error = viewModel.errorMessage,
+               !AppErrorPresentation.isConnectionIssue(message: error) {
+                InlineWarningBanner(
+                    title: "Couldn’t load alerts.",
+                    message: error,
+                    actions: [
+                        .init("Dismiss") {
+                            viewModel.clearError()
+                        },
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                            Task { await onReload() }
+                        },
+                    ]
+                )
                 Divider()
             }
 
@@ -199,42 +208,6 @@ private struct AlertsPrimaryPane: View {
                 undoManager: undoManager
             )
         }
-    }
-}
-
-private struct AlertsErrorBanner: View {
-    let error: String
-    let onRetry: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Couldn’t load alerts.")
-                    .font(.callout.weight(.semibold))
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Button("Dismiss", action: onDismiss)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-            Button("Retry", action: onRetry)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-        }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Color.red.opacity(0.08))
     }
 }
 

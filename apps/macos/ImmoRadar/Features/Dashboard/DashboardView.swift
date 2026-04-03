@@ -49,6 +49,7 @@ struct DashboardView: View {
             }
         }
         .task {
+            guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
     }
@@ -107,10 +108,17 @@ private struct DashboardContent<FocusPanel: View>: View {
                     isLoading: viewModel.isLoading
                 )
 
-                if let error = viewModel.errorMessage {
-                    DashboardErrorBanner(message: error) {
-                        Task { await viewModel.refresh(using: appState.apiClient) }
-                    }
+                if let error = viewModel.errorMessage,
+                   !AppErrorPresentation.isConnectionIssue(message: error) {
+                    InlineWarningBanner(
+                        title: "Couldn’t load the dashboard.",
+                        message: error,
+                        actions: [
+                            .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                                Task { await viewModel.refresh(using: appState.apiClient) }
+                            },
+                        ]
+                    )
                 }
 
                 focusPanel

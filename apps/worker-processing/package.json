@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "dependencies": {
+    "@immoradar/alerts": "*",
     "@immoradar/config": "*",
     "@immoradar/contracts": "*",
     "@immoradar/db": "*",
@@ -41,7 +42,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "npm run test:unit",
-    "test:unit": "vitest run --root ../.. apps/worker-processing/src/workers/outreach-send-worker.test.ts apps/worker-processing/src/workers/mailbox-sync-worker.test.ts",
+    "test:unit": "vitest run --root ../.. apps/worker-processing/src/workers/outreach-send-worker.test.ts apps/worker-processing/src/workers/mailbox-sync-worker.test.ts apps/worker-processing/src/workers/document-worker.test.ts",
     "test:integration": "vitest run --root ../.. --config vitest.config.integration.ts apps/worker-processing/src/workers/outreach-flow.integration.test.ts",
     "clean": "rm -rf dist"
   }

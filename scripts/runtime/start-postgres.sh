@@ -4,6 +4,10 @@ set -euo pipefail
 : "${IMMORADAR_RUNTIME_HOME:?IMMORADAR_RUNTIME_HOME is required}"
 : "${IMMORADAR_POSTGRES_PORT:?IMMORADAR_POSTGRES_PORT is required}"
 
+export LC_ALL="${LC_ALL:-C}"
+export LANG="${LANG:-C}"
+export LC_CTYPE="${LC_CTYPE:-C}"
+
 RUNTIME_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$RUNTIME_ROOT/infra/postgres/bin"
 PKG_LIB_DIR="$RUNTIME_ROOT/infra/postgres/lib/postgresql"

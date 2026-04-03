@@ -11,7 +11,7 @@ enum ConnectionStatus: Equatable {
         case .connected: "Connected"
         case .connecting: "Connecting..."
         case .disconnected: "Disconnected"
-        case .error(let msg): "Error: \(msg)"
+        case .error: "Connection issue"
         }
     }
 
@@ -31,5 +31,10 @@ enum ConnectionStatus: Equatable {
         case .disconnected: .secondary
         case .error: .red
         }
+    }
+
+    var message: String? {
+        guard case .error(let message) = self else { return nil }
+        return message
     }
 }

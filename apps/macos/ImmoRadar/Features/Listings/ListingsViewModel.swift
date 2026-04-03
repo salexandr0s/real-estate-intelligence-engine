@@ -143,7 +143,7 @@ final class ListingsViewModel {
             SpotlightIndexer.shared.indexListings(all)
             Log.ui.info("Fetched all \(all.count) listings")
         } catch {
-            errorMessage = String(describing: error)
+            errorMessage = AppErrorPresentation.message(for: error)
             Log.ui.error("Fetch error: \(error, privacy: .public)")
         }
 
@@ -184,7 +184,7 @@ final class ListingsViewModel {
             listings.append(contentsOf: newListings)
             nextCursor = response.nextCursor
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoadingMore = false
@@ -224,7 +224,7 @@ final class ListingsViewModel {
         do {
             return try await client.exportListingsCSV(query: query)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
             return nil
         }
     }

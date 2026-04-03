@@ -1,4 +1,3 @@
-import os
 import SwiftUI
 
 /// Detail view for a single listing, shown in the inspector pane.
@@ -7,23 +6,12 @@ struct ListingDetailView: View {
     let listing: Listing
     var onExpandMap: (() -> Void)?
     @Environment(AppState.self) private var appState
-    @State private var detailListing: Listing?
-    @State private var explanation: ScoreExplanation?
-    @State private var priceVersions: [PriceVersion] = []
-    @State private var cluster: ListingCluster?
-    @State private var analysis: ListingAnalysis?
-    @State private var isLoadingAnalysis: Bool = false
-    @State private var listingDocuments: [ListingDocument] = []
-    @State private var isLoadingDocuments: Bool = false
-    @State private var outreachThread: OutreachThread?
-    @State private var isLoadingOutreach: Bool = false
-    @State private var outreachErrorMessage: String?
-    @State private var isSaved: Bool = false
-    @State private var isSaving: Bool = false
-    @State private var actionErrorMessage: String?
+    @State private var viewModel: ListingDetailViewModel
 
-    private var displayedListing: Listing {
-        detailListing ?? listing
+    init(listing: Listing, onExpandMap: (() -> Void)? = nil) {
+        self.listing = listing
+        self.onExpandMap = onExpandMap
+        _viewModel = State(initialValue: ListingDetailViewModel(listing: listing))
     }
 
     var body: some View {
@@ -31,357 +19,132 @@ struct ListingDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                 // Header: status, title, price, score, metrics
                 ListingHeaderSection(
-                    listing: displayedListing,
-                    cluster: cluster
+                    listing: viewModel.displayedListing,
+                    cluster: viewModel.cluster
                 )
 
-                ListingExternalActionsBar(listing: displayedListing)
+                ListingExternalActionsBar(listing: viewModel.displayedListing)
 
                 ListingPrimaryActionsBar(
-                    isSaved: isSaved,
-                    isSaving: isSaving,
-                    canContact: canContact,
-                    isLoadingOutreach: isLoadingOutreach,
-                    contactButtonTitle: contactButtonTitle,
-                    contactButtonSystemImage: contactButtonSystemImage,
-                    contactButtonHelpText: contactButtonHelpText,
-                    onToggleSave: { Task { await toggleSave() } },
-                    onContact: { Task { await handleContactAction() } }
+                    isSaved: viewModel.isSaved,
+                    isSaving: viewModel.isSaving,
+                    canContact: viewModel.canContact,
+                    isLoadingOutreach: viewModel.isLoadingOutreach,
+                    contactButtonTitle: viewModel.contactButtonTitle,
+                    contactButtonSystemImage: viewModel.contactButtonSystemImage,
+                    contactButtonHelpText: viewModel.contactButtonHelpText,
+                    onToggleSave: {
+                        Task { await viewModel.toggleSave(using: appState.apiClient) }
+                    },
+                    onContact: {
+                        Task {
+                            if let threadID = await viewModel.handleContactAction(using: appState.apiClient) {
+                                appState.openOutreachThread(threadID)
+                            }
+                        }
+                    }
                 )
 
-                if let actionErrorMessage, !actionErrorMessage.isEmpty {
+                if let actionErrorMessage = viewModel.actionErrorMessage,
+                   !actionErrorMessage.isEmpty {
                     Text(actionErrorMessage)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
 
                 // Key investor metrics ribbon
-                KeyMetricsRibbon(analysis: analysis, explanation: explanation)
+                KeyMetricsRibbon(analysis: viewModel.analysis, explanation: viewModel.explanation)
 
                 ListingAnalysisSection(
-                    analysis: analysis,
-                    isLoadingAnalysis: isLoadingAnalysis
+                    analysis: viewModel.analysis,
+                    isLoadingAnalysis: viewModel.isLoadingAnalysis
                 )
 
                 // Price history
-                PriceHistoryView(versions: priceVersions)
+                PriceHistoryView(versions: viewModel.priceVersions)
 
                 // Cross-source comparison
-                if let cluster, cluster.deduplicatedMembers.count >= 2 {
+                if let cluster = viewModel.cluster,
+                   cluster.deduplicatedMembers.count >= 2 {
                     CrossSourceComparisonView(cluster: cluster)
                 }
 
                 Divider()
 
                 // Score breakdown
-                if let explanation {
+                if let explanation = viewModel.explanation {
                     Text("Score Breakdown")
                         .font(.headline)
                     ScoreBreakdownView(explanation: explanation)
                 }
 
                 // Confidence
-                if let analysis {
+                if let analysis = viewModel.analysis {
                     AnalysisConfidenceBadge(confidence: analysis.confidence)
                 }
 
                 Divider()
 
                 // Property details grid
-                ListingDetailsSection(listing: displayedListing)
+                ListingDetailsSection(listing: viewModel.displayedListing)
 
                 OutreachDetailSection(
-                    listing: displayedListing,
-                    thread: outreachThread,
-                    isLoading: isLoadingOutreach,
-                    errorMessage: outreachErrorMessage,
-                    onStart: { Task { await startOutreach() } },
-                    onReload: { Task { await loadOutreachThread() } },
-                    onAction: { action in Task { await applyOutreachAction(action) } },
-                    onSendFollowup: { Task { await sendFollowup() } }
+                    listing: viewModel.displayedListing,
+                    thread: viewModel.outreachThread,
+                    isLoading: viewModel.isLoadingOutreach,
+                    errorMessage: viewModel.outreachErrorMessage,
+                    onStart: {
+                        Task {
+                            if let threadID = await viewModel.startOutreach(using: appState.apiClient) {
+                                appState.openOutreachThread(threadID)
+                            }
+                        }
+                    },
+                    onReload: {
+                        Task { await viewModel.loadOutreachThread(using: appState.apiClient) }
+                    },
+                    onAction: { action in
+                        Task { await viewModel.applyOutreachAction(action, using: appState.apiClient) }
+                    },
+                    onSendFollowup: {
+                        Task { await viewModel.sendFollowup(using: appState.apiClient) }
+                    }
                 )
 
                 // Building context
-                if let building = analysis?.buildingContext {
+                if let building = viewModel.analysis?.buildingContext {
                     AnalysisBuildingContextCard(building: building)
                 }
 
                 // Nearby POIs
-                ListingLocationSection(listing: displayedListing)
+                ListingLocationSection(listing: viewModel.displayedListing)
 
                 Divider()
 
                 // Documents
                 DocumentsSection(
-                    documents: listingDocuments,
-                    isLoading: isLoadingDocuments,
-                    onLoadFacts: loadDocumentFacts
+                    documents: viewModel.listingDocuments,
+                    isLoading: viewModel.isLoadingDocuments,
+                    onLoadFacts: { documentID in
+                        await viewModel.loadDocumentFacts(
+                            documentId: documentID,
+                            using: appState.apiClient
+                        )
+                    }
                 )
 
                 Divider()
 
                 // Map
-                ListingMapView(listing: displayedListing, onExpandToFullMap: onExpandMap)
+                ListingMapView(listing: viewModel.displayedListing, onExpandToFullMap: onExpandMap)
             }
             .padding(Theme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: listing.id) {
-            actionErrorMessage = nil
-
-            await loadListingDetail()
-
-            async let v: Void = loadVersions()
-            async let e: Void = loadExplanation()
-            async let c: Void = loadCluster()
-            async let s: Void = checkIfSaved()
-            async let a: Void = loadAnalysis()
-            async let d: Void = loadDocuments()
-            _ = await (v, e, c, s, a, d)
-
-            await loadOutreachThread()
+            await viewModel.load(using: appState.apiClient, listing: listing)
         }
     }
-
-    private func loadListingDetail() async {
-        do {
-            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
-        } catch {
-            detailListing = nil
-            Log.ui.error("Failed to load listing detail for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func loadExplanation() async {
-        do {
-            explanation = try await appState.apiClient.fetchScoreExplanation(listingId: listing.id)
-        } catch {
-            explanation = nil
-            Log.ui.error("Failed to load score explanation for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func loadVersions() async {
-        do {
-            let versions = try await appState.apiClient.fetchListingVersions(id: listing.id)
-            priceVersions = versions.compactMap { v -> PriceVersion? in
-                guard let priceEurCents = v.listPriceEurCents, let observedAt = v.observedAt else { return nil }
-                return PriceVersion(
-                    date: observedAt,
-                    priceEur: priceEurCents / 100,
-                    reason: v.versionReason
-                )
-            }
-        } catch {
-            Log.ui.error("Failed to load price versions for listing \(self.listing.id): \(error, privacy: .public)")
-            if let listPriceEur = listing.listPriceEur, let firstSeenAt = listing.firstSeenAt {
-                priceVersions = [
-                    PriceVersion(
-                        date: firstSeenAt,
-                        priceEur: listPriceEur,
-                        reason: "Current price"
-                    )
-                ]
-            } else {
-                priceVersions = []
-            }
-        }
-    }
-
-    private func loadCluster() async {
-        do {
-            cluster = try await appState.apiClient.fetchListingCluster(listingId: listing.id)
-        } catch {
-            cluster = nil
-            Log.ui.error("Failed to load cluster for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func loadAnalysis() async {
-        isLoadingAnalysis = true
-        do {
-            analysis = try await appState.apiClient.fetchAnalysis(listingId: listing.id)
-        } catch {
-            analysis = nil
-            Log.ui.error("Failed to load analysis for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-        isLoadingAnalysis = false
-    }
-
-    private func loadDocuments() async {
-        isLoadingDocuments = true
-        do {
-            listingDocuments = try await appState.apiClient.fetchDocuments(listingId: listing.id)
-        } catch {
-            listingDocuments = []
-            Log.ui.error("Failed to load documents for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-        isLoadingDocuments = false
-    }
-
-    private func loadDocumentFacts(documentId: Int) async -> [DocumentFact] {
-        do {
-            return try await appState.apiClient.fetchDocumentFacts(documentId: documentId)
-        } catch {
-            Log.ui.error("Failed to load document facts for document \(documentId): \(error, privacy: .public)")
-            return []
-        }
-    }
-
-    private func checkIfSaved() async {
-        do {
-            let savedIds = try await appState.apiClient.checkSavedListings(ids: [listing.id])
-            isSaved = savedIds.contains(listing.id)
-        } catch {
-            isSaved = false
-            Log.ui.error("Failed to check saved status for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func toggleSave() async {
-        guard !isSaving else { return }
-        isSaving = true
-        defer { isSaving = false }
-
-        let wasSaved = isSaved
-        isSaved.toggle()
-        actionErrorMessage = nil
-
-        do {
-            if wasSaved {
-                try await appState.apiClient.unsaveListing(listingId: listing.id)
-            } else {
-                try await appState.apiClient.saveListing(listingId: listing.id)
-            }
-        } catch {
-            isSaved = wasSaved
-            actionErrorMessage = wasSaved
-                ? "Could not remove the listing from the watchlist."
-                : "Could not save the listing to the watchlist."
-            Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
-        }
-    }
-
-    private var hasOutreachThread: Bool {
-        outreachThread != nil || displayedListing.outreachSummary != nil
-    }
-
-    private var canContact: Bool {
-        hasOutreachThread || displayedListing.contactEmail != nil
-    }
-
-    private var contactButtonTitle: String {
-        if isLoadingOutreach {
-            return "Contacting…"
-        }
-        return hasOutreachThread ? "Open Outreach" : "Contact"
-    }
-
-    private var contactButtonSystemImage: String {
-        hasOutreachThread ? "paperplane.circle.fill" : "paperplane"
-    }
-
-    private var contactButtonHelpText: String {
-        if hasOutreachThread {
-            return "Open the outreach workflow"
-        }
-        if displayedListing.contactEmail != nil {
-            return "Start outreach for this listing"
-        }
-        return "No contact email is available for this listing"
-    }
-
-    private func loadOutreachThread() async {
-        isLoadingOutreach = true
-        defer { isLoadingOutreach = false }
-
-        guard let summary = displayedListing.outreachSummary else {
-            outreachThread = nil
-            outreachErrorMessage = nil
-            return
-        }
-
-        do {
-            outreachThread = try await appState.apiClient.fetchOutreachThread(id: summary.threadId)
-            outreachErrorMessage = nil
-        } catch {
-            outreachThread = nil
-            outreachErrorMessage = error.localizedDescription
-            actionErrorMessage = "Could not load the outreach thread."
-            Log.ui.error("Failed to load outreach thread for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func handleContactAction() async {
-        actionErrorMessage = nil
-
-        if let threadID = outreachThread?.id ?? displayedListing.outreachSummary?.threadId {
-            appState.openOutreachThread(threadID)
-            return
-        }
-
-        guard displayedListing.contactEmail != nil else {
-            actionErrorMessage = "No contact email is available for this listing."
-            return
-        }
-
-        await startOutreach()
-    }
-
-    private func startOutreach() async {
-        guard let contactEmail = displayedListing.contactEmail else { return }
-
-        isLoadingOutreach = true
-        defer { isLoadingOutreach = false }
-        actionErrorMessage = nil
-
-        do {
-            let threadId = try await appState.apiClient.startOutreach(
-                listingId: listing.id,
-                input: OutreachStartInput(
-                    subject: "Anfrage: \(displayedListing.title)",
-                    bodyText: "Guten Tag, ich interessiere mich für das Objekt \"\(displayedListing.title)\" und würde mich über weitere Informationen freuen.",
-                    contactEmail: contactEmail,
-                    contactName: displayedListing.contactName,
-                    contactCompany: displayedListing.contactCompany,
-                    contactPhone: displayedListing.contactPhone
-                )
-            )
-            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
-            outreachThread = try await appState.apiClient.fetchOutreachThread(id: threadId)
-            outreachErrorMessage = nil
-            appState.openOutreachThread(threadId)
-        } catch {
-            outreachErrorMessage = error.localizedDescription
-            actionErrorMessage = "Could not start outreach for this listing."
-            Log.ui.error("Failed to start outreach for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func applyOutreachAction(_ action: OutreachAction) async {
-        guard let thread = outreachThread else { return }
-        do {
-            try await appState.apiClient.updateOutreachThread(id: thread.id, action: action)
-            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
-            await loadOutreachThread()
-        } catch {
-            outreachErrorMessage = error.localizedDescription
-            Log.ui.error("Failed outreach action for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
-    private func sendFollowup() async {
-        guard let thread = outreachThread else { return }
-        do {
-            try await appState.apiClient.sendOutreachFollowup(id: thread.id)
-            detailListing = try await appState.apiClient.fetchListing(id: listing.id)
-            await loadOutreachThread()
-        } catch {
-            outreachErrorMessage = error.localizedDescription
-            Log.ui.error("Failed outreach follow-up for listing \(self.listing.id): \(error, privacy: .public)")
-        }
-    }
-
 }
 
 private struct OutreachDetailSection: View {

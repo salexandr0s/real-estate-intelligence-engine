@@ -5,7 +5,7 @@ struct DetailContentView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        switch appState.selectedNavItem {
+        switch appState.navigationState.selectedNavItem {
         case .dashboard:
             DashboardView()
         case .listings:

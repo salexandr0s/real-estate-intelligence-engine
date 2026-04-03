@@ -141,7 +141,7 @@ final class AlertsViewModel {
             alerts = allAlerts
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoading = false
@@ -155,7 +155,7 @@ final class AlertsViewModel {
             }
             normalizeSelection(preferredID: alert.id)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -175,7 +175,7 @@ final class AlertsViewModel {
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -195,7 +195,7 @@ final class AlertsViewModel {
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 
@@ -225,7 +225,7 @@ final class AlertsViewModel {
         do {
             body = try JSONEncoder().encode(APIAlertUpdateRequest(status: "dismissed"))
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
             return
         }
 
@@ -249,7 +249,7 @@ final class AlertsViewModel {
             }
             undoManager?.setActionName("Dismiss Alert")
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresentation.message(for: error)
         }
     }
 

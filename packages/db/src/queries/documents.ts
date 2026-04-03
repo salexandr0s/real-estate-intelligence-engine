@@ -14,6 +14,8 @@ interface DocumentDbRow {
   status: string;
   page_count: number | null;
   label: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
   first_seen_at: Date;
   last_seen_at: Date;
   created_at: Date;
@@ -32,6 +34,8 @@ export interface DocumentRow {
   status: string;
   pageCount: number | null;
   label: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
   firstSeenAt: Date;
   lastSeenAt: Date;
   createdAt: Date;
@@ -51,6 +55,8 @@ function toDocumentRow(row: DocumentDbRow): DocumentRow {
     status: row.status,
     pageCount: row.page_count,
     label: row.label,
+    lastErrorCode: row.last_error_code,
+    lastErrorMessage: row.last_error_message,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
     createdAt: row.created_at,
@@ -234,6 +240,9 @@ export async function updateStatus(
     mimeType?: string;
     sizeBytes?: number;
     pageCount?: number;
+    lastErrorCode?: string;
+    lastErrorMessage?: string;
+    clearFailure?: boolean;
   },
 ): Promise<DocumentRow | null> {
   const rows = await query<DocumentDbRow>(
@@ -244,6 +253,16 @@ export async function updateStatus(
        mime_type = COALESCE($5, mime_type),
        size_bytes = COALESCE($6, size_bytes),
        page_count = COALESCE($7, page_count),
+       last_error_code = CASE
+         WHEN $8 THEN NULL
+         WHEN $9 IS NOT NULL THEN $9
+         ELSE last_error_code
+       END,
+       last_error_message = CASE
+         WHEN $8 THEN NULL
+         WHEN $10 IS NOT NULL THEN $10
+         ELSE last_error_message
+       END,
        updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
@@ -255,6 +274,9 @@ export async function updateStatus(
       updates?.mimeType ?? null,
       updates?.sizeBytes ?? null,
       updates?.pageCount ?? null,
+      updates?.clearFailure ?? false,
+      updates?.lastErrorCode ?? null,
+      updates?.lastErrorMessage ?? null,
     ],
   );
   return rows[0] ? toDocumentRow(rows[0]) : null;
