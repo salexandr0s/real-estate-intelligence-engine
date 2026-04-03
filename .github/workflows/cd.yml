@@ -19,57 +19,53 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
-        with:
-          cache-binary: false
+      - name: Set up Docker Buildx
+        run: |
+          docker buildx version
+          docker buildx create --name immoradar-builder --driver docker-container --use
+          docker buildx inspect --bootstrap
 
       - name: Build and push API image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/api:latest
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main,mode=max
-          sbom: true
-          provenance: true
+        run: |
+          docker buildx build \
+            --file apps/api/Dockerfile \
+            --tag ghcr.io/${{ github.repository }}/api:${{ github.sha }} \
+            --tag ghcr.io/${{ github.repository }}/api:latest \
+            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main \
+            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main,mode=max \
+            --sbom=true \
+            --provenance=true \
+            --push \
+            .
 
       - name: Build and push worker-scraper image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
-        with:
-          context: .
-          file: apps/worker-scraper/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/worker-scraper:latest
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main,mode=max
-          sbom: true
-          provenance: true
+        run: |
+          docker buildx build \
+            --file apps/worker-scraper/Dockerfile \
+            --tag ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }} \
+            --tag ghcr.io/${{ github.repository }}/worker-scraper:latest \
+            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main \
+            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main,mode=max \
+            --sbom=true \
+            --provenance=true \
+            --push \
+            .
 
       - name: Build and push worker-processing image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
-        with:
-          context: .
-          file: apps/worker-processing/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/worker-processing:latest
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main,mode=max
-          sbom: true
-          provenance: true
+        run: |
+          docker buildx build \
+            --file apps/worker-processing/Dockerfile \
+            --tag ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }} \
+            --tag ghcr.io/${{ github.repository }}/worker-processing:latest \
+            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main \
+            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main,mode=max \
+            --sbom=true \
+            --provenance=true \
+            --push \
+            .
 
       - name: Prepare scan artifact directory
         run: mkdir -p .trivy
