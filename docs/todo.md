@@ -84,13 +84,13 @@ Migration note:
 - [x] Add Outreach sidebar page
 - [x] Add listing-detail Outreach panel with start flow, thread state, reply timeline, and follow-up controls
 - [x] Add inbox view for open threads, unread replies, and due follow-ups
-- [ ] Add dedicated view-model coverage for outreach inbox/thread flows
+- [x] Add dedicated view-model coverage for outreach inbox/thread flows
 
 ### Verification
 
-- [ ] Migration smoke test for `020-mailbox-outreach.sql`
-- [ ] Query idempotency tests for open-thread dedupe and inbound message dedupe
-- [ ] IMAP fixture tests for reply matching, reconnect, cursor resume, and unmatched mail preservation
-- [ ] XState transition tests for send, reply stop, pause/resume, close, retry, and delayed follow-up behavior
-- [ ] API auth/validation tests for all new routes
-- [ ] macOS API decoding and view-model tests for outreach inbox and thread detail
+- [x] Migration smoke test for `020-mailbox-outreach.sql`
+- [x] Query idempotency tests for open-thread dedupe and inbound message dedupe
+- [x] IMAP fixture tests for reply matching, reconnect, cursor resume, and unmatched mail preservation
+- [x] XState transition tests for send, reply stop, pause/resume, close, retry, and delayed follow-up behavior
+- [x] API auth/validation tests for all new routes
+- [x] macOS API decoding and view-model tests for outreach inbox and thread detail

@@ -259,4 +259,190 @@ describe('processMailboxSyncJob', () => {
       expect.objectContaining({ status: 'degraded', errorMessage: '1 unmatched inbound messages' }),
     );
   });
+
+  it('falls back to sender plus normalized subject matching when headers are missing', async () => {
+    const client = {
+      mailbox: { uidValidity: 123n },
+      connect: vi.fn().mockResolvedValue(undefined),
+      getMailboxLock: vi.fn().mockResolvedValue({ release: vi.fn() }),
+      search: vi.fn().mockResolvedValue([8]),
+      fetch: vi.fn().mockImplementation(async function* () {
+        yield {
+          uid: 8,
+          source: Buffer.from('raw-email'),
+          envelope: { subject: 'AW: Hallo' },
+          internalDate: new Date('2026-03-26T11:15:00Z'),
+        };
+      }),
+      logout: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mocks.findThreadByProviderMessageIds.mockResolvedValue(null);
+    mocks.findOpenThreadCandidatesByContact.mockResolvedValue([
+      {
+        thread: {
+          id: 21,
+          listingId: 300,
+          workflowState: 'sent_waiting_reply',
+        },
+        latestSubject: 'Hallo',
+      },
+    ]);
+    mocks.insertInboundMessage.mockResolvedValue({
+      id: 703,
+      occurredAt: new Date('2026-03-26T11:15:00Z'),
+    });
+
+    const result = await processMailboxSyncJob(
+      { mailboxAccountId: 10, triggeredBy: 'scheduler' },
+      {
+        clientFactory: () => client,
+        parser: vi.fn().mockResolvedValue({
+          messageId: '<reply-3>',
+          inReplyTo: null,
+          references: null,
+          subject: 'AW: Hallo',
+          from: { value: [{ address: 'broker@example.com' }] },
+          to: { value: [{ address: 'shared@example.com' }] },
+          text: 'Danke, hier die Unterlagen.',
+          html: null,
+          date: new Date('2026-03-26T11:15:00Z'),
+          attachments: [],
+        }),
+        storeBuffer: vi.fn().mockResolvedValue('storage-key'),
+        documentQueue: { add: vi.fn() },
+        now: () => new Date('2026-03-26T12:00:00Z'),
+        config: {
+          outreach: {
+            imap: {
+              host: 'localhost',
+              port: 993,
+              secure: true,
+              user: 'shared@example.com',
+              password: 'secret',
+              mailbox: 'INBOX',
+            },
+            initialLookbackDays: 7,
+          },
+        } as never,
+      },
+    );
+
+    expect(result).toEqual({
+      status: 'completed',
+      processedCount: 1,
+      unmatchedCount: 0,
+      maxUid: 8,
+    });
+    expect(mocks.insertInboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 21,
+        matchStrategy: 'from_subject',
+      }),
+    );
+  });
+
+  it('resumes from the next UID after the last successful sync cursor', async () => {
+    mocks.findMailboxById.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      email: 'shared@example.com',
+      isActive: true,
+      lastSeenUid: 41,
+      lastSeenUidvalidity: 123,
+    });
+
+    const client = {
+      mailbox: { uidValidity: 123n },
+      connect: vi.fn().mockResolvedValue(undefined),
+      getMailboxLock: vi.fn().mockResolvedValue({ release: vi.fn() }),
+      search: vi.fn().mockResolvedValue([]),
+      fetch: vi.fn().mockImplementation(async function* () {}),
+      logout: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await processMailboxSyncJob(
+      { mailboxAccountId: 10, triggeredBy: 'scheduler' },
+      {
+        clientFactory: () => client,
+        parser: vi.fn(),
+        storeBuffer: vi.fn(),
+        documentQueue: { add: vi.fn() },
+        config: {
+          outreach: {
+            imap: {
+              host: 'localhost',
+              port: 993,
+              secure: true,
+              user: 'shared@example.com',
+              password: 'secret',
+              mailbox: 'INBOX',
+            },
+            initialLookbackDays: 7,
+          },
+        } as never,
+      },
+    );
+
+    expect(result).toEqual({
+      status: 'completed',
+      processedCount: 0,
+      unmatchedCount: 0,
+      maxUid: 41,
+    });
+    expect(client.search).toHaveBeenCalledWith({ uid: '42:*' }, { uid: true });
+  });
+
+  it('marks the sync failed and preserves the last seen cursor on IMAP errors', async () => {
+    mocks.findMailboxById.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      email: 'shared@example.com',
+      isActive: true,
+      lastSeenUid: 41,
+      lastSeenUidvalidity: 123,
+    });
+
+    const client = {
+      mailbox: { uidValidity: 123n },
+      connect: vi.fn().mockRejectedValue(new Error('imap down')),
+      getMailboxLock: vi.fn(),
+      search: vi.fn(),
+      fetch: vi.fn(),
+      logout: vi.fn(),
+    };
+
+    await expect(
+      processMailboxSyncJob(
+        { mailboxAccountId: 10, triggeredBy: 'scheduler' },
+        {
+          clientFactory: () => client,
+          config: {
+            outreach: {
+              imap: {
+                host: 'localhost',
+                port: 993,
+                secure: true,
+                user: 'shared@example.com',
+                password: 'secret',
+                mailbox: 'INBOX',
+              },
+              initialLookbackDays: 7,
+            },
+          } as never,
+        },
+      ),
+    ).rejects.toThrow('imap down');
+
+    expect(mocks.markSyncFinished).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({
+        status: 'failed',
+        lastSeenUid: 41,
+        lastSeenUidvalidity: 123,
+        errorCode: 'mailbox_sync_failed',
+        errorMessage: 'imap down',
+      }),
+    );
+  });
 });

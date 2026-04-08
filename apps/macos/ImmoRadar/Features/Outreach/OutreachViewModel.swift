@@ -1,5 +1,21 @@
 import Foundation
 
+protocol OutreachAPIClient: Actor {
+    func fetchMailboxes() async throws -> [MailboxAccount]
+    func fetchOutreachThreads(
+        scope: OutreachScope,
+        cursor: String?,
+        limit: Int?
+    ) async throws -> (threads: [OutreachThreadSummary], nextCursor: String?)
+    func fetchOutreachThread(id: Int) async throws -> OutreachThread
+    func fetchListing(id: Int) async throws -> Listing
+    func syncMailbox(id: Int) async throws
+    func updateOutreachThread(id: Int, action: OutreachAction) async throws
+    func sendOutreachFollowup(id: Int, subject: String?, bodyText: String?) async throws
+}
+
+extension APIClient: OutreachAPIClient {}
+
 @MainActor @Observable
 final class OutreachViewModel {
     var mailboxes: [MailboxAccount] = []
@@ -19,13 +35,17 @@ final class OutreachViewModel {
 
     var selectedMailbox: MailboxAccount? { mailboxes.first }
 
-    func refresh(using client: APIClient) async {
+    func refresh(using client: any OutreachAPIClient) async {
         isLoadingList = true
         pageErrorMessage = nil
 
         do {
             async let mailboxRows = client.fetchMailboxes()
-            async let threadResult = client.fetchOutreachThreads(scope: selectedScope)
+            async let threadResult = client.fetchOutreachThreads(
+                scope: selectedScope,
+                cursor: nil,
+                limit: 25
+            )
             let (loadedMailboxes, loadedThreadsResult) = try await (mailboxRows, threadResult)
 
             mailboxes = loadedMailboxes
@@ -51,19 +71,19 @@ final class OutreachViewModel {
         isLoadingList = false
     }
 
-    func setScope(_ scope: OutreachScope, using client: APIClient) async {
+    func setScope(_ scope: OutreachScope, using client: any OutreachAPIClient) async {
         guard selectedScope != scope else { return }
         selectedScope = scope
         await refresh(using: client)
     }
 
-    func selectThread(id: Int, using client: APIClient) async {
+    func selectThread(id: Int, using client: any OutreachAPIClient) async {
         guard selectedThreadID != id || selectedThread == nil else { return }
         selectedThreadID = id
         await loadThread(id: id, using: client)
     }
 
-    func openThread(id: Int, using client: APIClient) async {
+    func openThread(id: Int, using client: any OutreachAPIClient) async {
         selectedScope = .all
 
         if mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
@@ -72,7 +92,11 @@ final class OutreachViewModel {
 
             do {
                 async let mailboxRows = client.fetchMailboxes()
-                async let threadResult = client.fetchOutreachThreads(scope: .all)
+                async let threadResult = client.fetchOutreachThreads(
+                    scope: .all,
+                    cursor: nil,
+                    limit: 25
+                )
                 let (loadedMailboxes, loadedThreadsResult) = try await (mailboxRows, threadResult)
 
                 mailboxes = loadedMailboxes
@@ -90,7 +114,7 @@ final class OutreachViewModel {
         await loadThread(id: id, using: client)
     }
 
-    func syncPrimaryMailbox(using client: APIClient) async {
+    func syncPrimaryMailbox(using client: any OutreachAPIClient) async {
         guard let mailbox = selectedMailbox else { return }
         isSyncingMailbox = true
         pageErrorMessage = nil
@@ -105,7 +129,7 @@ final class OutreachViewModel {
         isSyncingMailbox = false
     }
 
-    func reloadSelectedThread(using client: APIClient) async {
+    func reloadSelectedThread(using client: any OutreachAPIClient) async {
         guard let selectedThreadID else {
             await refresh(using: client)
             return
@@ -113,7 +137,7 @@ final class OutreachViewModel {
         await loadThread(id: selectedThreadID, using: client)
     }
 
-    func performThreadAction(_ action: OutreachAction, using client: APIClient) async {
+    func performThreadAction(_ action: OutreachAction, using client: any OutreachAPIClient) async {
         guard let thread = selectedThread else { return }
         actionInFlight = action.rawValue
         detailErrorMessage = nil
@@ -128,13 +152,13 @@ final class OutreachViewModel {
         actionInFlight = nil
     }
 
-    func sendFollowup(using client: APIClient) async {
+    func sendFollowup(using client: any OutreachAPIClient) async {
         guard let thread = selectedThread else { return }
         actionInFlight = "followup"
         detailErrorMessage = nil
 
         do {
-            try await client.sendOutreachFollowup(id: thread.id)
+            try await client.sendOutreachFollowup(id: thread.id, subject: nil, bodyText: nil)
             await refresh(using: client)
         } catch {
             detailErrorMessage = "Couldn’t queue the follow-up. Check the thread state and try again."
@@ -143,7 +167,7 @@ final class OutreachViewModel {
         actionInFlight = nil
     }
 
-    private func loadThread(id: Int, using client: APIClient) async {
+    private func loadThread(id: Int, using client: any OutreachAPIClient) async {
         isLoadingThread = true
         detailErrorMessage = nil
 

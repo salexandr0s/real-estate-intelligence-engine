@@ -12,8 +12,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
+    "test": "vitest run --root ../.. --passWithNoTests packages/outreach/src/machine.test.ts",
+    "test:unit": "vitest run --root ../.. --passWithNoTests packages/outreach/src/machine.test.ts",
     "clean": "rm -rf dist"
   }
 }

@@ -264,6 +264,11 @@ describe('mailbox/outreach API routes', () => {
     );
   });
 
+  it('requires auth for mailbox routes', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/mailboxes' });
+    expect(res.statusCode).toBe(401);
+  });
+
   it('queues a mailbox sync', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -272,6 +277,27 @@ describe('mailbox/outreach API routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(hoisted.queueAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates mailbox sync ids', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/mailboxes/not-a-number/sync',
+      headers: AUTH_HEADER,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when syncing an unknown mailbox', async () => {
+    hoisted.findMailboxByIdForUser.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/mailboxes/999/sync',
+      headers: AUTH_HEADER,
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 
   it('lists outreach threads with cursor pagination metadata', async () => {
@@ -284,6 +310,16 @@ describe('mailbox/outreach API routes', () => {
     const body = res.json<{ data: Array<{ id: number }>; meta: { nextCursor: string | null } }>();
     expect(body.data[0]?.id).toBe(21);
     expect(body.meta.nextCursor).toBe('cursor-1');
+  });
+
+  it('validates outreach thread list scope', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/outreach/threads?scope=invalid',
+      headers: AUTH_HEADER,
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 
   it('returns outreach thread detail', async () => {
@@ -300,6 +336,18 @@ describe('mailbox/outreach API routes', () => {
     expect(body.data.messages).toHaveLength(1);
     expect(body.data.events[0]?.payload.providerMessageId).toBe('msg-1');
     expect(body.data.events[0]?.payload.manual).toBe('true');
+  });
+
+  it('returns 404 for an unknown outreach thread detail request', async () => {
+    hoisted.findThreadByIdForUser.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/outreach/threads/999',
+      headers: AUTH_HEADER,
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 
   it('starts outreach for a listing', async () => {
@@ -333,6 +381,17 @@ describe('mailbox/outreach API routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('validates outreach start payloads', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/listings/300/outreach/start',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ subject: '', bodyText: 'Interested' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('rejects outreach start when an open thread already exists', async () => {
     hoisted.findOpenThreadByListingContact.mockResolvedValueOnce({ id: 99 });
 
@@ -355,6 +414,30 @@ describe('mailbox/outreach API routes', () => {
     expect(res.statusCode).toBe(200);
     expect(hoisted.updateThreadState).toHaveBeenCalled();
     expect(hoisted.appendEvent).toHaveBeenCalled();
+  });
+
+  it('validates thread actions', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/21',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'ship-it' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when mutating an unknown thread', async () => {
+    hoisted.findThreadByIdForUser.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/999',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'pause' }),
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 
   it('queues a manual follow-up', async () => {
@@ -394,6 +477,35 @@ describe('mailbox/outreach API routes', () => {
       headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
       payload: JSON.stringify({}),
     });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('rejects follow-up when the automatic follow-up has already been used', async () => {
+    hoisted.findThreadByIdForUser.mockResolvedValueOnce({
+      id: 21,
+      listingId: 300,
+      mailboxAccountId: 10,
+      contactName: 'Max Broker',
+      contactCompany: 'Broker GmbH',
+      contactEmail: 'broker@example.com',
+      contactPhone: '+431234567',
+      workflowState: 'followup_sent',
+      autoFollowupCount: 1,
+      nextActionAt: null,
+      lastInboundAt: null,
+      lastOutboundAt: new Date('2026-03-26T10:00:00Z'),
+      createdAt: new Date('2026-03-26T10:00:00Z'),
+      updatedAt: new Date('2026-03-29T10:00:00Z'),
+      userId: 1,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/outreach/threads/21/follow-up',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({}),
+    });
+
     expect(res.statusCode).toBe(409);
   });
 });
