@@ -8,12 +8,18 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 let sdk: NodeSDK | null = null;
 
+function isTracingEnabled(): boolean {
+  const raw = process.env['OTEL_ENABLED']?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
 /**
  * Initialize OpenTelemetry tracing. Opt-in: no-op when
- * OTEL_EXPORTER_OTLP_ENDPOINT is not set.
+ * OTEL_ENABLED is falsey or OTEL_EXPORTER_OTLP_ENDPOINT is not set.
  */
 export function initTracing(serviceName: string): void {
   if (sdk) return;
+  if (!isTracingEnabled()) return;
 
   const endpoint = process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
   if (!endpoint) return;
@@ -32,5 +38,14 @@ export function initTracing(serviceName: string): void {
 }
 
 export async function shutdownTracing(): Promise<void> {
-  if (sdk) await sdk.shutdown();
+  if (!sdk) return;
+
+  const activeSDK = sdk;
+  sdk = null;
+
+  try {
+    await activeSDK.shutdown();
+  } catch {
+    // Tracing teardown must never crash the host process.
+  }
 }

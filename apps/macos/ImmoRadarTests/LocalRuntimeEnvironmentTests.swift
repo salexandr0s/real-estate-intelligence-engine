@@ -123,4 +123,91 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
         XCTAssertEqual(detected[.processing], 102)
         XCTAssertEqual(detected[.scraper], 103)
     }
+
+    @MainActor
+    func testNodeExecutableCandidatesPreferEnvironmentOverride() {
+        let root = URL(fileURLWithPath: "/tmp/immoradar-repo", isDirectory: true)
+        let override = "/tmp/custom-node"
+
+        let candidates = LocalRuntimeService.nodeExecutableCandidates(
+            under: root,
+            environment: [
+                "IMMORADAR_NODE_EXECUTABLE": override,
+                "PATH": "/usr/bin:/bin",
+            ],
+            homeDirectory: URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        )
+
+        XCTAssertEqual(candidates.first?.path, override)
+    }
+
+    @MainActor
+    func testNodeExecutableCandidatesIncludeCommonHomebrewPathWithoutPATH() {
+        let root = URL(fileURLWithPath: "/tmp/immoradar-repo", isDirectory: true)
+
+        let candidates = LocalRuntimeService.nodeExecutableCandidates(
+            under: root,
+            environment: [:],
+            homeDirectory: URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        )
+
+        XCTAssertTrue(candidates.contains(URL(fileURLWithPath: "/opt/homebrew/bin/node")))
+    }
+
+    @MainActor
+    func testDetectBundledComponentPIDsFindsBundledRuntimeProcesses() {
+        let runtimeRoot = URL(
+            fileURLWithPath: "/Applications/ImmoRadar.app/Contents/Resources/runtime",
+            isDirectory: true
+        )
+        let runtimeHome = URL(
+            fileURLWithPath: "/Users/test/Library/Application Support/ImmoRadar/runtime",
+            isDirectory: true
+        )
+        let processList = """
+          301 \(runtimeRoot.path)/infra/postgres/bin/postgres -D \(runtimeHome.path)/postgres/data -h 127.0.0.1 -p 55432
+          302 \(runtimeRoot.path)/infra/redis/bin/redis-server 127.0.0.1:56379
+          303 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/api/dist/main.js
+          304 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/worker-processing/dist/main.js
+          305 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/worker-scraper/dist/main.js
+        """
+
+        let detected = LocalRuntimeService.detectBundledComponentPIDs(
+            processListOutput: processList,
+            runtimeRoot: runtimeRoot,
+            runtimeHome: runtimeHome,
+            redisPort: 56379
+        )
+
+        XCTAssertEqual(detected[.postgres], 301)
+        XCTAssertEqual(detected[.redis], 302)
+        XCTAssertEqual(detected[.api], 303)
+        XCTAssertEqual(detected[.processing], 304)
+        XCTAssertEqual(detected[.scraper], 305)
+    }
+
+    @MainActor
+    func testDetectBundledComponentPIDsIgnoresForeignProcesses() {
+        let runtimeRoot = URL(
+            fileURLWithPath: "/Applications/ImmoRadar.app/Contents/Resources/runtime",
+            isDirectory: true
+        )
+        let runtimeHome = URL(
+            fileURLWithPath: "/Users/test/Library/Application Support/ImmoRadar/runtime",
+            isDirectory: true
+        )
+        let processList = """
+          401 /opt/homebrew/opt/redis/bin/redis-server 127.0.0.1:56379
+          402 /opt/homebrew/bin/node /another/runtime/apps/api/dist/main.js
+        """
+
+        let detected = LocalRuntimeService.detectBundledComponentPIDs(
+            processListOutput: processList,
+            runtimeRoot: runtimeRoot,
+            runtimeHome: runtimeHome,
+            redisPort: 56379
+        )
+
+        XCTAssertTrue(detected.isEmpty)
+    }
 }

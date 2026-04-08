@@ -1,25 +1,30 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Lightweight wrapper around the macOS Keychain for storing sensitive strings.
 enum KeychainHelper {
 
-    private static let serviceName = "com.immoradar.api"
+    private static let defaultServiceName = "com.immoradar.api"
 
     // MARK: - Read
 
-    static func get(key: String, allowUserInteraction: Bool = true) -> String? {
-        var query: [String: Any] = [
+    static func get(
+        key: String,
+        service: String = defaultServiceName,
+        allowUserInteraction: Bool = true
+    ) -> String? {
+        let context = LAContext()
+        context.interactionNotAllowed = !allowUserInteraction
+
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseAuthenticationContext as String: context,
         ]
-
-        query[kSecUseAuthenticationUI as String] = allowUserInteraction
-            ? kSecUseAuthenticationUIAllow
-            : kSecUseAuthenticationUIFail
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -34,15 +39,19 @@ enum KeychainHelper {
 
     // MARK: - Write
 
-    static func set(key: String, value: String) throws {
+    static func set(
+        key: String,
+        value: String,
+        service: String = defaultServiceName
+    ) throws {
         guard let data = value.data(using: .utf8) else { return }
 
         // Delete any existing item first to avoid errSecDuplicateItem.
-        delete(key: key)
+        delete(key: key, service: service)
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
         ]
@@ -56,10 +65,10 @@ enum KeychainHelper {
     // MARK: - Delete
 
     @discardableResult
-    static func delete(key: String) -> Bool {
+    static func delete(key: String, service: String = defaultServiceName) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
 

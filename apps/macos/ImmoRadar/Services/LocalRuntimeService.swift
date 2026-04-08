@@ -3,6 +3,7 @@ import Darwin
 
 enum LocalRuntimeAuth {
     static let keychainKey = "localRuntimeApiToken"
+    static let keychainService = "com.immoradar.local-runtime"
 
     private static var environmentOverrideToken: String? {
         guard let raw = ProcessInfo.processInfo.environment["IMMORADAR_LOCAL_RUNTIME_API_TOKEN"]?
@@ -21,6 +22,7 @@ enum LocalRuntimeAuth {
 
         let token = KeychainHelper.get(
             key: keychainKey,
+            service: keychainService,
             allowUserInteraction: allowUserInteraction
         )?.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -39,13 +41,13 @@ enum LocalRuntimeAuth {
 
         let bytes = (0..<32).map { _ in UInt8.random(in: .min ... .max) }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
-        try KeychainHelper.set(key: keychainKey, value: token)
+        try KeychainHelper.set(key: keychainKey, value: token, service: keychainService)
         return token
     }
 
     static func resetToken() {
         guard environmentOverrideToken == nil else { return }
-        _ = KeychainHelper.delete(key: keychainKey)
+        _ = KeychainHelper.delete(key: keychainKey, service: keychainService)
     }
 
     static func preferredToken(
@@ -208,6 +210,8 @@ final class LocalRuntimeService {
         let component: String
         let isRunning: Bool
         let pid: Int32?
+        let ownership: String?
+        let command: String?
     }
 
     private struct StartupDiagnosticsPayload: Codable {
@@ -227,6 +231,25 @@ final class LocalRuntimeService {
         let startedAt: Date?
         let updatedAt: Date
         let components: [StartupDiagnosticsComponentSnapshot]
+    }
+
+    private struct ManagedProcessRegistryRecord: Codable, Sendable {
+        let component: String
+        let pid: Int32
+        let runtimeHomePath: String
+        let runtimeRootPath: String
+        let commandSignature: String
+        let updatedAt: Date
+    }
+
+    private struct ManagedProcessRegistryPayload: Codable, Sendable {
+        let updatedAt: Date
+        let records: [ManagedProcessRegistryRecord]
+    }
+
+    private struct DetectedManagedProcess: Sendable {
+        let pid: Int32
+        let command: String
     }
 
     private struct StartupFailure: Error, LocalizedError, Equatable {
@@ -279,6 +302,8 @@ final class LocalRuntimeService {
     private static let repoBootstrapLogFileName = "runtime-bootstrap.log"
 
     private static let repoBootstrapTurboScriptRelativePath = "node_modules/turbo/bin/turbo"
+
+    private static let bundledManagedProcessRegistryFileName = "managed-processes.json"
 
     var state: State = .stopped
     var progressStatus: ProgressStatus?
@@ -373,6 +398,21 @@ final class LocalRuntimeService {
                 return nil
             }
         }
+
+        var bundledCommandSignatureRelativePath: String {
+            switch self {
+            case .postgres:
+                return "infra/postgres/bin/postgres"
+            case .redis:
+                return "infra/redis/bin/redis-server"
+            case .api:
+                return "apps/api/dist/main.js"
+            case .processing:
+                return "apps/worker-processing/dist/main.js"
+            case .scraper:
+                return "apps/worker-scraper/dist/main.js"
+            }
+        }
     }
 
     private struct RuntimeManifest: Decodable {
@@ -449,6 +489,7 @@ final class LocalRuntimeService {
     private var logHandles: [Component: FileHandle] = [:]
     private var processOwners: [Component: Int] = [:]
     private var reusedExternalProcessIDs: [Component: Int32] = [:]
+    private var reusedExternalProcessCommands: [Component: String] = [:]
     private var launchedComponentsInActiveAttempt: Set<Component> = []
 
     static var runtimeHomeURL: URL {
@@ -475,6 +516,13 @@ final class LocalRuntimeService {
 
     static var startupDiagnosticsURL: URL {
         return logsDirectoryURL.appendingPathComponent("startup-diagnostics.json", isDirectory: false)
+    }
+
+    static var bundledManagedProcessRegistryURL: URL {
+        return runtimeHomeURL.appendingPathComponent(
+            bundledManagedProcessRegistryFileName,
+            isDirectory: false
+        )
     }
 
     func refreshStatus(apiBaseURL: String) async {
@@ -507,6 +555,7 @@ final class LocalRuntimeService {
                 persistStartupDiagnostics(status: .failed, context: context, failure: lastStartupFailure)
             } else {
                 reusedExternalProcessIDs.removeAll()
+                reusedExternalProcessCommands.removeAll()
                 state = .stopped
                 progressStatus = nil
                 persistStartupDiagnostics(status: .stopped, context: context, failure: nil)
@@ -700,11 +749,28 @@ final class LocalRuntimeService {
         refreshComponentStatuses()
     }
 
-    func resetLocalEngine() async throws {
+    func resetLocalEngine(apiBaseURL: String) async throws {
         progressStatus = nil
         activeStartupAttemptID = nil
         activeStartupStep = nil
+        let context = try? Self.discoverLaunchContext(apiBaseURL: apiBaseURL)
+        if let context {
+            await syncExternalProcessesIfNeeded(context: context)
+        }
         await stopManagedProcesses(force: true)
+
+        if let context {
+            await syncExternalProcessesIfNeeded(context: context)
+            refreshComponentStatuses()
+
+            let lingeringComponents = Component.allCases.filter(componentIsRunning)
+            guard lingeringComponents.isEmpty else {
+                let componentList = lingeringComponents.map(\.displayName).joined(separator: ", ")
+                throw RuntimeError.commandFailed(
+                    "Couldn’t reset the local engine because \(componentList) still \(lingeringComponents.count == 1 ? "is" : "are") running."
+                )
+            }
+        }
 
         if FileManager.default.fileExists(atPath: Self.runtimeHomeURL.path) {
             try FileManager.default.removeItem(at: Self.runtimeHomeURL)
@@ -743,6 +809,9 @@ final class LocalRuntimeService {
         let postgresPort = Self.resolvedBundledPostgresPort(manifest)
         let redisPort = Self.resolvedBundledRedisPort(manifest)
 
+        await syncExternalProcessesIfNeeded(context: context)
+        refreshComponentStatuses()
+
         setProgress(
             title: "Preparing local storage",
             detail: "Creating the runtime directories for data, logs, and artifacts.",
@@ -760,7 +829,7 @@ final class LocalRuntimeService {
             attributes: nil
         )
 
-        if processes[.postgres]?.isRunning != true {
+        if !componentIsRunning(.postgres) {
             setProgress(
                 title: "Starting Postgres",
                 detail: "Bootstrapping the local database for ImmoRadar.",
@@ -786,9 +855,15 @@ final class LocalRuntimeService {
                 context: context,
                 manifest: manifest
             )
+        } else {
+            recordStartupStep(.waitingForPostgres, context: context, status: .starting)
+            try await waitForBundledPostgres(
+                context: context,
+                manifest: manifest
+            )
         }
 
-        if processes[.redis]?.isRunning != true {
+        if !componentIsRunning(.redis) {
             setProgress(
                 title: "Starting Redis",
                 detail: "Bringing up the local queue and scheduler store.",
@@ -816,6 +891,14 @@ final class LocalRuntimeService {
                 port: redisPort,
                 component: .redis
             )
+        } else {
+            recordStartupStep(.waitingForRedis, context: context, status: .starting)
+            try await waitForTCP(
+                service: "Redis",
+                host: "127.0.0.1",
+                port: redisPort,
+                component: nil
+            )
         }
 
         setProgress(
@@ -834,7 +917,8 @@ final class LocalRuntimeService {
         )
 
         let apiPort = context.apiBaseURL.port ?? manifest.ports.api
-        if processes[.api]?.isRunning != true {
+        let apiAlreadyHealthy = await Self.isAPIHealthy(baseURL: context.apiBaseURL)
+        if !componentIsRunning(.api) {
             setProgress(
                 title: "Starting API",
                 detail: "Launching the local ImmoRadar API and waiting for health checks.",
@@ -846,8 +930,7 @@ final class LocalRuntimeService {
                 host: apiHost,
                 port: apiPort
             )
-            let apiHealthy = await Self.isAPIHealthy(baseURL: context.apiBaseURL)
-            if apiPortOccupied && !apiHealthy {
+            if apiPortOccupied && !apiAlreadyHealthy {
                 try await waitForPortToBecomeAvailable(
                     service: "API",
                     host: apiHost,
@@ -868,9 +951,15 @@ final class LocalRuntimeService {
                 recordStartupStep(.waitingForAPI, context: context, status: .starting)
                 try await waitForAPI(baseURL: context.apiBaseURL, component: .api)
             }
+        } else if !apiAlreadyHealthy {
+            recordStartupStep(.waitingForAPI, context: context, status: .starting)
+            try await waitForAPI(
+                baseURL: context.apiBaseURL,
+                component: processes[.api] == nil ? nil : .api
+            )
         }
 
-        if processes[.processing]?.isRunning != true {
+        if !componentIsRunning(.processing) {
             setProgress(
                 title: "Starting processing worker",
                 detail: "Enabling ingestion, scoring, and lifecycle jobs.",
@@ -887,7 +976,7 @@ final class LocalRuntimeService {
             )
         }
 
-        if processes[.scraper]?.isRunning != true {
+        if !componentIsRunning(.scraper) {
             setProgress(
                 title: "Starting scraper worker",
                 detail: "Registering source schedules and scraper queues.",
@@ -906,7 +995,7 @@ final class LocalRuntimeService {
 
         recordStartupStep(.verifyingServices, context: context, status: .starting)
         try? await Task.sleep(for: .milliseconds(600))
-        if processes[.api] != nil {
+        if componentIsRunning(.api) || apiAlreadyHealthy {
             try ensureComponentRunning(.api)
         }
         try ensureComponentRunning(.processing)
@@ -1017,6 +1106,7 @@ final class LocalRuntimeService {
         process.standardError = logHandle
         logHandles[component] = logHandle
         reusedExternalProcessIDs[component] = nil
+        reusedExternalProcessCommands[component] = nil
 
         installTerminationHandler(for: component, process: process, ownerAttemptID: ownerAttemptID)
 
@@ -1032,6 +1122,7 @@ final class LocalRuntimeService {
         }
         processes[component] = process
         processOwners[component] = ownerAttemptID
+        registerBundledManagedProcessIfNeeded(component: component, process: process, context: context)
         if activeStartupAttemptID == ownerAttemptID {
             launchedComponentsInActiveAttempt.insert(component)
         }
@@ -1066,6 +1157,7 @@ final class LocalRuntimeService {
         process.standardError = logHandle
         logHandles[component] = logHandle
         reusedExternalProcessIDs[component] = nil
+        reusedExternalProcessCommands[component] = nil
 
         installTerminationHandler(for: component, process: process, ownerAttemptID: ownerAttemptID)
 
@@ -1081,6 +1173,7 @@ final class LocalRuntimeService {
         }
         processes[component] = process
         processOwners[component] = ownerAttemptID
+        registerBundledManagedProcessIfNeeded(component: component, process: process, context: context)
         if activeStartupAttemptID == ownerAttemptID {
             launchedComponentsInActiveAttempt.insert(component)
         }
@@ -1198,6 +1291,10 @@ final class LocalRuntimeService {
 
                 self.processes[component] = nil
                 self.processOwners[component] = nil
+                self.unregisterBundledManagedProcessIfNeeded(
+                    component: component,
+                    pid: terminatedProcess.processIdentifier
+                )
                 if let handle = self.logHandles[component] {
                     try? handle.close()
                     self.logHandles[component] = nil
@@ -1222,7 +1319,7 @@ final class LocalRuntimeService {
                     self.progressStatus = nil
                     self.state = .failed(failure.message)
                     self.persistStartupDiagnostics(status: .failed, context: nil, failure: failure)
-                } else if self.processes.values.allSatisfy({ !$0.isRunning }) {
+                } else if !Component.allCases.contains(where: self.componentIsRunning) {
                     self.progressStatus = nil
                     self.state = .stopped
                     self.persistStartupDiagnostics(status: .stopped, context: nil, failure: nil)
@@ -1238,6 +1335,7 @@ final class LocalRuntimeService {
             guard let process = processes[component], process.isRunning else {
                 processes[component] = nil
                 processOwners[component] = nil
+                unregisterBundledManagedProcessIfNeeded(component: component, pid: nil)
                 if let handle = logHandles[component] {
                     try? handle.close()
                     logHandles[component] = nil
@@ -1285,12 +1383,15 @@ final class LocalRuntimeService {
         for component in orderedComponents where processes[component]?.isRunning != true {
             processes[component] = nil
             processOwners[component] = nil
+            unregisterBundledManagedProcessIfNeeded(component: component, pid: nil)
             if let handle = logHandles[component] {
                 try? handle.close()
                 logHandles[component] = nil
             }
         }
         reusedExternalProcessIDs.removeAll()
+        reusedExternalProcessCommands.removeAll()
+        Self.pruneBundledManagedProcessRegistry()
 
         refreshComponentStatuses()
         progressStatus = nil
@@ -1448,6 +1549,33 @@ final class LocalRuntimeService {
         persistStartupDiagnostics(status: status, context: context, failure: failure)
     }
 
+    private func component(for kind: ComponentStatus.Kind) -> Component? {
+        Component.allCases.first { $0.statusKind == kind }
+    }
+
+    private func ownershipDescription(for component: Component) -> String? {
+        if processes[component]?.isRunning == true {
+            return "launched"
+        }
+
+        if let pid = reusedExternalProcessIDs[component], Self.isProcessRunning(pid: pid) {
+            return "adopted"
+        }
+
+        return nil
+    }
+
+    private func commandDescription(for component: Component) -> String? {
+        if let process = processes[component], process.isRunning {
+            return Self.commandDescription(
+                executableURL: process.executableURL,
+                arguments: process.arguments
+            )
+        }
+
+        return reusedExternalProcessCommands[component]
+    }
+
     private func persistStartupDiagnostics(
         status: StartupDiagnosticsStatus,
         context: LaunchContext?,
@@ -1471,10 +1599,13 @@ final class LocalRuntimeService {
             startedAt: activeStartupStartedAt,
             updatedAt: Date.now,
             components: componentStatuses.map {
-                StartupDiagnosticsComponentSnapshot(
+                let component = component(for: $0.kind)
+                return StartupDiagnosticsComponentSnapshot(
                     component: $0.kind.rawValue,
                     isRunning: $0.isRunning,
-                    pid: $0.pid
+                    pid: $0.pid,
+                    ownership: component.flatMap(ownershipDescription(for:)),
+                    command: component.flatMap(commandDescription(for:))
                 )
             }
         )
@@ -1517,6 +1648,18 @@ final class LocalRuntimeService {
         throw Self.componentExitFailure(component: component, status: nil, duringStartup: true)
     }
 
+    private func componentIsRunning(_ component: Component) -> Bool {
+        if processes[component]?.isRunning == true {
+            return true
+        }
+
+        guard let pid = reusedExternalProcessIDs[component] else {
+            return false
+        }
+
+        return Self.isProcessRunning(pid: pid)
+    }
+
     private func refreshComponentStatuses() {
         componentStatuses = Component.allCases.map { component in
             let process = processes[component]
@@ -1529,25 +1672,296 @@ final class LocalRuntimeService {
     }
 
     private func syncExternalProcessesIfNeeded(context: LaunchContext) async {
-        guard case .repo = context.mode else {
-            reusedExternalProcessIDs.removeAll()
+        let detectedByComponent: [Component: DetectedManagedProcess]
+
+        switch context.mode {
+        case .repo:
+            let detected = await Self.detectRepoComponentPIDs(runtimeRoot: context.runtimeRoot)
+            var repoDetected: [Component: DetectedManagedProcess] = [:]
+            if let pid = detected[.api] {
+                repoDetected[.api] = DetectedManagedProcess(pid: pid, command: "")
+            }
+            if let pid = detected[.processing] {
+                repoDetected[.processing] = DetectedManagedProcess(pid: pid, command: "")
+            }
+            if let pid = detected[.scraper] {
+                repoDetected[.scraper] = DetectedManagedProcess(pid: pid, command: "")
+            }
+            detectedByComponent = repoDetected
+
+        case .bundled(let manifest):
+            detectedByComponent = await Self.detectBundledComponentProcesses(
+                runtimeRoot: context.runtimeRoot,
+                runtimeHome: context.runtimeHome,
+                manifest: manifest
+            )
+            Self.persistBundledManagedProcessRegistry(
+                records: detectedByComponent.map { component, process in
+                    Self.makeBundledManagedProcessRegistryRecord(
+                        component: component,
+                        pid: process.pid,
+                        runtimeRoot: context.runtimeRoot,
+                        runtimeHome: context.runtimeHome
+                    )
+                }
+            )
+        }
+
+        for component in Component.allCases {
+            if processes[component]?.isRunning == true {
+                reusedExternalProcessIDs[component] = nil
+                reusedExternalProcessCommands[component] = nil
+                continue
+            }
+
+            reusedExternalProcessIDs[component] = detectedByComponent[component]?.pid
+            let command = detectedByComponent[component]?.command
+            reusedExternalProcessCommands[component] = command?.isEmpty == false ? command : nil
+        }
+    }
+
+    private func registerBundledManagedProcessIfNeeded(
+        component: Component,
+        process: Process,
+        context: LaunchContext
+    ) {
+        guard case .bundled = context.mode else { return }
+
+        let existingRecords = Self.loadBundledManagedProcessRegistry()
+            .filter { $0.component != component.rawValue }
+        let record = Self.makeBundledManagedProcessRegistryRecord(
+            component: component,
+            pid: process.processIdentifier,
+            runtimeRoot: context.runtimeRoot,
+            runtimeHome: context.runtimeHome
+        )
+        Self.persistBundledManagedProcessRegistry(records: existingRecords + [record])
+    }
+
+    private func unregisterBundledManagedProcessIfNeeded(component: Component, pid: Int32?) {
+        guard let pid else { return }
+
+        let remainingRecords = Self.loadBundledManagedProcessRegistry().filter {
+            !($0.component == component.rawValue && $0.pid == pid)
+        }
+        Self.persistBundledManagedProcessRegistry(records: remainingRecords)
+    }
+
+    private static func makeBundledManagedProcessRegistryRecord(
+        component: Component,
+        pid: Int32,
+        runtimeRoot: URL,
+        runtimeHome: URL
+    ) -> ManagedProcessRegistryRecord {
+        ManagedProcessRegistryRecord(
+            component: component.rawValue,
+            pid: pid,
+            runtimeHomePath: runtimeHome.standardizedFileURL.path,
+            runtimeRootPath: runtimeRoot.standardizedFileURL.path,
+            commandSignature: bundledCommandSignature(component: component, runtimeRoot: runtimeRoot),
+            updatedAt: Date.now
+        )
+    }
+
+    nonisolated private static func bundledCommandSignature(component: Component, runtimeRoot: URL) -> String {
+        runtimeRoot
+            .appendingPathComponent(component.bundledCommandSignatureRelativePath)
+            .standardizedFileURL
+            .path
+    }
+
+    private static func loadBundledManagedProcessRegistry() -> [ManagedProcessRegistryRecord] {
+        let fileURL = bundledManagedProcessRegistryURL
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return []
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let payload = try? decoder.decode(ManagedProcessRegistryPayload.self, from: data) else {
+            return []
+        }
+
+        return payload.records
+    }
+
+    private static func persistBundledManagedProcessRegistry(records: [ManagedProcessRegistryRecord]) {
+        let fileURL = bundledManagedProcessRegistryURL
+        let normalizedRecords = records
+            .sorted { lhs, rhs in
+                if lhs.component == rhs.component {
+                    return lhs.pid < rhs.pid
+                }
+                return lhs.component < rhs.component
+            }
+
+        if normalizedRecords.isEmpty {
+            try? FileManager.default.removeItem(at: fileURL)
             return
         }
 
-        let detected = await Self.detectRepoComponentPIDs(runtimeRoot: context.runtimeRoot)
-        let kindToComponent: [ComponentStatus.Kind: Component] = [
-            .api: .api,
-            .processing: .processing,
-            .scraper: .scraper,
-        ]
+        do {
+            try FileManager.default.createDirectory(
+                at: runtimeHomeURL,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let payload = ManagedProcessRegistryPayload(
+                updatedAt: Date.now,
+                records: normalizedRecords
+            )
+            let data = try encoder.encode(payload)
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            // Registry persistence is best-effort and must never block runtime control.
+        }
+    }
 
-        for (kind, component) in kindToComponent {
-            if processes[component]?.isRunning == true {
-                reusedExternalProcessIDs[component] = nil
-            } else {
-                reusedExternalProcessIDs[component] = detected[kind]
+    private static func pruneBundledManagedProcessRegistry() {
+        let aliveRecords = loadBundledManagedProcessRegistry().filter { record in
+            isProcessRunning(pid: record.pid)
+        }
+        persistBundledManagedProcessRegistry(records: aliveRecords)
+    }
+
+    nonisolated static func detectBundledComponentPIDs(
+        processListOutput: String,
+        runtimeRoot: URL,
+        runtimeHome: URL,
+        redisPort: Int
+    ) -> [ComponentStatus.Kind: Int32] {
+        detectBundledComponentProcesses(
+            processListOutput: processListOutput,
+            runtimeRoot: runtimeRoot,
+            runtimeHome: runtimeHome,
+            redisPort: redisPort,
+            registryRecords: []
+        ).reduce(into: [:]) { partialResult, entry in
+            partialResult[entry.key.statusKind] = entry.value.pid
+        }
+    }
+
+    private static func detectBundledComponentProcesses(
+        runtimeRoot: URL,
+        runtimeHome: URL,
+        manifest: RuntimeManifest
+    ) async -> [Component: DetectedManagedProcess] {
+        let registryRecords = loadBundledManagedProcessRegistry().filter { record in
+            record.runtimeHomePath == runtimeHome.standardizedFileURL.path
+        }
+
+        let redisPort = resolvedBundledRedisPort(manifest)
+        return await Task.detached(priority: .utility) {
+            let processList = currentProcessListOutput()
+            return detectBundledComponentProcesses(
+                processListOutput: processList,
+                runtimeRoot: runtimeRoot,
+                runtimeHome: runtimeHome,
+                redisPort: redisPort,
+                registryRecords: registryRecords
+            )
+        }.value
+    }
+
+    nonisolated private static func detectBundledComponentProcesses(
+        processListOutput: String,
+        runtimeRoot: URL,
+        runtimeHome: URL,
+        redisPort: Int,
+        registryRecords: [ManagedProcessRegistryRecord]
+    ) -> [Component: DetectedManagedProcess] {
+        let entries = processListOutput
+            .split(whereSeparator: \.isNewline)
+            .compactMap { rawLine -> (pid: Int32, command: String)? in
+                let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !line.isEmpty else { return nil }
+
+                let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace)
+                guard parts.count == 2,
+                      let pid = Int32(parts[0]) else {
+                    return nil
+                }
+
+                return (pid, String(parts[1]))
+            }
+        let commandsByPID = Dictionary(uniqueKeysWithValues: entries.map { ($0.pid, $0.command) })
+        let registryPairs: [(Component, ManagedProcessRegistryRecord)] = registryRecords.compactMap { record in
+            guard let component = Component(rawValue: record.component) else {
+                return nil
+            }
+
+            return (component, record)
+        }
+        let registryByComponent = Dictionary(uniqueKeysWithValues: registryPairs)
+
+        var detected: [Component: DetectedManagedProcess] = [:]
+        for component in Component.allCases {
+            if let record = registryByComponent[component],
+               let command = commandsByPID[record.pid],
+               isBundledProcessMatch(
+                component: component,
+                command: command,
+                runtimeRoot: runtimeRoot,
+                runtimeHome: runtimeHome,
+                redisPort: redisPort,
+                registryRecord: record
+               ) {
+                detected[component] = DetectedManagedProcess(pid: record.pid, command: command)
+                continue
+            }
+
+            guard let match = entries.first(where: { entry in
+                isBundledProcessMatch(
+                    component: component,
+                    command: entry.command,
+                    runtimeRoot: runtimeRoot,
+                    runtimeHome: runtimeHome,
+                    redisPort: redisPort,
+                    registryRecord: nil
+                )
+            }) else {
+                continue
+            }
+
+            detected[component] = DetectedManagedProcess(pid: match.pid, command: match.command)
+        }
+
+        return detected
+    }
+
+    nonisolated private static func isBundledProcessMatch(
+        component: Component,
+        command: String,
+        runtimeRoot: URL,
+        runtimeHome: URL,
+        redisPort: Int,
+        registryRecord: ManagedProcessRegistryRecord?
+    ) -> Bool {
+        if let registryRecord {
+            guard registryRecord.runtimeHomePath == runtimeHome.standardizedFileURL.path else {
+                return false
+            }
+            guard registryRecord.runtimeRootPath == runtimeRoot.standardizedFileURL.path else {
+                return false
+            }
+            guard command.contains(registryRecord.commandSignature) else {
+                return false
+            }
+        } else {
+            let signature = bundledCommandSignature(component: component, runtimeRoot: runtimeRoot)
+            guard command.contains(signature) else {
+                return false
             }
         }
+
+        if component == .redis {
+            return command.contains("127.0.0.1:\(redisPort)")
+        }
+
+        return true
     }
 
     private func setProgress(title: String, detail: String, fractionCompleted: Double?) {
@@ -1793,6 +2207,13 @@ final class LocalRuntimeService {
             return ""
         }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func commandDescription(executableURL: URL?, arguments: [String]?) -> String {
+        let executable = executableURL?.path ?? ""
+        let arguments = arguments ?? []
+        let joined = ([executable] + arguments).filter { !$0.isEmpty }.joined(separator: " ")
+        return joined
     }
 
     private static func isProcessRunning(pid: Int32) -> Bool {
@@ -2182,27 +2603,173 @@ final class LocalRuntimeService {
         }
     }
 
-    private static func findNodeExecutable(under root: URL) throws -> URL {
-        let bundledCandidates = [
+    static func nodeExecutableCandidates(
+        under root: URL,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [URL] {
+        var candidates: [URL] = []
+
+        let overrideKeys = [
+            "IMMORADAR_NODE_EXECUTABLE",
+            "NODE_BINARY",
+        ]
+        for key in overrideKeys {
+            guard let raw = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else {
+                continue
+            }
+
+            candidates.append(URL(fileURLWithPath: raw, isDirectory: false))
+        }
+
+        candidates += [
             root.appendingPathComponent("node"),
             root.appendingPathComponent("bin/node"),
             root.appendingPathComponent("node/bin/node"),
         ]
 
-        for candidate in bundledCandidates where FileManager.default.isExecutableFile(atPath: candidate.path) {
+        let pathCandidates = (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+            .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("node") }
+        candidates += pathCandidates
+
+        if let homebrewPrefix = environment["HOMEBREW_PREFIX"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !homebrewPrefix.isEmpty {
+            candidates.append(
+                URL(fileURLWithPath: homebrewPrefix, isDirectory: true)
+                    .appendingPathComponent("bin/node")
+            )
+        }
+
+        candidates += [
+            URL(fileURLWithPath: "/opt/homebrew/bin/node"),
+            URL(fileURLWithPath: "/usr/local/bin/node"),
+            URL(fileURLWithPath: "/opt/local/bin/node"),
+            homeDirectory.appendingPathComponent(".volta/bin/node"),
+            homeDirectory.appendingPathComponent(".fnm/current/bin/node"),
+            homeDirectory.appendingPathComponent(".asdf/shims/node"),
+            homeDirectory.appendingPathComponent(".mise/shims/node"),
+            homeDirectory.appendingPathComponent(".local/bin/node"),
+        ]
+
+        return orderedUniqueURLs(urls: candidates)
+    }
+
+    private static func findNodeExecutable(under root: URL) throws -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+
+        for candidate in nodeExecutableCandidates(
+            under: root,
+            environment: environment,
+            homeDirectory: homeDirectory
+        ) where FileManager.default.isExecutableFile(atPath: candidate.path) {
             return candidate
         }
 
-        let searchPaths = (ProcessInfo.processInfo.environment["PATH"] ?? "")
-            .split(separator: ":")
-            .map(String.init)
-            .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("node") }
-
-        for candidate in searchPaths where FileManager.default.isExecutableFile(atPath: candidate.path) {
-            return candidate
+        if let shellResolved = resolveNodeExecutableFromUserShell(
+            environment: environment,
+            homeDirectory: homeDirectory
+        ) {
+            return shellResolved
         }
 
         throw RuntimeError.nodeExecutableMissing
+    }
+
+    private static func resolveNodeExecutableFromUserShell(
+        environment: [String: String],
+        homeDirectory: URL
+    ) -> URL? {
+        let preferredShells = orderedUniqueURLs(
+            urls: [
+                environment["SHELL"]
+                    .flatMap { raw -> URL? in
+                        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return nil }
+                        return URL(fileURLWithPath: trimmed, isDirectory: false)
+                    },
+                URL(fileURLWithPath: "/bin/zsh"),
+                URL(fileURLWithPath: "/bin/bash"),
+            ].compactMap { $0 }
+        )
+
+        for shellURL in preferredShells where FileManager.default.isExecutableFile(atPath: shellURL.path) {
+            guard let resolvedPath = shellCommandOutput(
+                executableURL: shellURL,
+                arguments: ["-l", "-c", "command -v node"],
+                environment: environment,
+                workingDirectory: homeDirectory
+            ) else {
+                continue
+            }
+
+            let lines = resolvedPath
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            guard let candidatePath = lines.last, candidatePath.hasPrefix("/") else {
+                continue
+            }
+
+            let candidateURL = URL(fileURLWithPath: candidatePath, isDirectory: false)
+            if FileManager.default.isExecutableFile(atPath: candidateURL.path) {
+                return candidateURL
+            }
+        }
+
+        return nil
+    }
+
+    private static func shellCommandOutput(
+        executableURL: URL,
+        arguments: [String],
+        environment: [String: String],
+        workingDirectory: URL
+    ) -> String? {
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = arguments
+        process.currentDirectoryURL = workingDirectory
+        process.environment = environment
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+
+        let deadline = Date.now.addingTimeInterval(3)
+        while process.isRunning && Date.now < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        if process.isRunning {
+            process.terminate()
+            Thread.sleep(forTimeInterval: 0.1)
+            if process.isRunning {
+                process.interrupt()
+            }
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let output = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return output.isEmpty ? nil : output
     }
 
     private static func environmentPortOverride(_ key: String) -> Int? {

@@ -426,7 +426,7 @@ final class AppState {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
             bootMode: preferredLocalRuntimeBootMode,
-            restartExistingRuntime: true,
+            restartExistingRuntime: false,
             userInitiated: true
         )
     }
@@ -494,7 +494,7 @@ final class AppState {
         alertsState.disconnectStream(alertStream)
 
         do {
-            try await runtimeState.localRuntime.resetLocalEngine()
+            try await runtimeState.localRuntime.resetLocalEngine(apiBaseURL: connectionState.apiBaseURL)
             runtimeState.hasCompletedBundledSetup = false
             runtimeState.hasEnabledMonitoring = false
             runtimeState.hasDismissedInitialMonitoringPrompt = false
@@ -530,6 +530,7 @@ final class AppState {
         switch connectionResult {
         case .success:
             connectionState.connectionStatus = .connected
+            reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection()
             await alertsState.refreshUnreadCount(using: apiClient)
             alertsState.connectStreamIfNeeded(
                 alertStream,
@@ -539,6 +540,21 @@ final class AppState {
         case .failure(let error):
             connectionState.connectionStatus = .error(AppErrorPresentation.message(for: error))
             alertsState.disconnectStream(alertStream)
+        }
+    }
+
+    private func reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection() {
+        guard usesManagedLocalRuntime,
+              runtimeState.localRuntime.state == .running else {
+            return
+        }
+
+        runtimeState.hasCompletedBundledSetup = true
+
+        if runtimeState.hasEnabledMonitoring || runtimeState.hasDismissedInitialMonitoringPrompt {
+            runtimeState.bundledLaunchExperienceState = .ready
+        } else {
+            runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring
         }
     }
 
