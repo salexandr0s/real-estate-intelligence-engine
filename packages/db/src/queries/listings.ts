@@ -439,6 +439,8 @@ export interface ListingSearchFilter {
   minRooms?: number | null;
   maxRooms?: number | null;
   minScore?: number | null;
+  requiredKeywords?: string[];
+  excludedKeywords?: string[];
   minLocationScore?: number | null;
   maxPoiDistances?: Record<string, number> | null;
   sortBy?: SortBy;
@@ -472,8 +474,8 @@ export async function searchListings(
       ) lscore ON true`
     : '';
 
-  // Track dynamic parameter index after the 10 base filter params
-  let nextParamIndex = 11;
+  // Track dynamic parameter index after the 12 base filter params
+  let nextParamIndex = 13;
 
   const locationScoreParamIndex = needsLocationJoin ? nextParamIndex++ : -1;
   const locationFilter = needsLocationJoin
@@ -561,6 +563,19 @@ export async function searchListings(
       AND ($8::numeric IS NULL OR l.rooms >= $8)
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
+      AND (COALESCE(array_length($11::text[], 1), 0) = 0
+        OR (SELECT bool_and(
+              l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+              OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+            )
+            FROM unnest($11::text[]) AS kw))
+      AND (COALESCE(array_length($12::text[], 1), 0) = 0
+        OR NOT EXISTS (
+          SELECT 1
+          FROM unnest($12::text[]) AS kw
+          WHERE l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+             OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+        ))
       ${locationFilter}
       ${poiFilter}
       ${cursorParamSql ? `AND (${cursorParamSql})` : ''}
@@ -579,6 +594,8 @@ export async function searchListings(
     filter.minRooms ?? null,
     filter.maxRooms ?? null,
     filter.minScore ?? null,
+    filter.requiredKeywords && filter.requiredKeywords.length > 0 ? filter.requiredKeywords : null,
+    filter.excludedKeywords && filter.excludedKeywords.length > 0 ? filter.excludedKeywords : null,
     ...(needsLocationJoin ? [filter.minLocationScore ?? null] : []),
     ...(needsPoiFilter ? [poiEntries.map(([cat]) => cat), poiEntries.map(([, dist]) => dist)] : []),
   ];
@@ -606,6 +623,19 @@ export async function searchListings(
       AND ($8::numeric IS NULL OR l.rooms >= $8)
       AND ($9::numeric IS NULL OR l.rooms <= $9)
       AND ($10::numeric IS NULL OR l.current_score >= $10)
+      AND (COALESCE(array_length($11::text[], 1), 0) = 0
+        OR (SELECT bool_and(
+              l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+              OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+            )
+            FROM unnest($11::text[]) AS kw))
+      AND (COALESCE(array_length($12::text[], 1), 0) = 0
+        OR NOT EXISTS (
+          SELECT 1
+          FROM unnest($12::text[]) AS kw
+          WHERE l.title ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+             OR COALESCE(l.description, '') ILIKE '%' || replace(replace(kw, '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+        ))
       ${locationFilter}
       ${poiFilter}
   `;

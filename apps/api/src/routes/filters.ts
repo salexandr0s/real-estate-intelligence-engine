@@ -243,24 +243,14 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       minRooms: compiled.minRooms,
       maxRooms: compiled.maxRooms,
       minScore: compiled.minScore,
+      requiredKeywords: compiled.requiredKeywords,
+      excludedKeywords: compiled.excludedKeywords,
       sortBy: compiled.sortBy,
     };
 
     const result = await listings.searchListings(searchFilter, null);
 
-    // Post-filter by keywords (searchListings doesn't support keyword params)
-    const requiredKw = compiled.requiredKeywords ?? [];
-    const excludedKw = compiled.excludedKeywords ?? [];
-    const keywordFiltered = result.data.filter((listing) => {
-      const text = (listing.title ?? '').toLowerCase();
-      if (requiredKw.length > 0 && !requiredKw.every((kw) => text.includes(kw.toLowerCase())))
-        return false;
-      if (excludedKw.length > 0 && excludedKw.some((kw) => text.includes(kw.toLowerCase())))
-        return false;
-      return true;
-    });
-
-    const mappedData = keywordFiltered.map((listing) => ({
+    const mappedData = result.data.map((listing) => ({
       id: listing.id,
       listingUid: listing.listingUid,
       sourceCode: listing.sourceCode,

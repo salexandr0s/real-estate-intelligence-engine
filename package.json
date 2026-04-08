@@ -31,6 +31,8 @@
     "reparse": "npx tsx scripts/reparse-raw.ts",
     "backfill": "npx tsx scripts/backfill-source.ts",
     "report:quality": "npx tsx scripts/data-quality-report.ts",
+    "report:source-stability": "npx tsx scripts/source-stability-report.ts",
+    "report:score-review": "npx tsx scripts/score-review-packet.ts",
     "baselines": "npx tsx scripts/compute-baselines.ts",
     "canary": "npx tsx scripts/canary-crawl.ts",
     "generate:types": "bash scripts/generate-types.sh",

@@ -17,6 +17,7 @@ DerivedData/
 
 # Scraper artifacts and local data
 /immoradar/
+/real-estate-intel/
 assets/
 
 # Certificates and keys
