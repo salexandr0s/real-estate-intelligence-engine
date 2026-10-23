@@ -285,6 +285,8 @@
 		FEE8D395E39E09CCB29B155F /* OutreachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244533AA4AED645DECB22499 /* OutreachView.swift */; };
 		FEFFC89DFD44ED6DA241A9AA /* SourceLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5921CDE3C75381475CE642F4 /* SourceLogo.swift */; };
 		FF5A72157B40D39EEF79A357 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6457F047481DBE34D3847093 /* FlowLayout.swift */; };
+		5A8E11D74FD9245798DB3F41 /* SmokeRuntimeOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7429F01ACCE003F3514508CE /* SmokeRuntimeOwnership.swift */; };
+		C8079B021194623D8487D756 /* SmokeRuntimeOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8115857BB0F6B986A756DBA8 /* SmokeRuntimeOwnershipTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -579,6 +581,8 @@
 		FF9CD2AA6C8EEE0B1F44BCFC /* ListingsFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsFilterBar.swift; sourceTree = "<group>"; };
 		FFA1AEC6E1FC6947B91DD83E /* ScrapeRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRun.swift; sourceTree = "<group>"; };
 		FFC6DBE60C79922ECF7E7D63 /* LocalRuntimeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuntimeService.swift; sourceTree = "<group>"; };
+		7429F01ACCE003F3514508CE /* SmokeRuntimeOwnership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeRuntimeOwnership.swift; sourceTree = "<group>"; };
+		8115857BB0F6B986A756DBA8 /* SmokeRuntimeOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeRuntimeOwnershipTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -733,6 +737,7 @@
 				41A6DE6BDC3AA17569BE9FFE /* DateParsingTests.swift */,
 				93E2EC2DE8059E75A46FB749 /* LocalRuntimeEnvironmentTests.swift */,
 				A7BCC2139F2E96CA268A1A08 /* LocalRuntimeStartupPolicyTests.swift */,
+				8115857BB0F6B986A756DBA8 /* SmokeRuntimeOwnershipTests.swift */,
 			);
 			path = ImmoRadarTests;
 			sourceTree = "<group>";
@@ -1004,6 +1009,7 @@
 				4018BCCA75DE984FC5F4D440 /* CacheManager.swift */,
 				D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */,
 				FFC6DBE60C79922ECF7E7D63 /* LocalRuntimeService.swift */,
+				7429F01ACCE003F3514508CE /* SmokeRuntimeOwnership.swift */,
 				D441B787954106ED54C49791 /* NotificationManager.swift */,
 				C4A52FB3F1D98A5F88CD9745 /* SpotlightIndexer.swift */,
 			);
@@ -1377,6 +1383,7 @@
 				D5315D0133D9C5F59F9357CA /* ListingsViewModel.swift in Sources */,
 				59687438CC6AE9BB4AD43CAA /* LocalCache.swift in Sources */,
 				C8FA87BD122E38348129711C /* LocalRuntimeService.swift in Sources */,
+				5A8E11D74FD9245798DB3F41 /* SmokeRuntimeOwnership.swift in Sources */,
 				97BD51DD4EBF633F5B964ABA /* Logging.swift in Sources */,
 				567C3C41FFC4C2001440E5DF /* MailboxAccount.swift in Sources */,
 				8583726C3B68750E59A5E1E8 /* MapSelectionOverlay.swift in Sources */,
@@ -1484,6 +1491,7 @@
 				D01E6EC41BC0F4A10AFA8057 /* DateParsingTests.swift in Sources */,
 				F9D0C74B6193D38F5D739670 /* LocalRuntimeEnvironmentTests.swift in Sources */,
 				7F01446563D20C73B7AF1C94 /* LocalRuntimeStartupPolicyTests.swift in Sources */,
+				C8079B021194623D8487D756 /* SmokeRuntimeOwnershipTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
