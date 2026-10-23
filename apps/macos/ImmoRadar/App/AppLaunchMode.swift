@@ -37,10 +37,39 @@ enum AppLaunchMode: Equatable {
 struct IsolatedSmokeContext: Equatable {
     let root: URL
     let apiToken: String
+    let bundleURL: URL
+    let runtimeRoot: URL
+    let nodeExecutableURL: URL
+    let runtimeHome: URL
+    let logsDirectory: URL
+    let apiBaseURL: URL
+    let postgresPort: Int
+    let redisPort: Int
+    let ownerUserID: UInt
+    let environment: [String: String]
+    /// Captured for configuration consistency only. These candidate bytes are
+    /// not an authenticated expected inventory or permission to execute them.
+    let manifestData: Data
 
-    private init(root: URL, apiToken: String) {
+    private init(
+        root: URL, apiToken: String, bundleURL: URL, runtimeRoot: URL,
+        runtimeHome: URL, logsDirectory: URL, apiBaseURL: URL,
+        postgresPort: Int, redisPort: Int, ownerUserID: UInt,
+        environment: [String: String], manifestData: Data
+    ) {
         self.root = root
         self.apiToken = apiToken
+        self.bundleURL = bundleURL
+        self.runtimeRoot = runtimeRoot
+        self.nodeExecutableURL = runtimeRoot.appendingPathComponent("bin/node")
+        self.runtimeHome = runtimeHome
+        self.logsDirectory = logsDirectory
+        self.apiBaseURL = apiBaseURL
+        self.postgresPort = postgresPort
+        self.redisPort = redisPort
+        self.ownerUserID = ownerUserID
+        self.environment = environment
+        self.manifestData = manifestData
     }
 
     enum ValidationError: Error {
@@ -99,7 +128,7 @@ struct IsolatedSmokeContext: Equatable {
         _ = try requirePath(environment["HOME"], "home")
         _ = try requirePath(environment["TMPDIR"], "tmp")
         let runtimeHome = try requirePath(environment["IMMORADAR_RUNTIME_HOME_OVERRIDE"], "runtime-home")
-        _ = try requirePath(environment["IMMORADAR_LOGS_DIRECTORY_OVERRIDE"], "logs")
+        let logsDirectory = try requirePath(environment["IMMORADAR_LOGS_DIRECTORY_OVERRIDE"], "logs")
         guard try fileManager.contentsOfDirectory(atPath: runtimeHome.path).isEmpty else {
             throw ValidationError.invalidContext
         }
@@ -140,18 +169,82 @@ struct IsolatedSmokeContext: Equatable {
               Set([apiPort, postgresPort, redisPort]).count == 3 else {
             throw ValidationError.invalidContext
         }
-        return Self(root: root, apiToken: token)
+        guard let apiBaseURL = components.url else { throw ValidationError.invalidContext }
+        return Self(root: root, apiToken: token, bundleURL: app, runtimeRoot: runtime,
+                    runtimeHome: runtimeHome, logsDirectory: logsDirectory, apiBaseURL: apiBaseURL,
+                    postgresPort: postgresPort, redisPort: redisPort, ownerUserID: currentUserID,
+                    environment: environment, manifestData: data)
+    }
+}
+
+/// Until an authenticated receipt capability AND fresh native identity/argv
+/// adapters are integrated and independently reviewed, every smoke effect is
+/// refused. There is deliberately no boolean/setter that self-attests a bridge
+/// as ready. The phase2A pure comparison model alone is not native authority.
+struct SmokeRuntimeAccessPolicy {
+    enum Operation: CaseIterable {
+        case launch, stop, appExit, reset, status, diagnostics, discovery, registry
+        case signal, logAccess, network, retry, completion, lateCallback, repoFallback, credentials, readiness
+    }
+
+    enum Refusal: Equatable {
+        case nonProductionLaunch
+        case missingContext
+        case missingAuthenticatedAndNativeBridges
+    }
+
+    let requiresSmokeBoundary: Bool
+    private let contextProvided: Bool
+    private let launchMode: AppLaunchMode
+    private(set) var refusal: Refusal?
+    private(set) var firstRefusedOperation: Operation?
+
+    init(contextProvided: Bool, smokeRequested: Bool, launchMode: AppLaunchMode = .production) {
+        self.contextProvided = contextProvided
+        self.requiresSmokeBoundary = contextProvided || smokeRequested
+        self.launchMode = launchMode
+    }
+
+    mutating func permitsProductionOperation(_ operation: Operation) -> Bool {
+        guard requiresSmokeBoundary || launchMode != .production else { return true }
+        if refusal == nil {
+            refusal = launchMode != .production ? .nonProductionLaunch
+                : contextProvided ? .missingAuthenticatedAndNativeBridges : .missingContext
+            firstRefusedOperation = operation
+        }
+        return false
+    }
+
+    var failureMessage: String? {
+        switch refusal {
+        case .nonProductionLaunch:
+            return "Runtime side effects are disabled for tests and previews."
+        case .missingContext:
+            return "Isolated smoke was requested without a validated task context."
+        case .missingAuthenticatedAndNativeBridges:
+            return "Isolated smoke is blocked: the authenticated artifact receipt and native process identity bridges are not installed."
+        case nil:
+            return nil
+        }
     }
 }
 
 struct AppLaunchPolicy {
     let mode: AppLaunchMode
     let smokeContext: IsolatedSmokeContext?
+    private let smokeRequested: Bool
 
-    var allowsStoredCredentials: Bool { mode == .production && smokeContext == nil }
-    var allowsDuplicateAppTermination: Bool { mode == .production && smokeContext == nil }
-    var allowsAutomaticFeatureLoads: Bool { mode == .production && smokeContext == nil }
-    var allowsBackgroundRefresh: Bool { mode == .production && smokeContext == nil }
+    init(mode: AppLaunchMode, smokeContext: IsolatedSmokeContext?, smokeRequested: Bool = ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil) {
+        self.mode = mode
+        self.smokeContext = smokeContext
+        self.smokeRequested = smokeRequested
+    }
+
+    var requiresSmokeBoundary: Bool { smokeContext != nil || smokeRequested }
+    var allowsStoredCredentials: Bool { mode == .production && !requiresSmokeBoundary }
+    var allowsDuplicateAppTermination: Bool { mode == .production && !requiresSmokeBoundary }
+    var allowsAutomaticFeatureLoads: Bool { mode == .production && !requiresSmokeBoundary }
+    var allowsBackgroundRefresh: Bool { mode == .production && !requiresSmokeBoundary }
 
     func connectionToken(storedToken: () -> String?) -> String? {
         if let smokeContext { return smokeContext.apiToken }

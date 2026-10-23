@@ -4,6 +4,9 @@ import Darwin
 enum LocalRuntimeAuth {
     static let keychainKey = "localRuntimeApiToken"
     static let keychainService = "com.immoradar.local-runtime"
+    private enum AuthError: Error { case isolatedSmokeBlocked }
+    private static var smokeRequested: Bool { ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil }
+    private static var permitsStoredCredentials: Bool { AppLaunchMode.current == .production && !smokeRequested }
 
     private static var environmentOverrideToken: String? {
         guard let raw = ProcessInfo.processInfo.environment["IMMORADAR_LOCAL_RUNTIME_API_TOKEN"]?
@@ -16,6 +19,7 @@ enum LocalRuntimeAuth {
     }
 
     static func loadToken(allowUserInteraction: Bool = true) -> String? {
+        guard permitsStoredCredentials else { return nil }
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
@@ -31,6 +35,7 @@ enum LocalRuntimeAuth {
     }
 
     static func ensureToken() throws -> String {
+        guard permitsStoredCredentials else { throw AuthError.isolatedSmokeBlocked }
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
@@ -46,6 +51,7 @@ enum LocalRuntimeAuth {
     }
 
     static func resetToken() {
+        guard permitsStoredCredentials else { return }
         guard environmentOverrideToken == nil else { return }
         _ = KeychainHelper.delete(key: keychainKey, service: keychainService)
     }
@@ -55,6 +61,7 @@ enum LocalRuntimeAuth {
         userToken: String?,
         allowUserInteraction: Bool = true
     ) -> String? {
+        guard permitsStoredCredentials else { return nil }
         if isLoopbackBaseURL(apiBaseURL),
            let localToken = loadToken(allowUserInteraction: allowUserInteraction) {
             return localToken
@@ -254,6 +261,7 @@ final class LocalRuntimeService {
 
     private struct StartupFailure: Error, LocalizedError, Equatable {
         enum Code: String, Codable {
+            case smokeBoundaryUnavailable
             case invalidBaseURL
             case nonLocalBaseURL
             case runtimeArtifactsMissing
@@ -320,9 +328,68 @@ final class LocalRuntimeService {
     private var activeStartupStep: StartupStep?
     private var activeStartupStartedAt: Date?
     private let maxStartupRetryCount = 2
+    private let smokeContext: IsolatedSmokeContext?
+    private var smokeAccess: SmokeRuntimeAccessPolicy
 
-    init() {
+    init(smokeContext: IsolatedSmokeContext? = nil, launchMode: AppLaunchMode = .current) {
+        self.smokeContext = smokeContext
+        self.smokeAccess = SmokeRuntimeAccessPolicy(
+            contextProvided: smokeContext != nil,
+            smokeRequested: Self.environmentRequestsSmoke,
+            launchMode: AppLaunchMode.current == .production ? launchMode : AppLaunchMode.current
+        )
         Self.sharedInstance = self
+    }
+
+    nonisolated private static var environmentRequestsSmoke: Bool {
+        ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil
+    }
+
+    nonisolated private static var environmentDisallowsRuntimeEffects: Bool {
+        environmentRequestsSmoke || AppLaunchMode.current != .production
+    }
+
+    private func smokeBoundaryFailure() -> StartupFailure {
+        StartupFailure(code: .smokeBoundaryUnavailable,
+                       message: smokeAccess.failureMessage ?? "Isolated smoke is blocked.",
+                       step: nil, logFileName: nil, component: nil, exitCode: nil, isTransient: false)
+    }
+
+    /// No native observation/inventory bridge exists in this revision. Denial
+    /// happens before effects, including cleanup and diagnostic file writes.
+    /// Keep records and the first refusal; callbacks cannot promote it to success.
+    @discardableResult
+    private func permitProductionOperation(_ operation: SmokeRuntimeAccessPolicy.Operation) -> Bool {
+        guard smokeAccess.permitsProductionOperation(operation) else {
+            let failure = smokeBoundaryFailure()
+            lastStartupFailure = failure
+            state = .failed(failure.message)
+            progressStatus = nil
+            return false
+        }
+        return true
+    }
+
+    private func requireProductionOperation(_ operation: SmokeRuntimeAccessPolicy.Operation) throws {
+        guard permitProductionOperation(operation) else { throw smokeBoundaryFailure() }
+    }
+
+    private func productionSignal(_ action: () -> Void) {
+        guard permitProductionOperation(.signal) else { return }
+        action()
+    }
+
+    /// A synthetic token or a healthy listener cannot authenticate ownership.
+    /// This remains false for smoke until both bridges have independent review.
+    func permitsSmokeAPIRead(apiBaseURL: String) -> Bool {
+        guard smokeAccess.requiresSmokeBoundary else { return false }
+        // Compare only the captured URL; never discover/health-check a listener.
+        guard let smokeContext, apiBaseURL == smokeContext.apiBaseURL.absoluteString,
+              state == .running else {
+            permitProductionOperation(.network)
+            return false
+        }
+        return permitProductionOperation(.network)
     }
 
     var isBusy: Bool {
@@ -526,6 +593,7 @@ final class LocalRuntimeService {
     }
 
     func refreshStatus(apiBaseURL: String) async {
+        guard permitProductionOperation(.status) else { return }
         if case .starting = state { return }
         if case .stopping = state { return }
 
@@ -580,6 +648,7 @@ final class LocalRuntimeService {
         bootMode: BootMode = .active,
         policy: StartPolicy = .ifNeeded
     ) async {
+        guard permitProductionOperation(.launch) else { return }
         guard !isBusy else { return }
 
         let attemptID = beginStartupAttempt(bootMode: bootMode)
@@ -660,6 +729,7 @@ final class LocalRuntimeService {
                     if activeStartupAttemptID == attemptID,
                        failure.isTransient,
                        activeStartupRetryCount < maxStartupRetryCount {
+                        guard permitProductionOperation(.retry) else { return }
                         activeStartupRetryCount += 1
                         lastStartupFailure = failure
                         recordStartupStep(failure.step, context: context, status: .retrying, failure: failure)
@@ -701,6 +771,7 @@ final class LocalRuntimeService {
     }
 
     func stop() async {
+        guard permitProductionOperation(.stop) else { return }
         guard state != .stopping else { return }
         state = .stopping
         activeStartupAttemptID = nil
@@ -712,6 +783,7 @@ final class LocalRuntimeService {
         )
         persistStartupDiagnostics(status: .stopping, context: nil, failure: nil)
         await stopManagedProcesses(force: true)
+        guard permitProductionOperation(.completion) else { return }
         lastStartupFailure = nil
         state = .stopped
         progressStatus = nil
@@ -719,6 +791,7 @@ final class LocalRuntimeService {
     }
 
     func terminateManagedProcessesForAppExit() {
+        guard permitProductionOperation(.appExit) else { return }
         let orderedComponents: [Component] = [.scraper, .processing, .api, .redis, .postgres]
 
         activeStartupAttemptID = nil
@@ -727,7 +800,7 @@ final class LocalRuntimeService {
         for component in orderedComponents {
             guard let process = processes[component] else { continue }
             if process.isRunning {
-                process.terminate()
+                productionSignal { process.terminate() }
             }
         }
 
@@ -736,7 +809,7 @@ final class LocalRuntimeService {
         for component in orderedComponents {
             guard let process = processes[component] else { continue }
             if process.isRunning {
-                Darwin.kill(process.processIdentifier, SIGKILL)
+                productionSignal { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
             }
             processes[component] = nil
             processOwners[component] = nil
@@ -750,6 +823,7 @@ final class LocalRuntimeService {
     }
 
     func resetLocalEngine(apiBaseURL: String) async throws {
+        try requireProductionOperation(.reset)
         progressStatus = nil
         activeStartupAttemptID = nil
         activeStartupStep = nil
@@ -758,6 +832,8 @@ final class LocalRuntimeService {
             await syncExternalProcessesIfNeeded(context: context)
         }
         await stopManagedProcesses(force: true)
+
+        try requireProductionOperation(.reset)
 
         if let context {
             await syncExternalProcessesIfNeeded(context: context)
@@ -785,6 +861,15 @@ final class LocalRuntimeService {
     }
 
     func diagnosticsSummary(apiBaseURL: String) -> DiagnosticsSummary {
+        guard permitProductionOperation(.diagnostics) else {
+            return DiagnosticsSummary(
+                runtimeDescription: "Isolated smoke blocked", runtimeVersion: nil,
+                storagePath: smokeContext?.runtimeHome.path ?? "Unavailable",
+                logsPath: smokeContext?.logsDirectory.path ?? "Unavailable",
+                startupDiagnosticsPath: smokeContext?.logsDirectory.appendingPathComponent("startup-diagnostics.json").path ?? "Unavailable",
+                lastErrorMessage: state.failureMessage, lastFailureCode: StartupFailure.Code.smokeBoundaryUnavailable.rawValue
+            )
+        }
         let discoveredContext = try? Self.discoverLaunchContext(apiBaseURL: apiBaseURL)
         let runtimeDetails = discoveredContext.map(Self.runtimeDetails) ?? (runtimeDescription ?? "Local engine", runtimeVersion)
 
@@ -806,6 +891,7 @@ final class LocalRuntimeService {
         bootMode: BootMode,
         ownerAttemptID: Int
     ) async throws {
+        try requireProductionOperation(.launch)
         let postgresPort = Self.resolvedBundledPostgresPort(manifest)
         let redisPort = Self.resolvedBundledRedisPort(manifest)
 
@@ -1008,6 +1094,7 @@ final class LocalRuntimeService {
         bootMode: BootMode,
         ownerAttemptID: Int
     ) async throws {
+        try requireProductionOperation(.repoFallback)
         await syncExternalProcessesIfNeeded(context: context)
         setProgress(
             title: "Starting local services",
@@ -1086,6 +1173,7 @@ final class LocalRuntimeService {
         bootMode: BootMode,
         ownerAttemptID: Int
     ) throws {
+        try requireProductionOperation(.launch)
         let entryURL = context.runtimeRoot.appendingPathComponent(relativePath)
         guard FileManager.default.fileExists(atPath: entryURL.path) else {
             throw Self.startupFailure(from: .runtimeArtifactsMissing)
@@ -1137,6 +1225,7 @@ final class LocalRuntimeService {
         bootMode: BootMode,
         ownerAttemptID: Int
     ) throws {
+        try requireProductionOperation(.launch)
         let scriptURL = context.runtimeRoot.appendingPathComponent(relativePath)
         guard FileManager.default.fileExists(atPath: scriptURL.path) else {
             throw Self.startupFailure(from: .runtimeArtifactsMissing)
@@ -1188,6 +1277,9 @@ final class LocalRuntimeService {
         bootMode: BootMode,
         step: StartupStep
     ) async throws {
+        // The phase2A synthetic shell-to-Node example is not a verified recipe
+        // for this script. No migration launch or timeout signal is allowed in smoke.
+        try requireProductionOperation(.launch)
         let scriptURL = context.runtimeRoot.appendingPathComponent(relativePath)
         guard FileManager.default.fileExists(atPath: scriptURL.path) else {
             throw Self.startupFailure(from: .runtimeArtifactsMissing)
@@ -1231,10 +1323,10 @@ final class LocalRuntimeService {
         }
 
         if process.isRunning {
-            process.interrupt()
+            productionSignal { process.interrupt() }
             try? await Task.sleep(for: .milliseconds(150))
             if process.isRunning {
-                process.terminate()
+                productionSignal { process.terminate() }
             }
             try? logHandle.close()
             throw StartupFailure(
@@ -1284,6 +1376,7 @@ final class LocalRuntimeService {
         process.terminationHandler = { [weak self] terminatedProcess in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.permitProductionOperation(.lateCallback) else { return }
                 guard self.processes[component] === terminatedProcess,
                       self.processOwners[component] == ownerAttemptID else {
                     return
@@ -1329,6 +1422,7 @@ final class LocalRuntimeService {
     }
 
     private func stopManagedProcesses(force: Bool) async {
+        guard permitProductionOperation(.stop) else { return }
         let orderedComponents: [Component] = [.scraper, .processing, .api, .redis, .postgres]
 
         for component in orderedComponents {
@@ -1343,14 +1437,14 @@ final class LocalRuntimeService {
                 continue
             }
 
-            process.terminate()
+            productionSignal { process.terminate() }
         }
 
         for component in orderedComponents {
             guard let pid = reusedExternalProcessIDs[component], Self.isProcessRunning(pid: pid) else {
                 continue
             }
-            Darwin.kill(pid, SIGTERM)
+            productionSignal { _ = Darwin.kill(pid, SIGTERM) }
         }
 
         let deadline = Date.now.addingTimeInterval(8)
@@ -1364,18 +1458,18 @@ final class LocalRuntimeService {
         if force {
             for component in orderedComponents {
                 guard let process = processes[component], process.isRunning else { continue }
-                process.interrupt()
+                productionSignal { process.interrupt() }
                 try? await Task.sleep(for: .milliseconds(150))
                 if process.isRunning {
-                    process.terminate()
+                    productionSignal { process.terminate() }
                 }
             }
 
             for pid in reusedExternalProcessIDs.values where Self.isProcessRunning(pid: pid) {
-                Darwin.kill(pid, SIGINT)
+                productionSignal { _ = Darwin.kill(pid, SIGINT) }
                 try? await Task.sleep(for: .milliseconds(150))
                 if Self.isProcessRunning(pid: pid) {
-                    Darwin.kill(pid, SIGTERM)
+                    productionSignal { _ = Darwin.kill(pid, SIGTERM) }
                 }
             }
         }
@@ -1398,6 +1492,7 @@ final class LocalRuntimeService {
     }
 
     private func waitForAPI(baseURL: URL, component: Component? = nil) async throws {
+        try requireProductionOperation(.readiness)
         let deadline = Date.now.addingTimeInterval(20)
         while Date.now < deadline {
             if await Self.isAPIHealthy(baseURL: baseURL) {
@@ -1426,6 +1521,7 @@ final class LocalRuntimeService {
         context: LaunchContext,
         manifest: RuntimeManifest
     ) async throws {
+        try requireProductionOperation(.readiness)
         let deadline = Date.now.addingTimeInterval(20)
         while Date.now < deadline {
             if processes[.postgres]?.isRunning != true {
@@ -1464,6 +1560,7 @@ final class LocalRuntimeService {
         port: Int,
         component: Component? = nil
     ) async throws {
+        try requireProductionOperation(.readiness)
         let deadline = Date.now.addingTimeInterval(20)
         while Date.now < deadline {
             if await Self.isTCPPortOpen(host: host, port: port) {
@@ -1496,6 +1593,7 @@ final class LocalRuntimeService {
         port: Int,
         timeout: TimeInterval
     ) async throws {
+        try requireProductionOperation(.readiness)
         let deadline = Date.now.addingTimeInterval(timeout)
 
         while await Self.isTCPPortOpen(host: host, port: port), Date.now < deadline {
@@ -1532,6 +1630,7 @@ final class LocalRuntimeService {
         context: LaunchContext?,
         failure: StartupFailure?
     ) {
+        guard permitProductionOperation(.completion) else { return }
         persistStartupDiagnostics(status: status, context: context, failure: failure)
         activeStartupAttemptID = nil
         activeStartupStep = nil
@@ -1545,6 +1644,7 @@ final class LocalRuntimeService {
         status: StartupDiagnosticsStatus,
         failure: StartupFailure? = nil
     ) {
+        guard permitProductionOperation(.status) else { return }
         activeStartupStep = step
         persistStartupDiagnostics(status: status, context: context, failure: failure)
     }
@@ -1554,6 +1654,7 @@ final class LocalRuntimeService {
     }
 
     private func ownershipDescription(for component: Component) -> String? {
+        guard permitProductionOperation(.status) else { return nil }
         if processes[component]?.isRunning == true {
             return "launched"
         }
@@ -1566,6 +1667,7 @@ final class LocalRuntimeService {
     }
 
     private func commandDescription(for component: Component) -> String? {
+        guard permitProductionOperation(.status) else { return nil }
         if let process = processes[component], process.isRunning {
             return Self.commandDescription(
                 executableURL: process.executableURL,
@@ -1581,6 +1683,7 @@ final class LocalRuntimeService {
         context: LaunchContext?,
         failure: StartupFailure?
     ) {
+        guard permitProductionOperation(.logAccess) else { return }
         let runtimeDetails = context.map(Self.runtimeDetails) ?? (runtimeDescription ?? "Local engine", runtimeVersion)
         let payload = StartupDiagnosticsPayload(
             attemptID: activeStartupAttemptID,
@@ -1627,6 +1730,7 @@ final class LocalRuntimeService {
     }
 
     private func ensureComponentRunning(_ component: Component) throws {
+        try requireProductionOperation(.status)
         if let process = processes[component] {
             guard process.isRunning else {
                 throw Self.componentExitFailure(
@@ -1649,6 +1753,7 @@ final class LocalRuntimeService {
     }
 
     private func componentIsRunning(_ component: Component) -> Bool {
+        guard permitProductionOperation(.status) else { return false }
         if processes[component]?.isRunning == true {
             return true
         }
@@ -1661,6 +1766,7 @@ final class LocalRuntimeService {
     }
 
     private func refreshComponentStatuses() {
+        guard permitProductionOperation(.status) else { return }
         componentStatuses = Component.allCases.map { component in
             let process = processes[component]
             return ComponentStatus(
@@ -1672,6 +1778,7 @@ final class LocalRuntimeService {
     }
 
     private func syncExternalProcessesIfNeeded(context: LaunchContext) async {
+        guard permitProductionOperation(.discovery) else { return }
         let detectedByComponent: [Component: DetectedManagedProcess]
 
         switch context.mode {
@@ -1725,6 +1832,7 @@ final class LocalRuntimeService {
         process: Process,
         context: LaunchContext
     ) {
+        guard permitProductionOperation(.registry) else { return }
         guard case .bundled = context.mode else { return }
 
         let existingRecords = Self.loadBundledManagedProcessRegistry()
@@ -1739,6 +1847,7 @@ final class LocalRuntimeService {
     }
 
     private func unregisterBundledManagedProcessIfNeeded(component: Component, pid: Int32?) {
+        guard permitProductionOperation(.registry) else { return }
         guard let pid else { return }
 
         let remainingRecords = Self.loadBundledManagedProcessRegistry().filter {
@@ -1771,6 +1880,7 @@ final class LocalRuntimeService {
     }
 
     private static func loadBundledManagedProcessRegistry() -> [ManagedProcessRegistryRecord] {
+        guard !environmentRequestsSmoke else { return [] }
         let fileURL = bundledManagedProcessRegistryURL
         guard let data = try? Data(contentsOf: fileURL) else {
             return []
@@ -1786,6 +1896,7 @@ final class LocalRuntimeService {
     }
 
     private static func persistBundledManagedProcessRegistry(records: [ManagedProcessRegistryRecord]) {
+        guard !environmentRequestsSmoke else { return }
         let fileURL = bundledManagedProcessRegistryURL
         let normalizedRecords = records
             .sorted { lhs, rhs in
@@ -1821,6 +1932,7 @@ final class LocalRuntimeService {
     }
 
     private static func pruneBundledManagedProcessRegistry() {
+        guard !environmentRequestsSmoke else { return }
         let aliveRecords = loadBundledManagedProcessRegistry().filter { record in
             isProcessRunning(pid: record.pid)
         }
@@ -1849,6 +1961,7 @@ final class LocalRuntimeService {
         runtimeHome: URL,
         manifest: RuntimeManifest
     ) async -> [Component: DetectedManagedProcess] {
+        guard !environmentDisallowsRuntimeEffects else { return [:] }
         let registryRecords = loadBundledManagedProcessRegistry().filter { record in
             record.runtimeHomePath == runtimeHome.standardizedFileURL.path
         }
@@ -1965,6 +2078,7 @@ final class LocalRuntimeService {
     }
 
     private func setProgress(title: String, detail: String, fractionCompleted: Double?) {
+        guard permitProductionOperation(.status) else { return }
         progressStatus = ProgressStatus(
             title: title,
             detail: detail,
@@ -1973,6 +2087,7 @@ final class LocalRuntimeService {
     }
 
     private func ensureRepoRuntimeArtifacts(context: LaunchContext) async throws {
+        try requireProductionOperation(.repoFallback)
         guard case .repo = context.mode else { return }
         guard !Self.hasRepoRuntimeArtifacts(at: context.runtimeRoot) else { return }
 
@@ -2061,10 +2176,10 @@ final class LocalRuntimeService {
         }
 
         if process.isRunning {
-            process.interrupt()
+            productionSignal { process.interrupt() }
             try? await Task.sleep(for: .milliseconds(150))
             if process.isRunning {
-                process.terminate()
+                productionSignal { process.terminate() }
             }
             try? logHandle.close()
             throw StartupFailure(
@@ -2109,6 +2224,7 @@ final class LocalRuntimeService {
         context: LaunchContext,
         bootMode: BootMode
     ) async -> Bool {
+        guard permitProductionOperation(.discovery) else { return false }
         await syncExternalProcessesIfNeeded(context: context)
         refreshComponentStatuses()
 
@@ -2152,7 +2268,8 @@ final class LocalRuntimeService {
     }
 
     nonisolated static func detectRepoComponentPIDs(runtimeRoot: URL) async -> [ComponentStatus.Kind: Int32] {
-        await Task.detached(priority: .utility) {
+        guard !environmentDisallowsRuntimeEffects else { return [:] }
+        return await Task.detached(priority: .utility) {
             let processList = currentProcessListOutput()
             return detectRepoComponentPIDs(processListOutput: processList, runtimeRoot: runtimeRoot)
         }.value
@@ -2188,6 +2305,7 @@ final class LocalRuntimeService {
     }
 
     nonisolated private static func currentProcessListOutput() -> String {
+        guard !environmentDisallowsRuntimeEffects else { return "" }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         process.arguments = ["-axo", "pid=,command="]
@@ -2217,7 +2335,7 @@ final class LocalRuntimeService {
     }
 
     private static func isProcessRunning(pid: Int32) -> Bool {
-        guard pid > 0 else { return false }
+        guard !environmentDisallowsRuntimeEffects, pid > 0 else { return false }
         return Darwin.kill(pid, 0) == 0
     }
 
@@ -2414,6 +2532,7 @@ final class LocalRuntimeService {
     }
 
     private static func discoverLaunchContext(apiBaseURL: String) throws -> LaunchContext {
+        guard !environmentRequestsSmoke else { throw RuntimeError.commandFailed("Isolated smoke cannot use production runtime discovery.") }
         guard let url = URL(string: apiBaseURL), let host = url.host else {
             throw RuntimeError.invalidBaseURL(apiBaseURL)
         }
@@ -2459,6 +2578,7 @@ final class LocalRuntimeService {
         apiBaseURL: URL,
         runtimeHome: URL
     ) throws -> LaunchContext? {
+        guard !environmentRequestsSmoke else { throw RuntimeError.commandFailed("Isolated smoke requires an authenticated inventory bridge.") }
         guard let resourceURL = Bundle.main.resourceURL else { return nil }
         let runtimeRoot = resourceURL.appendingPathComponent("runtime", isDirectory: true)
         let manifestURL = runtimeRoot.appendingPathComponent("manifest.json")
@@ -2500,6 +2620,9 @@ final class LocalRuntimeService {
         bundleURL: URL = Bundle.main.bundleURL,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> URL {
+        guard !environmentRequestsSmoke, environment["IMMORADAR_SMOKE_TEST"] == nil else {
+            throw RuntimeError.commandFailed("Isolated smoke cannot search for a repository runtime.")
+        }
         let candidates = orderedUniqueURLs(
             urls: runtimeRootCandidates(
                 currentDirectoryPath: currentDirectoryPath,
@@ -2685,6 +2808,7 @@ final class LocalRuntimeService {
         environment: [String: String],
         homeDirectory: URL
     ) -> URL? {
+        guard !environmentRequestsSmoke, environment["IMMORADAR_SMOKE_TEST"] == nil else { return nil }
         let preferredShells = orderedUniqueURLs(
             urls: [
                 environment["SHELL"]
@@ -2732,6 +2856,7 @@ final class LocalRuntimeService {
         environment: [String: String],
         workingDirectory: URL
     ) -> String? {
+        guard !environmentDisallowsRuntimeEffects, environment["IMMORADAR_SMOKE_TEST"] == nil else { return nil }
         let process = Process()
         process.executableURL = executableURL
         process.arguments = arguments
@@ -2754,10 +2879,10 @@ final class LocalRuntimeService {
         }
 
         if process.isRunning {
-            process.terminate()
+            if !environmentDisallowsRuntimeEffects, environment["IMMORADAR_SMOKE_TEST"] == nil { process.terminate() }
             Thread.sleep(forTimeInterval: 0.1)
             if process.isRunning {
-                process.interrupt()
+                if !environmentDisallowsRuntimeEffects, environment["IMMORADAR_SMOKE_TEST"] == nil { process.interrupt() }
             }
         }
 
@@ -2795,6 +2920,7 @@ final class LocalRuntimeService {
         authToken: String,
         bootMode: BootMode
     ) -> [String: String] {
+        guard !environmentRequestsSmoke else { return [:] }
         var environment = ProcessInfo.processInfo.environment
 
         switch context.mode {
@@ -2850,6 +2976,7 @@ final class LocalRuntimeService {
     }
 
     private static func parseEnvFile(at url: URL) -> [String: String] {
+        guard !environmentRequestsSmoke else { return [:] }
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
 
         var parsed: [String: String] = [:]
@@ -2874,6 +3001,7 @@ final class LocalRuntimeService {
     }
 
     private static func makeLogHandle(fileName: String) throws -> FileHandle {
+        guard !environmentRequestsSmoke else { throw RuntimeError.commandFailed("Isolated smoke cannot open logs without a verified path bridge.") }
         let logsDirectory = Self.logsDirectoryURL
 
         try FileManager.default.createDirectory(
@@ -2893,6 +3021,7 @@ final class LocalRuntimeService {
     }
 
     private static func isAPIHealthy(baseURL: URL) async -> Bool {
+        guard !environmentDisallowsRuntimeEffects else { return false }
         guard let healthURL = URL(string: "/health", relativeTo: baseURL)?.absoluteURL else {
             return false
         }
@@ -2913,6 +3042,7 @@ final class LocalRuntimeService {
         context: LaunchContext,
         manifest: RuntimeManifest
     ) async -> Bool {
+        guard !environmentDisallowsRuntimeEffects else { return false }
         let postgresPort = resolvedBundledPostgresPort(manifest)
         let pgIsReadyURL = context.runtimeRoot.appendingPathComponent("infra/postgres/bin/pg_isready")
         guard FileManager.default.isExecutableFile(atPath: pgIsReadyURL.path) else {
@@ -2943,7 +3073,8 @@ final class LocalRuntimeService {
     }
 
     private static func isTCPPortOpen(host: String, port: Int) async -> Bool {
-        await withCheckedContinuation { continuation in
+        guard !environmentDisallowsRuntimeEffects else { return false }
+        return await withCheckedContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
             process.arguments = ["-z", host, String(port)]
