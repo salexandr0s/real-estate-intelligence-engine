@@ -7,6 +7,7 @@ final class AppTerminationBridge {
     static let shared = AppTerminationBridge()
 
     var appState: AppState?
+    var launchPolicy: AppLaunchPolicy?
 }
 
 @MainActor
@@ -31,7 +32,9 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { @MainActor in
-            await Self.terminateDuplicateAppProcesses()
+            if AppTerminationBridge.shared.launchPolicy?.allowsDuplicateAppTermination == true {
+                await Self.terminateDuplicateAppProcesses()
+            }
 
             await AppTerminationBridge.shared.appState?.performInitialLaunchIfNeeded()
         }
@@ -126,8 +129,24 @@ struct ImmoRadarApp: App {
     init() {
         let launchMode = AppLaunchMode.current
         self.launchMode = launchMode
-        let appState = AppState(launchMode: launchMode)
+        let smokeContext: IsolatedSmokeContext?
+        do {
+            guard let executableURL = Bundle.main.executableURL else {
+                throw IsolatedSmokeContext.ValidationError.invalidContext
+            }
+            smokeContext = try IsolatedSmokeContext.resolve(
+                environment: ProcessInfo.processInfo.environment,
+                executableURL: executableURL,
+                bundleURL: Bundle.main.bundleURL,
+                currentUserID: UInt(getuid())
+            )
+        } catch {
+            FileHandle.standardError.write(Data("Invalid isolated smoke context.\n".utf8))
+            exit(64)
+        }
+        let appState = AppState(launchMode: launchMode, smokeContext: smokeContext)
         _appState = State(initialValue: appState)
+        AppTerminationBridge.shared.launchPolicy = AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext)
         AppTerminationBridge.shared.appState = appState
 
         Task { @MainActor in
@@ -139,7 +158,7 @@ struct ImmoRadarApp: App {
         // MARK: - Main Window
 
         Window("ImmoRadar", id: "main") {
-            if launchMode == .test {
+            if launchMode == .test || appState.isIsolatedSmokeLaunch {
                 EmptyView()
                     .frame(width: 1, height: 1)
                     .environment(appState)
@@ -167,7 +186,7 @@ struct ImmoRadarApp: App {
         }
 
         MenuBarExtra {
-            if launchMode == .test {
+            if launchMode == .test || appState.isIsolatedSmokeLaunch {
                 EmptyView()
             } else {
                 MenuBarContent()
@@ -178,7 +197,7 @@ struct ImmoRadarApp: App {
         }
 
         Settings {
-            if launchMode == .test {
+            if launchMode == .test || appState.isIsolatedSmokeLaunch {
                 EmptyView()
             } else {
                 SettingsView()
