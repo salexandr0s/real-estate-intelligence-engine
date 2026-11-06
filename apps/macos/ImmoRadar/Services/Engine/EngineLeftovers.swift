@@ -44,14 +44,10 @@ enum PostmasterDecision: Equatable, Sendable {
 /// Finds what earlier runs left behind. These all read every process on the Mac, so call them off
 /// the main actor. Nothing here sends a signal: the watchdog stops what these find.
 enum EngineLeftovers {
-    static func find(
-        runtimeHome: URL,
-        recorded: [ProcessIdentity],
-        includesUnmarkedWorkers: Bool
-    ) -> [EngineLeftover] {
+    static func find(runtimeHome: URL, recorded: [ProcessIdentity]) -> [EngineLeftover] {
         let marker = "IMMORADAR_ENGINE_HOME=\(runtimeHome.path)/"
         let dataDirectory = dataDirectoryPath(runtimeHome: runtimeHome)
-        let redisDirectory = realPath(of: runtimeHome) + "/redis"
+        let redisDirectory = realPath(of: runtimeHome.appendingPathComponent("redis", isDirectory: true))
         let recordedPostmaster = recordedPostmasterPID(runtimeHome: runtimeHome)
         let ownPID = getpid()
 
@@ -81,8 +77,7 @@ enum EngineLeftovers {
             }
 
             guard let process = ProcessInspector.argumentsAndEnvironment(pid: pid) else { continue }
-            if process.environment.contains(marker)
-                || (includesUnmarkedWorkers && isUnmarkedWorker(process)) {
+            if process.environment.contains(marker) {
                 leftovers.append(EngineLeftover(identity: identity, role: .other))
             }
         }
@@ -121,8 +116,10 @@ enum EngineLeftovers {
     ) -> PostmasterDecision {
         guard case .live(let identity) = recorded else { return .leaveFile }
 
-        if executableName(of: identity) == "postgres", recordedCWD == dataDirectory {
-            return .stopPostgres(identity.pid)
+        if executableName(of: identity) == "postgres" {
+            // A folder that can't be read doesn't show this is another server, so the file stays.
+            guard let recordedCWD else { return .leaveFile }
+            if recordedCWD == dataDirectory { return .stopPostgres(identity.pid) }
         }
         return postgresHoldingData ? .leaveFile : .deleteFile
     }
@@ -168,7 +165,7 @@ enum EngineLeftovers {
     }
 
     private static func dataDirectoryPath(runtimeHome: URL) -> String {
-        realPath(of: runtimeHome) + "/postgres/data"
+        realPath(of: runtimeHome.appendingPathComponent("postgres/data", isDirectory: true))
     }
 
     private static func postmasterFile(runtimeHome: URL) -> URL {
@@ -200,15 +197,5 @@ enum EngineLeftovers {
             }
             return ProcessInspector.cwd(pid: pid) == dataDirectory
         }
-    }
-
-    /// Engines from before the home marker existed run the same entry points without it.
-    private static func isUnmarkedWorker(_ process: (arguments: [String], environment: [String])) -> Bool {
-        guard let entry = process.arguments.last,
-              entry.hasSuffix("/dist/main.js"), entry.contains("/apps/") else {
-            return false
-        }
-        return process.environment.contains { $0.hasPrefix("IMMORADAR_RUNTIME_BOOT_MODE=") }
-            && !process.environment.contains { $0.hasPrefix("IMMORADAR_ENGINE_HOME=") }
     }
 }

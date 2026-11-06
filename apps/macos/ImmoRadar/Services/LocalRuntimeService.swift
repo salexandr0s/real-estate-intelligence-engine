@@ -692,7 +692,7 @@ final class LocalRuntimeService {
             // With no layout there is no watchdog script to stop anything with, so only look.
             let home = Self.runtimeHomeURL
             let leftovers = await Task.detached(priority: .utility) {
-                EngineLeftovers.find(runtimeHome: home, recorded: [], includesUnmarkedWorkers: false)
+                EngineLeftovers.find(runtimeHome: home, recorded: [])
             }.value
             guard leftovers.isEmpty else { throw ResetError.processesRunning(leftovers.count) }
         }

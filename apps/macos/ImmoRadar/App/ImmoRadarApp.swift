@@ -21,6 +21,15 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
         signalSource = source
     }
 
+    /// A smoke launch leaves the owner's stored preferences alone, and the window would save its frame there.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil else { return }
+        for window in NSApp.windows where !window.frameAutosaveName.isEmpty {
+            window.setFrameAutosaveName("")
+            window.close()
+        }
+    }
+
     /// The engine lives as long as the app, so closing the window leaves both running. The menu bar
     /// item brings the window back.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

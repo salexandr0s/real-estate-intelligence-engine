@@ -44,6 +44,18 @@ final class EngineLeftoversTests: XCTestCase {
         )
     }
 
+    func testLivePostgresInAFolderThatCantBeReadKeepsTheFile() {
+        XCTAssertEqual(
+            EngineLeftovers.postmasterDecision(
+                recorded: live("/opt/homebrew/opt/postgresql@17/bin/postgres"),
+                recordedCWD: nil,
+                dataDirectory: dataDirectory,
+                postgresHoldingData: false
+            ),
+            .leaveFile
+        )
+    }
+
     func testOwnPostgresHasToStopFirst() {
         XCTAssertEqual(
             EngineLeftovers.postmasterDecision(

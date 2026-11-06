@@ -498,13 +498,8 @@ final class EngineSupervisor {
     private func findLeftovers(_ layout: EngineLayout, prior: EngineRunRecord?) async -> [EngineLeftover] {
         let home = layout.runtimeHome
         let recorded = prior.map { Array($0.components.values) } ?? []
-        let includesUnmarkedWorkers = ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] == nil
         return await Task.detached(priority: .utility) {
-            EngineLeftovers.find(
-                runtimeHome: home,
-                recorded: recorded,
-                includesUnmarkedWorkers: includesUnmarkedWorkers
-            )
+            EngineLeftovers.find(runtimeHome: home, recorded: recorded)
         }.value
     }
 

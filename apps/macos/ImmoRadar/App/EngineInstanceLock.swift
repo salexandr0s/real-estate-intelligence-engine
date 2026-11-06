@@ -70,9 +70,14 @@ enum EngineInstanceLock {
         case .acquired:
             return
         case .unavailable(let code):
-            // The engine can't write here either, so its own start reports the problem to the user.
+            // Without the lock, a second launch could stop this one's engine, so this launch ends here.
             let reason = String(cString: strerror(code))
             Log.engine.error("Couldn't open the engine lock: \(reason, privacy: .public)")
+            showAlertAndExit(
+                title: "ImmoRadar can’t open",
+                detail: "It couldn’t open \(url.path): \(reason). Check that your account can write to this file, then open ImmoRadar again.",
+                status: 1
+            )
         case .heldByApp(let pid):
             let path: String
             if case .live(let identity) = ProcessInspector.observe(pid: pid) {
@@ -84,11 +89,22 @@ enum EngineInstanceLock {
             NSRunningApplication(processIdentifier: pid)?.activate()
             exit(0)
         case .heldByTool:
-            let alert = NSAlert()
-            alert.messageText = "ImmoRadar can’t open yet"
-            alert.informativeText = "A database import is using the local engine. Open ImmoRadar again once it finishes."
-            alert.runModal()
-            exit(0)
+            showAlertAndExit(
+                title: "ImmoRadar can’t open yet",
+                detail: "A database import is using the local engine. Open ImmoRadar again once it finishes.",
+                status: 0
+            )
         }
+    }
+
+    @MainActor
+    private static func showAlertAndExit(title: String, detail: String, status: Int32) -> Never {
+        // This runs before the app has finished launching, so nothing has brought it forward yet.
+        NSApplication.shared.activate()
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = detail
+        alert.runModal()
+        exit(status)
     }
 }
