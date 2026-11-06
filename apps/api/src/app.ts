@@ -35,6 +35,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
     trustProxy: config.api.trustProxy,
+    // An open SSE stream would otherwise hold app.close() open.
+    forceCloseConnections: true,
   });
 
   // Security headers
