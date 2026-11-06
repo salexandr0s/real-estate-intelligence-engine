@@ -54,7 +54,11 @@ if [[ "$SIGNATURE" == *"Authority=Developer ID Application"* ]]; then
   /usr/bin/codesign --verify --deep --strict "$INSTALLED_APP"
 fi
 
-env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 - "$TMP_ROOT" <<'PY'
+# In the background, so a signal reaches this shell's trap right away and Python gets to clean up.
+SMOKE_PID=""
+trap '[[ -z "$SMOKE_PID" ]] || kill -TERM "$SMOKE_PID" 2>/dev/null || true' TERM INT HUP QUIT
+
+env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 - "$TMP_ROOT" <<'PY' &
 import collections
 import ctypes
 import json
@@ -76,12 +80,14 @@ if os.path.realpath(root) != root:
 # macOS strips /private from some paths the app derives, so scripts can appear under either form.
 root_in_arguments = root[len('/private'):] + '/'
 app_path = root + '/install/ImmoRadar.app/Contents/MacOS/ImmoRadar'
+bundled_pg_config = root + '/install/ImmoRadar.app/Contents/Resources/runtime/infra/postgres/bin/pg_config'
 logs = Path(root, 'logs')
 diagnostics_file = logs / 'startup-diagnostics.json'
 api_log = logs / 'api.log'
 postmaster_pid_file = Path(root, 'runtime-home/postgres/data/postmaster.pid')
 run_record = Path(root, 'runtime-home/engine-run.json')
 tool_environment = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LC_ALL': 'C'}
+stop_signals = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT)
 
 CORE_ROLES = ['app', 'watchdog', 'postmaster', 'redis', 'api']
 ACTIVE_ROLES = CORE_ROLES + ['processing', 'scraper', 'chromium']
@@ -184,15 +190,20 @@ def role_of(path, arguments, parent_path):
     return 'other'
 
 
+def runs_script_from_root(arguments):
+    words = arguments.split()
+    return len(words) > 1 and words[1].startswith((root + '/', root_in_arguments))
+
+
 def engine_processes():
-    """Every process running from the root, or a shell whose arguments name the root."""
+    """Every process running from the root, or a shell running a script from the root."""
     arguments = argument_table()
     found = {}
     for pid in all_pids():
         info = live_info(pid)
         path = executable_path(pid) if info else None
         if path and (path.startswith(root + '/')
-                     or (path == '/bin/bash' and root_in_arguments in arguments.get(pid, ''))):
+                     or (path == '/bin/bash' and runs_script_from_root(arguments.get(pid, '')))):
             found[pid] = (info, path, arguments.get(pid, ''))
     return {
         pid: Process(pid, info.ppid, (info.start_sec, info.start_usec), path, args,
@@ -231,11 +242,13 @@ def require_unchanged(before, exclude, cause):
 
 
 def immoradar_outside_root():
+    """Skips children of the same executable, which a running engine starts and ends all the time."""
     found = set()
     for pid in all_pids():
         info = live_info(pid)
         path = executable_path(pid) if info else None
-        if path and 'ImmoRadar' in path and not path.startswith(root + '/'):
+        if (path and 'ImmoRadar' in path and not path.startswith(root + '/')
+                and executable_path(info.ppid) != path):
             found.add((pid, info.start_sec, info.start_usec, path))
     return found
 
@@ -397,6 +410,16 @@ def stream_ended(stream, timeout):
         return True
 
 
+def check_bundled_postgres_folders():
+    """Outside the bundle would mean it only works on a Mac with Homebrew's Postgres."""
+    result = subprocess.run([bundled_pg_config, '--sharedir', '--pkglibdir'], env=tool_environment,
+                            capture_output=True, text=True)
+    require(result.returncode == 0, f'pg_config failed: {result.stderr}')
+    for folder in result.stdout.splitlines():
+        require(folder.startswith((root + '/', root_in_arguments)),
+                f'The bundled Postgres reads from outside the bundle: {folder}')
+
+
 def phase_cold_start():
     log('P1: cold start without workers')
     app = launch_and_wait({}, 'setup')
@@ -477,7 +500,14 @@ def phase_double_failure():
     require(app.wait(timeout=5) == 0, f'The app exited with status {app.returncode} after SIGTERM')
 
 
+def ignore_stop_signals():
+    for number in stop_signals:
+        signal.signal(number, signal.SIG_IGN)
+
+
 def stop_whatever_is_left():
+    """True when nothing from the root is still running."""
+    ignore_stop_signals()
     apps = of_role('app')
     for process in apps:
         if is_alive(process):
@@ -489,31 +519,51 @@ def stop_whatever_is_left():
             os.kill(process.pid, signal.SIGKILL)
     if wait_until(lambda: not engine_processes(), 5) is None:
         log(f'Could not stop: {sorted((p.role, p.pid) for p in engine_processes().values())}')
+        return False
+    return True
 
 
-def interrupt(_signal, _frame):
-    raise SmokeFailure('Interrupted')
+def interrupt(number, _frame):
+    # Only the first signal counts, so a second Ctrl-C can't cut the cleanup short.
+    ignore_stop_signals()
+    raise SmokeFailure(f'Interrupted by {signal.Signals(number).name}')
 
 
-signal.signal(signal.SIGTERM, interrupt)
-signal.signal(signal.SIGINT, interrupt)
+for stop_signal in stop_signals:
+    signal.signal(stop_signal, interrupt)
 
 outside_before = immoradar_outside_root()
 # A running copy of the real app writes its own preferences, which says nothing about this test.
 preferences_before = None if outside_before else real_preferences()
+if preferences_before is None:
+    log('Not comparing preferences, because ImmoRadar is running outside the smoke root')
 
+passed = False
 try:
+    check_bundled_postgres_folders()
     phase_cold_start()
     phase_crashes()
     phase_double_failure()
+    require(not engine_processes(), 'Something from the smoke root is still running')
     require(immoradar_outside_root() == outside_before, 'An ImmoRadar process outside the smoke root changed')
-    if preferences_before is not None and not immoradar_outside_root():
+    if preferences_before is not None:
         require(real_preferences() == preferences_before, 'The smoke run changed the real preferences')
+    passed = True
 except SmokeFailure as failure:
     log(f'FAILED: {failure}')
-    sys.exit(1)
 finally:
-    stop_whatever_is_left()
+    stopped = stop_whatever_is_left()
 
+if not (passed and stopped):
+    sys.exit(1)
 log('Smoke test passed')
 PY
+SMOKE_PID=$!
+
+# A trapped signal ends `wait` early, so this repeats until Python is gone. The script's exit status
+# comes from the last `wait`.
+set +e
+while kill -0 "$SMOKE_PID" 2>/dev/null; do
+  wait "$SMOKE_PID"
+done
+wait "$SMOKE_PID"
