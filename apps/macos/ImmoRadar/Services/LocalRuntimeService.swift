@@ -19,10 +19,10 @@ enum LocalRuntimeAuth {
     }
 
     static func loadToken(allowUserInteraction: Bool = true) -> String? {
-        guard permitsStoredCredentials else { return nil }
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
+        guard permitsStoredCredentials else { return nil }
 
         let token = KeychainHelper.get(
             key: keychainKey,
@@ -35,10 +35,10 @@ enum LocalRuntimeAuth {
     }
 
     static func ensureToken() throws -> String {
-        guard permitsStoredCredentials else { throw AuthError.isolatedSmokeBlocked }
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
+        guard permitsStoredCredentials else { throw AuthError.isolatedSmokeBlocked }
 
         if let existing = loadToken() {
             return existing
