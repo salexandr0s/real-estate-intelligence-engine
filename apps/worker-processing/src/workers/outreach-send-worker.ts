@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { Queue, Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
@@ -10,7 +10,7 @@ import type { OutreachSendJobData } from '@immoradar/scraper-core';
 
 const log = createLogger('worker:outreach-send');
 
-type MailTransport = Pick<nodemailer.Transporter, 'sendMail'>;
+type MailTransport = Pick<Transporter, 'sendMail'>;
 type SendQueue = Pick<Queue<OutreachSendJobData>, 'add'>;
 
 type OutreachSendProcessResult =

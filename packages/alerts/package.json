@@ -15,10 +15,10 @@
   "dependencies": {
     "@immoradar/contracts": "*",
     "@immoradar/observability": "*",
-    "nodemailer": "^8.0.4"
+    "nodemailer": "^10.3.1"
   },
   "devDependencies": {
-    "@types/nodemailer": "^7.0.11",
+    "@types/nodemailer": "^8.0.2",
     "vitest": "^4.1.0"
   }
 }
