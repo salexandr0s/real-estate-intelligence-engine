@@ -15,9 +15,12 @@
     "@immoradar/contracts": "*",
     "@immoradar/copilot": "*",
     "@immoradar/db": "*",
+    "@immoradar/filtering": "*",
     "@immoradar/legal-rent": "*",
     "@immoradar/observability": "*",
     "@immoradar/outreach": "*",
+    "@immoradar/scraper-core": "*",
+    "bullmq": "^5.81.5",
     "fastify": "^5.12.8",
     "zod": "^4.6.7"
   },
