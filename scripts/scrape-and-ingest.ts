@@ -126,7 +126,7 @@ async function main(): Promise<void> {
 
   try {
     const config = loadConfig();
-    const artifactWriter = new ArtifactWriter(config.s3.bucket);
+    const artifactWriter = new ArtifactWriter(config.artifacts.dir);
     const viewport = pickRandomViewport();
     const userAgent = pickRandomUserAgent();
 

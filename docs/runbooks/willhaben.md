@@ -158,8 +158,7 @@ willhaben **blocks automated HTTP requests** — a real browser with JavaScript 
 - Page navigation delay: 2000--7000ms jitter between requests
 - Rate limiter: Token bucket at 10 RPM
 - Request interception: Blocks analytics/tracking scripts (Google Analytics, Facebook Pixel, etc.)
-- Cooldown after block: 900,000ms (15 minutes, `SCRAPER_COOLDOWN_AFTER_BLOCK_MS`)
-- Circuit breaker cooldown: 300,000ms (5 minutes, separate from block cooldown)
+- Circuit breaker cooldown: 300,000ms (5 minutes)
 
 ## Common Failure Modes
 
@@ -189,7 +188,7 @@ willhaben **blocks automated HTTP requests** — a real browser with JavaScript 
 - **Symptoms**: HTTP 403/429 responses. Circuit breaker opens after 5 consecutive failures.
 - **Detection**: `health_status` transitions to `'blocked'`. `captcha_count` or `http_4xx` spikes in scrape_runs.
 - **Resolution**:
-  1. Let cooldowns expire — block cooldown (15 min) and circuit breaker cooldown (5 min)
+  1. Let the circuit breaker cooldown (5 min) expire
   2. Circuit breaker enters `half_open` — next scheduled run sends a single probe request
   3. If probe succeeds: circuit closes, normal operation resumes
   4. If probe fails: reduce `rate_limit_rpm` (e.g. 10 → 6), increase `crawl_interval_minutes`

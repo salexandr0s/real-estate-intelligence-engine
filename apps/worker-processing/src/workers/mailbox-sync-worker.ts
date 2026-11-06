@@ -78,7 +78,7 @@ async function defaultStoreBuffer(
   const storageKey = `${prefix}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${String(
     now.getUTCDate(),
   ).padStart(2, '0')}/${randomUUID()}.${extension}`;
-  const fullPath = join(config.s3.bucket, storageKey);
+  const fullPath = join(config.artifacts.dir, storageKey);
   await mkdir(dirname(fullPath), { recursive: true });
   await writeFile(fullPath, buffer);
   return storageKey;

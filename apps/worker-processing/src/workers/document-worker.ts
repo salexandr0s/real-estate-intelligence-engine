@@ -328,7 +328,7 @@ async function downloadDocument(params: {
   source: SourceRow;
 }): Promise<{ buffer: Buffer; mimeType: string | null; finalUrl: string }> {
   const config = loadConfig();
-  const storagePath = params.storageKey ? join(config.s3.bucket, params.storageKey) : null;
+  const storagePath = params.storageKey ? join(config.artifacts.dir, params.storageKey) : null;
 
   if (storagePath) {
     try {

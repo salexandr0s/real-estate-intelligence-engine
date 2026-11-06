@@ -19,8 +19,6 @@ Use `claudecodex-vault.sh` to store each secret:
 ~/.claude/claudecodex-vault.sh set REDIS_URL "redis://localhost:6379/0"
 ~/.claude/claudecodex-vault.sh set API_BEARER_TOKEN "GENERATE_A_SECURE_TOKEN_HERE"
 ~/.claude/claudecodex-vault.sh set METRICS_TOKEN "GENERATE_A_SEPARATE_METRICS_TOKEN_HERE"
-~/.claude/claudecodex-vault.sh set S3_ACCESS_KEY "minioadmin"
-~/.claude/claudecodex-vault.sh set S3_SECRET_KEY "GENERATE_A_SECURE_KEY_HERE"
 ```
 
 ## Step 2: Verify stored secrets
@@ -41,8 +39,6 @@ export DATABASE_URL="$(~/.claude/claudecodex-vault.sh get DATABASE_URL)"
 export REDIS_URL="$(~/.claude/claudecodex-vault.sh get REDIS_URL)"
 export API_BEARER_TOKEN="$(~/.claude/claudecodex-vault.sh get API_BEARER_TOKEN)"
 export METRICS_TOKEN="$(~/.claude/claudecodex-vault.sh get METRICS_TOKEN)"
-export S3_ACCESS_KEY="$(~/.claude/claudecodex-vault.sh get S3_ACCESS_KEY)"
-export S3_SECRET_KEY="$(~/.claude/claudecodex-vault.sh get S3_SECRET_KEY)"
 ```
 
 After editing, source the profile or open a new terminal:
@@ -67,14 +63,10 @@ services:
     environment:
       - DATABASE_URL
       - REDIS_URL
-      - S3_ACCESS_KEY
-      - S3_SECRET_KEY
   worker-processing:
     environment:
       - DATABASE_URL
       - REDIS_URL
-      - S3_ACCESS_KEY
-      - S3_SECRET_KEY
 ```
 
 When no `=value` is provided, Docker Compose passes through the host's env var.
@@ -83,7 +75,7 @@ When no `=value` is provided, Docker Compose passes through the host's env var.
 
 ```bash
 # Verify secrets are in the shell environment
-env | grep -E 'DATABASE_URL|REDIS_URL|API_BEARER_TOKEN|METRICS_TOKEN|S3_ACCESS_KEY|S3_SECRET_KEY'
+env | grep -E 'DATABASE_URL|REDIS_URL|API_BEARER_TOKEN|METRICS_TOKEN'
 
 # Verify Docker Compose interpolates correctly (shows values, do not share output)
 docker compose config | grep -i password

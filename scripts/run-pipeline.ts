@@ -144,7 +144,7 @@ async function runScrape(
   const totals = { discovered: 0, ingested: 0, failed: 0 };
   const config = loadConfig();
   const pipeline = createPipeline();
-  const artifactWriter = new ArtifactWriter(config.s3.bucket);
+  const artifactWriter = new ArtifactWriter(config.artifacts.dir);
 
   let browser: Browser | null = null;
 

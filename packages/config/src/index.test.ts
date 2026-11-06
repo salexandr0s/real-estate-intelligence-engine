@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { loadCanaryConfig, loadConfig, resetConfig } from './index.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { loadCanaryConfig, loadConfig, loadRepoEnvFiles, resetConfig } from './index.js';
 
 const ENV_KEYS = [
   'NODE_ENV',
@@ -14,6 +18,8 @@ const ENV_KEYS = [
   'DOCUMENT_DOWNLOAD_TIMEOUT_MS',
   'DOCUMENT_MAX_BYTES',
   'IMMORADAR_RUNTIME_BOOT_MODE',
+  'IMMORADAR_RUNTIME_HOME',
+  'ARTIFACTS_DIR',
 ] as const;
 
 describe('config loaders', () => {
@@ -62,7 +68,7 @@ describe('config loaders', () => {
 
     expect(config.api.trustProxy).toBe(false);
     expect(config.documents.downloadTimeoutMs).toBe(20000);
-    expect(config.documents.maxBytes).toBe(25000000);
+    expect(config.documents.maxBytes).toBe(10000000);
   });
 
   it('keeps a proxy address intact and refuses a hop count', () => {
@@ -80,5 +86,68 @@ describe('config loaders', () => {
     const config = loadConfig();
 
     expect(config.runtime.bootMode).toBe('setup');
+  });
+
+  it('refuses a relative ARTIFACTS_DIR and defaults to a folder under the runtime home', () => {
+    process.env.ARTIFACTS_DIR = 'artifacts';
+    expect(() => loadConfig()).toThrow(/ARTIFACTS_DIR/);
+
+    resetConfig();
+    delete process.env.ARTIFACTS_DIR;
+    process.env.IMMORADAR_RUNTIME_HOME = '/tmp/engine-home';
+    expect(loadConfig().artifacts.dir).toBe('/tmp/engine-home/artifacts');
+  });
+});
+
+describe('loadRepoEnvFiles', () => {
+  const SET_BY_TESTS = [
+    'IMMORADAR_TEST_FROM_SHELL',
+    'IMMORADAR_TEST_FROM_LOCAL',
+    'IMMORADAR_TEST_FROM_BASE',
+    'IMMORADAR_RUNTIME_HOME',
+  ] as const;
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'immoradar-env-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+    for (const key of SET_BY_TESTS) {
+      delete process.env[key];
+    }
+  });
+
+  it('prefers the shell, then .env.local, then .env, from anywhere in the checkout', () => {
+    writeFileSync(join(root, 'turbo.json'), '{}');
+    writeFileSync(
+      join(root, '.env.local'),
+      'IMMORADAR_TEST_FROM_SHELL=local\nIMMORADAR_TEST_FROM_LOCAL=local\n',
+    );
+    writeFileSync(
+      join(root, '.env'),
+      'IMMORADAR_TEST_FROM_SHELL=base\nIMMORADAR_TEST_FROM_LOCAL=base\nIMMORADAR_TEST_FROM_BASE=base\n',
+    );
+    const packageDir = join(root, 'apps', 'api');
+    mkdirSync(packageDir, { recursive: true });
+    process.env.IMMORADAR_TEST_FROM_SHELL = 'shell';
+
+    loadRepoEnvFiles(packageDir);
+
+    expect(process.env.IMMORADAR_TEST_FROM_SHELL).toBe('shell');
+    expect(process.env.IMMORADAR_TEST_FROM_LOCAL).toBe('local');
+    expect(process.env.IMMORADAR_TEST_FROM_BASE).toBe('base');
+  });
+
+  it('reads nothing outside a checkout, or for a process the app started', () => {
+    writeFileSync(join(root, '.env'), 'IMMORADAR_TEST_FROM_BASE=base\n');
+    loadRepoEnvFiles(root);
+    expect(process.env.IMMORADAR_TEST_FROM_BASE).toBeUndefined();
+
+    writeFileSync(join(root, 'turbo.json'), '{}');
+    process.env.IMMORADAR_RUNTIME_HOME = '/tmp/engine-home';
+    loadRepoEnvFiles(root);
+    expect(process.env.IMMORADAR_TEST_FROM_BASE).toBeUndefined();
   });
 });

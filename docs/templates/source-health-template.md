@@ -80,14 +80,11 @@ circuit_breaker_closed source={source_code}
 
 ### Cooldown and retry
 
-Two independent cooldown timers apply:
-
-- **Block cooldown** (`SCRAPER_COOLDOWN_AFTER_BLOCK_MS`): 900,000ms (15 min). Prevents any requests to the source after a block is detected.
-- **Circuit breaker cooldown**: 300,000ms (5 min). After 5 consecutive failures, blocks requests until cooldown expires.
+The **circuit breaker cooldown** is 300,000ms (5 min). After 5 consecutive failures, it blocks requests until the cooldown expires.
 
 Recovery sequence:
 
-1. Both cooldown timers must expire before the source accepts requests
+1. The cooldown must expire before the source accepts requests
 2. Circuit breaker enters `half_open` — next scheduled run sends a single probe request
 3. If probe succeeds: circuit closes, normal operation resumes
 4. If probe fails: circuit reopens for another cooldown period

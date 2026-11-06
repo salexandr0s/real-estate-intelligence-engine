@@ -189,7 +189,7 @@ export async function startScheduler(): Promise<void> {
   log.info('Stale check scheduler registered (every 6 hours)');
 
   // Canary health check every 2 hours (if enabled)
-  if (config.scraper.canaryEnabled) {
+  if (config.scraper.canaryWorkerEnabled) {
     await queues.canaryQueue.upsertJobScheduler(
       SYSTEM_SCHEDULER_IDS.canary,
       { pattern: '0 */2 * * *' },

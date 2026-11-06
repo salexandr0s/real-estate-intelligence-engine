@@ -128,7 +128,6 @@ If you do not use Docker locally, you will need your own working instances of:
 
 - PostgreSQL
 - Redis
-- S3-compatible object storage
 
 ## Quick start
 

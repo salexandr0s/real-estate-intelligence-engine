@@ -52,7 +52,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
   });
 
   const config = loadConfig();
-  const artifactWriter = new ArtifactWriter(config.s3.bucket);
+  const artifactWriter = new ArtifactWriter(config.artifacts.dir);
   const rateLimiter = new PerDomainRateLimiter(12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
 

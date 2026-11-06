@@ -12,7 +12,6 @@
 
 ## Rotation
 - `API_BEARER_TOKEN`: Rotate by updating Keychain + restarting API service
-- `S3_ACCESS_KEY` / `S3_SECRET_KEY`: Rotate via MinIO admin + update Keychain
 - `DATABASE_URL`: Rotate by updating Postgres password + Keychain + restart all services
 
 ## Secrets Inventory
@@ -21,8 +20,6 @@
 | `DATABASE_URL` | API, workers, scripts | On compromise |
 | `REDIS_URL` | Workers, scheduler | On compromise |
 | `API_BEARER_TOKEN` | API auth, macOS app | Quarterly |
-| `S3_ACCESS_KEY` | Workers (artifact storage) | Annually |
-| `S3_SECRET_KEY` | Workers (artifact storage) | Annually |
 
 ## Rules
 - Never commit `.env` files

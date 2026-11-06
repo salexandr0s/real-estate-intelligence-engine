@@ -61,22 +61,22 @@ WHERE code = 'willhaben';
 
 These apply to all sources and are set via environment variables.
 
-| Variable                          | Default   | Description                              |
-| --------------------------------- | --------- | ---------------------------------------- |
-| `SCRAPER_COOLDOWN_AFTER_BLOCK_MS`| `900000`  | Cooldown after a block is detected (15 min) |
-| `SCRAPER_DEFAULT_RATE_LIMIT_RPM` | `12`      | Default RPM for sources without explicit config |
-| `SCRAPER_DEFAULT_CONCURRENCY_PER_SOURCE` | `1` | Default concurrency per source        |
-| `SCRAPER_CANARY_ENABLED`         | `true`    | Enable canary crawl probes               |
-| `SCRAPER_JITTER_MIN_MS`          | `2000`    | Registered in config but not yet wired to delay functions |
-| `SCRAPER_JITTER_MAX_MS`          | `7000`    | Registered in config but not yet wired to delay functions |
+| Variable                             | Default | Description                                                  |
+| ------------------------------------ | ------- | ------------------------------------------------------------ |
+| `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES` | `180`   | Shortest time between two crawls of a source                 |
+| `SCRAPER_MAX_PAGES_PER_RUN`          | `60`    | Most list pages one run fetches                              |
+| `SCRAPER_DETAIL_BUDGET_PER_RUN`      | `40`    | Most detail pages one run queues                             |
+| `SCRAPER_DETAIL_REFRESH_DAYS`        | `30`    | Age at which a listing's detail page gets fetched again      |
+| `SCRAPER_ARTIFACT_RETENTION_DAYS`    | `7`     | Days to keep failure HTML and screenshots                    |
+| `CANARY_WORKER_ENABLED`              | `false` | Runs the canary worker on a schedule; `npm run canary` works either way |
 
 **Delay functions** (in `packages/scraper-core/src/browser/delay.ts`):
 
-These currently use hardcoded ranges. The `SCRAPER_JITTER_*` env vars are defined in config but **not yet wired** to these functions — changing the env vars has no effect until the delay functions are updated to read from config.
+These use fixed ranges:
 
-- `pageNavigationDelay()`: 2000--7000ms (hardcoded)
-- `interactionDelay()`: 500--1500ms (hardcoded)
-- `cooldownDelay()`: 10,000--60,000ms (hardcoded)
+- `pageNavigationDelay()`: 2000--7000ms
+- `interactionDelay()`: 500--1500ms
+- `cooldownDelay()`: 10,000--60,000ms
 
 ## Circuit Breaker
 
@@ -150,7 +150,7 @@ UPDATE sources SET legal_status = 'approved' WHERE code = 'willhaben';
 
 ## Recovering from a Blocked State
 
-1. **Wait for cooldown**: The `SCRAPER_COOLDOWN_AFTER_BLOCK_MS` (default 15 min) must elapse. The circuit breaker cooldown (5 min) must also elapse.
+1. **Wait for cooldown**: The circuit breaker cooldown (5 min) must elapse.
 
 2. **Check circuit breaker state**: Look for `circuit_breaker_half_open` in worker logs. The next scheduled run will send a probe request.
 

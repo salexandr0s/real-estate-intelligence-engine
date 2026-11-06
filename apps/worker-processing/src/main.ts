@@ -48,7 +48,7 @@ runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   const staleCheckWorker = createStaleCheckWorker();
 
   // Canary worker — gated on feature flag
-  const canaryWorker = config.scraper.canaryEnabled ? createCanaryWorker() : null;
+  const canaryWorker = config.scraper.canaryWorkerEnabled ? createCanaryWorker() : null;
 
   // Geocoding worker — gated on feature flag
   const geocodingWorker = config.features.geocodingEnabled ? createGeocodingWorker() : null;

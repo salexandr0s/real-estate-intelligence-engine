@@ -52,7 +52,7 @@
 - **Symptoms**: HTTP 403 or 429 responses. Circuit breaker opens. `captcha_count` or `http_4xx` metrics spike.
 - **Detection**: `scrape_runs.status = 'rate_limited'` or `'failed'`. `sources.health_status` transitions to `'blocked'`.
 - **Resolution**:
-  1. Stop manual triggers — let the cooldown timer expire (`SCRAPER_COOLDOWN_AFTER_BLOCK_MS`)
+  1. Stop manual triggers and let the circuit breaker cooldown (5 min) expire
   2. Check if the block is IP-based or behavioral
   3. If behavioral: increase jitter delays, reduce `rate_limit_rpm`, reduce `maxPages`
   4. If IP-based: wait longer or investigate proxy options

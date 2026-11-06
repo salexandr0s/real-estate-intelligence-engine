@@ -112,15 +112,15 @@ async function main(): Promise<void> {
     browser = await chromium.launch({ headless: config.playwright.headless });
     context = await browser.newContext({
       viewport,
-      locale: config.playwright.locale,
-      timezoneId: config.playwright.timezoneId,
+      locale: DEFAULT_BROWSER_CONTEXT_CONFIG.locale,
+      timezoneId: DEFAULT_BROWSER_CONTEXT_CONFIG.timezoneId,
       userAgent,
       javaScriptEnabled: DEFAULT_BROWSER_CONTEXT_CONFIG.javaScriptEnabled,
     });
     await setupRequestInterception(context);
 
     const page = await context.newPage();
-    page.setDefaultTimeout(config.playwright.defaultTimeoutMs);
+    page.setDefaultTimeout(30_000);
     page.setDefaultNavigationTimeout(config.playwright.navigationTimeoutMs);
 
     // ── Discovery phase ──────────────────────────────────────────────────
