@@ -247,7 +247,7 @@ final class LocalRuntimeService {
     }
 
     private static let maxStartupRetryCount = 2
-    private static let coreRestartDelays: [Duration] = [.seconds(1), .seconds(5)]
+    private static let coreRestartDelays: [Duration] = [.seconds(1), .seconds(5), .seconds(30)]
     private static let coreRestartWindow: TimeInterval = 300
 
     var state: State = .stopped
@@ -263,6 +263,7 @@ final class LocalRuntimeService {
     private var activeAPIBaseURL: String?
     private var coreRestartTimes: [Date] = []
     private var coreRestartTask: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
     private var workerHolds = WorkerHolds()
     private var workerHoldObserver: WorkerHoldObserver?
     private var workerHoldWaitTask: Task<Void, Never>?
@@ -368,9 +369,17 @@ final class LocalRuntimeService {
         observeWorkerHoldsIfNeeded()
 
         // The start in progress launches workers from this choice, or applies it when it finishes.
-        guard !isBusy else {
+        // Waiting for it means the caller sees how that start ended, not its progress.
+        if let startTask {
             activeBootMode = bootMode
             await supervisor?.setWorkersRunning(workersShouldRun)
+            await startTask.value
+            return
+        }
+
+        // Only a reset is busy with no start running, and the next start reads this choice.
+        guard !isBusy else {
+            activeBootMode = bootMode
             return
         }
 
@@ -379,11 +388,30 @@ final class LocalRuntimeService {
         cancelCoreRestart()
         coreRestartTimes.removeAll()
 
-        await performStart(
+        await runStart(
             apiBaseURL: apiBaseURL,
             bootMode: bootMode,
             policy: replacesPendingRestart ? .forceRestart : policy
         )
+    }
+
+    /// Owns the one start that can run at a time, so a restart timer or a second click can't run
+    /// alongside it. It's a task of its own so a caller that goes away can't abandon a half-started
+    /// engine.
+    private func runStart(apiBaseURL: String, bootMode: BootMode, policy: StartPolicy) async {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performStart(apiBaseURL: apiBaseURL, bootMode: bootMode, policy: policy)
+            self.startTask = nil
+
+            // Exits are ignored while a start runs, because it replaces the engine. One that is still
+            // down came after the new engine was up, or during a start that only moved the workers.
+            if let down = self.supervisor?.downCoreService {
+                self.handleCoreServiceExit(down.slot, status: down.status)
+            }
+        }
+        startTask = task
+        await task.value
     }
 
     private func performStart(apiBaseURL: String, bootMode: BootMode, policy: StartPolicy) async {
@@ -580,8 +608,8 @@ final class LocalRuntimeService {
 
     /// Everything depends on Postgres and Redis, so losing either restarts the whole engine.
     private func handleCoreServiceExit(_ slot: EngineSlot, status: Int32) {
-        // A restart already on its way covers this exit too.
-        guard coreRestartTask == nil else { return }
+        // A restart already on its way covers this exit too, and so does a start that is running.
+        guard coreRestartTask == nil, startTask == nil else { return }
 
         let failure = EngineStartupFailure.exited(slot, status: status, duringStartup: false)
         lastStartupFailure = failure
@@ -611,7 +639,7 @@ final class LocalRuntimeService {
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self else { return }
             self.coreRestartTask = nil
-            await self.performStart(apiBaseURL: apiBaseURL, bootMode: bootMode, policy: .forceRestart)
+            await self.runStart(apiBaseURL: apiBaseURL, bootMode: bootMode, policy: .forceRestart)
         }
     }
 

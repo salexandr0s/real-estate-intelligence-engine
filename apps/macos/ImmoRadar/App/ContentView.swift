@@ -255,6 +255,7 @@ private struct BundledLaunchExperienceView: View {
                     Task { await appState.resetLocalEngine() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
             }
         }
     }

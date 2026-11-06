@@ -238,6 +238,7 @@ private struct SettingsLocalEngineSection: View {
                     Task { await appState.restartLocalEngine() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
             }
 
             HStack(spacing: Theme.Spacing.sm) {
@@ -255,6 +256,7 @@ private struct SettingsLocalEngineSection: View {
                     Task { await appState.resetLocalEngine() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
             }
 
             Toggle("Show advanced connection settings", isOn: $showAdvancedConnectionSettings)

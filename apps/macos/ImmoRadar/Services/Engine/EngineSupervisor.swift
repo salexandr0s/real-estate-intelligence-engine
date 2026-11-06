@@ -127,6 +127,15 @@ final class EngineSupervisor {
         return wanted.allSatisfy { children[$0]?.process.isRunning == true }
     }
 
+    /// A core service that has exited while the engine counts as running.
+    var downCoreService: (slot: EngineSlot, status: Int32)? {
+        guard phase == .running else { return nil }
+        for slot in [EngineSlot.postgres, .redis] where children[slot] == nil {
+            return (slot, lastExitStatus[slot] ?? 0)
+        }
+        return nil
+    }
+
     // MARK: - Starting
 
     func start(layout: EngineLayout, token: String, monitoring: Bool) async throws {

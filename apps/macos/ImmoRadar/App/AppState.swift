@@ -177,6 +177,10 @@ final class AppState {
         runtimeState.preferredLocalRuntimeBootMode
     }
 
+    var isLocalEngineBusy: Bool {
+        runtimeState.localRuntime.isBusy
+    }
+
     var shouldPresentBundledLaunchExperience: Bool {
         runtimeState.shouldPresentBundledLaunchExperience(usesManagedLocalRuntime: usesManagedLocalRuntime)
     }
@@ -430,7 +434,6 @@ final class AppState {
         if usesManagedLocalRuntime {
             await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
             _ = await startManagedLocalRuntime(
-                bootMode: preferredLocalRuntimeBootMode,
                 restartExistingRuntime: false,
                 userInitiated: false
             )
@@ -445,7 +448,6 @@ final class AppState {
     func retryBundledLaunch() async {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
-            bootMode: preferredLocalRuntimeBootMode,
             // A degraded engine is still up, so only a restart gives what stopped another try.
             restartExistingRuntime: runtimeState.localRuntime.state.isDegraded,
             userInitiated: true
@@ -465,23 +467,24 @@ final class AppState {
     private func setMonitoring(_ bootMode: LocalRuntimeService.BootMode) async {
         guard usesManagedLocalRuntime else { return }
 
-        if let managedRuntimeTransitionTask {
-            _ = await managedRuntimeTransitionTask.value
-        }
-
+        // Recorded before any wait, because whichever start runs next reads it. After two quick
+        // clicks, the last one wins.
         runtimeState.hasEnabledMonitoring = bootMode == .active
         runtimeState.hasDismissedInitialMonitoringPrompt = true
+
+        while let managedRuntimeTransitionTask {
+            _ = await managedRuntimeTransitionTask.value
+        }
 
         if runtimeState.localRuntime.isEngineRunning {
             runtimeState.bundledLaunchExperienceState = .ready
             await runtimeState.localRuntime.start(
                 apiBaseURL: connectionState.apiBaseURL,
-                bootMode: bootMode,
+                bootMode: preferredLocalRuntimeBootMode,
                 policy: .ifNeeded
             )
         } else {
             _ = await startManagedLocalRuntime(
-                bootMode: bootMode,
                 restartExistingRuntime: true,
                 userInitiated: true
             )
@@ -491,7 +494,6 @@ final class AppState {
     func restartLocalEngine() async {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
-            bootMode: preferredLocalRuntimeBootMode,
             restartExistingRuntime: true,
             userInitiated: true
         )
@@ -529,7 +531,6 @@ final class AppState {
             await apiClient.updateAuthToken(nil)
 
             _ = await startManagedLocalRuntime(
-                bootMode: .setup,
                 restartExistingRuntime: false,
                 userInitiated: true
             )
@@ -597,15 +598,15 @@ final class AppState {
     // MARK: - Internal Helpers
 
     private func startManagedLocalRuntime(
-        bootMode: LocalRuntimeService.BootMode,
         restartExistingRuntime: Bool,
         userInitiated: Bool
     ) async -> Bool {
-        if let managedRuntimeTransitionTask {
-            let activeResult = await managedRuntimeTransitionTask.value
-            if !restartExistingRuntime {
-                return activeResult
-            }
+        var activeResult: Bool?
+        while let managedRuntimeTransitionTask {
+            activeResult = await managedRuntimeTransitionTask.value
+        }
+        if let activeResult, !restartExistingRuntime {
+            return activeResult
         }
 
         let transitionID = UUID()
@@ -619,7 +620,6 @@ final class AppState {
             }
 
             return await self.performManagedLocalRuntimeTransition(
-                bootMode: bootMode,
                 restartExistingRuntime: restartExistingRuntime,
                 userInitiated: userInitiated
             )
@@ -631,7 +631,6 @@ final class AppState {
     }
 
     private func performManagedLocalRuntimeTransition(
-        bootMode: LocalRuntimeService.BootMode,
         restartExistingRuntime: Bool,
         userInitiated: Bool
     ) async -> Bool {
@@ -649,7 +648,7 @@ final class AppState {
         let startPolicy: LocalRuntimeService.StartPolicy = restartExistingRuntime ? .forceRestart : .ifNeeded
         await runtimeState.localRuntime.start(
             apiBaseURL: connectionState.apiBaseURL,
-            bootMode: bootMode,
+            bootMode: preferredLocalRuntimeBootMode,
             policy: startPolicy
         )
         await refreshConnection(userInitiated: userInitiated)
@@ -676,11 +675,7 @@ final class AppState {
 
         runtimeState.hasCompletedBundledSetup = true
 
-        if bootMode == .active {
-            runtimeState.hasEnabledMonitoring = true
-            runtimeState.hasDismissedInitialMonitoringPrompt = true
-            runtimeState.bundledLaunchExperienceState = .ready
-        } else if runtimeState.hasDismissedInitialMonitoringPrompt {
+        if runtimeState.hasEnabledMonitoring || runtimeState.hasDismissedInitialMonitoringPrompt {
             runtimeState.bundledLaunchExperienceState = .ready
         } else {
             runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring

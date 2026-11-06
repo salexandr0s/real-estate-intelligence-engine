@@ -176,6 +176,7 @@ private struct SourcesRuntimeCard: View {
                             Task { await appState.resetLocalEngine() }
                         }
                         .buttonStyle(.bordered)
+                        .disabled(appState.isLocalEngineBusy)
                     }
                 }
 
@@ -224,6 +225,7 @@ private struct SourcesRuntimeCard: View {
                     Label("Restart Engine", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
 
             case .monitoringActive, .monitoringHeld:
                 Button {
@@ -245,6 +247,7 @@ private struct SourcesRuntimeCard: View {
                     Label("Restart Engine", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
 
             case .needsAttention:
                 Button {
