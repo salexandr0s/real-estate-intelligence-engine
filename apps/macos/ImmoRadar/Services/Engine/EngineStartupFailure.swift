@@ -17,7 +17,6 @@ enum EngineStartupStep: String, Codable, Sendable {
 
 struct EngineStartupFailure: Error, LocalizedError, Equatable, Sendable {
     enum Code: String, Codable, Sendable {
-        case smokeBoundaryUnavailable
         case invalidBaseURL
         case nonLocalBaseURL
         case runtimeArtifactsMissing

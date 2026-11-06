@@ -242,6 +242,7 @@ final class AppState {
         let connectionState = ConnectionState()
         let runtimeState = RuntimeState(
             isSmokeTest: launchPolicy.requiresSmokeBoundary,
+            smokeStartsMonitoring: smokeContext?.startsMonitoring ?? false,
             localRuntime: LocalRuntimeService(smokeContext: smokeContext, launchMode: launchMode)
         )
         let alertsState = AlertsState()
@@ -427,9 +428,7 @@ final class AppState {
         }
 
         if usesManagedLocalRuntime {
-            if !isIsolatedSmokeLaunch {
-                await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
-            }
+            await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
             _ = await startManagedLocalRuntime(
                 bootMode: preferredLocalRuntimeBootMode,
                 restartExistingRuntime: false,
@@ -542,35 +541,16 @@ final class AppState {
 
     // MARK: - Connection / Alerts
 
-    /// Check before and after awaits. A token or successful health response is
-    /// never ownership evidence, and a smoke refusal never starts read/stream work.
-    private func permitsSmokeConnectionRead() -> Bool {
-        guard isIsolatedSmokeLaunch else { return true }
-        let ownedRead = runtimeState.localRuntime.permitsSmokeAPIRead(apiBaseURL: connectionState.apiBaseURL)
-        guard let context = launchPolicy.smokeContext,
-              connectionState.apiBaseURL == context.apiBaseURL.absoluteString,
-              ownedRead else {
-            connectionState.connectionStatus = .error(
-                runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke has no verified owned API."
-            )
-            alertsState.disconnectStream(alertStream)
-            return false
-        }
-        return true
-    }
-
     func refreshConnection(userInitiated: Bool = false) async {
-        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
+        guard launchMode.allowsInitialLaunchSideEffects else { return }
         let authToken = launchPolicy.connectionToken {
             connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
             return connectionState.resolvedConnectionAuthToken(allowUserInteraction: userInitiated)
         }
         await apiClient.updateAuthToken(authToken)
-        guard permitsSmokeConnectionRead() else { return }
 
         connectionState.connectionStatus = .connecting
         let connectionResult = await apiClient.testConnection()
-        guard permitsSmokeConnectionRead() else { return }
 
         switch connectionResult {
         case .success:
@@ -610,9 +590,8 @@ final class AppState {
     }
 
     func refreshUnreadCount() async {
-        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
+        guard launchMode.allowsInitialLaunchSideEffects else { return }
         await alertsState.refreshUnreadCount(using: apiClient)
-        guard permitsSmokeConnectionRead() else { return }
     }
 
     // MARK: - Internal Helpers
@@ -660,11 +639,6 @@ final class AppState {
         defer { startBackgroundRefreshTasksIfNeeded() }
 
         guard usesManagedLocalRuntime else {
-            if isIsolatedSmokeLaunch {
-                _ = permitsSmokeConnectionRead()
-                runtimeState.bundledLaunchExperienceState = .needsAttention("Isolated smoke requires a verified owned local runtime.")
-                return false
-            }
             runtimeState.bundledLaunchExperienceState = .ready
             await refreshConnection(userInitiated: userInitiated)
             return true
@@ -678,14 +652,6 @@ final class AppState {
             bootMode: bootMode,
             policy: startPolicy
         )
-        if isIsolatedSmokeLaunch {
-            guard runtimeState.localRuntime.state == .running, permitsSmokeConnectionRead() else {
-                runtimeState.bundledLaunchExperienceState = .needsAttention(
-                    runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke startup has no verified owned API."
-                )
-                return false
-            }
-        }
         await refreshConnection(userInitiated: userInitiated)
 
         switch runtimeState.localRuntime.state {

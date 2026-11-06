@@ -65,14 +65,18 @@ final class RuntimeState {
         hasEnabledMonitoring ? .active : .setup
     }
 
-    init(isSmokeTest: Bool, localRuntime: LocalRuntimeService = LocalRuntimeService()) {
+    init(
+        isSmokeTest: Bool,
+        smokeStartsMonitoring: Bool = false,
+        localRuntime: LocalRuntimeService = LocalRuntimeService()
+    ) {
         self.isSmokeTest = isSmokeTest
         self.localRuntime = localRuntime
         self.hasCompletedBundledSetup = isSmokeTest
             ? false
             : UserDefaults.standard.bool(forKey: PreferenceKey.bundledSetupCompleted)
         self.hasEnabledMonitoring = isSmokeTest
-            ? false
+            ? smokeStartsMonitoring
             : UserDefaults.standard.bool(forKey: PreferenceKey.monitoringEnabled)
         self.hasDismissedInitialMonitoringPrompt = isSmokeTest
             ? false

@@ -54,7 +54,7 @@ struct ImmoRadarApp: App {
             FileHandle.standardError.write(Data("Invalid isolated smoke context.\n".utf8))
             exit(64)
         }
-        if AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext).enforcesSingleInstance {
+        if AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext).allowsEngineEffects {
             EngineInstanceLock.acquireOrExit()
         }
 

@@ -230,11 +230,14 @@ final class LocalRuntimeService {
     }
 
     private enum ResetError: LocalizedError {
+        case notAllowed
         case busy
         case processesRunning(Int)
 
         var errorDescription: String? {
             switch self {
+            case .notAllowed:
+                return "This launch can’t change the local engine."
             case .busy:
                 return "Couldn’t reset the local engine while it’s starting or stopping. Try again in a moment."
             case .processesRunning(let count):
@@ -269,16 +272,14 @@ final class LocalRuntimeService {
     private var activeStartupRetryCount = 0
     private var activeStartupStep: EngineStartupStep?
     private var activeStartupStartedAt: Date?
-    private let smokeContext: IsolatedSmokeContext?
-    private var smokeAccess: SmokeRuntimeAccessPolicy
+    private let allowsEngineEffects: Bool
+    private let isSmokeRun: Bool
 
     init(smokeContext: IsolatedSmokeContext? = nil, launchMode: AppLaunchMode = .current) {
-        self.smokeContext = smokeContext
-        self.smokeAccess = SmokeRuntimeAccessPolicy(
-            contextProvided: smokeContext != nil,
-            smokeRequested: ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil,
-            launchMode: AppLaunchMode.current == .production ? launchMode : AppLaunchMode.current
-        )
+        isSmokeRun = smokeContext != nil
+        // A test that asks for a production launch still runs inside a test process.
+        let mode = AppLaunchMode.current == .production ? launchMode : AppLaunchMode.current
+        allowsEngineEffects = AppLaunchPolicy(mode: mode, smokeContext: smokeContext).allowsEngineEffects
     }
 
     var isBusy: Bool {
@@ -311,46 +312,10 @@ final class LocalRuntimeService {
         logsDirectoryURL.appendingPathComponent("startup-diagnostics.json", isDirectory: false)
     }
 
-    // MARK: - Smoke boundary
-
-    private func smokeBoundaryFailure() -> EngineStartupFailure {
-        EngineStartupFailure(
-            code: .smokeBoundaryUnavailable,
-            message: smokeAccess.failureMessage ?? "Isolated smoke is blocked."
-        )
-    }
-
-    /// Denial happens before any effect, including cleanup and diagnostic file writes. Keep records
-    /// and the first refusal; callbacks cannot promote it to success.
-    @discardableResult
-    private func permitProductionOperation(_ operation: SmokeRuntimeAccessPolicy.Operation) -> Bool {
-        guard smokeAccess.permitsProductionOperation(operation) else {
-            let failure = smokeBoundaryFailure()
-            lastStartupFailure = failure
-            state = .failed(failure.message)
-            progressStatus = nil
-            return false
-        }
-        return true
-    }
-
-    /// A synthetic token or a healthy listener cannot authenticate ownership.
-    /// This remains false for smoke until both bridges have independent review.
-    func permitsSmokeAPIRead(apiBaseURL: String) -> Bool {
-        guard smokeAccess.requiresSmokeBoundary else { return false }
-        // Compare only the captured URL; never discover/health-check a listener.
-        guard let smokeContext, apiBaseURL == smokeContext.apiBaseURL.absoluteString,
-              state == .running else {
-            permitProductionOperation(.network)
-            return false
-        }
-        return permitProductionOperation(.network)
-    }
-
     // MARK: - Status
 
     func refreshStatus(apiBaseURL: String) async {
-        guard permitProductionOperation(.status), isIdle else { return }
+        guard allowsEngineEffects, isIdle else { return }
 
         do {
             let layout = try await EngineLayout.resolve(apiBaseURL: apiBaseURL)
@@ -374,20 +339,7 @@ final class LocalRuntimeService {
 
     /// Reads only what `applyRuntimeMetadata` cached, because views call this from their bodies.
     func diagnosticsSummary() -> DiagnosticsSummary {
-        guard permitProductionOperation(.diagnostics) else {
-            return DiagnosticsSummary(
-                runtimeDescription: "Isolated smoke blocked",
-                runtimeVersion: nil,
-                storagePath: smokeContext?.runtimeHome.path ?? "Unavailable",
-                logsPath: smokeContext?.logsDirectory.path ?? "Unavailable",
-                startupDiagnosticsPath: smokeContext?.logsDirectory
-                    .appendingPathComponent("startup-diagnostics.json").path ?? "Unavailable",
-                lastErrorMessage: state.failureMessage,
-                lastFailureCode: EngineStartupFailure.Code.smokeBoundaryUnavailable.rawValue
-            )
-        }
-
-        return DiagnosticsSummary(
+        DiagnosticsSummary(
             runtimeDescription: runtimeDescription ?? "Local engine",
             runtimeVersion: runtimeVersion,
             storagePath: Self.runtimeHomeURL.path,
@@ -409,7 +361,10 @@ final class LocalRuntimeService {
         bootMode: BootMode = .active,
         policy: StartPolicy = .ifNeeded
     ) async {
-        guard permitProductionOperation(.launch) else { return }
+        guard allowsEngineEffects else {
+            state = .unavailable("This launch can’t run the local engine.")
+            return
+        }
         observeWorkerHoldsIfNeeded()
 
         // The start in progress launches workers from this choice, or applies it when it finishes.
@@ -480,7 +435,7 @@ final class LocalRuntimeService {
 
     /// A smoke run proves the engine's lifecycle, which shouldn't depend on how warm the Mac is.
     private func observeWorkerHoldsIfNeeded() {
-        guard workerHoldObserver == nil, smokeContext == nil else { return }
+        guard workerHoldObserver == nil, !isSmokeRun else { return }
 
         let observer = WorkerHoldObserver { [weak self] reason, isActive in
             self?.noteWorkerHold(reason, isActive: isActive)
@@ -561,6 +516,8 @@ final class LocalRuntimeService {
     }
 
     private func engineSupervisor() -> EngineSupervisor {
+        // The supervisor is the only code that signals engine processes.
+        precondition(allowsEngineEffects, "This launch can't run the local engine.")
         if let supervisor { return supervisor }
 
         let supervisor = EngineSupervisor()
@@ -666,7 +623,7 @@ final class LocalRuntimeService {
     // MARK: - Reset
 
     func resetLocalEngine(apiBaseURL: String) async throws {
-        guard permitProductionOperation(.reset) else { throw smokeBoundaryFailure() }
+        guard allowsEngineEffects else { throw ResetError.notAllowed }
         guard !isBusy else { throw ResetError.busy }
 
         cancelCoreRestart()
