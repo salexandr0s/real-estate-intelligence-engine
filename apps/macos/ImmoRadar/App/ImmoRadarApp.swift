@@ -54,8 +54,12 @@ struct ImmoRadarApp: App {
             FileHandle.standardError.write(Data("Invalid isolated smoke context.\n".utf8))
             exit(64)
         }
-        if AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext).allowsEngineEffects {
+        let launchPolicy = AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext)
+        if launchPolicy.allowsEngineEffects {
             EngineInstanceLock.acquireOrExit()
+        }
+        if launchPolicy.allowsStoredSettingsChanges {
+            ConnectionState.migrateDefaultPortIfNeeded()
         }
 
         let appState = AppState(launchMode: launchMode, smokeContext: smokeContext)

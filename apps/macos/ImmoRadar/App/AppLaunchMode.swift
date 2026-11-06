@@ -176,6 +176,7 @@ struct AppLaunchPolicy {
 
     var requiresSmokeBoundary: Bool { smokeContext != nil || smokeRequested }
     var allowsStoredCredentials: Bool { mode == .production && !requiresSmokeBoundary }
+    var allowsStoredSettingsChanges: Bool { mode == .production && !requiresSmokeBoundary }
     /// Taking the instance lock, starting the engine and signaling its processes. A validated smoke
     /// run does these under its own root, so it never meets the user's app. Tests and previews run
     /// inside the real app's bundle ID, so they must never do them.

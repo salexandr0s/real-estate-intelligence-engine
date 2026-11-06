@@ -63,7 +63,7 @@ struct EngineLayout: Equatable, Sendable {
         let playwrightBrowsersPath: String?
     }
 
-    static let defaultPorts = Ports(postgres: 55432, redis: 56379, api: 8080)
+    static let defaultPorts = Ports(postgres: 55432, redis: 56379, api: 58080)
 
     private static let repoWorkspaceMarkerRelativePaths = [
         "package.json",

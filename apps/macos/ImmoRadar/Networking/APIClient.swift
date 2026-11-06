@@ -14,7 +14,7 @@ actor APIClient {
     private let encoder: JSONEncoder
 
     init(
-        baseURL: String = "http://localhost:8080",
+        baseURL: String = APIEndpoint.defaultBaseURL,
         authToken: String? = nil
     ) {
         self.baseURL = baseURL

@@ -112,6 +112,7 @@
 		5935DE6756E8A99D9C3C8C11 /* AnalysisMarketRentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903C4634B492678F18E330B5 /* AnalysisMarketRentCard.swift */; };
 		59687438CC6AE9BB4AD43CAA /* LocalCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DA2B996EFE1C4C008E15F69 /* LocalCache.swift */; };
 		5A81F46B7BA5D259330015AB /* APIEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04519B2A31DBCAE192B0B1F9 /* APIEndpoints.swift */; };
+		5AD169FF8C1DFCD83E39756B /* ConnectionStatePortMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C9B18B73B8E27783BEB1DE /* ConnectionStatePortMigrationTests.swift */; };
 		5B2DA7BED5F3A00F390B2730 /* vienna-districts.geojson in Resources */ = {isa = PBXBuildFile; fileRef = CE6C448725BAACD07E85B5ED /* vienna-districts.geojson */; };
 		5B54ADC42909CF07E737C06C /* MapKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78D6DCD2B9A5E470C9DEED8F /* MapKit.framework */; };
 		5B841E8E787691D1FAF964A4 /* vienna-developments.geojson in Resources */ = {isa = PBXBuildFile; fileRef = 6FB687332467F61D86E23909 /* vienna-developments.geojson */; };
@@ -514,6 +515,7 @@
 		B80DC5AE36D9A7299200969A /* TextContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentBlock.swift; sourceTree = "<group>"; };
 		B87458EDE61CBF902689763B /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
 		B8C130D5FC8F8BCC6C0A7250 /* Source.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Source.swift; sourceTree = "<group>"; };
+		B9C9B18B73B8E27783BEB1DE /* ConnectionStatePortMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatePortMigrationTests.swift; sourceTree = "<group>"; };
 		BABBD631A72356D230A67207 /* ProximityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityRow.swift; sourceTree = "<group>"; };
 		BD70C07F84B1256AD4D9E6CA /* ScoreBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreBar.swift; sourceTree = "<group>"; };
 		BDA7E05E821D443E9364A186 /* APIAlertListingSummaryResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIAlertListingSummaryResponse.swift; sourceTree = "<group>"; };
@@ -750,6 +752,7 @@
 			isa = PBXGroup;
 			children = (
 				74D6E5AAAFDC0C0B90E045E1 /* AppLaunchModeTests.swift */,
+				B9C9B18B73B8E27783BEB1DE /* ConnectionStatePortMigrationTests.swift */,
 				41A6DE6BDC3AA17569BE9FFE /* DateParsingTests.swift */,
 				46ADEF2DF4569EB421026B99 /* EngineLeftoversTests.swift */,
 				93E2EC2DE8059E75A46FB749 /* LocalRuntimeEnvironmentTests.swift */,
@@ -1528,6 +1531,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7FC748EBE6A4CE74F1E09EED /* AppLaunchModeTests.swift in Sources */,
+				5AD169FF8C1DFCD83E39756B /* ConnectionStatePortMigrationTests.swift in Sources */,
 				D01E6EC41BC0F4A10AFA8057 /* DateParsingTests.swift in Sources */,
 				F61B2162B4083D02C44E72B7 /* EngineLeftoversTests.swift in Sources */,
 				F9D0C74B6193D38F5D739670 /* LocalRuntimeEnvironmentTests.swift in Sources */,

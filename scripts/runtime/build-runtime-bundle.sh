@@ -363,7 +363,7 @@ copy_playwright_browser
 cat > "$OUTPUT_DIR/manifest.json" <<'JSON'
 {
   "version": 1,
-  "defaultApiBaseURL": "http://127.0.0.1:8080",
+  "defaultApiBaseURL": "http://127.0.0.1:58080",
   "nodeExecutable": "bin/node",
   "scripts": {
     "postgres": "scripts/start-postgres.sh",
@@ -374,7 +374,7 @@ cat > "$OUTPUT_DIR/manifest.json" <<'JSON'
   "ports": {
     "postgres": 55432,
     "redis": 56379,
-    "api": 8080
+    "api": 58080
   },
   "artifactsDirectory": "artifacts",
   "playwrightBrowsersPath": "playwright-browsers"

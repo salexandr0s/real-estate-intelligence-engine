@@ -1,8 +1,10 @@
 import Foundation
 
 /// Type-safe API endpoint definitions.
-/// All paths are relative to the base URL (default: http://localhost:8080).
+/// All paths are relative to the base URL.
 enum APIEndpoint {
+    /// The local engine's API. Well away from 8080 and the other ports dev servers tend to use.
+    static let defaultBaseURL = "http://127.0.0.1:58080"
 
     // MARK: - Listings
 

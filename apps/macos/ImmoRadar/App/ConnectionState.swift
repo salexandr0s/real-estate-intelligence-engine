@@ -38,7 +38,7 @@ final class ConnectionState {
         self.apiBaseURLOverride = override
         self.apiBaseURL = override
             ?? UserDefaults.standard.string(forKey: "apiBaseURL")
-            ?? "http://localhost:8080"
+            ?? APIEndpoint.defaultBaseURL
     }
 
     func updateAPIBaseURL(_ newValue: String) {
@@ -186,10 +186,30 @@ final class ConnectionState {
         )
     }
 
+    /// The local engine's API used to listen on 8080. Runs once, so a user who later sets a local
+    /// URL on 8080 on purpose keeps it. Remote URLs are left alone.
+    static func migrateDefaultPortIfNeeded(defaults: UserDefaults = .standard) {
+        let migrationKey = "connection.didMigrateDefaultPort.v1"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+        defaults.set(true, forKey: migrationKey)
+
+        guard let stored = defaults.string(forKey: "apiBaseURL"),
+              LocalRuntimeAuth.isLoopbackBaseURL(stored),
+              var components = URLComponents(string: stored),
+              components.port == 8080,
+              let defaultPort = URLComponents(string: APIEndpoint.defaultBaseURL)?.port else {
+            return
+        }
+        components.port = defaultPort
+        if let migrated = components.string {
+            defaults.set(migrated, forKey: "apiBaseURL")
+        }
+    }
+
     static func initialAPIBaseURL() -> String {
         readAPIBaseURLOverride()
             ?? UserDefaults.standard.string(forKey: "apiBaseURL")
-            ?? "http://localhost:8080"
+            ?? APIEndpoint.defaultBaseURL
     }
 
     private static func readAPIBaseURLOverride() -> String? {
