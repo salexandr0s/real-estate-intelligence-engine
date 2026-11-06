@@ -35,6 +35,23 @@ function envStringList(key: string, fallback: string[]): string[] {
   return fallback;
 }
 
+/**
+ * Takes true, false, or the proxy's IP or CIDR. A hop count can't verify the immediate peer, so a
+ * direct client could forge X-Forwarded-For by sending enough hops. Fastify ignores that form, and
+ * refusing it here keeps the setting from doing nothing without anyone noticing.
+ */
+function envTrustProxy(): boolean | string {
+  const raw = envStr('API_TRUST_PROXY', 'false').trim();
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  if (/^\d+$/.test(raw)) {
+    throw new Error(
+      `Invalid API_TRUST_PROXY: ${raw}. Use true, false, or the proxy's IP or CIDR, not a hop count.`,
+    );
+  }
+  return raw;
+}
+
 export interface PlaywrightConfig {
   browser: string;
   headless: boolean;
@@ -81,7 +98,7 @@ export interface AppConfig {
     corsOrigins: string[];
     rateLimitMax: number;
     rateLimitWindowMs: number;
-    trustProxy: boolean | number | string;
+    trustProxy: boolean | string;
     docsPublic: boolean;
     allowPublicDocsInProduction: boolean;
   };
@@ -254,13 +271,7 @@ export function loadConfig(): AppConfig {
       corsOrigins: envStringList('API_CORS_ORIGINS', ['http://localhost:8080']),
       rateLimitMax: envInt('API_RATE_LIMIT_MAX', 100),
       rateLimitWindowMs: envInt('API_RATE_LIMIT_WINDOW_MS', 60000),
-      trustProxy: (() => {
-        const raw = envStr('API_TRUST_PROXY', 'false');
-        if (raw === 'true') return true;
-        if (raw === 'false') return false;
-        const n = parseInt(raw, 10);
-        return Number.isNaN(n) ? raw : n;
-      })(),
+      trustProxy: envTrustProxy(),
       docsPublic,
       allowPublicDocsInProduction,
     },

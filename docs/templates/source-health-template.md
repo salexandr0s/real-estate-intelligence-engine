@@ -106,6 +106,6 @@ Recovery sequence:
 2. Update extraction logic in `packages/source-{source_code}/src/`
 3. Update parser tests to match new structure
 4. Bump `parserVersion` in the adapter
-5. Run `npm run test:unit -- --filter source-{source_code}`
+5. Run `npm run test:unit -- packages/source-{source_code}`
 6. Deploy and trigger a manual scrape run to verify
 7. Monitor first 3 scheduled runs for stability

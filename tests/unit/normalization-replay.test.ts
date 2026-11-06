@@ -36,7 +36,7 @@ describe('normalization replay', () => {
     expect(result1.success).toBe(true);
     expect(result2.success).toBe(true);
 
-    if (!result1.success || !result2.success) return;
+    if (!result1.listing || !result2.listing) throw new Error('normalization returned no listing');
 
     // Content fingerprints must match
     expect(result1.listing.contentFingerprint).toBe(result2.listing.contentFingerprint);
@@ -62,8 +62,7 @@ describe('normalization replay', () => {
 
     expect(resultA.success).toBe(true);
     expect(resultB.success).toBe(true);
-    if (resultA.success && resultB.success) {
-      expect(resultA.listing.contentFingerprint).toBe(resultB.listing.contentFingerprint);
-    }
+    expect(resultA.listing?.contentFingerprint).toBeDefined();
+    expect(resultA.listing?.contentFingerprint).toBe(resultB.listing?.contentFingerprint);
   });
 });

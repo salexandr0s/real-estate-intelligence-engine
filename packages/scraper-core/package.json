@@ -8,15 +8,13 @@
     "@immoradar/config": "*",
     "@immoradar/contracts": "*",
     "@immoradar/observability": "*",
-    "bullmq": "^5.71.0",
+    "bullmq": "^5.81.5",
     "ioredis": "^5.10.1"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "echo 'ok'",
-    "test:unit": "echo 'ok'",
     "clean": "rm -rf dist"
   }
 }

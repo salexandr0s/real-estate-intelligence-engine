@@ -75,7 +75,12 @@ async function main(): Promise<void> {
   const { sourceCode, limit, dryRun } = parseArgs();
   loadConfig();
 
-  log.info('Starting rescore', { sourceCode, limit, dryRun, scoreVersion: SCORE_VERSION });
+  log.info('Starting rescore', {
+    sourceCode: sourceCode ?? undefined,
+    limit,
+    dryRun,
+    scoreVersion: SCORE_VERSION,
+  });
 
   // Resolve source filter
   let sourceId: number | null = null;

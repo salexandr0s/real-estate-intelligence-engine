@@ -17,27 +17,34 @@ interface HealthCheck {
   status: 'ok' | 'warn' | 'error';
 }
 
+/** Runs a query that aggregates without GROUP BY, which always returns exactly one row. */
+async function aggregate<T extends Record<string, unknown>>(sql: string): Promise<T> {
+  const [row] = await query<T>(sql);
+  if (!row) throw new Error(`Aggregate query returned no rows: ${sql}`);
+  return row;
+}
+
 async function main(): Promise<void> {
   loadConfig();
   const checks: HealthCheck[] = [];
 
   // 1. Active listing count
-  const [{ count: listingCount }] = await query<{ count: string }>(
+  const { count: listingCount } = await aggregate<{ count: string }>(
     `SELECT COUNT(*) AS count FROM listings WHERE listing_status = 'active'`,
   );
   checks.push({
     name: 'Active listings',
-    value: listingCount!,
+    value: listingCount,
     status: Number(listingCount) > 0 ? 'ok' : 'warn',
   });
 
   // 2. Scored listing count
-  const [{ count: scoredCount }] = await query<{ count: string }>(
+  const { count: scoredCount } = await aggregate<{ count: string }>(
     `SELECT COUNT(*) AS count FROM listings WHERE current_score IS NOT NULL`,
   );
   checks.push({
     name: 'Scored listings',
-    value: scoredCount!,
+    value: scoredCount,
     status: Number(scoredCount) > 0 ? 'ok' : 'warn',
   });
 
@@ -59,17 +66,17 @@ async function main(): Promise<void> {
   }
 
   // 4. Baseline count
-  const [{ count: baselineCount }] = await query<{ count: string }>(
+  const { count: baselineCount } = await aggregate<{ count: string }>(
     `SELECT COUNT(*) AS count FROM market_baselines`,
   );
   checks.push({
     name: 'Market baselines',
-    value: baselineCount!,
+    value: baselineCount,
     status: Number(baselineCount) > 0 ? 'ok' : 'warn',
   });
 
   // 4b. Baseline freshness
-  const [{ latest: latestBaseline }] = await query<{ latest: Date | null }>(
+  const { latest: latestBaseline } = await aggregate<{ latest: Date | null }>(
     `SELECT MAX(baseline_date) AS latest FROM market_baselines`,
   );
   if (latestBaseline) {
@@ -84,24 +91,24 @@ async function main(): Promise<void> {
   }
 
   // 5. Pending alerts
-  const [{ count: alertCount }] = await query<{ count: string }>(
+  const { count: alertCount } = await aggregate<{ count: string }>(
     `SELECT COUNT(*) AS count FROM alerts WHERE status = 'queued'`,
   );
   checks.push({
     name: 'Queued alerts',
-    value: alertCount!,
+    value: alertCount,
     status: 'ok',
   });
 
   // 6. Stale listings (not seen in 7+ days)
-  const [{ count: staleCount }] = await query<{ count: string }>(
+  const { count: staleCount } = await aggregate<{ count: string }>(
     `SELECT COUNT(*) AS count FROM listings
      WHERE listing_status = 'active'
        AND last_seen_at < NOW() - INTERVAL '7 days'`,
   );
   checks.push({
     name: 'Stale listings (7+ days)',
-    value: staleCount!,
+    value: staleCount,
     status: Number(staleCount) === 0 ? 'ok' : 'warn',
   });
 

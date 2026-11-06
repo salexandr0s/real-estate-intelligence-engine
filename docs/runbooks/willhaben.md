@@ -171,7 +171,7 @@ willhaben **blocks automated HTTP requests** — a real browser with JavaScript 
   1. `npx tsx scripts/capture-site-html.ts --source willhaben`
   2. Inspect banner HTML for new CMP selectors
   3. Update willhaben entry in `packages/scraper-core/src/browser/cookie-consent.ts`
-  4. Run parser tests: `npm run test:unit -- --filter source-willhaben`
+  4. Run parser tests: `npm run test:unit -- packages/source-willhaben`
 
 ### `__NEXT_DATA__` structure changed
 
@@ -250,6 +250,6 @@ willhaben **blocks automated HTTP requests** — a real browser with JavaScript 
 
 4. **Update test expectations** in `packages/source-willhaben/src/tests/parser.test.ts`
 
-5. **Run tests**: `npm run test:unit -- --filter source-willhaben`
+5. **Run tests**: `npm run test:unit -- packages/source-willhaben`
 
 6. **Bump `parserVersion`** in `WillhabenAdapter` if extraction logic changed

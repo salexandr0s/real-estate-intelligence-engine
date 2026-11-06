@@ -70,7 +70,7 @@ Copy this checklist into a new issue or document when starting source onboarding
 
 ## Verification
 
-- [ ] All parser tests pass: `npm run test:unit -- --filter source-<code>`
+- [ ] All parser tests pass: `npm run test:unit -- packages/source-<code>`
 - [ ] Canary crawl completes without errors
 - [ ] Normalized listings appear in `listings` table with correct field mappings
 - [ ] Scoring works correctly for new source listings

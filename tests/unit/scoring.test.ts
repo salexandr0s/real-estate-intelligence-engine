@@ -9,7 +9,6 @@ import {
   mapBucketDiscountToScore,
   computeKeywordSignalScore,
   computeTimeOnMarketScore,
-  _computeConfidenceScore,
   scoreListing,
 } from '@immoradar/scoring';
 import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';

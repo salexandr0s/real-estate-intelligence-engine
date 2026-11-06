@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('alert:email');
@@ -14,7 +14,7 @@ export interface EmailConfig {
 }
 
 let cachedTransportKey: string | null = null;
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 
 function getTransportKey(config: EmailConfig): string {
   return JSON.stringify({
@@ -26,7 +26,7 @@ function getTransportKey(config: EmailConfig): string {
   });
 }
 
-function getTransporter(config: EmailConfig): nodemailer.Transporter {
+function getTransporter(config: EmailConfig): Transporter {
   const key = getTransportKey(config);
   if (cachedTransporter && cachedTransportKey === key) {
     return cachedTransporter;
@@ -93,14 +93,17 @@ export async function sendAlertEmail(params: {
       text: params.body,
     });
 
+    const accepted = result.accepted?.length ?? 0;
+    const rejected = result.rejected?.length ?? 0;
+
     log.info('Email sent', {
       to: params.to,
       subject: params.subject,
       messageId: result.messageId ?? null,
-      accepted: result.accepted.length,
-      rejected: result.rejected.length,
+      accepted,
+      rejected,
     });
-    return result.accepted.length > 0 && result.rejected.length === 0;
+    return accepted > 0 && rejected === 0;
   } catch (error) {
     log.error('Email delivery failed', {
       to: params.to,

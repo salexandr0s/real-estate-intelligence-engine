@@ -1,5 +1,5 @@
 # ── Builder ──────────────────────────────────────────────────────────
-FROM node:22-slim AS builder
+FROM node:22.23.4-slim AS builder
 
 WORKDIR /app
 
@@ -27,8 +27,9 @@ RUN mkdir -p /runtime/apps /runtime/packages \
     done
 
 # ── Runtime ─────────────────────────────────────────────────────────
-# Playwright base image includes Chromium and system dependencies.
-FROM mcr.microsoft.com/playwright:v1.58.2-noble
+# Playwright base image includes Chromium and system dependencies. It installs its own Node, 24 as
+# of Playwright 1.64, so this stage runs a different major than the 22 that .nvmrc pins and CI tests.
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
 WORKDIR /app
 

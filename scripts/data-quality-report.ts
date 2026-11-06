@@ -421,7 +421,7 @@ async function main(): Promise<void> {
   const { sourceCode, gate } = parseArgs();
   loadConfig();
 
-  log.info('Starting data quality report', { sourceCode, gate });
+  log.info('Starting data quality report', { sourceCode: sourceCode ?? undefined, gate });
 
   console.log('\n');
   console.log('DATA QUALITY REPORT');

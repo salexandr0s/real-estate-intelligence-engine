@@ -125,8 +125,7 @@ immoradar/
 │   ├── observability/
 │   │   ├── src/
 │   │   │   ├── logging/
-│   │   │   ├── metrics/
-│   │   │   └── tracing/
+│   │   │   └── metrics/
 │   │   └── package.json
 │   │
 │   ├── source-template/
