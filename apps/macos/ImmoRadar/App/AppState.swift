@@ -518,26 +518,41 @@ final class AppState {
     }
 
     func resetLocalEngine() async {
+        // Cleared before any wait, so a monitoring choice made during the reset is the one the new
+        // engine starts with.
+        runtimeState.hasEnabledMonitoring = false
+        runtimeState.hasDismissedInitialMonitoringPrompt = false
+
+        // A transition of its own, so every other engine action waits for the reset to finish.
+        while let managedRuntimeTransitionTask {
+            _ = await managedRuntimeTransitionTask.value
+        }
+        _ = await runManagedTransition { appState in
+            await appState.performReset()
+        }
+    }
+
+    private func performReset() async -> Bool {
+        runtimeState.hasCompletedBundledSetup = false
         runtimeState.bundledLaunchExperienceState = .starting
         stopBackgroundRefreshTasks()
         alertsState.disconnectStream(alertStream)
 
         do {
             try await runtimeState.localRuntime.resetLocalEngine(apiBaseURL: connectionState.apiBaseURL)
-            runtimeState.hasCompletedBundledSetup = false
-            runtimeState.hasEnabledMonitoring = false
-            runtimeState.hasDismissedInitialMonitoringPrompt = false
-            alertsState.unreadAlertCount = 0
-            await apiClient.updateAuthToken(nil)
-
-            _ = await startManagedLocalRuntime(
-                restartExistingRuntime: false,
-                userInitiated: true
-            )
         } catch {
             runtimeState.bundledLaunchExperienceState = .needsAttention(error.localizedDescription)
             startBackgroundRefreshTasksIfNeeded()
+            return false
         }
+
+        alertsState.unreadAlertCount = 0
+        await apiClient.updateAuthToken(nil)
+
+        return await performManagedLocalRuntimeTransition(
+            restartExistingRuntime: false,
+            userInitiated: true
+        )
     }
 
     // MARK: - Connection / Alerts
@@ -609,6 +624,18 @@ final class AppState {
             return activeResult
         }
 
+        return await runManagedTransition { appState in
+            await appState.performManagedLocalRuntimeTransition(
+                restartExistingRuntime: restartExistingRuntime,
+                userInitiated: userInitiated
+            )
+        }
+    }
+
+    /// The caller has already waited for any transition in progress.
+    private func runManagedTransition(
+        _ transition: @escaping @MainActor (AppState) async -> Bool
+    ) async -> Bool {
         let transitionID = UUID()
         let task = Task { @MainActor [weak self] () -> Bool in
             guard let self else { return false }
@@ -619,10 +646,7 @@ final class AppState {
                 }
             }
 
-            return await self.performManagedLocalRuntimeTransition(
-                restartExistingRuntime: restartExistingRuntime,
-                userInitiated: userInitiated
-            )
+            return await transition(self)
         }
 
         managedRuntimeTransitionID = transitionID

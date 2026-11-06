@@ -264,6 +264,7 @@ final class LocalRuntimeService {
     private var coreRestartTimes: [Date] = []
     private var coreRestartTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
+    private var startMovesOnlyWorkers = false
     private var workerHolds = WorkerHolds()
     private var workerHoldObserver: WorkerHoldObserver?
     private var workerHoldWaitTask: Task<Void, Never>?
@@ -370,11 +371,13 @@ final class LocalRuntimeService {
 
         // The start in progress launches workers from this choice, or applies it when it finishes.
         // Waiting for it means the caller sees how that start ended, not its progress.
-        if let startTask {
+        while let startTask {
+            let keepsEngine = startMovesOnlyWorkers
             activeBootMode = bootMode
             await supervisor?.setWorkersRunning(workersShouldRun)
             await startTask.value
-            return
+            // A restart still has work to do after a start that left the engine in place.
+            guard policy == .forceRestart, keepsEngine else { return }
         }
 
         // Only a reset is busy with no start running, and the next start reads this choice.
@@ -399,9 +402,20 @@ final class LocalRuntimeService {
     /// alongside it. It's a task of its own so a caller that goes away can't abandon a half-started
     /// engine.
     private func runStart(apiBaseURL: String, bootMode: BootMode, policy: StartPolicy) async {
+        // Written before the task exists, because a click already queued runs before the task's body
+        // and its newer choice has to survive.
+        activeBootMode = bootMode
+        // Only the workers depend on the mode, so an engine that is up stays up and the API keeps answering.
+        let movesOnlyWorkers = policy == .ifNeeded && isEngineRunning
+        startMovesOnlyWorkers = movesOnlyWorkers
+
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.performStart(apiBaseURL: apiBaseURL, bootMode: bootMode, policy: policy)
+            if movesOnlyWorkers {
+                await self.applyWorkerState()
+            } else {
+                await self.performStart(apiBaseURL: apiBaseURL)
+            }
             self.startTask = nil
 
             // Exits are ignored while a start runs, because it replaces the engine. One that is still
@@ -414,15 +428,8 @@ final class LocalRuntimeService {
         await task.value
     }
 
-    private func performStart(apiBaseURL: String, bootMode: BootMode, policy: StartPolicy) async {
-        // Only the workers depend on the mode, so an engine that is up stays up and the API keeps answering.
-        if policy == .ifNeeded, isEngineRunning {
-            activeBootMode = bootMode
-            await applyWorkerState()
-            return
-        }
-
-        beginStartupAttempt(bootMode: bootMode)
+    private func performStart(apiBaseURL: String) async {
+        beginStartupAttempt()
         activeAPIBaseURL = apiBaseURL
         state = .starting
 
@@ -652,6 +659,11 @@ final class LocalRuntimeService {
 
     func resetLocalEngine(apiBaseURL: String) async throws {
         guard allowsEngineEffects else { throw ResetError.notAllowed }
+
+        // Cutting a start off halfway would leave its processes behind, so the reset goes after it.
+        while let startTask {
+            await startTask.value
+        }
         guard !isBusy else { throw ResetError.busy }
 
         cancelCoreRestart()
@@ -717,13 +729,12 @@ final class LocalRuntimeService {
         }
     }
 
-    private func beginStartupAttempt(bootMode: BootMode) {
+    private func beginStartupAttempt() {
         nextStartupAttemptID += 1
         activeStartupAttemptID = nextStartupAttemptID
         activeStartupRetryCount = 0
         activeStartupStep = nil
         activeStartupStartedAt = Date.now
-        activeBootMode = bootMode
         lastStartupFailure = nil
     }
 
