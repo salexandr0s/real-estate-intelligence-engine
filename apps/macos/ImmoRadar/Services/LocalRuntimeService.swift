@@ -84,8 +84,6 @@ enum LocalRuntimeAuth {
 
 @MainActor @Observable
 final class LocalRuntimeService {
-    static weak var sharedInstance: LocalRuntimeService?
-
     enum State: Equatable {
         case stopped
         case starting
@@ -338,7 +336,6 @@ final class LocalRuntimeService {
             smokeRequested: Self.environmentRequestsSmoke,
             launchMode: AppLaunchMode.current == .production ? launchMode : AppLaunchMode.current
         )
-        Self.sharedInstance = self
     }
 
     nonisolated private static var environmentRequestsSmoke: Bool {
@@ -523,9 +520,6 @@ final class LocalRuntimeService {
         case runtimeArtifactsMissing
         case manifestMissing
         case nodeExecutableMissing
-        case apiStartupTimedOut
-        case serviceStartupTimedOut(String)
-        case portInUse(String, Int)
         case commandFailed(String)
 
         var errorDescription: String? {
@@ -540,12 +534,6 @@ final class LocalRuntimeService {
                 return "The bundled runtime manifest is missing or invalid."
             case .nodeExecutableMissing:
                 return "Couldn’t find a Node.js runtime to launch the local backend."
-            case .apiStartupTimedOut:
-                return "The local API didn’t become healthy in time."
-            case .serviceStartupTimedOut(let service):
-                return "\(service) didn’t become ready in time."
-            case .portInUse(let service, let port):
-                return "Can’t start \(service). Port \(port) is already in use."
             case .commandFailed(let description):
                 return description
             }
@@ -768,58 +756,6 @@ final class LocalRuntimeService {
             progressStatus = nil
             finishStartupAttempt(status: .failed, context: nil, failure: failure)
         }
-    }
-
-    func stop() async {
-        guard permitProductionOperation(.stop) else { return }
-        guard state != .stopping else { return }
-        state = .stopping
-        activeStartupAttemptID = nil
-        activeStartupStep = nil
-        setProgress(
-            title: "Stopping local engine",
-            detail: "Shutting down workers and local services.",
-            fractionCompleted: nil
-        )
-        persistStartupDiagnostics(status: .stopping, context: nil, failure: nil)
-        await stopManagedProcesses(force: true)
-        guard permitProductionOperation(.completion) else { return }
-        lastStartupFailure = nil
-        state = .stopped
-        progressStatus = nil
-        persistStartupDiagnostics(status: .stopped, context: nil, failure: nil)
-    }
-
-    func terminateManagedProcessesForAppExit() {
-        guard permitProductionOperation(.appExit) else { return }
-        let orderedComponents: [Component] = [.scraper, .processing, .api, .redis, .postgres]
-
-        activeStartupAttemptID = nil
-        activeStartupStep = nil
-
-        for component in orderedComponents {
-            guard let process = processes[component] else { continue }
-            if process.isRunning {
-                productionSignal { process.terminate() }
-            }
-        }
-
-        Thread.sleep(forTimeInterval: 0.35)
-
-        for component in orderedComponents {
-            guard let process = processes[component] else { continue }
-            if process.isRunning {
-                productionSignal { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
-            }
-            processes[component] = nil
-            processOwners[component] = nil
-            if let handle = logHandles[component] {
-                try? handle.close()
-                logHandles[component] = nil
-            }
-        }
-
-        refreshComponentStatuses()
     }
 
     func resetLocalEngine(apiBaseURL: String) async throws {
@@ -2390,45 +2326,6 @@ final class LocalRuntimeService {
                 component: nil,
                 exitCode: nil,
                 isTransient: false
-            )
-        case .apiStartupTimedOut:
-            return StartupFailure(
-                code: .apiStartupTimedOut,
-                message: "The local API didn’t become healthy in time.",
-                step: .waitingForAPI,
-                logFileName: Component.api.logFileName,
-                component: .api,
-                exitCode: nil,
-                isTransient: true
-            )
-        case .serviceStartupTimedOut(let service):
-            let component: Component? =
-                service == "Postgres" ? .postgres
-                : service == "Redis" ? .redis
-                : nil
-            let code: StartupFailure.Code =
-                service == "Postgres" ? .postgresStartupTimedOut
-                : service == "Redis" ? .redisStartupTimedOut
-                : .componentExitedUnexpectedly
-
-            return StartupFailure(
-                code: code,
-                message: "\(service) didn’t become ready in time.",
-                step: component == .postgres ? .waitingForPostgres : component == .redis ? .waitingForRedis : .verifyingServices,
-                logFileName: component?.logFileName,
-                component: component,
-                exitCode: nil,
-                isTransient: service == "Postgres" || service == "Redis"
-            )
-        case .portInUse(let service, let port):
-            return StartupFailure(
-                code: .portInUse,
-                message: "Can’t start \(service). Port \(port) is already in use.",
-                step: service == "Postgres" ? .startingPostgres : service == "Redis" ? .startingRedis : .startingAPI,
-                logFileName: nil,
-                component: service == "Postgres" ? .postgres : service == "Redis" ? .redis : .api,
-                exitCode: nil,
-                isTransient: true
             )
         case .commandFailed(let description):
             return StartupFailure(
