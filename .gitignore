@@ -18,7 +18,8 @@ DerivedData/
 # Scraper artifacts and local data
 /immoradar/
 /real-estate-intel/
-assets/
+/assets/
+*.profraw
 
 # Certificates and keys
 *.pem

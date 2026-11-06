@@ -6,7 +6,7 @@
  * in with verdict / disagreement notes.
  *
  * Usage:
- *   npx tsx scripts/score-review-packet.ts [--limit 12] [--output docs/internal/score-review-packet.md]
+ *   npx tsx scripts/score-review-packet.ts [--limit 12] [--output score-review-packet.md]
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
