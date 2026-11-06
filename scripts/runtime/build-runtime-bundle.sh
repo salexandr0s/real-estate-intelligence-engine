@@ -265,6 +265,26 @@ verify_runtime_modules() {
   ) >/dev/null
 }
 
+# Only the headless shell this Playwright version launches. The whole cache holds every revision and
+# browser ever installed on this machine.
+copy_playwright_browser() {
+  local revision
+  revision="$(BROWSERS_JSON="$REPO_ROOT/node_modules/playwright-core/browsers.json" "$NODE_BIN" -p \
+    "require(process.env.BROWSERS_JSON).browsers.find((browser) => browser.name === 'chromium-headless-shell').revision")"
+  local browser_dir="$PLAYWRIGHT_CACHE_DIR/chromium_headless_shell-$revision"
+
+  if [[ ! -d "$browser_dir" ]]; then
+    if [[ "$STRICT_MODE" == "1" ]]; then
+      fail "Chromium headless shell not found at $browser_dir; run: npx playwright install chromium-headless-shell"
+    fi
+    warn "Chromium headless shell not found at $browser_dir; the scraper will not start a browser"
+    return 0
+  fi
+
+  mkdir -p "$OUTPUT_DIR/playwright-browsers"
+  rsync -a "$browser_dir" "$OUTPUT_DIR/playwright-browsers/"
+}
+
 NODE_BIN="${IMMORADAR_NODE_BINARY:-$(command -v node || true)}"
 REDIS_SERVER_BIN="${IMMORADAR_REDIS_SERVER_BINARY:-$(command -v redis-server || true)}"
 REDIS_CLI_BIN="${IMMORADAR_REDIS_CLI_BINARY:-$(command -v redis-cli || true)}"
@@ -338,9 +358,7 @@ rewrite_macho_paths
 adhoc_sign_runtime
 verify_runtime_modules
 
-if [[ -d "$PLAYWRIGHT_CACHE_DIR" ]]; then
-  rsync -a "$PLAYWRIGHT_CACHE_DIR/" "$OUTPUT_DIR/playwright-browsers/"
-fi
+copy_playwright_browser
 
 cat > "$OUTPUT_DIR/manifest.json" <<'JSON'
 {
