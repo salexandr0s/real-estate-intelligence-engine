@@ -351,7 +351,8 @@ final class LocalRuntimeService {
         }
     }
 
-    func diagnosticsSummary(apiBaseURL: String) -> DiagnosticsSummary {
+    /// Reads only what `applyRuntimeMetadata` cached, because views call this from their bodies.
+    func diagnosticsSummary() -> DiagnosticsSummary {
         guard permitProductionOperation(.diagnostics) else {
             return DiagnosticsSummary(
                 runtimeDescription: "Isolated smoke blocked",

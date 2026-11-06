@@ -31,9 +31,6 @@ final class RuntimeState {
     @ObservationIgnored
     private let isSmokeTest: Bool
 
-    @ObservationIgnored
-    private var statusRefreshTask: Task<Void, Never>?
-
     let localRuntime: LocalRuntimeService
     var settingsErrorMessage: String?
 
@@ -61,10 +58,6 @@ final class RuntimeState {
                 forKey: PreferenceKey.monitoringPromptDismissed
             )
         }
-    }
-
-    var hasActiveStatusRefreshTask: Bool {
-        statusRefreshTask != nil
     }
 
     var preferredLocalRuntimeBootMode: LocalRuntimeService.BootMode {
@@ -132,34 +125,12 @@ final class RuntimeState {
         }
     }
 
-    func localRuntimeDiagnostics(apiBaseURL: String) -> LocalRuntimeService.DiagnosticsSummary {
-        localRuntime.diagnosticsSummary(apiBaseURL: apiBaseURL)
+    var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
+        localRuntime.diagnosticsSummary()
     }
 
     func clearSettingsError() {
         settingsErrorMessage = nil
-    }
-
-    func startStatusRefreshTaskIfNeeded(
-        allowsBackgroundRefreshTasks: Bool,
-        usesManagedLocalRuntime: Bool,
-        apiBaseURL: String
-    ) {
-        stopStatusRefreshTask()
-        guard allowsBackgroundRefreshTasks, usesManagedLocalRuntime else { return }
-
-        statusRefreshTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let self else { break }
-                await self.localRuntime.refreshStatus(apiBaseURL: apiBaseURL)
-                try? await Task.sleep(for: .seconds(5))
-            }
-        }
-    }
-
-    func stopStatusRefreshTask() {
-        statusRefreshTask?.cancel()
-        statusRefreshTask = nil
     }
 
     func openLocalEngineLogs() {

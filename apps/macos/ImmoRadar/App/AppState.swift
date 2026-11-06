@@ -162,7 +162,7 @@ final class AppState {
     }
 
     var hasActiveBackgroundRefreshTasks: Bool {
-        connectionState.hasActiveRefreshTask || runtimeState.hasActiveStatusRefreshTask
+        connectionState.hasActiveRefreshTask
     }
 
     var allowsAutomaticFeatureLoads: Bool {
@@ -190,7 +190,7 @@ final class AppState {
     }
 
     var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
-        runtimeState.localRuntimeDiagnostics(apiBaseURL: connectionState.apiBaseURL)
+        runtimeState.localRuntimeDiagnostics
     }
 
     var localRuntime: LocalRuntimeService {
@@ -375,25 +375,16 @@ final class AppState {
     // MARK: - Background Refresh
 
     func startBackgroundRefreshTasksIfNeeded() {
-        let allowsBackgroundRefreshTasks = launchPolicy.allowsBackgroundRefresh
-
         connectionState.startRefreshTaskIfNeeded(
-            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks
+            allowsBackgroundRefreshTasks: launchPolicy.allowsBackgroundRefresh
         ) { [weak self] in
             guard let self else { return }
             await self.refreshConnection()
         }
-
-        runtimeState.startStatusRefreshTaskIfNeeded(
-            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks,
-            usesManagedLocalRuntime: usesManagedLocalRuntime,
-            apiBaseURL: connectionState.apiBaseURL
-        )
     }
 
     func stopBackgroundRefreshTasks() {
         connectionState.stopRefreshTask()
-        runtimeState.stopStatusRefreshTask()
     }
 
     // MARK: - Navigation
