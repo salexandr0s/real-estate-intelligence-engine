@@ -17,6 +17,7 @@ enum LocalEngineExperienceState: Equatable {
     case ready
     case monitoringPaused
     case monitoringActive
+    case monitoringHeld(String)
     case needsAttention
 }
 
@@ -118,7 +119,11 @@ final class RuntimeState {
             case .unavailable, .failed, .degraded:
                 return .needsAttention
             case .running:
-                return hasEnabledMonitoring ? .monitoringActive : .monitoringPaused
+                guard hasEnabledMonitoring else { return .monitoringPaused }
+                if let explanation = localRuntime.workerHoldExplanation {
+                    return .monitoringHeld(explanation)
+                }
+                return .monitoringActive
             case .stopped:
                 return hasCompletedBundledSetup ? .needsAttention : .starting
             }

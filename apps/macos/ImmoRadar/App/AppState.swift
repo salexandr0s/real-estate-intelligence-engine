@@ -189,6 +189,20 @@ final class AppState {
         runtimeState.localEngineExperienceState(usesManagedLocalRuntime: usesManagedLocalRuntime)
     }
 
+    /// Why the local engine can't run a source right now, if it can't.
+    var sourceRunBlockedReason: String? {
+        switch localEngineExperienceState {
+        case .externalConnection, .monitoringActive:
+            return nil
+        case .monitoringHeld(let reason):
+            return reason
+        case .ready, .monitoringPaused:
+            return "Start monitoring to run this source"
+        case .starting, .needsAttention:
+            return "The local engine isn’t ready"
+        }
+    }
+
     var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
         runtimeState.localRuntimeDiagnostics
     }

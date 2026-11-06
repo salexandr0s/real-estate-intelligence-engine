@@ -225,7 +225,7 @@ private struct SourcesRuntimeCard: View {
                 }
                 .buttonStyle(.bordered)
 
-            case .monitoringActive:
+            case .monitoringActive, .monitoringHeld:
                 Button {
                     Task {
                         await appState.pauseMonitoring()
@@ -283,6 +283,8 @@ private struct SourcesRuntimeCard: View {
             return "Monitoring is paused"
         case .monitoringActive:
             return "Monitoring is active"
+        case .monitoringHeld:
+            return "Monitoring is on hold"
         case .needsAttention:
             return "Local engine needs attention"
         case .externalConnection:
@@ -300,6 +302,8 @@ private struct SourcesRuntimeCard: View {
             return "The local runtime is running, but automatic discovery is paused until you start monitoring."
         case .monitoringActive:
             return "The local runtime is actively scheduling background discovery while the app stays open."
+        case .monitoringHeld(let explanation):
+            return explanation
         case .needsAttention:
             return appState.localRuntime.state.detail
         case .externalConnection:
@@ -313,7 +317,7 @@ private struct SourcesRuntimeCard: View {
             return "arrow.triangle.2.circlepath.circle.fill"
         case .ready:
             return "checkmark.circle.fill"
-        case .monitoringPaused:
+        case .monitoringPaused, .monitoringHeld:
             return "pause.circle.fill"
         case .monitoringActive:
             return "bolt.circle.fill"
@@ -330,7 +334,7 @@ private struct SourcesRuntimeCard: View {
             return .accentColor
         case .ready, .monitoringActive:
             return .scoreGood
-        case .monitoringPaused, .externalConnection:
+        case .monitoringPaused, .monitoringHeld, .externalConnection:
             return .secondary
         case .needsAttention:
             return .scoreAverage
@@ -347,6 +351,8 @@ private struct SourcesRuntimeCard: View {
             return "Browsing stays available while monitoring is paused. You can turn it on at any time."
         case .monitoringActive:
             return "Automatic monitoring stays active while the ImmoRadar app is open on this Mac."
+        case .monitoringHeld:
+            return "Browsing stays available while the workers are stopped."
         case .needsAttention:
             return "Use the diagnostics below if the local engine needs attention."
         case .externalConnection:
@@ -740,8 +746,8 @@ private struct SourceDetailCard: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(viewModel.runningSourceIDs.contains(source.id) || !source.isActive)
-                .help(source.isActive ? "Trigger a manual scrape run" : "Enable source to run")
+                .disabled(viewModel.runningSourceIDs.contains(source.id) || !source.isActive || appState.sourceRunBlockedReason != nil)
+                .help(runNowHelp)
 
                 Spacer()
             }
@@ -844,6 +850,11 @@ private struct SourceDetailCard: View {
         case .unknown:
             return "Source health has not been determined yet."
         }
+    }
+
+    private var runNowHelp: String {
+        guard source.isActive else { return "Enable source to run" }
+        return appState.sourceRunBlockedReason ?? "Trigger a manual scrape run"
     }
 
     private var intervalLabel: String {
