@@ -17,6 +17,7 @@ enum LocalEngineExperienceState: Equatable {
     case ready
     case monitoringPaused
     case monitoringActive
+    case monitoringHeld(String)
     case needsAttention
 }
 
@@ -30,9 +31,6 @@ final class RuntimeState {
 
     @ObservationIgnored
     private let isSmokeTest: Bool
-
-    @ObservationIgnored
-    private var statusRefreshTask: Task<Void, Never>?
 
     let localRuntime: LocalRuntimeService
     var settingsErrorMessage: String?
@@ -63,22 +61,22 @@ final class RuntimeState {
         }
     }
 
-    var hasActiveStatusRefreshTask: Bool {
-        statusRefreshTask != nil
-    }
-
     var preferredLocalRuntimeBootMode: LocalRuntimeService.BootMode {
         hasEnabledMonitoring ? .active : .setup
     }
 
-    init(isSmokeTest: Bool, localRuntime: LocalRuntimeService = LocalRuntimeService()) {
+    init(
+        isSmokeTest: Bool,
+        smokeStartsMonitoring: Bool = false,
+        localRuntime: LocalRuntimeService = LocalRuntimeService()
+    ) {
         self.isSmokeTest = isSmokeTest
         self.localRuntime = localRuntime
         self.hasCompletedBundledSetup = isSmokeTest
             ? false
             : UserDefaults.standard.bool(forKey: PreferenceKey.bundledSetupCompleted)
         self.hasEnabledMonitoring = isSmokeTest
-            ? false
+            ? smokeStartsMonitoring
             : UserDefaults.standard.bool(forKey: PreferenceKey.monitoringEnabled)
         self.hasDismissedInitialMonitoringPrompt = isSmokeTest
             ? false
@@ -122,44 +120,26 @@ final class RuntimeState {
             switch localRuntime.state {
             case .starting, .stopping:
                 return .starting
-            case .unavailable, .failed:
+            case .unavailable, .failed, .degraded:
                 return .needsAttention
             case .running:
-                return hasEnabledMonitoring ? .monitoringActive : .monitoringPaused
+                guard hasEnabledMonitoring else { return .monitoringPaused }
+                if let explanation = localRuntime.workerHoldExplanation {
+                    return .monitoringHeld(explanation)
+                }
+                return .monitoringActive
             case .stopped:
                 return hasCompletedBundledSetup ? .needsAttention : .starting
             }
         }
     }
 
-    func localRuntimeDiagnostics(apiBaseURL: String) -> LocalRuntimeService.DiagnosticsSummary {
-        localRuntime.diagnosticsSummary(apiBaseURL: apiBaseURL)
+    var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
+        localRuntime.diagnosticsSummary()
     }
 
     func clearSettingsError() {
         settingsErrorMessage = nil
-    }
-
-    func startStatusRefreshTaskIfNeeded(
-        allowsBackgroundRefreshTasks: Bool,
-        usesManagedLocalRuntime: Bool,
-        apiBaseURL: String
-    ) {
-        stopStatusRefreshTask()
-        guard allowsBackgroundRefreshTasks, usesManagedLocalRuntime else { return }
-
-        statusRefreshTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let self else { break }
-                await self.localRuntime.refreshStatus(apiBaseURL: apiBaseURL)
-                try? await Task.sleep(for: .seconds(5))
-            }
-        }
-    }
-
-    func stopStatusRefreshTask() {
-        statusRefreshTask?.cancel()
-        statusRefreshTask = nil
     }
 
     func openLocalEngineLogs() {

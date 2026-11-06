@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUNTIME_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NODE_BIN="$RUNTIME_ROOT/bin/node"
-MIGRATE_SCRIPT="$RUNTIME_ROOT/packages/db/dist/migrate.js"
-PSQL_BIN="$RUNTIME_ROOT/infra/postgres/bin/psql"
-CREATEDB_BIN="$RUNTIME_ROOT/infra/postgres/bin/createdb"
-PG_ISREADY_BIN="$RUNTIME_ROOT/infra/postgres/bin/pg_isready"
+RUNTIME_ROOT="${IMMORADAR_RUNTIME_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+POSTGRES_BIN_DIR="${IMMORADAR_POSTGRES_BIN_DIR:-$RUNTIME_ROOT/infra/postgres/bin}"
+NODE_BIN="${IMMORADAR_NODE_BIN:-$RUNTIME_ROOT/bin/node}"
+MIGRATE_SCRIPT="${IMMORADAR_MIGRATE_SCRIPT:-$RUNTIME_ROOT/packages/db/dist/migrate.js}"
+PSQL_BIN="$POSTGRES_BIN_DIR/psql"
+CREATEDB_BIN="$POSTGRES_BIN_DIR/createdb"
+PG_ISREADY_BIN="$POSTGRES_BIN_DIR/pg_isready"
 EXIT_POSTGRES_NOT_READY=70
 
 if [[ ! -x "$NODE_BIN" ]]; then
@@ -83,8 +84,18 @@ if [[ -x "$PSQL_BIN" && -x "$CREATEDB_BIN" ]]; then
     exit "$EXIT_POSTGRES_NOT_READY"
   fi
 
-  if ! retry_transient_postgres_command "$PSQL_BIN" "$ADMIN_DATABASE_URL" -tAc "SELECT 1 FROM pg_database WHERE datname = '$TARGET_DATABASE'" | grep -q 1; then
-    retry_transient_postgres_command "$CREATEDB_BIN" --maintenance-db="$ADMIN_DATABASE_URL" "$TARGET_DATABASE" >/dev/null
+  # -X skips ~/.psqlrc, whose output would otherwise become part of this answer.
+  DATABASE_EXISTS="$(retry_transient_postgres_command "$PSQL_BIN" -X "$ADMIN_DATABASE_URL" -tAc "SELECT 1 FROM pg_database WHERE datname = '$TARGET_DATABASE'")"
+  if [[ "$DATABASE_EXISTS" != "1" ]]; then
+    # The server's default ctype is C, under which ILIKE folds only ASCII and keyword search
+    # misses German words. Sorting stays bytewise.
+    retry_transient_postgres_command "$CREATEDB_BIN" \
+      --maintenance-db="$ADMIN_DATABASE_URL" \
+      --template=template0 \
+      --encoding=UTF8 \
+      --lc-collate=C \
+      --lc-ctype=en_US.UTF-8 \
+      "$TARGET_DATABASE" >/dev/null
   fi
 fi
 

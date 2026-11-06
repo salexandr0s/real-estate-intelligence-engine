@@ -9,6 +9,8 @@
 import { loadConfig } from '@immoradar/config';
 import IORedis from 'ioredis';
 
+const QUIT_TIMEOUT_MS = 1_000;
+
 let _connection: IORedis | null = null;
 
 /**
@@ -27,11 +29,24 @@ export function getRedisConnection(): unknown {
   return _connection;
 }
 
+/**
+ * Closes the shared connection. Concurrent and repeated calls close it once.
+ */
 export async function closeRedisConnection(): Promise<void> {
-  if (_connection) {
-    await _connection.quit();
-    _connection = null;
-  }
+  const closing = _connection;
+  if (!closing) return;
+
+  _connection = null;
+
+  // With maxRetriesPerRequest null, quit() never settles while Redis is unreachable.
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, QUIT_TIMEOUT_MS);
+  });
+  await Promise.race([closing.quit().catch(() => undefined), timedOut]);
+  clearTimeout(timer);
+
+  closing.disconnect();
 }
 
 export function getQueuePrefix(): string {

@@ -65,7 +65,7 @@ struct GetAlertCountIntent: AppIntent {
     nonisolated(unsafe) static var description = IntentDescription("Returns the number of unread alerts in ImmoRadar.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
-        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
+        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? APIEndpoint.defaultBaseURL
         let token = LocalRuntimeAuth.preferredToken(
             for: baseURL,
             userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
@@ -85,7 +85,7 @@ struct GetListingCountIntent: AppIntent {
     nonisolated(unsafe) static var description = IntentDescription("Returns the number of active listings in ImmoRadar.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
-        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? "http://localhost:8080"
+        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? APIEndpoint.defaultBaseURL
         let token = LocalRuntimeAuth.preferredToken(
             for: baseURL,
             userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),

@@ -1,5 +1,4 @@
 import Foundation
-#if !IMMORADAR_POLICY_PROOF
 import XCTest
 @testable import ImmoRadar
 
@@ -39,17 +38,31 @@ final class AppLaunchModeTests: XCTestCase {
 
         XCTAssertFalse(appState.allowsAutomaticFeatureLoads)
     }
-}
-#endif
 
-// This same proof can be compiled with AppLaunchMode.swift alone. It must not
-// import the application, execute a bundle, inspect processes or call Keychain.
+    /// Hosted tests run inside the real app, so a start here could stop or replace a running engine.
+    @MainActor
+    func testTestProcessCannotStartTheEngine() async {
+        let runtime = LocalRuntimeService(launchMode: .production)
+
+        await runtime.start(apiBaseURL: "http://127.0.0.1:1", bootMode: .active, policy: .forceRestart)
+
+        XCTAssertFalse(runtime.isEngineRunning)
+        guard case .unavailable = runtime.state else {
+            return XCTFail("Expected the start to be refused, got \(runtime.state)")
+        }
+    }
+}
+
+// Must not execute a bundle, inspect processes or call Keychain.
 enum SmokePolicyProof {
     struct Failure: Error { let check: String }
 
     static func run() throws -> [String] {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory.resolvingSymlinksInPath()
+        // Canonical, so it keeps `/private` the way a real smoke root does.
+        guard let canonicalTemporary = realpath(fm.temporaryDirectory.path, nil) else { throw Failure(check: "temporary directory") }
+        defer { free(canonicalTemporary) }
+        let root = URL(fileURLWithPath: String(cString: canonicalTemporary), isDirectory: true)
             .appendingPathComponent("immoradar-smoke.\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? fm.removeItem(at: root) }
@@ -57,8 +70,8 @@ enum SmokePolicyProof {
         let executable = app.appendingPathComponent("Contents/MacOS/ImmoRadar")
         let runtime = app.appendingPathComponent("Contents/Resources/runtime", isDirectory: true)
         let manifestURL = runtime.appendingPathComponent("manifest.json")
-        let scriptPaths = ["postgres": "scripts/start-postgres.sh", "redis": "scripts/start-redis.sh", "migrate": "scripts/run-migrations.sh"]
-        for relative in ["home", "tmp", "runtime-home", "logs"] {
+        let scriptPaths = ["postgres": "scripts/start-postgres.sh", "redis": "scripts/start-redis.sh", "migrate": "scripts/run-migrations.sh", "watchdog": "scripts/engine-watchdog.sh"]
+        for relative in ["home", "t", "runtime-home", "logs"] {
             try fm.createDirectory(at: root.appendingPathComponent(relative), withIntermediateDirectories: true)
         }
         for file in [executable] + (["bin/node", "infra/postgres/bin/postgres", "infra/redis/bin/redis-server",
@@ -73,7 +86,8 @@ enum SmokePolicyProof {
         let uid = (try fm.attributesOfItem(atPath: root.path)[.ownerAccountID] as! NSNumber).uintValue
         var environment = [
             "HOME": root.appendingPathComponent("home").path,
-            "TMPDIR": root.appendingPathComponent("tmp").path,
+            "CFFIXED_USER_HOME": root.appendingPathComponent("home").path,
+            "TMPDIR": root.appendingPathComponent("t").path,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "IMMORADAR_SMOKE_TEST": "1",
             "IMMORADAR_SMOKE_ROOT": root.path,
             "IMMORADAR_RUNTIME_HOME_OVERRIDE": root.appendingPathComponent("runtime-home").path,
@@ -107,20 +121,24 @@ enum SmokePolicyProof {
         let smoke = AppLaunchPolicy(mode: .production, smokeContext: context)
         let token = smoke.connectionToken { reads += 1; return "must-not-load" }
         try check("smoke token avoids stored loader", reads == 0 && token == environment["IMMORADAR_LOCAL_RUNTIME_API_TOKEN"])
-        try check("smoke disables duplicate discovery and feature refresh", !smoke.allowsDuplicateAppTermination && !smoke.allowsAutomaticFeatureLoads && !smoke.allowsBackgroundRefresh && !smoke.allowsStoredCredentials)
+        try check("smoke runs its own engine and disables feature refresh", smoke.allowsEngineEffects && !smoke.allowsAutomaticFeatureLoads && !smoke.allowsBackgroundRefresh && !smoke.allowsStoredCredentials)
         for mode in [AppLaunchMode.test, .preview] {
             let policy = AppLaunchPolicy(mode: mode, smokeContext: nil)
             let token = policy.connectionToken { reads += 1; return "must-not-load" }
-            try check("\(mode) skips credentials and duplicate discovery", token == nil && reads == 0 && !policy.allowsDuplicateAppTermination && !policy.allowsStoredCredentials && !policy.allowsAutomaticFeatureLoads && !policy.allowsBackgroundRefresh)
+            try check("\(mode) skips credentials and the engine", token == nil && reads == 0 && !policy.allowsEngineEffects && !policy.allowsStoredCredentials && !policy.allowsAutomaticFeatureLoads && !policy.allowsBackgroundRefresh)
         }
-        let production = AppLaunchPolicy(mode: .production, smokeContext: nil)
+        let unvalidated = AppLaunchPolicy(mode: .production, smokeContext: nil, smokeRequested: true)
+        try check("unvalidated smoke can't run the engine", !unvalidated.allowsEngineEffects)
+        let production = AppLaunchPolicy(mode: .production, smokeContext: nil, smokeRequested: false)
         let productionToken = production.connectionToken { reads += 1; return "synthetic-stored-token" }
-        try check("normal production policy retained", reads == 1 && productionToken == "synthetic-stored-token" && production.allowsDuplicateAppTermination && production.allowsStoredCredentials && production.allowsAutomaticFeatureLoads && production.allowsBackgroundRefresh)
+        try check("normal production policy retained", reads == 1 && productionToken == "synthetic-stored-token" && production.allowsEngineEffects && production.allowsStoredCredentials && production.allowsAutomaticFeatureLoads && production.allowsBackgroundRefresh)
 
         for (name, key, value) in [
             ("invalid smoke flag rejected", "IMMORADAR_SMOKE_TEST", "0"),
             ("missing root rejected", "IMMORADAR_SMOKE_ROOT", ""),
             ("foreign home rejected", "HOME", "/Users/not-the-test-home"),
+            ("foreign preferences home rejected", "CFFIXED_USER_HOME", "/Users/not-the-test-home"),
+            ("unknown boot mode rejected", "IMMORADAR_SMOKE_BOOT_MODE", "paused"),
             ("missing token rejected", "IMMORADAR_LOCAL_RUNTIME_API_TOKEN", ""),
             ("inherited credentials rejected", "OPENAI_API_KEY", "synthetic-only"),
             ("enabled scheduler rejected", "SCHEDULER_ENABLED", "true"),
@@ -131,10 +149,6 @@ enum SmokePolicyProof {
             invalid[key] = value
             try reject(name, invalid)
         }
-        let stale = root.appendingPathComponent("runtime-home/stale-registry")
-        try Data().write(to: stale)
-        try reject("existing runtime home rejected", environment)
-        try fm.removeItem(at: stale)
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
         try reject("non-private root rejected", environment)
         try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)

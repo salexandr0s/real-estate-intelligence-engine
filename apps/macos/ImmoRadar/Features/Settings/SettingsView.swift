@@ -238,6 +238,7 @@ private struct SettingsLocalEngineSection: View {
                     Task { await appState.restartLocalEngine() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
             }
 
             HStack(spacing: Theme.Spacing.sm) {
@@ -255,6 +256,7 @@ private struct SettingsLocalEngineSection: View {
                     Task { await appState.resetLocalEngine() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isLocalEngineBusy)
             }
 
             Toggle("Show advanced connection settings", isOn: $showAdvancedConnectionSettings)
@@ -276,6 +278,8 @@ private struct SettingsLocalEngineSection: View {
             return "Monitoring is paused"
         case .monitoringActive:
             return "Monitoring is active"
+        case .monitoringHeld:
+            return "Monitoring is on hold"
         case .needsAttention:
             return "Local engine needs attention"
         case .externalConnection:
@@ -293,6 +297,8 @@ private struct SettingsLocalEngineSection: View {
             return "Automatic discovery is paused, but the local engine is still available for browsing existing data."
         case .monitoringActive:
             return "Automatic monitoring is enabled and the bundled local engine is running in the background while the app is open."
+        case .monitoringHeld(let explanation):
+            return explanation
         case .needsAttention:
             return "Review the diagnostics below, then retry or reset the local engine if needed."
         case .externalConnection:
@@ -306,7 +312,7 @@ private struct SettingsLocalEngineSection: View {
             return "arrow.triangle.2.circlepath.circle.fill"
         case .ready:
             return "checkmark.circle.fill"
-        case .monitoringPaused:
+        case .monitoringPaused, .monitoringHeld:
             return "pause.circle.fill"
         case .monitoringActive:
             return "bolt.circle.fill"
@@ -323,7 +329,7 @@ private struct SettingsLocalEngineSection: View {
             return .accentColor
         case .ready, .monitoringActive:
             return .scoreGood
-        case .monitoringPaused, .externalConnection:
+        case .monitoringPaused, .monitoringHeld, .externalConnection:
             return .secondary
         case .needsAttention:
             return .scoreAverage

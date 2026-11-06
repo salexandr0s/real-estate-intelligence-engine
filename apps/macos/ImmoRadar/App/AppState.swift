@@ -162,7 +162,7 @@ final class AppState {
     }
 
     var hasActiveBackgroundRefreshTasks: Bool {
-        connectionState.hasActiveRefreshTask || runtimeState.hasActiveStatusRefreshTask
+        connectionState.hasActiveRefreshTask
     }
 
     var allowsAutomaticFeatureLoads: Bool {
@@ -177,6 +177,10 @@ final class AppState {
         runtimeState.preferredLocalRuntimeBootMode
     }
 
+    var isLocalEngineBusy: Bool {
+        runtimeState.localRuntime.isBusy
+    }
+
     var shouldPresentBundledLaunchExperience: Bool {
         runtimeState.shouldPresentBundledLaunchExperience(usesManagedLocalRuntime: usesManagedLocalRuntime)
     }
@@ -189,8 +193,22 @@ final class AppState {
         runtimeState.localEngineExperienceState(usesManagedLocalRuntime: usesManagedLocalRuntime)
     }
 
+    /// Why the local engine can't run a source right now, if it can't.
+    var sourceRunBlockedReason: String? {
+        switch localEngineExperienceState {
+        case .externalConnection, .monitoringActive:
+            return nil
+        case .monitoringHeld(let reason):
+            return reason
+        case .ready, .monitoringPaused:
+            return "Start monitoring to run this source"
+        case .starting, .needsAttention:
+            return "The local engine isn’t ready"
+        }
+    }
+
     var localRuntimeDiagnostics: LocalRuntimeService.DiagnosticsSummary {
-        runtimeState.localRuntimeDiagnostics(apiBaseURL: connectionState.apiBaseURL)
+        runtimeState.localRuntimeDiagnostics
     }
 
     var localRuntime: LocalRuntimeService {
@@ -228,6 +246,7 @@ final class AppState {
         let connectionState = ConnectionState()
         let runtimeState = RuntimeState(
             isSmokeTest: launchPolicy.requiresSmokeBoundary,
+            smokeStartsMonitoring: smokeContext?.startsMonitoring ?? false,
             localRuntime: LocalRuntimeService(smokeContext: smokeContext, launchMode: launchMode)
         )
         let alertsState = AlertsState()
@@ -375,25 +394,16 @@ final class AppState {
     // MARK: - Background Refresh
 
     func startBackgroundRefreshTasksIfNeeded() {
-        let allowsBackgroundRefreshTasks = launchPolicy.allowsBackgroundRefresh
-
         connectionState.startRefreshTaskIfNeeded(
-            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks
+            allowsBackgroundRefreshTasks: launchPolicy.allowsBackgroundRefresh
         ) { [weak self] in
             guard let self else { return }
             await self.refreshConnection()
         }
-
-        runtimeState.startStatusRefreshTaskIfNeeded(
-            allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks,
-            usesManagedLocalRuntime: usesManagedLocalRuntime,
-            apiBaseURL: connectionState.apiBaseURL
-        )
     }
 
     func stopBackgroundRefreshTasks() {
         connectionState.stopRefreshTask()
-        runtimeState.stopStatusRefreshTask()
     }
 
     // MARK: - Navigation
@@ -422,11 +432,8 @@ final class AppState {
         }
 
         if usesManagedLocalRuntime {
-            if !isIsolatedSmokeLaunch {
-                await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
-            }
+            await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
             _ = await startManagedLocalRuntime(
-                bootMode: preferredLocalRuntimeBootMode,
                 restartExistingRuntime: false,
                 userInitiated: false
             )
@@ -441,46 +448,52 @@ final class AppState {
     func retryBundledLaunch() async {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
-            bootMode: preferredLocalRuntimeBootMode,
-            restartExistingRuntime: false,
+            // A degraded engine is still up, so only a restart gives what stopped another try.
+            restartExistingRuntime: runtimeState.localRuntime.state.isDegraded,
             userInitiated: true
         )
     }
 
     func startMonitoring() async {
-        guard usesManagedLocalRuntime else { return }
-
-        let didStart = await startManagedLocalRuntime(
-            bootMode: .active,
-            restartExistingRuntime: true,
-            userInitiated: true
-        )
-
-        guard didStart else { return }
-        runtimeState.hasEnabledMonitoring = true
-        runtimeState.hasDismissedInitialMonitoringPrompt = true
-        runtimeState.bundledLaunchExperienceState = .ready
+        await setMonitoring(.active)
     }
 
     func pauseMonitoring() async {
+        await setMonitoring(.setup)
+    }
+
+    /// With the engine up this only starts or stops the workers, so nothing else needs a launch
+    /// screen or a new connection.
+    private func setMonitoring(_ bootMode: LocalRuntimeService.BootMode) async {
         guard usesManagedLocalRuntime else { return }
 
-        let didStart = await startManagedLocalRuntime(
-            bootMode: .setup,
-            restartExistingRuntime: true,
-            userInitiated: true
-        )
-
-        guard didStart else { return }
-        runtimeState.hasEnabledMonitoring = false
+        // Recorded before any wait, because whichever start runs next reads it. After two quick
+        // clicks, the last one wins.
+        runtimeState.hasEnabledMonitoring = bootMode == .active
         runtimeState.hasDismissedInitialMonitoringPrompt = true
-        runtimeState.bundledLaunchExperienceState = .ready
+
+        while let managedRuntimeTransitionTask {
+            _ = await managedRuntimeTransitionTask.value
+        }
+
+        if runtimeState.localRuntime.isEngineRunning {
+            runtimeState.bundledLaunchExperienceState = .ready
+            await runtimeState.localRuntime.start(
+                apiBaseURL: connectionState.apiBaseURL,
+                bootMode: preferredLocalRuntimeBootMode,
+                policy: .ifNeeded
+            )
+        } else {
+            _ = await startManagedLocalRuntime(
+                restartExistingRuntime: true,
+                userInitiated: true
+            )
+        }
     }
 
     func restartLocalEngine() async {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
-            bootMode: preferredLocalRuntimeBootMode,
             restartExistingRuntime: true,
             userInitiated: true
         )
@@ -505,65 +518,55 @@ final class AppState {
     }
 
     func resetLocalEngine() async {
+        // Cleared before any wait, so a monitoring choice made during the reset is the one the new
+        // engine starts with.
+        runtimeState.hasEnabledMonitoring = false
+        runtimeState.hasDismissedInitialMonitoringPrompt = false
+
+        // A transition of its own, so every other engine action waits for the reset to finish.
+        while let managedRuntimeTransitionTask {
+            _ = await managedRuntimeTransitionTask.value
+        }
+        _ = await runManagedTransition { appState in
+            await appState.performReset()
+        }
+    }
+
+    private func performReset() async -> Bool {
+        runtimeState.hasCompletedBundledSetup = false
         runtimeState.bundledLaunchExperienceState = .starting
         stopBackgroundRefreshTasks()
         alertsState.disconnectStream(alertStream)
 
         do {
             try await runtimeState.localRuntime.resetLocalEngine(apiBaseURL: connectionState.apiBaseURL)
-            runtimeState.hasCompletedBundledSetup = false
-            runtimeState.hasEnabledMonitoring = false
-            runtimeState.hasDismissedInitialMonitoringPrompt = false
-            alertsState.unreadAlertCount = 0
-            await apiClient.updateAuthToken(nil)
-
-            _ = await startManagedLocalRuntime(
-                bootMode: .setup,
-                restartExistingRuntime: false,
-                userInitiated: true
-            )
         } catch {
             runtimeState.bundledLaunchExperienceState = .needsAttention(error.localizedDescription)
             startBackgroundRefreshTasksIfNeeded()
+            return false
         }
-    }
 
-    func prepareForTermination() async {
-        stopBackgroundRefreshTasks()
-        alertsState.disconnectStream(alertStream)
+        alertsState.unreadAlertCount = 0
+        await apiClient.updateAuthToken(nil)
+
+        return await performManagedLocalRuntimeTransition(
+            restartExistingRuntime: false,
+            userInitiated: true
+        )
     }
 
     // MARK: - Connection / Alerts
 
-    /// Check before and after awaits. A token or successful health response is
-    /// never ownership evidence, and a smoke refusal never starts read/stream work.
-    private func permitsSmokeConnectionRead() -> Bool {
-        guard isIsolatedSmokeLaunch else { return true }
-        let ownedRead = runtimeState.localRuntime.permitsSmokeAPIRead(apiBaseURL: connectionState.apiBaseURL)
-        guard let context = launchPolicy.smokeContext,
-              connectionState.apiBaseURL == context.apiBaseURL.absoluteString,
-              ownedRead else {
-            connectionState.connectionStatus = .error(
-                runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke has no verified owned API."
-            )
-            alertsState.disconnectStream(alertStream)
-            return false
-        }
-        return true
-    }
-
     func refreshConnection(userInitiated: Bool = false) async {
-        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
+        guard launchMode.allowsInitialLaunchSideEffects else { return }
         let authToken = launchPolicy.connectionToken {
             connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
             return connectionState.resolvedConnectionAuthToken(allowUserInteraction: userInitiated)
         }
         await apiClient.updateAuthToken(authToken)
-        guard permitsSmokeConnectionRead() else { return }
 
         connectionState.connectionStatus = .connecting
         let connectionResult = await apiClient.testConnection()
-        guard permitsSmokeConnectionRead() else { return }
 
         switch connectionResult {
         case .success:
@@ -603,25 +606,36 @@ final class AppState {
     }
 
     func refreshUnreadCount() async {
-        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
+        guard launchMode.allowsInitialLaunchSideEffects else { return }
         await alertsState.refreshUnreadCount(using: apiClient)
-        guard permitsSmokeConnectionRead() else { return }
     }
 
     // MARK: - Internal Helpers
 
     private func startManagedLocalRuntime(
-        bootMode: LocalRuntimeService.BootMode,
         restartExistingRuntime: Bool,
         userInitiated: Bool
     ) async -> Bool {
-        if let managedRuntimeTransitionTask {
-            let activeResult = await managedRuntimeTransitionTask.value
-            if !restartExistingRuntime {
-                return activeResult
-            }
+        var activeResult: Bool?
+        while let managedRuntimeTransitionTask {
+            activeResult = await managedRuntimeTransitionTask.value
+        }
+        if let activeResult, !restartExistingRuntime {
+            return activeResult
         }
 
+        return await runManagedTransition { appState in
+            await appState.performManagedLocalRuntimeTransition(
+                restartExistingRuntime: restartExistingRuntime,
+                userInitiated: userInitiated
+            )
+        }
+    }
+
+    /// The caller has already waited for any transition in progress.
+    private func runManagedTransition(
+        _ transition: @escaping @MainActor (AppState) async -> Bool
+    ) async -> Bool {
         let transitionID = UUID()
         let task = Task { @MainActor [weak self] () -> Bool in
             guard let self else { return false }
@@ -632,11 +646,7 @@ final class AppState {
                 }
             }
 
-            return await self.performManagedLocalRuntimeTransition(
-                bootMode: bootMode,
-                restartExistingRuntime: restartExistingRuntime,
-                userInitiated: userInitiated
-            )
+            return await transition(self)
         }
 
         managedRuntimeTransitionID = transitionID
@@ -645,7 +655,6 @@ final class AppState {
     }
 
     private func performManagedLocalRuntimeTransition(
-        bootMode: LocalRuntimeService.BootMode,
         restartExistingRuntime: Bool,
         userInitiated: Bool
     ) async -> Bool {
@@ -653,11 +662,6 @@ final class AppState {
         defer { startBackgroundRefreshTasksIfNeeded() }
 
         guard usesManagedLocalRuntime else {
-            if isIsolatedSmokeLaunch {
-                _ = permitsSmokeConnectionRead()
-                runtimeState.bundledLaunchExperienceState = .needsAttention("Isolated smoke requires a verified owned local runtime.")
-                return false
-            }
             runtimeState.bundledLaunchExperienceState = .ready
             await refreshConnection(userInitiated: userInitiated)
             return true
@@ -668,17 +672,9 @@ final class AppState {
         let startPolicy: LocalRuntimeService.StartPolicy = restartExistingRuntime ? .forceRestart : .ifNeeded
         await runtimeState.localRuntime.start(
             apiBaseURL: connectionState.apiBaseURL,
-            bootMode: bootMode,
+            bootMode: preferredLocalRuntimeBootMode,
             policy: startPolicy
         )
-        if isIsolatedSmokeLaunch {
-            guard runtimeState.localRuntime.state == .running, permitsSmokeConnectionRead() else {
-                runtimeState.bundledLaunchExperienceState = .needsAttention(
-                    runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke startup has no verified owned API."
-                )
-                return false
-            }
-        }
         await refreshConnection(userInitiated: userInitiated)
 
         switch runtimeState.localRuntime.state {
@@ -690,7 +686,7 @@ final class AppState {
                 "ImmoRadar couldn’t finish starting the local engine. Check diagnostics and try again."
             )
             return false
-        case .running:
+        case .running, .degraded:
             break
         }
 
@@ -703,11 +699,7 @@ final class AppState {
 
         runtimeState.hasCompletedBundledSetup = true
 
-        if bootMode == .active {
-            runtimeState.hasEnabledMonitoring = true
-            runtimeState.hasDismissedInitialMonitoringPrompt = true
-            runtimeState.bundledLaunchExperienceState = .ready
-        } else if runtimeState.hasDismissedInitialMonitoringPrompt {
+        if runtimeState.hasEnabledMonitoring || runtimeState.hasDismissedInitialMonitoringPrompt {
             runtimeState.bundledLaunchExperienceState = .ready
         } else {
             runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring

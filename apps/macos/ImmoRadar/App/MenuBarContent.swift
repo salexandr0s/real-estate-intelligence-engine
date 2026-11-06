@@ -3,6 +3,7 @@ import SwiftUI
 /// Menu bar extra dropdown content with alerts summary and quick actions.
 struct MenuBarContent: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if appState.unreadAlertCount > 0 {
@@ -16,14 +17,12 @@ struct MenuBarContent: View {
         Divider()
 
         Button("Open Dashboard") {
-            appState.navigateTo(.dashboard)
-            NSApp.activate(ignoringOtherApps: true)
+            showMainWindow(at: .dashboard)
         }
         .keyboardShortcut("1", modifiers: .command)
 
         Button("View Alerts") {
-            appState.navigateTo(.alerts)
-            NSApp.activate(ignoringOtherApps: true)
+            showMainWindow(at: .alerts)
         }
         .keyboardShortcut("5", modifiers: .command)
 
@@ -41,5 +40,11 @@ struct MenuBarContent: View {
         Button("Quit ImmoRadar") {
             NSApplication.shared.terminate(nil)
         }
+    }
+
+    private func showMainWindow(at item: NavigationItem) {
+        appState.navigateTo(item)
+        openWindow(id: ImmoRadarApp.mainWindowID)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

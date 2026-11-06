@@ -33,6 +33,11 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
 WORKDIR /app
 
+# The base image ships apt 2.8.3, which carries a HIGH advisory (CVE-2026-109518) that fails the CD scan.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Remove package managers from the runtime image; the container only needs Node.js to start the worker.
 RUN rm -rf \
     /usr/local/lib/node_modules/npm \

@@ -258,6 +258,9 @@ export function redactSensitive(value: string): string {
 
 // ── Re-exports ──────────────────────────────────────────────────────────────
 
+export { runMain } from './process-lifecycle.js';
+export type { ProcessLifecycle } from './process-lifecycle.js';
+
 export {
   registry,
   scrapeRunsTotal,

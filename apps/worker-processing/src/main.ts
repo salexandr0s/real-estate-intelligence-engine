@@ -2,7 +2,7 @@
 import './adapter-registry.js';
 
 import { loadConfig } from '@immoradar/config';
-import { createLogger, setLogLevel, redactUrl } from '@immoradar/observability';
+import { createLogger, runMain, setLogLevel, redactUrl } from '@immoradar/observability';
 import type { LogLevel } from '@immoradar/observability';
 import { closeRedisConnection } from '@immoradar/scraper-core';
 import { closePool } from '@immoradar/db';
@@ -26,7 +26,13 @@ import type { MailboxSyncJobData } from '@immoradar/scraper-core';
 
 const logger = createLogger('worker-processing');
 
-async function main(): Promise<void> {
+// The engine watchdog sends SIGKILL at 10 s.
+const HARD_TIMEOUT_MS = 8_000;
+// Worker.close() waits for running jobs with no limit, so shutdown moves on after this long.
+const WORKER_CLOSE_GRACE_MS = 5_000;
+const PUSH_SESSION_CLOSE_TIMEOUT_MS = 1_000;
+
+runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
 
@@ -57,6 +63,31 @@ async function main(): Promise<void> {
     config.alerts.pushEnabled || config.alerts.emailEnabled || config.alerts.webhookEnabled
       ? createDeliveryWorker()
       : null;
+
+  lifecycle.onShutdown(
+    'workers',
+    async () => {
+      await Promise.all(
+        [
+          ingestionWorker,
+          baselineWorker,
+          clusterWorker,
+          geocodingEnqueuer,
+          staleCheckWorker,
+          documentWorker,
+          mailboxSyncWorker,
+          outreachSendWorker,
+          canaryWorker,
+          geocodingWorker,
+          deliveryWorker,
+        ].map((worker) => worker?.close()),
+      );
+    },
+    WORKER_CLOSE_GRACE_MS,
+  );
+  lifecycle.onShutdown('push session', closePushSession, PUSH_SESSION_CLOSE_TIMEOUT_MS);
+  lifecycle.onShutdown('redis', closeRedisConnection);
+  lifecycle.onShutdown('database pool', closePool);
 
   if (config.outreach.enabled && config.outreach.imap.user) {
     const mailbox = await mailboxes.ensureSharedMailbox({
@@ -94,29 +125,4 @@ async function main(): Promise<void> {
   if (mailboxSyncWorker) workerNames.push('mailbox-sync');
   if (outreachSendWorker) workerNames.push('outreach-send');
   logger.info(`Workers ready: ${workerNames.join(', ')}`);
-
-  // Graceful shutdown
-  const shutdown = async (signal: string) => {
-    logger.info(`Received ${signal}, shutting down processing worker`);
-    await ingestionWorker.close();
-    await baselineWorker.close();
-    await clusterWorker.close();
-    await geocodingEnqueuer.close();
-    await staleCheckWorker.close();
-    await documentWorker.close();
-    if (mailboxSyncWorker) await mailboxSyncWorker.close();
-    if (outreachSendWorker) await outreachSendWorker.close();
-    if (canaryWorker) await canaryWorker.close();
-    if (geocodingWorker) await geocodingWorker.close();
-    if (deliveryWorker) await deliveryWorker.close();
-    await closePushSession();
-    await closeRedisConnection();
-    await closePool();
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.on('SIGINT', () => void shutdown('SIGINT'));
-}
-
-void main();
+});

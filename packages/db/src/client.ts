@@ -92,12 +92,13 @@ export async function queryWithClient<T extends pg.QueryResultRow = pg.QueryResu
 }
 
 /**
- * Gracefully shut down the connection pool.
+ * Gracefully shut down the connection pool. Concurrent and repeated calls end it once.
  */
 export async function closePool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
-    logger.info('Database pool closed');
-  }
+  const closing = pool;
+  if (!closing) return;
+
+  pool = null;
+  await closing.end();
+  logger.info('Database pool closed');
 }

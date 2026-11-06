@@ -5,4 +5,5 @@ enum Log {
     static let data = Logger(subsystem: "com.immoradar.app", category: "Data")
     static let ui = Logger(subsystem: "com.immoradar.app", category: "UI")
     static let stream = Logger(subsystem: "com.immoradar.app", category: "Stream")
+    static let engine = Logger(subsystem: "com.immoradar.app", category: "Engine")
 }
