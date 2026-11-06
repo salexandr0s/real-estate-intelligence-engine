@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { resetConfig } from '@immoradar/config';
 import { buildApp } from '../../apps/api/src/app.js';
+import { seed } from '../../packages/db/seeds/seed.js';
 
 const AUTH_HEADER = { authorization: 'Bearer dev-token' };
 const hasDb = !!process.env.DATABASE_URL;
@@ -14,6 +15,8 @@ describe('API endpoints', () => {
     delete process.env.API_DOCS_PUBLIC;
     process.env.PROMETHEUS_ENABLED = 'true';
     resetConfig();
+    // Filter writes reference the owner row, which migrations alone do not create.
+    if (hasDb) await seed();
     app = await buildApp();
     await app.ready();
   });
