@@ -45,8 +45,10 @@ extension EngineSlot {
         }
     }
 
+    fileprivate static let workers: [EngineSlot] = [.workerProcessing, .workerScraper]
+
     fileprivate var isWorker: Bool {
-        self == .workerProcessing || self == .workerScraper
+        Self.workers.contains(self)
     }
 }
 
@@ -82,6 +84,8 @@ final class EngineSupervisor {
     private static let watchdogDeathWindow: TimeInterval = 60
     private static let watchdogDeathLimit = 3
     private static let watchdogStopBound: Duration = .seconds(40)
+    /// Longer than the watchdog's worker rung: 10 seconds, then SIGKILL and its sweep.
+    private static let workerStopBound: Duration = .seconds(15)
     private static let healthInterval: Duration = .seconds(30)
     private static let healthFailureLimit = 3
     private static let healthChecksPerRotation = 120
@@ -100,6 +104,7 @@ final class EngineSupervisor {
     private var generations: [EngineSlot: Int] = [:]
     private var lastExitStatus: [EngineSlot: Int32] = [:]
     private var workersWanted = false
+    private var workerTransition: Task<Void, Never>?
     private var restartHistory: [EngineSlot: [Date]] = [:]
     private var restartTasks: [EngineSlot: Task<Void, Never>] = [:]
     private var watchdogDeaths: [Date] = []
@@ -113,6 +118,12 @@ final class EngineSupervisor {
 
     var runningPIDs: [EngineSlot: pid_t] {
         children.compactMapValues { $0.process.isRunning ? $0.process.processIdentifier : nil }
+    }
+
+    /// False while something the engine should be running is down, which is what degraded means.
+    var hasEveryWantedProcess: Bool {
+        let wanted: [EngineSlot] = [.postgres, .redis, .api] + (workersWanted ? EngineSlot.workers : [])
+        return wanted.allSatisfy { children[$0]?.process.isRunning == true }
     }
 
     // MARK: - Starting
@@ -149,43 +160,85 @@ final class EngineSupervisor {
         try await launchRedis(layout)
         try await applyMigrations(layout)
         try await launchAPI(layout)
-        if monitoring {
+        let startedWorkers = workersWanted
+        if startedWorkers {
+            report(.step(.startingProcessingWorker))
+            report(.progress(
+                title: "Starting workers",
+                detail: "Enabling ingestion, scoring, and the scraper queues.",
+                fraction: 0.92
+            ))
             try launchWorkers(layout)
         }
 
         report(.step(.verifyingServices))
         try? await Task.sleep(for: .milliseconds(600))
         try requireRunning(.api)
-        if monitoring {
+        if startedWorkers {
             try requireRunning(.workerProcessing)
             try requireRunning(.workerScraper)
         }
 
         phase = .running
         startHealthLoop(layout)
+        // Monitoring may have paused, or a hold may have begun, while the engine was starting.
+        if workersWanted != startedWorkers {
+            await convergeWorkers()
+        }
     }
 
-    /// Paused monitoring means no worker processes. Postgres, Redis and the API stay up.
-    func setWorkersRunning(_ running: Bool) async throws {
-        guard phase == .running, let layout else { return }
+    // MARK: - Workers
 
+    /// Paused monitoring means no worker processes. Postgres, Redis and the API stay up. Only the
+    /// latest request counts, and a change never overlaps the one before it.
+    func setWorkersRunning(_ running: Bool) async {
+        guard running != workersWanted else { return }
         workersWanted = running
-        let workers: [EngineSlot] = [.workerProcessing, .workerScraper]
-        for slot in workers {
-            restartTasks[slot]?.cancel()
-            restartTasks[slot] = nil
-            restartHistory[slot] = nil
-        }
+        await convergeWorkers()
+    }
 
-        if running {
-            try launchWorkers(layout)
-            try? await Task.sleep(for: .milliseconds(600))
-            try requireRunning(.workerProcessing)
-            try requireRunning(.workerScraper)
-        } else {
-            let processes = workers.compactMap { children[$0]?.process }
-            tellWatchdog { try $0.stop(workers) }
-            await waitForExit(of: processes, timeout: .seconds(15))
+    private func convergeWorkers() async {
+        if let workerTransition {
+            await workerTransition.value
+            return
+        }
+        guard phase == .running else { return }
+
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.runWorkerTransitions()
+        }
+        workerTransition = task
+        await task.value
+    }
+
+    private func runWorkerTransitions() async {
+        defer { workerTransition = nil }
+
+        var applied: Bool?
+        while phase == .running, let layout, applied != workersWanted {
+            let running = workersWanted
+            applied = running
+
+            for slot in EngineSlot.workers {
+                restartTasks[slot]?.cancel()
+                restartTasks[slot] = nil
+                restartHistory[slot] = nil
+            }
+
+            if running {
+                do {
+                    try launchWorkers(layout)
+                } catch {
+                    report(.degraded(error.localizedDescription))
+                }
+            } else {
+                let processes = EngineSlot.workers.compactMap { children[$0]?.process }
+                if !processes.isEmpty {
+                    tellWatchdog { try $0.stop(EngineSlot.workers) }
+                    await waitForExit(of: processes, timeout: Self.workerStopBound)
+                }
+            }
         }
     }
 
@@ -625,23 +678,13 @@ final class EngineSupervisor {
         }
     }
 
+    /// A worker whose exit hasn't been handled yet counts as gone, because `handleExit` ignores the
+    /// old generation once a new one has its slot.
     private func launchWorkers(_ layout: EngineLayout) throws {
-        if children[.workerProcessing] == nil {
-            report(.step(.startingProcessingWorker))
-            report(.progress(
-                title: "Starting processing worker",
-                detail: "Enabling ingestion, scoring, and lifecycle jobs.",
-                fraction: 0.88
-            ))
+        if children[.workerProcessing]?.process.isRunning != true {
             try spawnNode(.workerProcessing, entry: layout.processingEntry, layout: layout)
         }
-        if children[.workerScraper] == nil {
-            report(.step(.startingScraperWorker))
-            report(.progress(
-                title: "Starting scraper worker",
-                detail: "Registering source schedules and scraper queues.",
-                fraction: 0.96
-            ))
+        if children[.workerScraper]?.process.isRunning != true {
             try spawnNode(.workerScraper, entry: layout.scraperEntry, layout: layout)
         }
     }

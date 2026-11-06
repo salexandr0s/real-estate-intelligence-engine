@@ -433,39 +433,46 @@ final class AppState {
         guard usesManagedLocalRuntime else { return }
         _ = await startManagedLocalRuntime(
             bootMode: preferredLocalRuntimeBootMode,
-            restartExistingRuntime: false,
+            // A degraded engine is still up, so only a restart gives what stopped another try.
+            restartExistingRuntime: runtimeState.localRuntime.state.isDegraded,
             userInitiated: true
         )
     }
 
     func startMonitoring() async {
-        guard usesManagedLocalRuntime else { return }
-
-        let didStart = await startManagedLocalRuntime(
-            bootMode: .active,
-            restartExistingRuntime: true,
-            userInitiated: true
-        )
-
-        guard didStart else { return }
-        runtimeState.hasEnabledMonitoring = true
-        runtimeState.hasDismissedInitialMonitoringPrompt = true
-        runtimeState.bundledLaunchExperienceState = .ready
+        await setMonitoring(.active)
     }
 
     func pauseMonitoring() async {
+        await setMonitoring(.setup)
+    }
+
+    /// With the engine up this only starts or stops the workers, so nothing else needs a launch
+    /// screen or a new connection.
+    private func setMonitoring(_ bootMode: LocalRuntimeService.BootMode) async {
         guard usesManagedLocalRuntime else { return }
 
-        let didStart = await startManagedLocalRuntime(
-            bootMode: .setup,
-            restartExistingRuntime: true,
-            userInitiated: true
-        )
+        if let managedRuntimeTransitionTask {
+            _ = await managedRuntimeTransitionTask.value
+        }
 
-        guard didStart else { return }
-        runtimeState.hasEnabledMonitoring = false
+        runtimeState.hasEnabledMonitoring = bootMode == .active
         runtimeState.hasDismissedInitialMonitoringPrompt = true
-        runtimeState.bundledLaunchExperienceState = .ready
+
+        if runtimeState.localRuntime.isEngineRunning {
+            runtimeState.bundledLaunchExperienceState = .ready
+            await runtimeState.localRuntime.start(
+                apiBaseURL: connectionState.apiBaseURL,
+                bootMode: bootMode,
+                policy: .ifNeeded
+            )
+        } else {
+            _ = await startManagedLocalRuntime(
+                bootMode: bootMode,
+                restartExistingRuntime: true,
+                userInitiated: true
+            )
+        }
     }
 
     func restartLocalEngine() async {

@@ -197,6 +197,7 @@
 		A9707B09B266A70C326E2E2F /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADA5F952B634E39ED848DD /* Document.swift */; };
 		AABB4632AE2ADC00822C5C4B /* FilterDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFCB707D11875B9C410516B4 /* FilterDraft.swift */; };
 		AB13EDC10E12FD22BD4828FD /* DashboardPriceTrendChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43B5F87E9E50935F6376A2A /* DashboardPriceTrendChart.swift */; };
+		AC4B2A948863A7B536943275 /* WorkerHolds.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFEF9F2B7CB3C2DCFDCDD23 /* WorkerHolds.swift */; };
 		ACC23D1A3D66FD9A00B5045B /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F98CDF8081F16F1EB0D06A8 /* Alert.swift */; };
 		AE0F9570F9C71F452E302791 /* PriceHistoryBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1681E42AD48BB96EBD37D4C /* PriceHistoryBlock.swift */; };
 		B00A4261C7B75E34EC290C97 /* FilterKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A03E572E197CB96C11F5946 /* FilterKind.swift */; };
@@ -258,6 +259,7 @@
 		DF308F5CD41EADF9831AE105 /* ProximityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BABBD631A72356D230A67207 /* ProximityRow.swift */; };
 		DFAF58EA58A1285FDF38510E /* AnalysisBuildingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE288C5583909C92493D829A /* AnalysisBuildingContext.swift */; };
 		DFD11391ABB95998AA996D4D /* ListingClusterBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AB1A46E512CC3E394AB2B4 /* ListingClusterBubble.swift */; };
+		E04E5258496BE1EDAAEEA487 /* WorkerHoldsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74AAACF402D0F74EC047BCD /* WorkerHoldsTests.swift */; };
 		E0AF7EFBD413EC2E325EC63B /* EngineLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC3E5F372A5547CBE4888B4 /* EngineLeftovers.swift */; };
 		E0BDFB144A4F4AA0399224AA /* ListingComparisonData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6DD8E1E4ED5FC82A2A3680D /* ListingComparisonData.swift */; };
 		E11048868859B4174C01AB6F /* CopilotSuggestionChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF47AB0A10EAA15AC191978 /* CopilotSuggestionChips.swift */; };
@@ -390,6 +392,7 @@
 		48460A3BD5A93C1696E3752A /* APIOutreachAttachmentResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIOutreachAttachmentResponse.swift; sourceTree = "<group>"; };
 		4A24AF8DC385A2ACEC789C91 /* ConnectionStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBar.swift; sourceTree = "<group>"; };
 		4ABFF7A55FCE122EBC74AA91 /* CardModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardModifier.swift; sourceTree = "<group>"; };
+		4BFEF9F2B7CB3C2DCFDCDD23 /* WorkerHolds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerHolds.swift; sourceTree = "<group>"; };
 		4D622964D11E802D9FDEBB93 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		4D8E541D3A28A309C7F55449 /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
 		4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotInputBar.swift; sourceTree = "<group>"; };
@@ -530,6 +533,7 @@
 		C6DD8E1E4ED5FC82A2A3680D /* ListingComparisonData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingComparisonData.swift; sourceTree = "<group>"; };
 		C6E9EBA6FB6364C40458D8F9 /* ChartBlockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartBlockData.swift; sourceTree = "<group>"; };
 		C718F8AC07C48F07BA3EEDE6 /* SourcesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesViewModel.swift; sourceTree = "<group>"; };
+		C74AAACF402D0F74EC047BCD /* WorkerHoldsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerHoldsTests.swift; sourceTree = "<group>"; };
 		CB42A62EA6FF75A9E40C22D2 /* AnalysisFlagsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisFlagsSection.swift; sourceTree = "<group>"; };
 		CC037F581496D918CB8E6C69 /* ThresholdBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThresholdBadge.swift; sourceTree = "<group>"; };
 		CC40576B4A66599E98015590 /* AccessibilityModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityModifiers.swift; sourceTree = "<group>"; };
@@ -754,6 +758,7 @@
 				46ADEF2DF4569EB421026B99 /* EngineLeftoversTests.swift */,
 				93E2EC2DE8059E75A46FB749 /* LocalRuntimeEnvironmentTests.swift */,
 				5861C17408C5433F0B975C5A /* SmokeRuntimeOwnershipTests.swift */,
+				C74AAACF402D0F74EC047BCD /* WorkerHoldsTests.swift */,
 			);
 			path = ImmoRadarTests;
 			sourceTree = "<group>";
@@ -902,6 +907,7 @@
 				B2FB68B41A883DBD6BD65C31 /* EngineSupervisor.swift */,
 				660755060ACC2F38F4AD4240 /* EngineWatchdogClient.swift */,
 				2930C4E1475C22DAEB644553 /* ProcessInspector.swift */,
+				4BFEF9F2B7CB3C2DCFDCDD23 /* WorkerHolds.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -1520,6 +1526,7 @@
 				3DA6ADEEBAFCCB9A03580DF1 /* WatchlistView.swift in Sources */,
 				33A91DD055685BAEAF1B91BE /* WatchlistViewModel.swift in Sources */,
 				D830A42A28ED51CBF42A109D /* WienDevelopment.swift in Sources */,
+				AC4B2A948863A7B536943275 /* WorkerHolds.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1532,6 +1539,7 @@
 				F61B2162B4083D02C44E72B7 /* EngineLeftoversTests.swift in Sources */,
 				F9D0C74B6193D38F5D739670 /* LocalRuntimeEnvironmentTests.swift in Sources */,
 				CBB3159FC65D91326951534E /* SmokeRuntimeOwnershipTests.swift in Sources */,
+				E04E5258496BE1EDAAEEA487 /* WorkerHoldsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

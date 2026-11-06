@@ -103,6 +103,11 @@ final class LocalRuntimeService {
             }
         }
 
+        var isDegraded: Bool {
+            if case .degraded = self { return true }
+            return false
+        }
+
         var title: String {
             switch self {
             case .stopped:
@@ -255,6 +260,9 @@ final class LocalRuntimeService {
     private var activeAPIBaseURL: String?
     private var coreRestartTimes: [Date] = []
     private var coreRestartTask: Task<Void, Never>?
+    private var workerHolds = WorkerHolds()
+    private var workerHoldObserver: WorkerHoldObserver?
+    private var workerHoldWaitTask: Task<Void, Never>?
     private var lastStartupFailure: EngineStartupFailure?
     private var activeStartupAttemptID: Int?
     private var nextStartupAttemptID = 0
@@ -280,6 +288,19 @@ final class LocalRuntimeService {
         case .stopped, .running, .degraded, .unavailable, .failed:
             return false
         }
+    }
+
+    var isEngineRunning: Bool {
+        supervisor?.isRunning == true
+    }
+
+    /// Why the workers are stopped although monitoring is on, if they are.
+    var workerHoldExplanation: String? {
+        workerHolds.explanation
+    }
+
+    private var workersShouldRun: Bool {
+        activeBootMode == .active && !workerHolds.isHolding
     }
 
     static var runtimeHomeURL: URL { EngineLayout.runtimeHomeURL() }
@@ -389,7 +410,14 @@ final class LocalRuntimeService {
         policy: StartPolicy = .ifNeeded
     ) async {
         guard permitProductionOperation(.launch) else { return }
-        guard !isBusy else { return }
+        observeWorkerHoldsIfNeeded()
+
+        // The start in progress launches workers from this choice, or applies it when it finishes.
+        guard !isBusy else {
+            activeBootMode = bootMode
+            await supervisor?.setWorkersRunning(workersShouldRun)
+            return
+        }
 
         // A core service is down and its restart is waiting out a delay, so this start replaces it.
         let replacesPendingRestart = coreRestartTask != nil
@@ -404,8 +432,12 @@ final class LocalRuntimeService {
     }
 
     private func performStart(apiBaseURL: String, bootMode: BootMode, policy: StartPolicy) async {
-        let alreadyRunning = policy == .ifNeeded && supervisor?.isRunning == true
-        if alreadyRunning, activeBootMode == bootMode { return }
+        // Only the workers depend on the mode, so an engine that is up stays up and the API keeps answering.
+        if policy == .ifNeeded, isEngineRunning {
+            activeBootMode = bootMode
+            await applyWorkerState()
+            return
+        }
 
         beginStartupAttempt(bootMode: bootMode)
         activeAPIBaseURL = apiBaseURL
@@ -417,20 +449,11 @@ final class LocalRuntimeService {
             let token = try LocalRuntimeAuth.ensureToken()
             let supervisor = engineSupervisor()
 
-            if alreadyRunning {
-                try await supervisor.setWorkersRunning(bootMode == .active)
-            } else {
-                if supervisor.isActive {
-                    state = .stopping
-                    await supervisor.stop()
-                }
-                try await startWithRetries(
-                    supervisor,
-                    layout: layout,
-                    token: token,
-                    monitoring: bootMode == .active
-                )
+            if supervisor.isActive {
+                state = .stopping
+                await supervisor.stop()
             }
+            try await startWithRetries(supervisor, layout: layout, token: token)
 
             lastStartupFailure = nil
             state = .running
@@ -442,11 +465,63 @@ final class LocalRuntimeService {
         }
     }
 
+    // MARK: - Workers
+
+    private func applyWorkerState() async {
+        guard let supervisor else { return }
+
+        await supervisor.setWorkersRunning(workersShouldRun)
+        if state.isDegraded, supervisor.hasEveryWantedProcess {
+            lastStartupFailure = nil
+            state = .running
+        }
+        persistStartupDiagnostics()
+    }
+
+    /// A smoke run proves the engine's lifecycle, which shouldn't depend on how warm the Mac is.
+    private func observeWorkerHoldsIfNeeded() {
+        guard workerHoldObserver == nil, smokeContext == nil else { return }
+
+        let observer = WorkerHoldObserver { [weak self] reason, isActive in
+            self?.noteWorkerHold(reason, isActive: isActive)
+        }
+        workerHoldObserver = observer
+        for reason in observer.currentReasons {
+            workerHolds.set(reason, isActive: true, now: .now)
+        }
+    }
+
+    func noteWorkerHold(_ reason: WorkerHolds.Reason, isActive: Bool) {
+        Log.engine.info("Worker hold \(String(describing: reason), privacy: .public): \(isActive, privacy: .public)")
+        workerHolds.set(reason, isActive: isActive, now: .now)
+        workerHoldsChanged()
+    }
+
+    private func workerHoldsChanged() {
+        scheduleWorkerHoldWaitEnd()
+        Task { await applyWorkerState() }
+    }
+
+    /// With a hold still active there is nothing to wait for, because clearing it arms this again.
+    private func scheduleWorkerHoldWaitEnd() {
+        workerHoldWaitTask?.cancel()
+        workerHoldWaitTask = nil
+        guard workerHolds.active.isEmpty, let resumesAt = workerHolds.resumesAt else { return }
+
+        workerHoldWaitTask = Task { [weak self] in
+            try? await Task.sleep(until: resumesAt, clock: .continuous)
+            guard !Task.isCancelled, let self else { return }
+            self.workerHolds.finishWait(now: .now)
+            self.workerHoldsChanged()
+        }
+    }
+
+    // MARK: - Engine start
+
     private func startWithRetries(
         _ supervisor: EngineSupervisor,
         layout: EngineLayout,
-        token: String,
-        monitoring: Bool
+        token: String
     ) async throws {
         while true {
             let isRetry = activeStartupRetryCount > 0
@@ -461,7 +536,7 @@ final class LocalRuntimeService {
             )
 
             do {
-                try await supervisor.start(layout: layout, token: token, monitoring: monitoring)
+                try await supervisor.start(layout: layout, token: token, monitoring: workersShouldRun)
                 return
             } catch {
                 await supervisor.stop()
@@ -509,6 +584,7 @@ final class LocalRuntimeService {
 
     private func recordStartFailure(_ failure: EngineStartupFailure) {
         lastStartupFailure = failure
+        activeStartupStep = failure.step ?? activeStartupStep
         progressStatus = nil
         switch failure.code {
         case .invalidBaseURL, .nonLocalBaseURL:
