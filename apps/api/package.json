@@ -33,9 +33,6 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "npm run test:unit",
-    "test:unit": "vitest run --root ../.. --passWithNoTests apps/api/src/**/*.test.ts",
-    "test:integration": "vitest run --root ../.. --config vitest.config.integration.ts tests/integration/outreach-api.test.ts",
     "clean": "rm -rf dist"
   }
 }

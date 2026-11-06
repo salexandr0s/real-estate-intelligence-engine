@@ -107,6 +107,6 @@
 
 4. **Update parser tests** in `packages/source-{source_code}/src/tests/parser.test.ts` to match any new field values or structure.
 
-5. **Run tests**: `npm run test:unit -- --filter source-{source_code}`
+5. **Run tests**: `npm run test:unit -- packages/source-{source_code}`
 
 6. **Bump `parserVersion`** in the adapter if extraction logic changed.

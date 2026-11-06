@@ -8,13 +8,11 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run",
-    "test:unit": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@immoradar/contracts": "*",
-    "@immoradar/config": "*"
+    "@immoradar/config": "*",
+    "@immoradar/contracts": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.12"

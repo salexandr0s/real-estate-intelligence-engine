@@ -8,20 +8,18 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run",
-    "test:unit": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@immoradar/contracts": "*",
-    "@immoradar/config": "*",
-    "@immoradar/db": "*",
-    "@immoradar/normalization": "*",
-    "@immoradar/scoring": "*",
-    "@immoradar/filtering": "*",
     "@immoradar/alerts": "*",
-    "@immoradar/scraper-core": "*",
-    "@immoradar/observability": "*"
+    "@immoradar/config": "*",
+    "@immoradar/contracts": "*",
+    "@immoradar/db": "*",
+    "@immoradar/filtering": "*",
+    "@immoradar/normalization": "*",
+    "@immoradar/observability": "*",
+    "@immoradar/scoring": "*",
+    "@immoradar/scraper-core": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.12"

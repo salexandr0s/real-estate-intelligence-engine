@@ -108,16 +108,20 @@ jobs:
         run: npm run db:migrate
 
       - name: Lint
-        run: npx eslint "packages/*/src/**/*.ts" "apps/*/src/**/*.ts" "tests/**/*.ts" "scripts/**/*.ts"
+        run: npm run lint
 
       - name: Type check
         run: npm run typecheck
 
       - name: Unit tests
-        run: npx vitest run --reporter=verbose 2>&1 | tee test-output.log
+        run: |
+          set -o pipefail
+          npx vitest run --reporter=verbose 2>&1 | tee test-output.log
 
       - name: Integration tests
-        run: npm run test:integration -- --reporter=verbose 2>&1 | tee integration-test-output.log
+        run: |
+          set -o pipefail
+          npm run test:integration -- --reporter=verbose 2>&1 | tee integration-test-output.log
 
       - name: Upload test artifacts on failure
         if: failure()
@@ -156,6 +160,18 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build \
+            -project apps/macos/ImmoRadar.xcodeproj \
+            -scheme ImmoRadar \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -50
+
+      - name: Test macOS app
+        run: |
+          set -o pipefail
+          xcodebuild test \
             -project apps/macos/ImmoRadar.xcodeproj \
             -scheme ImmoRadar \
             -destination 'platform=macOS' \

@@ -8,14 +8,12 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run --passWithNoTests",
-    "test:unit": "vitest run --passWithNoTests",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@immoradar/contracts": "*",
-    "@immoradar/scraper-core": "*",
-    "@immoradar/documents": "*"
+    "@immoradar/documents": "*",
+    "@immoradar/scraper-core": "*"
   },
   "devDependencies": {
     "vitest": "^4.1.12"
