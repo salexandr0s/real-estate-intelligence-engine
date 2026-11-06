@@ -5,7 +5,7 @@ import { closeRedisConnection } from '@immoradar/scraper-core';
 import { closePool } from '@immoradar/db';
 import { createDiscoveryWorker } from './workers/discovery-worker.js';
 import { createDetailWorker } from './workers/detail-worker.js';
-import { closeBrowser } from './browser-pool.js';
+import { closeBrowser, getBrowser } from './browser-pool.js';
 import { startScheduler } from './scheduler.js';
 
 const logger = createLogger('worker-scraper');
@@ -41,6 +41,11 @@ runMain('worker-scraper', HARD_TIMEOUT_MS, async (lifecycle) => {
   lifecycle.onShutdown('database pool', closePool);
 
   logger.info('Discovery and detail workers ready');
+
+  // The smoke test checks that Chromium stops with the scraper, and it runs no crawl to start one.
+  if (process.env['IMMORADAR_SMOKE_LAUNCH_BROWSER'] === '1') {
+    await getBrowser();
+  }
 
   await startScheduler();
 });
