@@ -127,9 +127,14 @@ struct IsolatedSmokeContext: Equatable {
               ] else {
             throw ValidationError.invalidContext
         }
-        for relative in ["bin/node", "infra/postgres/bin/postgres", "infra/redis/bin/redis-server",
+        for relative in ["bin/node", "infra/redis/bin/redis-server",
                          "apps/api/dist/main.js", "apps/worker-processing/dist/main.js", "apps/worker-scraper/dist/main.js"] + Array(scripts.values) {
             try requirePath("\(root)/\(runtime)/\(relative)", "\(runtime)/\(relative)")
+        }
+        // `bin` links to the folder layout Postgres was built with, inside this same tree.
+        let postgresRoot = "\(root)/\(runtime)/infra/postgres/"
+        guard canonicalPath("\(postgresRoot)bin/postgres")?.hasPrefix(postgresRoot) == true else {
+            throw ValidationError.invalidContext
         }
         if let browsers = manifest["playwrightBrowsersPath"] as? String, browsers != "playwright-browsers" {
             throw ValidationError.invalidContext

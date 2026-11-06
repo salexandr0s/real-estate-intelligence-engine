@@ -84,7 +84,9 @@ if [[ -x "$PSQL_BIN" && -x "$CREATEDB_BIN" ]]; then
     exit "$EXIT_POSTGRES_NOT_READY"
   fi
 
-  if ! retry_transient_postgres_command "$PSQL_BIN" "$ADMIN_DATABASE_URL" -tAc "SELECT 1 FROM pg_database WHERE datname = '$TARGET_DATABASE'" | grep -q 1; then
+  # -X skips ~/.psqlrc, whose output would otherwise become part of this answer.
+  DATABASE_EXISTS="$(retry_transient_postgres_command "$PSQL_BIN" -X "$ADMIN_DATABASE_URL" -tAc "SELECT 1 FROM pg_database WHERE datname = '$TARGET_DATABASE'")"
+  if [[ "$DATABASE_EXISTS" != "1" ]]; then
     # The server's default ctype is C, under which ILIKE folds only ASCII and keyword search
     # misses German words. Sorting stays bytewise.
     retry_transient_postgres_command "$CREATEDB_BIN" \

@@ -55,6 +55,26 @@ find_postgres_bin() {
   done
 }
 
+# Prints $1 without the leading folders it shares with $2.
+path_after_shared_folders() {
+  local path_parts other_parts
+  IFS=/ read -r -a path_parts <<<"$1"
+  IFS=/ read -r -a other_parts <<<"$2"
+  local index=0
+  while [[ $index -lt ${#path_parts[@]} && $index -lt ${#other_parts[@]} && "${path_parts[$index]}" == "${other_parts[$index]}" ]]; do
+    index=$((index + 1))
+  done
+  local IFS=/
+  echo "${path_parts[*]:$index}"
+}
+
+# Prints one "../" for each folder in a relative path.
+path_to_parent_of() {
+  local parts
+  IFS=/ read -r -a parts <<<"$1"
+  printf '../%.0s' "${parts[@]}"
+}
+
 list_macho_dependencies() {
   otool -L "$1" | tail -n +2 | awk '{print $1}'
 }
@@ -187,14 +207,17 @@ rewrite_macho_paths() {
       "$OUTPUT_DIR"/bin/*)
         install_base="@executable_path/../lib"
         ;;
-      "$OUTPUT_DIR"/infra/postgres/bin/*|"$OUTPUT_DIR"/infra/redis/bin/*)
+      "$OUTPUT_DIR"/infra/redis/bin/*)
         install_base="@executable_path/../../../lib"
         ;;
-      "$OUTPUT_DIR"/infra/postgres/lib/postgresql/*)
+      "$POSTGRES_BIN_OUTPUT"/*)
+        install_base="@executable_path/$(path_to_parent_of "infra/postgres/$POSTGRES_BIN_TAIL")lib"
+        ;;
+      "$POSTGRES_LIB_OUTPUT"/*)
         if [[ "$file_name" == *.dylib ]]; then
           install_name_tool -id "@loader_path/$file_name" "$file_path" || true
         fi
-        install_base="@loader_path/../../../lib"
+        install_base="@loader_path/$(path_to_parent_of "infra/postgres/$POSTGRES_LIB_TAIL")lib"
         ;;
       *)
         continue
@@ -233,7 +256,7 @@ prune_runtime_payload() {
     "$OUTPUT_DIR/apps/api/src" \
     "$OUTPUT_DIR/apps/worker-processing/src" \
     "$OUTPUT_DIR/apps/worker-scraper/src" \
-    "$OUTPUT_DIR/infra/postgres/lib/postgresql/pgxs"
+    "$POSTGRES_LIB_OUTPUT/pgxs"
 
   find "$OUTPUT_DIR/apps" "$OUTPUT_DIR/packages" -type d \( \
     -name test -o \
@@ -256,6 +279,16 @@ prune_runtime_payload() {
     "$OUTPUT_DIR/apps/api/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-processing/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-scraper/Dockerfile"
+}
+
+verify_postgres_uses_its_own_folders() {
+  local own_root share_dir pkg_lib_dir
+  own_root="$(cd "$OUTPUT_DIR/infra/postgres" && pwd -P)"
+  share_dir="$("$OUTPUT_DIR/infra/postgres/bin/pg_config" --sharedir)"
+  pkg_lib_dir="$("$OUTPUT_DIR/infra/postgres/bin/pg_config" --pkglibdir)"
+  if [[ "$share_dir" != "$own_root"/* || "$pkg_lib_dir" != "$own_root"/* ]]; then
+    fail "the bundled Postgres would read $share_dir and $pkg_lib_dir instead of its own folders"
+  fi
 }
 
 verify_runtime_modules() {
@@ -291,6 +324,18 @@ REDIS_CLI_BIN="${IMMORADAR_REDIS_CLI_BINARY:-$(command -v redis-cli || true)}"
 POSTGRES_BIN_DIR="$(find_postgres_bin)"
 POSTGRES_PKG_LIB_DIR="$("$POSTGRES_BIN_DIR/pg_config" --pkglibdir)"
 POSTGRES_SHARE_DIR="$("$POSTGRES_BIN_DIR/pg_config" --sharedir)"
+POSTGRES_BUILD_BIN_DIR="$("$POSTGRES_BIN_DIR/pg_config" --bindir)"
+
+# Postgres finds its share and library folders relative to its own binary only when the binary's
+# folder ends in the same path it was built for. Anywhere else it falls back to the build's absolute
+# paths, which exist only while Homebrew's copy is installed. So below the folders those paths share,
+# the bundle repeats the build's layout, and `bin` links to wherever the binaries ended up.
+POSTGRES_BIN_TAIL="$(path_after_shared_folders "$POSTGRES_BUILD_BIN_DIR" "$POSTGRES_SHARE_DIR")"
+POSTGRES_LIB_TAIL="$(path_after_shared_folders "$POSTGRES_PKG_LIB_DIR" "$POSTGRES_BUILD_BIN_DIR")"
+POSTGRES_SHARE_TAIL="$(path_after_shared_folders "$POSTGRES_SHARE_DIR" "$POSTGRES_BUILD_BIN_DIR")"
+POSTGRES_BIN_OUTPUT="$OUTPUT_DIR/infra/postgres/$POSTGRES_BIN_TAIL"
+POSTGRES_LIB_OUTPUT="$OUTPUT_DIR/infra/postgres/$POSTGRES_LIB_TAIL"
+POSTGRES_SHARE_OUTPUT="$OUTPUT_DIR/infra/postgres/$POSTGRES_SHARE_TAIL"
 
 require_or_warn "$NODE_BIN" "Node binary"
 require_or_warn "$REDIS_SERVER_BIN" "redis-server binary"
@@ -301,7 +346,11 @@ require_or_warn "$POSTGRES_SHARE_DIR" "Postgres shared directory"
 
 mkdir -p "$OUTPUT_DIR"
 rm -rf "$OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"/{apps,packages,node_modules,bin,lib,infra/postgres/bin,infra/postgres/lib/postgresql,infra/postgres/share/postgresql,infra/redis/bin,scripts}
+mkdir -p "$OUTPUT_DIR"/{apps,packages,node_modules,bin,lib,infra/redis/bin,scripts}
+mkdir -p "$POSTGRES_BIN_OUTPUT" "$POSTGRES_LIB_OUTPUT" "$POSTGRES_SHARE_OUTPUT"
+if [[ "$POSTGRES_BIN_TAIL" != "bin" ]]; then
+  ln -s "$POSTGRES_BIN_TAIL" "$OUTPUT_DIR/infra/postgres/bin"
+fi
 
 rsync -a "$REPO_ROOT/apps/api/" "$OUTPUT_DIR/apps/api/"
 rsync -a "$REPO_ROOT/apps/worker-processing/" "$OUTPUT_DIR/apps/worker-processing/"
@@ -311,22 +360,23 @@ rsync -a "$REPO_ROOT/node_modules/" "$OUTPUT_DIR/node_modules/"
 cp "$REPO_ROOT/package.json" "$OUTPUT_DIR/package.json"
 
 cp "$NODE_BIN" "$OUTPUT_DIR/bin/node"
-cp "$POSTGRES_BIN_DIR/postgres" "$OUTPUT_DIR/infra/postgres/bin/postgres"
-cp "$POSTGRES_BIN_DIR/initdb" "$OUTPUT_DIR/infra/postgres/bin/initdb"
-rsync -aL "$POSTGRES_PKG_LIB_DIR/" "$OUTPUT_DIR/infra/postgres/lib/postgresql/"
-rsync -aL "$POSTGRES_SHARE_DIR/" "$OUTPUT_DIR/infra/postgres/share/postgresql/"
+cp "$POSTGRES_BIN_DIR/postgres" "$POSTGRES_BIN_OUTPUT/postgres"
+cp "$POSTGRES_BIN_DIR/initdb" "$POSTGRES_BIN_OUTPUT/initdb"
+cp "$POSTGRES_BIN_DIR/pg_config" "$POSTGRES_BIN_OUTPUT/pg_config"
+rsync -aL "$POSTGRES_PKG_LIB_DIR/" "$POSTGRES_LIB_OUTPUT/"
+rsync -aL "$POSTGRES_SHARE_DIR/" "$POSTGRES_SHARE_OUTPUT/"
 
 if [[ -x "$POSTGRES_BIN_DIR/pg_isready" ]]; then
-  cp "$POSTGRES_BIN_DIR/pg_isready" "$OUTPUT_DIR/infra/postgres/bin/pg_isready"
+  cp "$POSTGRES_BIN_DIR/pg_isready" "$POSTGRES_BIN_OUTPUT/pg_isready"
 fi
 if [[ -x "$POSTGRES_BIN_DIR/pg_ctl" ]]; then
-  cp "$POSTGRES_BIN_DIR/pg_ctl" "$OUTPUT_DIR/infra/postgres/bin/pg_ctl"
+  cp "$POSTGRES_BIN_DIR/pg_ctl" "$POSTGRES_BIN_OUTPUT/pg_ctl"
 fi
 if [[ -x "$POSTGRES_BIN_DIR/psql" ]]; then
-  cp "$POSTGRES_BIN_DIR/psql" "$OUTPUT_DIR/infra/postgres/bin/psql"
+  cp "$POSTGRES_BIN_DIR/psql" "$POSTGRES_BIN_OUTPUT/psql"
 fi
 if [[ -x "$POSTGRES_BIN_DIR/createdb" ]]; then
-  cp "$POSTGRES_BIN_DIR/createdb" "$OUTPUT_DIR/infra/postgres/bin/createdb"
+  cp "$POSTGRES_BIN_DIR/createdb" "$POSTGRES_BIN_OUTPUT/createdb"
 fi
 
 cp "$REDIS_SERVER_BIN" "$OUTPUT_DIR/infra/redis/bin/redis-server"
@@ -343,19 +393,21 @@ prune_runtime_payload
 
 chmod +x \
   "$OUTPUT_DIR/bin/node" \
-  "$OUTPUT_DIR/infra/postgres/bin/postgres" \
-  "$OUTPUT_DIR/infra/postgres/bin/initdb" \
+  "$POSTGRES_BIN_OUTPUT/postgres" \
+  "$POSTGRES_BIN_OUTPUT/initdb" \
+  "$POSTGRES_BIN_OUTPUT/pg_config" \
   "$OUTPUT_DIR/infra/redis/bin/redis-server" \
   "$OUTPUT_DIR/scripts/start-postgres.sh" \
   "$OUTPUT_DIR/scripts/start-redis.sh" \
   "$OUTPUT_DIR/scripts/run-migrations.sh" \
   "$OUTPUT_DIR/scripts/engine-watchdog.sh"
 
-find "$OUTPUT_DIR/infra/postgres/lib/postgresql" -type f -name '*.dylib' -exec chmod +w {} +
+find "$POSTGRES_LIB_OUTPUT" -type f -name '*.dylib' -exec chmod +w {} +
 
 bundle_runtime_dependencies
 rewrite_macho_paths
 adhoc_sign_runtime
+verify_postgres_uses_its_own_folders
 verify_runtime_modules
 
 copy_playwright_browser
