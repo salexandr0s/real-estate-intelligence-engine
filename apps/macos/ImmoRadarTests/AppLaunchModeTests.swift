@@ -107,15 +107,17 @@ enum SmokePolicyProof {
         let smoke = AppLaunchPolicy(mode: .production, smokeContext: context)
         let token = smoke.connectionToken { reads += 1; return "must-not-load" }
         try check("smoke token avoids stored loader", reads == 0 && token == environment["IMMORADAR_LOCAL_RUNTIME_API_TOKEN"])
-        try check("smoke disables duplicate discovery and feature refresh", !smoke.allowsDuplicateAppTermination && !smoke.allowsAutomaticFeatureLoads && !smoke.allowsBackgroundRefresh && !smoke.allowsStoredCredentials)
+        try check("smoke holds its own lock and disables feature refresh", smoke.enforcesSingleInstance && !smoke.allowsAutomaticFeatureLoads && !smoke.allowsBackgroundRefresh && !smoke.allowsStoredCredentials)
         for mode in [AppLaunchMode.test, .preview] {
             let policy = AppLaunchPolicy(mode: mode, smokeContext: nil)
             let token = policy.connectionToken { reads += 1; return "must-not-load" }
-            try check("\(mode) skips credentials and duplicate discovery", token == nil && reads == 0 && !policy.allowsDuplicateAppTermination && !policy.allowsStoredCredentials && !policy.allowsAutomaticFeatureLoads && !policy.allowsBackgroundRefresh)
+            try check("\(mode) skips credentials and the instance lock", token == nil && reads == 0 && !policy.enforcesSingleInstance && !policy.allowsStoredCredentials && !policy.allowsAutomaticFeatureLoads && !policy.allowsBackgroundRefresh)
         }
-        let production = AppLaunchPolicy(mode: .production, smokeContext: nil)
+        let unvalidated = AppLaunchPolicy(mode: .production, smokeContext: nil, smokeRequested: true)
+        try check("unvalidated smoke takes no lock", !unvalidated.enforcesSingleInstance)
+        let production = AppLaunchPolicy(mode: .production, smokeContext: nil, smokeRequested: false)
         let productionToken = production.connectionToken { reads += 1; return "synthetic-stored-token" }
-        try check("normal production policy retained", reads == 1 && productionToken == "synthetic-stored-token" && production.allowsDuplicateAppTermination && production.allowsStoredCredentials && production.allowsAutomaticFeatureLoads && production.allowsBackgroundRefresh)
+        try check("normal production policy retained", reads == 1 && productionToken == "synthetic-stored-token" && production.enforcesSingleInstance && production.allowsStoredCredentials && production.allowsAutomaticFeatureLoads && production.allowsBackgroundRefresh)
 
         for (name, key, value) in [
             ("invalid smoke flag rejected", "IMMORADAR_SMOKE_TEST", "0"),

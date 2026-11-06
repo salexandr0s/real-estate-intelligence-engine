@@ -3,14 +3,6 @@ import Darwin
 import SwiftUI
 
 @MainActor
-final class AppTerminationBridge {
-    static let shared = AppTerminationBridge()
-
-    var appState: AppState?
-    var launchPolicy: AppLaunchPolicy?
-}
-
-@MainActor
 final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
 
     private var signalSource: DispatchSourceSignal?
@@ -29,80 +21,17 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
         signalSource = source
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        Task { @MainActor in
-            if AppTerminationBridge.shared.launchPolicy?.allowsDuplicateAppTermination == true {
-                await Self.terminateDuplicateAppProcesses()
-            }
-
-            await AppTerminationBridge.shared.appState?.performInitialLaunchIfNeeded()
-        }
-    }
-
-    private nonisolated static func terminateDuplicateAppProcesses() async {
-        let currentProcessID = ProcessInfo.processInfo.processIdentifier
-        let duplicatePIDs = await duplicateAppPIDs(excluding: currentProcessID)
-
-        guard !duplicatePIDs.isEmpty else { return }
-
-        for pid in duplicatePIDs {
-            Darwin.kill(pid, SIGTERM)
-        }
-
-        try? await Task.sleep(for: .seconds(1))
-
-        for pid in duplicatePIDs where isProcessRunning(pid) {
-            Darwin.kill(pid, SIGKILL)
-        }
-    }
-
-    private nonisolated static func duplicateAppPIDs(excluding currentProcessID: Int32) async -> [Int32] {
-        await Task.detached(priority: .utility) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/ps")
-            process.arguments = ["-axo", "pid=,command="]
-
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = Pipe()
-
-            do {
-                try process.run()
-            } catch {
-                return []
-            }
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else { return [] }
-
-            return String(decoding: data, as: UTF8.self)
-                .split(whereSeparator: \.isNewline)
-                .compactMap { rawLine -> Int32? in
-                    let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard line.contains("/ImmoRadar.app/Contents/MacOS/ImmoRadar") else { return nil }
-
-                    let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace)
-                    guard let pidPart = parts.first,
-                          let pid = Int32(pidPart),
-                          pid != currentProcessID else {
-                        return nil
-                    }
-
-                    return pid
-                }
-        }.value
-    }
-
-    private nonisolated static func isProcessRunning(_ pid: Int32) -> Bool {
-        guard pid > 0 else { return false }
-        return Darwin.kill(pid, 0) == 0
+    /// The engine lives as long as the app, so closing the window leaves both running. The menu bar
+    /// item brings the window back.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 }
 
 @main
 struct ImmoRadarApp: App {
+    static let mainWindowID = "main"
+
     @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var appLifecycleDelegate
     private let launchMode: AppLaunchMode
     @State private var appState: AppState
@@ -125,10 +54,12 @@ struct ImmoRadarApp: App {
             FileHandle.standardError.write(Data("Invalid isolated smoke context.\n".utf8))
             exit(64)
         }
+        if AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext).enforcesSingleInstance {
+            EngineInstanceLock.acquireOrExit()
+        }
+
         let appState = AppState(launchMode: launchMode, smokeContext: smokeContext)
         _appState = State(initialValue: appState)
-        AppTerminationBridge.shared.launchPolicy = AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext)
-        AppTerminationBridge.shared.appState = appState
 
         Task { @MainActor in
             await appState.performInitialLaunchIfNeeded()
@@ -138,7 +69,7 @@ struct ImmoRadarApp: App {
     var body: some Scene {
         // MARK: - Main Window
 
-        Window("ImmoRadar", id: "main") {
+        Window("ImmoRadar", id: Self.mainWindowID) {
             if launchMode == .test || appState.isIsolatedSmokeLaunch {
                 EmptyView()
                     .frame(width: 1, height: 1)

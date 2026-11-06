@@ -275,6 +275,7 @@
 		ED4B5AAECC490DA220AFFD0F /* CrossSourceBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CAB7988649A7762FD0BF9B /* CrossSourceBadge.swift */; };
 		EDB638E1B021D23A92D155FA /* ListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57B6306BA305CEA301D68E46 /* ListingRow.swift */; };
 		F1AB7A6DC39523710B0D570B /* CopilotInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */; };
+		F1F7CC97E0C922BA03CAE8C2 /* EngineInstanceLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7DDA59AE096C15C3BD554C /* EngineInstanceLock.swift */; };
 		F2B6B2F4CB352BA73A048D9F /* ListingDetailsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB94263E58BA6258D733AA8 /* ListingDetailsSection.swift */; };
 		F4B3C363FEBF70A8FAC495C1 /* DashboardStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC219D950CF80D56C236923 /* DashboardStats.swift */; };
 		F4F1802C644047A5AA40CE65 /* ProximitySummaryBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33E2A5BBB638D5E43A254A6 /* ProximitySummaryBlock.swift */; };
@@ -570,6 +571,7 @@
 		E873B0A342425CE22629C157 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
 		E8C95C8E917773192B24263B /* ProximityNearestItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityNearestItem.swift; sourceTree = "<group>"; };
 		E94B629565BEAF82A7AFD0FE /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		EC7DDA59AE096C15C3BD554C /* EngineInstanceLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineInstanceLock.swift; sourceTree = "<group>"; };
 		ECC3E5F372A5547CBE4888B4 /* EngineLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineLeftovers.swift; sourceTree = "<group>"; };
 		EDD00C94C8841623F009F9D6 /* CopilotEmptyStateContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotEmptyStateContainer.swift; sourceTree = "<group>"; };
 		EE604F7EA233DB23168C597B /* AnalysisBuildingContextCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisBuildingContextCard.swift; sourceTree = "<group>"; };
@@ -918,6 +920,7 @@
 				57996D89E9D47EBAA6FE9158 /* ContentView.swift */,
 				F4023F1A7D9C797C12B20310 /* CopilotSettingsState.swift */,
 				8C795EA5243808C16B8C72FC /* DetailContentView.swift */,
+				EC7DDA59AE096C15C3BD554C /* EngineInstanceLock.swift */,
 				C4647B8EC98172778E6A7A62 /* ImmoRadarApp.swift */,
 				4D622964D11E802D9FDEBB93 /* Logging.swift */,
 				2DA8D1A87DA84720D4B01F9A /* MenuBarContent.swift */,
@@ -1360,6 +1363,7 @@
 				DF09F60534CBA530649BFC44 /* DocumentFactsView.swift in Sources */,
 				6EC61471E44C6D3214D55950 /* DocumentRow.swift in Sources */,
 				68E925D114C1348A3F232F82 /* DocumentsSection.swift in Sources */,
+				F1F7CC97E0C922BA03CAE8C2 /* EngineInstanceLock.swift in Sources */,
 				1699C40AFC5E6D596D7D91E6 /* EngineLayout.swift in Sources */,
 				E0AF7EFBD413EC2E325EC63B /* EngineLeftovers.swift in Sources */,
 				B443129C1F1775604B410009 /* EngineLogs.swift in Sources */,

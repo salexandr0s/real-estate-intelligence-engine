@@ -242,7 +242,8 @@ struct AppLaunchPolicy {
 
     var requiresSmokeBoundary: Bool { smokeContext != nil || smokeRequested }
     var allowsStoredCredentials: Bool { mode == .production && !requiresSmokeBoundary }
-    var allowsDuplicateAppTermination: Bool { mode == .production && !requiresSmokeBoundary }
+    /// A validated smoke run holds the lock under its own root, so it never meets the user's app.
+    var enforcesSingleInstance: Bool { mode == .production && (smokeContext != nil || !smokeRequested) }
     var allowsAutomaticFeatureLoads: Bool { mode == .production && !requiresSmokeBoundary }
     var allowsBackgroundRefresh: Bool { mode == .production && !requiresSmokeBoundary }
 
