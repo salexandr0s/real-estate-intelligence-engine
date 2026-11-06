@@ -690,7 +690,7 @@ final class AppState {
                 "ImmoRadar couldn’t finish starting the local engine. Check diagnostics and try again."
             )
             return false
-        case .running:
+        case .running, .degraded:
             break
         }
 

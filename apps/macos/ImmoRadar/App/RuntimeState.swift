@@ -122,7 +122,7 @@ final class RuntimeState {
             switch localRuntime.state {
             case .starting, .stopping:
                 return .starting
-            case .unavailable, .failed:
+            case .unavailable, .failed, .degraded:
                 return .needsAttention
             case .running:
                 return hasEnabledMonitoring ? .monitoringActive : .monitoringPaused

@@ -5,7 +5,7 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
     @MainActor
     func testRepoRootCandidatesHonorEnvironmentOverride() {
         let override = "/tmp/immoradar-repo-override"
-        let candidates = LocalRuntimeService.runtimeRootCandidates(
+        let candidates = EngineLayout.runtimeRootCandidates(
             currentDirectoryPath: "/tmp",
             bundleURL: URL(fileURLWithPath: "/Applications/ImmoRadar.app", isDirectory: true),
             environment: ["IMMORADAR_REPO_ROOT_OVERRIDE": override]
@@ -16,13 +16,13 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
 
     @MainActor
     func testFindRepoRuntimeRootFallsBackToDebugSourceRoot() throws {
-        let discovered = try LocalRuntimeService.findRepoRuntimeRoot(
+        let discovered = try EngineLayout.findRepoRuntimeRoot(
             currentDirectoryPath: "/tmp",
             bundleURL: URL(fileURLWithPath: "/Applications/ImmoRadar.app", isDirectory: true),
             environment: [:]
         )
 
-        XCTAssertTrue(LocalRuntimeService.hasRepoWorkspaceLayout(at: discovered))
+        XCTAssertTrue(EngineLayout.hasRepoWorkspaceLayout(at: discovered))
         XCTAssertTrue(
             FileManager.default.fileExists(
                 atPath: discovered.appendingPathComponent("apps/api/package.json").path
@@ -58,14 +58,14 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
             FileManager.default.createFile(atPath: fileURL.path, contents: Data("{}".utf8))
         }
 
-        let discovered = try LocalRuntimeService.findRepoRuntimeRoot(
+        let discovered = try EngineLayout.findRepoRuntimeRoot(
             currentDirectoryPath: "/tmp",
             bundleURL: URL(fileURLWithPath: "/Applications/ImmoRadar.app", isDirectory: true),
             environment: ["IMMORADAR_REPO_ROOT_OVERRIDE": tempRoot.path]
         )
 
         XCTAssertEqual(discovered.standardizedFileURL, tempRoot.standardizedFileURL)
-        XCTAssertFalse(LocalRuntimeService.hasRepoRuntimeArtifacts(at: discovered))
+        XCTAssertFalse(EngineLayout.hasRepoRuntimeArtifacts(at: discovered))
     }
 
     func testLocalRuntimeAuthPrefersEnvironmentOverrideToken() throws {
@@ -105,31 +105,11 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
     }
 
     @MainActor
-    func testDetectRepoComponentPIDsFindsRepoProcessesFromProcessList() {
-        let root = URL(fileURLWithPath: "/tmp/immoradar-repo", isDirectory: true)
-        let processList = """
-          101 /opt/homebrew/bin/node \(root.path)/apps/api/dist/main.js
-          102 /opt/homebrew/bin/node \(root.path)/apps/worker-processing/dist/main.js
-          103 /opt/homebrew/bin/node \(root.path)/apps/worker-scraper/dist/main.js
-          201 /opt/homebrew/bin/node /another/repo/apps/api/dist/main.js
-        """
-
-        let detected = LocalRuntimeService.detectRepoComponentPIDs(
-            processListOutput: processList,
-            runtimeRoot: root
-        )
-
-        XCTAssertEqual(detected[.api], 101)
-        XCTAssertEqual(detected[.processing], 102)
-        XCTAssertEqual(detected[.scraper], 103)
-    }
-
-    @MainActor
     func testNodeExecutableCandidatesPreferEnvironmentOverride() {
         let root = URL(fileURLWithPath: "/tmp/immoradar-repo", isDirectory: true)
         let override = "/tmp/custom-node"
 
-        let candidates = LocalRuntimeService.nodeExecutableCandidates(
+        let candidates = EngineLayout.nodeExecutableCandidates(
             under: root,
             environment: [
                 "IMMORADAR_NODE_EXECUTABLE": override,
@@ -145,69 +125,12 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
     func testNodeExecutableCandidatesIncludeCommonHomebrewPathWithoutPATH() {
         let root = URL(fileURLWithPath: "/tmp/immoradar-repo", isDirectory: true)
 
-        let candidates = LocalRuntimeService.nodeExecutableCandidates(
+        let candidates = EngineLayout.nodeExecutableCandidates(
             under: root,
             environment: [:],
             homeDirectory: URL(fileURLWithPath: "/Users/test", isDirectory: true)
         )
 
         XCTAssertTrue(candidates.contains(URL(fileURLWithPath: "/opt/homebrew/bin/node")))
-    }
-
-    @MainActor
-    func testDetectBundledComponentPIDsFindsBundledRuntimeProcesses() {
-        let runtimeRoot = URL(
-            fileURLWithPath: "/Applications/ImmoRadar.app/Contents/Resources/runtime",
-            isDirectory: true
-        )
-        let runtimeHome = URL(
-            fileURLWithPath: "/Users/test/Library/Application Support/ImmoRadar/runtime",
-            isDirectory: true
-        )
-        let processList = """
-          301 \(runtimeRoot.path)/infra/postgres/bin/postgres -D \(runtimeHome.path)/postgres/data -h 127.0.0.1 -p 55432
-          302 \(runtimeRoot.path)/infra/redis/bin/redis-server 127.0.0.1:56379
-          303 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/api/dist/main.js
-          304 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/worker-processing/dist/main.js
-          305 \(runtimeRoot.path)/bin/node \(runtimeRoot.path)/apps/worker-scraper/dist/main.js
-        """
-
-        let detected = LocalRuntimeService.detectBundledComponentPIDs(
-            processListOutput: processList,
-            runtimeRoot: runtimeRoot,
-            runtimeHome: runtimeHome,
-            redisPort: 56379
-        )
-
-        XCTAssertEqual(detected[.postgres], 301)
-        XCTAssertEqual(detected[.redis], 302)
-        XCTAssertEqual(detected[.api], 303)
-        XCTAssertEqual(detected[.processing], 304)
-        XCTAssertEqual(detected[.scraper], 305)
-    }
-
-    @MainActor
-    func testDetectBundledComponentPIDsIgnoresForeignProcesses() {
-        let runtimeRoot = URL(
-            fileURLWithPath: "/Applications/ImmoRadar.app/Contents/Resources/runtime",
-            isDirectory: true
-        )
-        let runtimeHome = URL(
-            fileURLWithPath: "/Users/test/Library/Application Support/ImmoRadar/runtime",
-            isDirectory: true
-        )
-        let processList = """
-          401 /opt/homebrew/opt/redis/bin/redis-server 127.0.0.1:56379
-          402 /opt/homebrew/bin/node /another/runtime/apps/api/dist/main.js
-        """
-
-        let detected = LocalRuntimeService.detectBundledComponentPIDs(
-            processListOutput: processList,
-            runtimeRoot: runtimeRoot,
-            runtimeHome: runtimeHome,
-            redisPort: 56379
-        )
-
-        XCTAssertTrue(detected.isEmpty)
     }
 }
