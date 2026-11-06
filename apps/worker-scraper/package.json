@@ -18,13 +18,13 @@
     "@immoradar/source-remax": "*",
     "@immoradar/source-willhaben": "*",
     "@immoradar/source-wohnnet": "*",
-    "bullmq": "^5.71.0",
+    "bullmq": "^5.81.5",
     "ioredis": "^5.10.1",
     "patchright": "^1.58.2",
     "playwright": "^1.58.2"
   },
   "devDependencies": {
-    "tsx": "^4.19.0"
+    "tsx": "^4.23.15"
   },
   "scripts": {
     "build": "tsc",
