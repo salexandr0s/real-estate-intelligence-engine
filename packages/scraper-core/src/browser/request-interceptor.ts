@@ -37,7 +37,7 @@ export async function setupRequestInterception(context: {
       abort: () => Promise<void>;
       continue: () => Promise<void>;
     }) => Promise<void>,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
 }): Promise<void> {
   await context.route('**/*', async (route) => {
     const request = route.request();
