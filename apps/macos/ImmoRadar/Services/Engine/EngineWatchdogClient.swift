@@ -37,6 +37,7 @@ final class EngineWatchdogClient {
     private let runtimeHome: URL
     private let logFile: URL
     private var process: Process?
+    private var identity: ProcessIdentity?
     private var pipe: Pipe?
     private var isClosing = false
     private var exitWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
@@ -89,6 +90,7 @@ final class EngineWatchdogClient {
         guard case .live(let identity) = ProcessInspector.observe(pid: process.processIdentifier) else {
             throw ClientError.didNotStart
         }
+        self.identity = identity
         try send("RUN \(runID.uuidString)")
         return identity
     }
@@ -116,8 +118,8 @@ final class EngineWatchdogClient {
         closeWriteEnd()
 
         var exited = await waitForExit(of: process, timeout: timeout)
-        if !exited, case .live = ProcessInspector.observe(pid: process.processIdentifier) {
-            kill(process.processIdentifier, SIGKILL)
+        if !exited, let identity, ProcessInspector.observe(pid: identity.pid) == .live(identity) {
+            kill(identity.pid, SIGKILL)
             exited = await waitForExit(of: process, timeout: .seconds(1))
         }
         self.process = nil
@@ -143,7 +145,8 @@ final class EngineWatchdogClient {
             let id = UUID()
             exitWaiters[id] = continuation
             Task { [weak self] in
-                try? await Task.sleep(for: timeout)
+                // Time asleep doesn't count, so closing the lid mid-stop can't get a healthy watchdog killed.
+                try? await Task.sleep(for: timeout, clock: .suspending)
                 self?.exitWaiters.removeValue(forKey: id)?.resume(returning: false)
             }
         }

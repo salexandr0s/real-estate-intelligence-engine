@@ -108,6 +108,7 @@ final class EngineSupervisor {
     private var restartHistory: [EngineSlot: [Date]] = [:]
     private var restartTasks: [EngineSlot: Task<Void, Never>] = [:]
     private var watchdogDeaths: [Date] = []
+    private var watchdogRetry: Task<Void, Never>?
     private var healthTask: Task<Void, Never>?
     private var stopTask: Task<Void, Never>?
 
@@ -173,6 +174,13 @@ final class EngineSupervisor {
 
         report(.step(.verifyingServices))
         try? await Task.sleep(for: .milliseconds(600))
+        guard phase == .starting else {
+            throw EngineStartupFailure.unexpected("The engine stopped while it was starting.")
+        }
+        // Each process is checked here because nothing else reports an exit during a start. Postgres
+        // and Redis can die after their readiness wait, and the API's static /health wouldn't notice.
+        try requireRunning(.postgres)
+        try requireRunning(.redis)
         try requireRunning(.api)
         if startedWorkers {
             try requireRunning(.workerProcessing)
@@ -260,11 +268,19 @@ final class EngineSupervisor {
             task.cancel()
         }
         restartTasks.removeAll()
+        watchdogRetry?.cancel()
+        watchdogRetry = nil
 
         let closing = watchdog
+        // With no watchdog to close, only the app can end its children.
+        let unwatched = closing == nil ? children.values.map(\.process).filter(\.isRunning) : []
+        unwatched.forEach { $0.terminate() }
+
         let task = Task { [weak self] in
             if let closing {
                 _ = await closing.closeAndWait(timeout: Self.watchdogStopBound)
+            } else {
+                await self?.waitForExit(of: unwatched, timeout: Self.watchdogStopBound)
             }
             self?.finishStopping()
         }
@@ -356,6 +372,9 @@ final class EngineSupervisor {
     }
 
     private func handleWatchdogExit() {
+        // The old client takes no more commands. Clearing it first means a failed replacement leaves
+        // nil here, and a later stop knows there is no watchdog to close.
+        watchdog = nil
         guard phase == .starting || phase == .running, let layout else { return }
 
         let now = Date.now
@@ -366,13 +385,16 @@ final class EngineSupervisor {
             for (slot, child) in children where child.process.isRunning {
                 try watchdog?.add(slot, generation: child.generation, pid: child.process.processIdentifier)
             }
+            // The dead watchdog may have lost a stop that was on its way to it.
+            if !workersWanted, EngineSlot.workers.contains(where: { children[$0]?.process.isRunning == true }) {
+                try watchdog?.stop(EngineSlot.workers)
+            }
         } catch {
+            // A new client that fails on a send reports its own exit, and this runs again.
             Log.engine.error("Couldn't replace the engine watchdog: \(error.localizedDescription, privacy: .public)")
-            watchdogDeaths.append(now)
         }
 
-        // Closing the newest watchdog stops the children it just took over.
-        if watchdogDeaths.count >= Self.watchdogDeathLimit {
+        guard watchdogDeaths.count < Self.watchdogDeathLimit else {
             Task { [weak self] in
                 await self?.stop()
                 self?.report(.failed(EngineStartupFailure(
@@ -381,10 +403,22 @@ final class EngineSupervisor {
                     logFileName: Self.watchdogLogFileName
                 )))
             }
+            return
+        }
+
+        // Nothing else calls back when a watchdog can't even start.
+        if watchdog == nil {
+            watchdogRetry?.cancel()
+            watchdogRetry = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self, self.watchdog == nil else { return }
+                self.handleWatchdogExit()
+            }
         }
     }
 
-    /// A send fails only while the watchdog is dead, and its replacement takes over every child.
+    /// A send fails only while the watchdog is dead. Its replacement takes over every running child
+    /// and reruns a lost worker stop.
     private func tellWatchdog(_ command: (EngineWatchdogClient) throws -> Void) {
         guard let watchdog else { return }
         do {
@@ -422,7 +456,7 @@ final class EngineSupervisor {
         while !leftovers.isEmpty, passes < 2 {
             passes += 1
             Log.engine.info("Stopping \(leftovers.count) leftover engine processes")
-            for leftover in leftovers {
+            for leftover in leftovers where ProcessInspector.observe(pid: leftover.identity.pid) == .live(leftover.identity) {
                 let slot: EngineSlot = switch leftover.role {
                 case .postmaster: .postgres
                 case .redis: .redis
@@ -780,13 +814,16 @@ final class EngineSupervisor {
         }
     }
 
+    // These waits count only time the Mac is awake, so closing the lid can't use them up and report a
+    // healthy process as hung.
+
     private func waitUntilReady(
         _ slot: EngineSlot,
         timeout: Duration,
         timedOut: EngineStartupFailure,
         isReady: () async -> Bool
     ) async throws {
-        let clock = ContinuousClock()
+        let clock = SuspendingClock()
         let deadline = clock.now + timeout
         while clock.now < deadline {
             if await isReady() { return }
@@ -797,7 +834,7 @@ final class EngineSupervisor {
     }
 
     private func waitForExit(of processes: [Process], timeout: Duration) async {
-        let clock = ContinuousClock()
+        let clock = SuspendingClock()
         let deadline = clock.now + timeout
         while processes.contains(where: \.isRunning), clock.now < deadline {
             try? await Task.sleep(for: .milliseconds(200))
@@ -805,7 +842,7 @@ final class EngineSupervisor {
     }
 
     private func waitUntilGone(_ identities: [ProcessIdentity], timeout: Duration) async -> Bool {
-        let clock = ContinuousClock()
+        let clock = SuspendingClock()
         let deadline = clock.now + timeout
         while true {
             let isAnyAlive = identities.contains { ProcessInspector.observe(pid: $0.pid) == .live($0) }
@@ -825,7 +862,7 @@ final class EngineSupervisor {
         writeRunRecord()
         report(.componentsChanged)
 
-        // A start in progress finds out from its own waits, and a stop expects this.
+        // A start in progress checks every process before it reports running, and a stop expects this.
         guard phase == .running else { return }
 
         switch slot {
@@ -897,6 +934,7 @@ final class EngineSupervisor {
         healthTask = Task { [weak self] in
             var failures = 0
             var checks = 0
+            var countedGeneration: Int?
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.healthInterval)
                 guard !Task.isCancelled else { return }
@@ -906,11 +944,19 @@ final class EngineSupervisor {
                     await self?.rotateLogs(in: logsDirectory, largerThan: EngineLogs.rotationLimitWhileRunning)
                 }
 
+                let probedGeneration = self?.children[.api]?.generation
                 let isHealthy = await Self.isAPIHealthy(baseURL: baseURL)
                 guard !Task.isCancelled, let self else { return }
-                guard self.phase == .running, self.children[.api] != nil else {
+                // A probe says nothing about an API that started after it began, and failures never
+                // carry over from one API process to the next.
+                guard self.phase == .running, let probedGeneration,
+                      self.children[.api]?.generation == probedGeneration else {
                     failures = 0
                     continue
+                }
+                if probedGeneration != countedGeneration {
+                    countedGeneration = probedGeneration
+                    failures = 0
                 }
 
                 failures = isHealthy ? 0 : failures + 1
