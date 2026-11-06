@@ -1,11 +1,5 @@
 import { loadConfig } from '@immoradar/config';
-import {
-  createLogger,
-  setLogLevel,
-  redactUrl,
-  initTracing,
-  shutdownTracing,
-} from '@immoradar/observability';
+import { createLogger, setLogLevel, redactUrl } from '@immoradar/observability';
 import type { LogLevel } from '@immoradar/observability';
 import { closeRedisConnection } from '@immoradar/scraper-core';
 import { closePool } from '@immoradar/db';
@@ -19,7 +13,6 @@ const logger = createLogger('worker-scraper');
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
-  initTracing('immoradar-worker-scraper');
 
   logger.info('Scraper worker starting', {
     nodeEnv: config.nodeEnv,
@@ -40,7 +33,6 @@ async function main(): Promise<void> {
     await discoveryWorker.close();
     await detailWorker.close();
     await closeBrowser();
-    await shutdownTracing();
     await closeRedisConnection();
     await closePool();
     process.exit(0);

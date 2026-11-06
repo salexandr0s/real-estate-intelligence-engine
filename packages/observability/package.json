@@ -8,17 +8,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run --root ../.. --passWithNoTests packages/observability/src/tracing.test.ts",
-    "test:unit": "vitest run --root ../.. --passWithNoTests packages/observability/src/tracing.test.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-node": "^0.213.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
     "prom-client": "^15.1.3"
   }
 }

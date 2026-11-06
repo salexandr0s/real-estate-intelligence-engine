@@ -59,7 +59,6 @@
 ### Observability
 - [x] Add structured logging
 - [x] Add metrics endpoint
-- [x] Add tracing/OpenTelemetry
 - [x] Add error tracking
 - [x] Add health/readiness endpoints
 

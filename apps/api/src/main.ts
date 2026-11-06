@@ -1,6 +1,6 @@
 import { loadConfig } from '@immoradar/config';
 import { getPool, closePool } from '@immoradar/db';
-import { createLogger, setLogLevel, initTracing, shutdownTracing } from '@immoradar/observability';
+import { createLogger, setLogLevel } from '@immoradar/observability';
 import type { LogLevel } from '@immoradar/observability';
 import { buildApp } from './app.js';
 
@@ -9,7 +9,6 @@ const logger = createLogger('api');
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
-  initTracing('immoradar-api');
 
   logger.info('Starting API server', {
     nodeEnv: config.nodeEnv,
@@ -61,7 +60,6 @@ async function main(): Promise<void> {
     logger.info(`Received ${signal}, shutting down gracefully`);
     try {
       await app.close();
-      await shutdownTracing();
       await closePool();
       logger.info('API server closed');
       process.exit(0);
