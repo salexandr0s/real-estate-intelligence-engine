@@ -79,7 +79,7 @@ function makeExistingListing(overrides: Record<string, unknown> = {}) {
     contentFingerprint: listing.contentFingerprint,
     normalizationVersion: listing.normalizationVersion,
     listingStatus: listing.listingStatus,
-    listPriceEurCents: listing.listPriceEurCents,
+    listPriceEurCents: listing.listPriceEurCents ?? null,
     firstSeenAt: new Date('2026-03-20T08:00:00.000Z'),
     lastPriceChangeAt: null,
     currentScore: 72,
@@ -111,9 +111,7 @@ function makeExistingListing(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeContext(
-  overrides: Partial<NormalizationContext> = {},
-): NormalizationContext {
+function makeContext(overrides: Partial<NormalizationContext> = {}): NormalizationContext {
   return {
     sourceId: 1,
     sourceListingKey: 'immoscout24:abc123',
@@ -144,9 +142,10 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
       ),
     };
 
-    const upsertListing = vi.fn(
-      async (_input: CanonicalListingInput) => ({ id: 123, isNew: false }),
-    );
+    const upsertListing = vi.fn(async (_input: CanonicalListingInput) => ({
+      id: 123,
+      isNew: false,
+    }));
     const appendListingVersion = vi.fn(async () => ({ id: 777, versionNo: 2 }));
 
     const sut = new NormalizeAndUpsert(new Map([['immoscout24', normalizer]]), {

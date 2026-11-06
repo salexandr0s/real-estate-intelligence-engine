@@ -28,7 +28,13 @@ import {
   pickRandomUserAgent,
   setupRequestInterception,
 } from '@immoradar/scraper-core';
-import type { SourceAdapter, CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import type {
+  SourceAdapter,
+  CrawlProfile,
+  DetailCapture,
+  RequestPlan,
+  SourceRawListingBase,
+} from '@immoradar/contracts';
 import { WillhabenAdapter } from '@immoradar/source-willhaben';
 import { Immoscout24Adapter } from '@immoradar/source-immoscout24';
 import { WohnnetAdapter } from '@immoradar/source-wohnnet';
@@ -244,7 +250,7 @@ async function main(): Promise<void> {
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
-        log.error(`Discovery page failed: ${currentPlan.url}`, { errorClass });
+        log.error(`Discovery page failed: ${currentPlan?.url}`, { errorClass });
         runCtx.incrementMetric('http4xx');
         currentPlan = null; // Stop on error
       }
@@ -325,7 +331,11 @@ async function main(): Promise<void> {
         detailCapture.htmlStorageKey = htmlKey ?? null;
 
         // Feed through full pipeline
-        const result = await pipeline.ingestDetailCapture(detailCapture, source.id, run.id);
+        const result = await pipeline.ingestDetailCapture(
+          detailCapture as DetailCapture<SourceRawListingBase>,
+          source.id,
+          run.id,
+        );
 
         const status = result.normalization.isNew ? 'NEW' : 'UPDATED';
         const score = result.scoring?.overallScore ?? null;

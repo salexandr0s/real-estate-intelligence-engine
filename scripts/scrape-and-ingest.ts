@@ -31,7 +31,12 @@ import {
 } from '@immoradar/scraper-core';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
 import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
-import type { CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import type {
+  CrawlProfile,
+  DetailCapture,
+  RequestPlan,
+  SourceRawListingBase,
+} from '@immoradar/contracts';
 import { sources, scrapeRuns, closePool } from '@immoradar/db';
 
 const log = createLogger('scrape-cli');
@@ -213,7 +218,7 @@ async function main(): Promise<void> {
       } catch (err) {
         const errorClass = classifyScraperError(err);
         circuitBreaker.recordFailure(sourceCode, errorClass);
-        log.error(`Discovery page failed: ${currentPlan.url}`, { errorClass });
+        log.error(`Discovery page failed: ${currentPlan?.url}`, { errorClass });
         runCtx.incrementMetric('http4xx');
         currentPlan = null; // Stop on error
       }
@@ -292,7 +297,11 @@ async function main(): Promise<void> {
         }
 
         // Feed through pipeline
-        const result = await pipeline.ingestDetailCapture(detailCapture, source.id, run.id);
+        const result = await pipeline.ingestDetailCapture(
+          detailCapture as DetailCapture<SourceRawListingBase>,
+          source.id,
+          run.id,
+        );
 
         const status = result.normalization.isNew ? 'NEW' : 'UPDATED';
         const score = result.scoring?.overallScore ?? null;

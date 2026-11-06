@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   const { sourceCode, limit, dryRun } = parseArgs();
   loadConfig();
 
-  log.info('Starting normalization replay', { sourceCode, limit, dryRun });
+  log.info('Starting normalization replay', { sourceCode: sourceCode ?? undefined, limit, dryRun });
 
   // Resolve source ID if filtered
   let sourceId: number | null = null;

@@ -43,7 +43,12 @@ import {
 } from '@immoradar/scraper-core';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
 import { createPipeline } from '../apps/worker-processing/src/pipeline-factory.js';
-import type { CrawlProfile, RequestPlan } from '@immoradar/contracts';
+import type {
+  CrawlProfile,
+  DetailCapture,
+  RequestPlan,
+  SourceRawListingBase,
+} from '@immoradar/contracts';
 import { sources, scrapeRuns, listings, query, listingPois, closePool } from '@immoradar/db';
 import { geocodeListing } from '@immoradar/geocoding';
 
@@ -327,7 +332,11 @@ async function runScrape(
             continue;
           }
 
-          await pipeline.ingestDetailCapture(detailCapture, source.id, run.id);
+          await pipeline.ingestDetailCapture(
+            detailCapture as DetailCapture<SourceRawListingBase>,
+            source.id,
+            run.id,
+          );
           circuitBreaker.recordSuccess(sourceCode);
           ingested++;
 
