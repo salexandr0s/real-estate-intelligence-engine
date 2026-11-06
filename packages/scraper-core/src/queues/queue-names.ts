@@ -100,7 +100,6 @@ export interface GeocodeEnqueueJobData {
 export interface StaleCheckJobData {
   triggeredBy: 'scheduler' | 'manual';
   thresholdDays?: number;
-  batchSize?: number;
 }
 
 /** Job data for canary health check. */

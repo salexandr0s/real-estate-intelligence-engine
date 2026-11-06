@@ -1,4 +1,4 @@
-import { query } from '../client.js';
+import { execute, query } from '../client.js';
 import type {
   ListingRow,
   OperationType,
@@ -230,7 +230,8 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
  *
  * On insert: sets first_seen_at and last_seen_at.
  * On update: updates last_seen_at, detects price/status/content changes
- * and sets the corresponding timestamps.
+ * and sets the corresponding timestamps. Stored coordinates stay when the source
+ * sends none, so a geocoded listing isn't geocoded again on every fetch.
  */
 export async function upsertListing(input: CanonicalListingInput): Promise<ListingRow> {
   const rows = await query<ListingDbRow>(
@@ -282,9 +283,12 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        street = EXCLUDED.street,
        house_number = EXCLUDED.house_number,
        address_display = EXCLUDED.address_display,
-       latitude = EXCLUDED.latitude,
-       longitude = EXCLUDED.longitude,
-       geocode_precision = EXCLUDED.geocode_precision,
+       latitude = COALESCE(EXCLUDED.latitude, listings.latitude),
+       longitude = COALESCE(EXCLUDED.longitude, listings.longitude),
+       geocode_precision = CASE
+         WHEN EXCLUDED.latitude IS NOT NULL THEN EXCLUDED.geocode_precision
+         ELSE listings.geocode_precision
+       END,
        list_price_eur_cents = EXCLUDED.list_price_eur_cents,
        monthly_operating_cost_eur_cents = EXCLUDED.monthly_operating_cost_eur_cents,
        reserve_fund_eur_cents = EXCLUDED.reserve_fund_eur_cents,
@@ -905,33 +909,72 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
   }
 }
 
-// ── Stale Listing Detection ──────────────────────────────────────────────────
+// ── Expiry ──────────────────────────────────────────────────────────────────
 
-/** Find active listings not observed within the threshold. */
-export async function findStaleActive(thresholdDays: number, limit = 100): Promise<ListingRow[]> {
+/** Move discovery sightings into the canonical last_seen_at. Returns the rows it moved. */
+export async function reconcileLastSeen(): Promise<number> {
+  const result = await execute(
+    `UPDATE listings l
+     SET last_seen_at = s.last_sighted_at
+     FROM raw_listing_sightings s
+     WHERE s.source_id = l.source_id
+       AND s.source_listing_key = l.source_listing_key
+       AND s.last_sighted_at > l.last_seen_at`,
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Active listings whose own detail page stopped giving a listing. Silence never
+ * qualifies: a candidate needs three spaced live fetches with no listing, while
+ * the same source is healthy and parsed another page after the last of them. That
+ * last condition keeps a site redesign from expiring a whole source.
+ */
+export async function findExpiryCandidates(
+  thresholdDays: number,
+  limit = 100,
+): Promise<ListingRow[]> {
   const rows = await query<ListingDbRow>(
     `SELECT l.*
      FROM listings l
-     JOIN sources s ON s.id = l.source_id
+     JOIN sources src ON src.id = l.source_id
+     JOIN raw_listing_sightings s
+       ON s.source_id = l.source_id AND s.source_listing_key = l.source_listing_key
      WHERE l.listing_status = 'active'
-       AND s.health_status = 'healthy'
+       AND src.is_active
+       AND src.health_status = 'healthy'
+       AND s.inconclusive_count >= 3
        AND l.last_seen_at < NOW() - make_interval(days => $1)
-     ORDER BY l.last_seen_at ASC
+       AND (s.last_sighted_at IS NULL OR s.last_sighted_at < NOW() - make_interval(days => $1))
+       AND EXISTS (
+         SELECT 1 FROM raw_listing_sightings ok
+         WHERE ok.source_id = s.source_id AND ok.last_detail_ok_at > s.last_inconclusive_at
+       )
+     ORDER BY l.last_seen_at
      LIMIT $2`,
     [thresholdDays, limit],
   );
   return rows.map(toListingRow);
 }
 
-/** Mark a single listing as expired. */
-export async function markExpired(id: number): Promise<ListingRow | null> {
+/**
+ * Expire a listing that failed revalidation. last_seen_at and current_raw_listing_id
+ * stay as they are, because this is a decision and not an observation.
+ */
+export async function markExpiredStale(
+  id: number,
+  contentFingerprint: string,
+  sourceStatusRaw: string,
+): Promise<ListingRow | null> {
   const rows = await query<ListingDbRow>(
     `UPDATE listings
      SET listing_status = 'expired',
+         source_status_raw = $3,
+         content_fingerprint = $2,
          last_status_change_at = NOW()
      WHERE id = $1 AND listing_status = 'active'
      RETURNING *`,
-    [id],
+    [id, contentFingerprint, sourceStatusRaw],
   );
   const row = rows[0];
   return row ? toListingRow(row) : null;

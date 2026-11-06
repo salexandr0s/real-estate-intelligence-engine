@@ -274,7 +274,7 @@
 - [x] Map source availability states to canonical statuses (`mapRawStatusToCanonical()` in base-mapper)
 - [x] Implement removed/not-found handling (maps to 'withdrawn' status)
 - [x] Implement sold/rented detection where available (maps 'sold'/'verkauft' → 'sold', etc.)
-- [x] Implement missing-from-discovery inactivity rule (`scripts/mark-stale-listings.ts`)
+- [x] Implement expiry by revalidation, never by silence (`stale-check-worker.ts`, `raw_listing_sightings`)
 - [x] Implement reactivation rule (inactive→active triggers `relist_detected` in normalize-and-upsert)
 - [x] Implement relist detection heuristic backlog item (same as reactivation)
 - [x] Add lifecycle transition tests (`tests/unit/listing-lifecycle.test.ts`)

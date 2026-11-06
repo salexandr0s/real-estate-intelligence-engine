@@ -8,6 +8,7 @@ export { runMigrations } from './migrate.js';
 export * as sources from './queries/sources.js';
 export * as scrapeRuns from './queries/scrape-runs.js';
 export * as rawListings from './queries/raw-listings.js';
+export * as rawSightings from './queries/raw-sightings.js';
 export * as listings from './queries/listings.js';
 export * as listingVersions from './queries/listing-versions.js';
 export * as userFilters from './queries/user-filters.js';
@@ -38,6 +39,12 @@ export type { AlertNotification, AlertListener } from './notify.js';
 
 // ── Re-export query-specific types ──────────────────────────────────────────
 export type { SourceCreateInput } from './queries/sources.js';
+export type {
+  DetailFetchCandidate,
+  DetailOutcomeInput,
+  PageSighting,
+  SelectFreshInput,
+} from './queries/raw-sightings.js';
 export type { ListingSearchFilter } from './queries/listings.js';
 export type { AppendVersionInput, ListingVersionRow } from './queries/listing-versions.js';
 export type { UpsertBaselineInput, MarketBaselineRow } from './queries/market-baselines.js';

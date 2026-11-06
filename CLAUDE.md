@@ -10,7 +10,7 @@ Always-on Austrian property intelligence platform. Backend-first TypeScript serv
 - **Monorepo**: npm workspaces + Turbo
 
 ## Architecture Boundaries
-- Scraping → raw_listings only (never writes to canonical tables)
+- Scraping → raw_listings and raw_listing_sightings only (never writes to canonical tables)
 - Normalization → turns raw DTOs into canonical listings
 - Scoring → reads canonical listings + baselines, writes scores
 - Filtering → compiles criteria to SQL, reverse-matches listings to filters

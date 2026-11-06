@@ -220,6 +220,33 @@ FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- raw_listing_sightings
+-- What discovery saw and what the last detail fetch showed, per listing key.
+-- The scraper writes the sighting columns, processing writes the detail outcome.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS raw_listing_sightings (
+  source_id                BIGINT NOT NULL REFERENCES sources(id),
+  source_listing_key       TEXT NOT NULL,
+  detail_url               TEXT NOT NULL,
+  discovery_url            TEXT,
+  first_sighted_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_sighted_at          TIMESTAMPTZ,
+  last_sighted_run_id      BIGINT,
+  summary_sha256           CHAR(64),
+  summary_changed_at       TIMESTAMPTZ,
+  last_detail_enqueued_at  TIMESTAMPTZ,
+  next_detail_at           TIMESTAMPTZ,
+  last_detail_ok_at        TIMESTAMPTZ,
+  inconclusive_count       SMALLINT NOT NULL DEFAULT 0,
+  last_inconclusive_at     TIMESTAMPTZ,
+  PRIMARY KEY (source_id, source_listing_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_listing_sightings_next_detail
+  ON raw_listing_sightings (source_id, next_detail_at);
+
+-- ---------------------------------------------------------------------------
 -- listings
 -- Current canonical state by source-local listing key.
 -- This is the main search/filter table.
@@ -404,7 +431,7 @@ CREATE TABLE IF NOT EXISTS listing_versions (
   CONSTRAINT uq_listing_versions_listing_version UNIQUE (listing_id, version_no)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_listing_versions_raw_listing
+CREATE INDEX IF NOT EXISTS idx_listing_versions_raw_listing
   ON listing_versions (raw_listing_id);
 
 CREATE INDEX IF NOT EXISTS idx_listing_versions_listing_observed
