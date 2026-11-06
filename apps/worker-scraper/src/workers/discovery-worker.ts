@@ -28,7 +28,7 @@ import { getAdapter } from '../adapter-registry.js';
 
 const log = createLogger('worker:discovery');
 
-export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
+export function createDiscoveryWorker(shutdownSignal: AbortSignal): Worker<DiscoveryJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
 
@@ -112,6 +112,11 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
         let currentPlan: RequestPlan | null = discoveryPlans[0] ?? null;
 
         while (currentPlan !== null && pagesProcessed < maxPagesPerRun) {
+          if (shutdownSignal.aborted) {
+            log.info('Shutting down, stopping discovery', { sourceCode, pagesProcessed });
+            break;
+          }
+
           if (circuitBreaker.isOpen(sourceCode)) {
             log.warn('Circuit breaker open, stopping discovery', { sourceCode });
             break;
@@ -172,6 +177,11 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
               currentPlan = null;
             }
           } catch (err) {
+            if (shutdownSignal.aborted) {
+              log.info('Shutdown interrupted a discovery page', { sourceCode, url: planUrl });
+              break;
+            }
+
             const errorClass = classifyScraperError(err);
             circuitBreaker.recordFailure(sourceCode, errorClass);
             log.error('Discovery page failed', { url: planUrl, errorClass });
@@ -197,7 +207,12 @@ export function createDiscoveryWorker(): Worker<DiscoveryJobData> {
           listingsDiscovered: metrics.listingsDiscovered,
         });
 
-        const finalStatus = totalEnqueued > 0 ? 'succeeded' : 'failed';
+        // A run cut short by shutdown says nothing about the source's health.
+        const finalStatus = shutdownSignal.aborted
+          ? 'cancelled'
+          : totalEnqueued > 0
+            ? 'succeeded'
+            : 'failed';
         await scrapeRuns.finish(scrapeRunId, finalStatus, metrics);
 
         // Update source health and detect transitions
