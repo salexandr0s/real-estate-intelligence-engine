@@ -74,7 +74,7 @@ Recommended production services:
 
 Security defaults:
 
-- keep `API_TRUST_PROXY=false` unless a real reverse proxy is terminating traffic in front of the API
+- keep `API_TRUST_PROXY=false` unless a real reverse proxy is terminating traffic in front of the API, then set it to that proxy's IP or CIDR (a bare hop count stops the API at startup)
 - keep `/docs` bearer-protected in production unless you have an explicit public-docs override and network controls
 - scrape `/metrics` on the main API port with a dedicated bearer token instead of exposing a separate unauthenticated metrics port
 

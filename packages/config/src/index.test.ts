@@ -65,6 +65,15 @@ describe('config loaders', () => {
     expect(config.documents.maxBytes).toBe(25000000);
   });
 
+  it('keeps a proxy address intact and refuses a hop count', () => {
+    process.env.API_TRUST_PROXY = '10.0.0.1';
+    expect(loadConfig().api.trustProxy).toBe('10.0.0.1');
+
+    resetConfig();
+    process.env.API_TRUST_PROXY = '1';
+    expect(() => loadConfig()).toThrow(/API_TRUST_PROXY/);
+  });
+
   it('parses the runtime boot mode for bundled local launches', () => {
     process.env.IMMORADAR_RUNTIME_BOOT_MODE = 'setup';
 
