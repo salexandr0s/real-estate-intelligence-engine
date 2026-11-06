@@ -31,10 +31,12 @@ import { outreachRoutes } from './routes/outreach.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
+  const { trustProxy } = config.api;
 
   const app = Fastify({
     logger: false,
-    trustProxy: config.api.trustProxy,
+    // Fastify's types no longer list a hop count, so pass the function it builds from one.
+    trustProxy: typeof trustProxy === 'number' ? (_address, hop) => hop < trustProxy : trustProxy,
   });
 
   // Security headers
