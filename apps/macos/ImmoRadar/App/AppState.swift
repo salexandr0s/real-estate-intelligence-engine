@@ -11,9 +11,9 @@ final class AppState {
     private static let copilotStaleSecretsCleanupVersionKey =
         "appState.didRunStaleSecretsCleanup.copilot.v1"
 
-    private static var isSmokeTest: Bool {
-        ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] == "1"
-    }
+    private let launchPolicy: AppLaunchPolicy
+
+    var isIsolatedSmokeLaunch: Bool { launchPolicy.requiresSmokeBoundary }
 
     let navigationState: NavigationState
     let connectionState: ConnectionState
@@ -166,7 +166,7 @@ final class AppState {
     }
 
     var allowsAutomaticFeatureLoads: Bool {
-        launchMode.allowsInitialLaunchSideEffects
+        launchPolicy.allowsAutomaticFeatureLoads
     }
 
     var usesManagedLocalRuntime: Bool {
@@ -213,17 +213,23 @@ final class AppState {
 
     /// The active API key for the current provider, resolving Claude subscription OAuth.
     var activeCopilotApiKey: String {
-        copilotSettingsState.activeAPIKey()
+        guard launchPolicy.allowsStoredCredentials else { return "" }
+        return copilotSettingsState.activeAPIKey()
     }
 
     // MARK: - Init
 
-    init(launchMode: AppLaunchMode = .current) {
+    init(launchMode: AppLaunchMode = .current, smokeContext: IsolatedSmokeContext? = nil) {
         self.launchMode = launchMode
+        let launchPolicy = AppLaunchPolicy(mode: launchMode, smokeContext: smokeContext)
+        self.launchPolicy = launchPolicy
 
         let navigationState = NavigationState()
         let connectionState = ConnectionState()
-        let runtimeState = RuntimeState(isSmokeTest: Self.isSmokeTest)
+        let runtimeState = RuntimeState(
+            isSmokeTest: launchPolicy.requiresSmokeBoundary,
+            localRuntime: LocalRuntimeService(smokeContext: smokeContext, launchMode: launchMode)
+        )
         let alertsState = AlertsState()
         let copilotSettingsState = CopilotSettingsState()
 
@@ -233,14 +239,12 @@ final class AppState {
         self.alertsState = alertsState
         self.copilotSettingsState = copilotSettingsState
 
-        let initialAuthToken: String? = if launchMode == .production {
-            ConnectionState.initialStoredAuthToken(isSmokeTest: Self.isSmokeTest)
-        } else {
-            nil
+        let initialAuthToken = launchPolicy.connectionToken {
+            ConnectionState.initialStoredAuthToken(isSmokeTest: false)
         }
 
         self.apiClient = APIClient(
-            baseURL: connectionState.apiBaseURL,
+            baseURL: smokeContext?.apiBaseURL.absoluteString ?? connectionState.apiBaseURL,
             authToken: initialAuthToken
         )
 
@@ -249,12 +253,12 @@ final class AppState {
         }
 
         if launchMode.shouldRequestNotificationPermission,
-           !Self.isSmokeTest,
+           smokeContext == nil,
            alertsState.notificationsEnabled {
             NotificationManager.shared.requestPermission()
         }
 
-        if launchMode == .production, !Self.isSmokeTest {
+        if launchPolicy.allowsStoredCredentials {
             runSilentStaleSecretsCleanupIfNeeded()
         }
     }
@@ -262,19 +266,23 @@ final class AppState {
     // MARK: - Settings
 
     func loadSettingsSecretsIfNeeded() {
+        guard launchPolicy.allowsStoredCredentials else { return }
         connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: true)
         copilotSettingsState.loadCopilotSecretsIfNeeded(allowUserInteraction: true)
     }
 
     func loadConnectionSecretForUserAction() {
+        guard launchPolicy.allowsStoredCredentials else { return }
         connectionState.loadConnectionSecretForUserAction()
     }
 
     func loadClaudeSubscriptionIfNeeded() {
+        guard launchPolicy.allowsStoredCredentials else { return }
         copilotSettingsState.loadClaudeSubscriptionIfNeeded()
     }
 
     func refreshClaudeSubscription() {
+        guard launchPolicy.allowsStoredCredentials else { return }
         copilotSettingsState.refreshClaudeSubscription()
     }
 
@@ -285,10 +293,12 @@ final class AppState {
     }
 
     func testConnection(baseURL: String, token: String) async {
+        guard launchPolicy.allowsStoredCredentials else { return }
         await connectionState.testConnection(baseURL: baseURL, token: token)
     }
 
     func applyConnectionSettings(baseURL: String, token: String) async {
+        guard launchPolicy.allowsStoredCredentials else { return }
         let previousBaseURL = connectionState.apiBaseURL
         let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -341,6 +351,7 @@ final class AppState {
         openAIKey: String,
         model: String
     ) async {
+        guard launchPolicy.allowsStoredCredentials else { return }
         _ = await copilotSettingsState.applySettings(
             provider: provider,
             anthropicKey: anthropicKey,
@@ -350,18 +361,21 @@ final class AppState {
     }
 
     func cleanupStoredSecrets() {
+        guard launchPolicy.allowsStoredCredentials else { return }
         connectionState.cleanupStoredSecrets()
         copilotSettingsState.cleanupStoredSecrets()
     }
 
     func resolvedConnectionAuthToken(allowUserInteraction: Bool = true) -> String? {
-        connectionState.resolvedConnectionAuthToken(allowUserInteraction: allowUserInteraction)
+        launchPolicy.connectionToken {
+            connectionState.resolvedConnectionAuthToken(allowUserInteraction: allowUserInteraction)
+        }
     }
 
     // MARK: - Background Refresh
 
     func startBackgroundRefreshTasksIfNeeded() {
-        let allowsBackgroundRefreshTasks = launchMode.allowsBackgroundRefreshTasks
+        let allowsBackgroundRefreshTasks = launchPolicy.allowsBackgroundRefresh
 
         connectionState.startRefreshTaskIfNeeded(
             allowsBackgroundRefreshTasks: allowsBackgroundRefreshTasks
@@ -408,7 +422,9 @@ final class AppState {
         }
 
         if usesManagedLocalRuntime {
-            await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
+            if !isIsolatedSmokeLaunch {
+                await runtimeState.localRuntime.refreshStatus(apiBaseURL: connectionState.apiBaseURL)
+            }
             _ = await startManagedLocalRuntime(
                 bootMode: preferredLocalRuntimeBootMode,
                 restartExistingRuntime: false,
@@ -519,24 +535,48 @@ final class AppState {
 
     // MARK: - Connection / Alerts
 
+    /// Check before and after awaits. A token or successful health response is
+    /// never ownership evidence, and a smoke refusal never starts read/stream work.
+    private func permitsSmokeConnectionRead() -> Bool {
+        guard isIsolatedSmokeLaunch else { return true }
+        let ownedRead = runtimeState.localRuntime.permitsSmokeAPIRead(apiBaseURL: connectionState.apiBaseURL)
+        guard let context = launchPolicy.smokeContext,
+              connectionState.apiBaseURL == context.apiBaseURL.absoluteString,
+              ownedRead else {
+            connectionState.connectionStatus = .error(
+                runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke has no verified owned API."
+            )
+            alertsState.disconnectStream(alertStream)
+            return false
+        }
+        return true
+    }
+
     func refreshConnection(userInitiated: Bool = false) async {
-        connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
-        let authToken = connectionState.resolvedConnectionAuthToken(allowUserInteraction: userInitiated)
+        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
+        let authToken = launchPolicy.connectionToken {
+            connectionState.loadConnectionSecretsIfNeeded(allowUserInteraction: userInitiated)
+            return connectionState.resolvedConnectionAuthToken(allowUserInteraction: userInitiated)
+        }
         await apiClient.updateAuthToken(authToken)
+        guard permitsSmokeConnectionRead() else { return }
 
         connectionState.connectionStatus = .connecting
         let connectionResult = await apiClient.testConnection()
+        guard permitsSmokeConnectionRead() else { return }
 
         switch connectionResult {
         case .success:
             connectionState.connectionStatus = .connected
             reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection()
-            await alertsState.refreshUnreadCount(using: apiClient)
-            alertsState.connectStreamIfNeeded(
-                alertStream,
-                baseURL: connectionState.apiBaseURL,
-                token: authToken
-            )
+            if !isIsolatedSmokeLaunch {
+                await alertsState.refreshUnreadCount(using: apiClient)
+                alertsState.connectStreamIfNeeded(
+                    alertStream,
+                    baseURL: connectionState.apiBaseURL,
+                    token: authToken
+                )
+            }
         case .failure(let error):
             connectionState.connectionStatus = .error(AppErrorPresentation.message(for: error))
             alertsState.disconnectStream(alertStream)
@@ -563,7 +603,9 @@ final class AppState {
     }
 
     func refreshUnreadCount() async {
+        guard launchMode.allowsInitialLaunchSideEffects, permitsSmokeConnectionRead() else { return }
         await alertsState.refreshUnreadCount(using: apiClient)
+        guard permitsSmokeConnectionRead() else { return }
     }
 
     // MARK: - Internal Helpers
@@ -611,6 +653,11 @@ final class AppState {
         defer { startBackgroundRefreshTasksIfNeeded() }
 
         guard usesManagedLocalRuntime else {
+            if isIsolatedSmokeLaunch {
+                _ = permitsSmokeConnectionRead()
+                runtimeState.bundledLaunchExperienceState = .needsAttention("Isolated smoke requires a verified owned local runtime.")
+                return false
+            }
             runtimeState.bundledLaunchExperienceState = .ready
             await refreshConnection(userInitiated: userInitiated)
             return true
@@ -624,6 +671,14 @@ final class AppState {
             bootMode: bootMode,
             policy: startPolicy
         )
+        if isIsolatedSmokeLaunch {
+            guard runtimeState.localRuntime.state == .running, permitsSmokeConnectionRead() else {
+                runtimeState.bundledLaunchExperienceState = .needsAttention(
+                    runtimeState.localRuntime.state.failureMessage ?? "Isolated smoke startup has no verified owned API."
+                )
+                return false
+            }
+        }
         await refreshConnection(userInitiated: userInitiated)
 
         switch runtimeState.localRuntime.state {
