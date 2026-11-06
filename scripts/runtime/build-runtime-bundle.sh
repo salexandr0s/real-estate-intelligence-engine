@@ -317,6 +317,7 @@ fi
 cp "$REPO_ROOT/scripts/runtime/start-postgres.sh" "$OUTPUT_DIR/scripts/start-postgres.sh"
 cp "$REPO_ROOT/scripts/runtime/start-redis.sh" "$OUTPUT_DIR/scripts/start-redis.sh"
 cp "$REPO_ROOT/scripts/runtime/run-migrations.sh" "$OUTPUT_DIR/scripts/run-migrations.sh"
+cp "$REPO_ROOT/scripts/runtime/engine-watchdog.sh" "$OUTPUT_DIR/scripts/engine-watchdog.sh"
 
 prune_runtime_payload
 
@@ -327,7 +328,8 @@ chmod +x \
   "$OUTPUT_DIR/infra/redis/bin/redis-server" \
   "$OUTPUT_DIR/scripts/start-postgres.sh" \
   "$OUTPUT_DIR/scripts/start-redis.sh" \
-  "$OUTPUT_DIR/scripts/run-migrations.sh"
+  "$OUTPUT_DIR/scripts/run-migrations.sh" \
+  "$OUTPUT_DIR/scripts/engine-watchdog.sh"
 
 find "$OUTPUT_DIR/infra/postgres/lib/postgresql" -type f -name '*.dylib' -exec chmod +w {} +
 
@@ -348,7 +350,8 @@ cat > "$OUTPUT_DIR/manifest.json" <<'JSON'
   "scripts": {
     "postgres": "scripts/start-postgres.sh",
     "redis": "scripts/start-redis.sh",
-    "migrate": "scripts/run-migrations.sh"
+    "migrate": "scripts/run-migrations.sh",
+    "watchdog": "scripts/engine-watchdog.sh"
   },
   "ports": {
     "postgres": 55432,
