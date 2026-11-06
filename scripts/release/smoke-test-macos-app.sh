@@ -56,7 +56,12 @@ fi
 
 # In the background, so a signal reaches this shell's trap right away and Python gets to clean up.
 SMOKE_PID=""
-trap '[[ -z "$SMOKE_PID" ]] || kill -TERM "$SMOKE_PID" 2>/dev/null || true' TERM INT HUP QUIT
+STOP_REQUESTED=""
+stop_smoke() {
+  STOP_REQUESTED=1
+  [[ -z "$SMOKE_PID" ]] || kill -TERM "$SMOKE_PID" 2>/dev/null || true
+}
+trap stop_smoke TERM INT HUP QUIT
 
 env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 - "$TMP_ROOT" <<'PY' &
 import collections
@@ -242,12 +247,13 @@ def require_unchanged(before, exclude, cause):
 
 
 def immoradar_outside_root():
-    """Skips children of the same executable, which a running engine starts and ends all the time."""
+    """The app and databases of a running copy. Its workers and Chromium start and end on their own."""
     found = set()
     for pid in all_pids():
         info = live_info(pid)
         path = executable_path(pid) if info else None
         if (path and 'ImmoRadar' in path and not path.startswith(root + '/')
+                and os.path.basename(path) in ('ImmoRadar', 'postgres', 'redis-server')
                 and executable_path(info.ppid) != path):
             found.add((pid, info.start_sec, info.start_usec, path))
     return found
@@ -256,10 +262,7 @@ def immoradar_outside_root():
 def real_preferences():
     output = subprocess.run(['/usr/bin/defaults', 'export', 'com.immoradar.app', '-'], env=tool_environment,
                             capture_output=True).stdout
-    try:
-        return plistlib.loads(output)
-    except Exception:
-        return {}
+    return plistlib.loads(output) if output else {}
 
 
 def wait_until(predicate, timeout, interval=0.2):
@@ -505,18 +508,24 @@ def ignore_stop_signals():
         signal.signal(number, signal.SIG_IGN)
 
 
+def signal_if_alive(process, signal_number):
+    """Cleanup carries on when a process exits between the check and the signal."""
+    try:
+        if is_alive(process):
+            os.kill(process.pid, signal_number)
+    except ProcessLookupError:
+        pass
+
+
 def stop_whatever_is_left():
     """True when nothing from the root is still running."""
-    ignore_stop_signals()
     apps = of_role('app')
     for process in apps:
-        if is_alive(process):
-            os.kill(process.pid, signal.SIGTERM)
+        signal_if_alive(process, signal.SIGTERM)
     if apps:
         wait_until(lambda: not engine_processes(), 40)
     for process in engine_processes().values():
-        if is_alive(process):
-            os.kill(process.pid, signal.SIGKILL)
+        signal_if_alive(process, signal.SIGKILL)
     if wait_until(lambda: not engine_processes(), 5) is None:
         log(f'Could not stop: {sorted((p.role, p.pid) for p in engine_processes().values())}')
         return False
@@ -540,17 +549,21 @@ if preferences_before is None:
 
 passed = False
 try:
-    check_bundled_postgres_folders()
-    phase_cold_start()
-    phase_crashes()
-    phase_double_failure()
-    require(not engine_processes(), 'Something from the smoke root is still running')
-    require(immoradar_outside_root() == outside_before, 'An ImmoRadar process outside the smoke root changed')
-    if preferences_before is not None:
-        require(real_preferences() == preferences_before, 'The smoke run changed the real preferences')
-    passed = True
-except SmokeFailure as failure:
-    log(f'FAILED: {failure}')
+    try:
+        check_bundled_postgres_folders()
+        phase_cold_start()
+        phase_crashes()
+        phase_double_failure()
+        require(not engine_processes(), 'Something from the smoke root is still running')
+        require(immoradar_outside_root() == outside_before, 'An ImmoRadar process outside the smoke root changed')
+        if preferences_before is not None:
+            require(real_preferences() == preferences_before, 'The smoke run changed the real preferences')
+        passed = True
+    except SmokeFailure as failure:
+        log(f'FAILED: {failure}')
+    finally:
+        # A signal that lands before this line still reaches the cleanup below, and none can after it.
+        ignore_stop_signals()
 finally:
     stopped = stop_whatever_is_left()
 
@@ -559,6 +572,7 @@ if not (passed and stopped):
 log('Smoke test passed')
 PY
 SMOKE_PID=$!
+[[ -z "$STOP_REQUESTED" ]] || kill -TERM "$SMOKE_PID" 2>/dev/null || true
 
 # A trapped signal ends `wait` early, so this repeats until Python is gone. The script's exit status
 # comes from the last `wait`.
