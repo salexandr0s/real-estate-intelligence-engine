@@ -1,14 +1,27 @@
 name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  IMAGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-scan-push:
+    # Only a green CI run for a push to this repository's main branch reaches
+    # this job. Manual runs are limited to main.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,6 +31,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.IMAGE_SHA }}
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -28,44 +43,19 @@ jobs:
           docker buildx create --name immoradar-builder --driver docker-container --use
           docker buildx inspect --bootstrap
 
-      - name: Build and push API image
+      # Images stay local until the vulnerability gates below pass.
+      - name: Build images locally
         run: |
-          docker buildx build \
-            --file apps/api/Dockerfile \
-            --tag ghcr.io/${{ github.repository }}/api:${{ github.sha }} \
-            --tag ghcr.io/${{ github.repository }}/api:latest \
-            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main \
-            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/api-buildcache:main,mode=max \
-            --sbom=true \
-            --provenance=true \
-            --push \
-            .
-
-      - name: Build and push worker-scraper image
-        run: |
-          docker buildx build \
-            --file apps/worker-scraper/Dockerfile \
-            --tag ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }} \
-            --tag ghcr.io/${{ github.repository }}/worker-scraper:latest \
-            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main \
-            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/worker-scraper-buildcache:main,mode=max \
-            --sbom=true \
-            --provenance=true \
-            --push \
-            .
-
-      - name: Build and push worker-processing image
-        run: |
-          docker buildx build \
-            --file apps/worker-processing/Dockerfile \
-            --tag ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }} \
-            --tag ghcr.io/${{ github.repository }}/worker-processing:latest \
-            --cache-from type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main \
-            --cache-to type=registry,ref=ghcr.io/${{ github.repository }}/worker-processing-buildcache:main,mode=max \
-            --sbom=true \
-            --provenance=true \
-            --push \
-            .
+          for image in api worker-scraper worker-processing; do
+            docker buildx build \
+              --file "apps/$image/Dockerfile" \
+              --tag "$IMAGE_PREFIX/$image:$IMAGE_SHA" \
+              --cache-from "type=registry,ref=$IMAGE_PREFIX/$image-buildcache:main" \
+              --sbom=false \
+              --provenance=false \
+              --load \
+              .
+          done
 
       - name: Prepare scan artifact directory
         run: mkdir -p .trivy
@@ -75,7 +65,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/api:${{ env.IMAGE_SHA }}
           format: sarif
           output: .trivy/api.sarif
           exit-code: 0
@@ -89,7 +79,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/worker-scraper:${{ env.IMAGE_SHA }}
           format: sarif
           output: .trivy/worker-scraper.sarif
           exit-code: 0
@@ -103,7 +93,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/worker-processing:${{ env.IMAGE_SHA }}
           format: sarif
           output: .trivy/worker-processing.sarif
           exit-code: 0
@@ -118,6 +108,8 @@ jobs:
         with:
           sarif_file: .trivy/api.sarif
           category: container-api
+          ref: refs/heads/main
+          sha: ${{ env.IMAGE_SHA }}
 
       - name: Upload worker-scraper SARIF to code scanning
         if: always() && hashFiles('.trivy/worker-scraper.sarif') != ''
@@ -125,6 +117,8 @@ jobs:
         with:
           sarif_file: .trivy/worker-scraper.sarif
           category: container-worker-scraper
+          ref: refs/heads/main
+          sha: ${{ env.IMAGE_SHA }}
 
       - name: Upload worker-processing SARIF to code scanning
         if: always() && hashFiles('.trivy/worker-processing.sarif') != ''
@@ -132,6 +126,8 @@ jobs:
         with:
           sarif_file: .trivy/worker-processing.sarif
           category: container-worker-processing
+          ref: refs/heads/main
+          sha: ${{ env.IMAGE_SHA }}
 
       - name: Enforce API vulnerability gate
         id: scan_api
@@ -140,7 +136,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/api:${{ env.IMAGE_SHA }}
           format: table
           exit-code: 1
           severity: HIGH,CRITICAL
@@ -156,7 +152,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/worker-scraper:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/worker-scraper:${{ env.IMAGE_SHA }}
           format: table
           exit-code: 1
           severity: HIGH,CRITICAL
@@ -172,7 +168,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: ghcr.io/${{ github.repository }}/worker-processing:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_PREFIX }}/worker-processing:${{ env.IMAGE_SHA }}
           format: table
           exit-code: 1
           severity: HIGH,CRITICAL
@@ -199,3 +195,20 @@ jobs:
             echo "One or more container scans failed."
             exit 1
           fi
+
+      # The builder's local cache supplies the scanned layers, so this adds the
+      # SBOM and provenance attestations without changing what was scanned.
+      - name: Push scanned images
+        run: |
+          for image in api worker-scraper worker-processing; do
+            docker buildx build \
+              --file "apps/$image/Dockerfile" \
+              --tag "$IMAGE_PREFIX/$image:$IMAGE_SHA" \
+              --tag "$IMAGE_PREFIX/$image:latest" \
+              --cache-from "type=registry,ref=$IMAGE_PREFIX/$image-buildcache:main" \
+              --cache-to "type=registry,ref=$IMAGE_PREFIX/$image-buildcache:main,mode=max" \
+              --sbom=true \
+              --provenance=true \
+              --push \
+              .
+          done
