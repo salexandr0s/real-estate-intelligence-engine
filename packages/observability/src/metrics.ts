@@ -3,7 +3,18 @@
 import { Registry, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
 
 export const registry = new Registry();
-collectDefaultMetrics({ register: registry });
+
+let defaultMetricsEnabled = false;
+
+/**
+ * Default metrics keep an event loop monitor and a GC observer running, so only a process that
+ * serves /metrics turns them on.
+ */
+export function enableDefaultMetrics(): void {
+  if (defaultMetricsEnabled) return;
+  defaultMetricsEnabled = true;
+  collectDefaultMetrics({ register: registry });
+}
 
 // Scraper metrics
 
