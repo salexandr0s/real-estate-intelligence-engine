@@ -45,10 +45,12 @@ log() {
   printf '%s watchdog: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
-# Prints "<start time> <state>" normalized to single spaces, or nothing when the PID is gone.
+# Prints "<start time> <state>" normalized to single spaces, or nothing when the PID is gone. ps
+# prints lstart in local time, so without a fixed zone a time zone change would make every process
+# look replaced, and none would be stopped.
 process_line() {
   local fields
-  fields="$(LC_ALL=C ps -o lstart= -o stat= -p "$1" 2>/dev/null)"
+  fields="$(LC_ALL=C TZ=UTC ps -o lstart= -o stat= -p "$1" 2>/dev/null)"
   [[ -n "$fields" ]] || return 1
   # Unquoted on purpose: word splitting collapses the padding ps adds to its columns.
   # shellcheck disable=SC2086
@@ -135,6 +137,20 @@ run_rung() {
   wait_for_targets 1
 }
 
+# True when the marker is in the PID's environment. `ps -E` prints the arguments and then the
+# environment as one line, so a command that only names the marker in its arguments, such as a grep
+# for it, has to be told apart. Unsure means no: the home sweep runs twice.
+has_marker_in_environment() {
+  local with_environment arguments
+  with_environment="$(ps -E -ww -o command= -p "$1" 2>/dev/null)" || return 1
+  arguments="$(ps -ww -o command= -p "$1" 2>/dev/null)" || return 1
+  [[ "$with_environment" == "$arguments"* ]] || return 1
+  case "${with_environment#"$arguments"}" in
+    *" $2 "* | *" $2") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Kills every process whose environment holds one of the given NAME=value strings. This catches
 # what no ADD covers: Chromium and its helpers, and a Node child spawned just before the app died.
 # macOS hides the environment of Apple's own binaries from ps, and Postgres and Redis overwrite
@@ -156,7 +172,7 @@ sweep_markers() {
         *" $marker "* | *" $marker")
           if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]] ]]; then
             pid="${BASH_REMATCH[1]}"
-            if [[ "$pid" != "$$" ]]; then
+            if [[ "$pid" != "$$" ]] && has_marker_in_environment "$pid" "$marker"; then
               log "sweep pid=$pid SIGKILL"
               kill -KILL "$pid" 2>/dev/null
             fi

@@ -183,6 +183,34 @@ describe.skipIf(process.platform !== 'darwin')('engine watchdog', () => {
     expect(unrelated.output()).not.toContain('TERM');
   });
 
+  it('still stops a process after the time zone changes', async () => {
+    // From the moment the flag exists, a ps run with no zone of its own reports local time in Tokyo.
+    const stubDir = join(root, 'stub');
+    const moved = join(root, 'time-zone-changed');
+    await mkdir(stubDir);
+    const stub = join(stubDir, 'ps');
+    await writeFile(
+      stub,
+      `#!/bin/bash\nif [[ -f '${moved}' ]]; then export TZ="\${TZ:-Asia/Tokyo}"; fi\nexec /bin/ps "$@"\n`,
+    );
+    await chmod(stub, 0o755);
+
+    const watchdog = startWatchdog(`${stubDir}:${SYSTEM_PATH}`);
+    const api = await startChild(`trap 'exit 0' TERM`);
+
+    watchdog.stdin.write(`ADD api 1 ${api.process.pid}\nRUN marker\n`);
+    await new Promise<void>((resolve) => {
+      watchdog.stdout.on('data', () => {
+        if (watchdog.log().includes('run marker')) resolve();
+      });
+    });
+    await writeFile(moved, '');
+    watchdog.stdin.end();
+    await waitForExit(watchdog);
+
+    expect(await waitForExit(api.process)).toEqual({ code: 0, signal: null });
+  });
+
   it('kills tagged processes on STOP and everything under the home when the pipe closes', async () => {
     const homeMarker = { IMMORADAR_ENGINE_HOME: `${runtimeHome}/` };
     await writeFile(join(runtimeHome, 'engine-run.json'), '{}');
@@ -215,5 +243,22 @@ describe.skipIf(process.platform !== 'darwin')('engine watchdog', () => {
     expect(await waitForExit(newBrowser)).toEqual({ code: null, signal: 'SIGKILL' });
     expect(isRunning(otherHome)).toBe(true);
     await expect(stat(join(runtimeHome, 'engine-run.json'))).rejects.toThrow('ENOENT');
+  });
+
+  it('spares a process that only names the marker in its arguments', async () => {
+    const homeMarker = `IMMORADAR_ENGINE_HOME=${runtimeHome}/`;
+    const searching = spawn(
+      process.execPath,
+      ['-e', 'console.log("ready"); setInterval(() => {}, 1000)', homeMarker, 'engine.log'],
+      { env: { PATH: SYSTEM_PATH }, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    spawned.push(searching);
+    await new Promise((resolve) => searching.stdout.once('data', resolve));
+
+    const watchdog = startWatchdog();
+    watchdog.stdin.end();
+
+    expect(await waitForExit(watchdog)).toEqual({ code: 0, signal: null });
+    expect(isRunning(searching)).toBe(true);
   });
 });
