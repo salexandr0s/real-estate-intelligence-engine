@@ -528,11 +528,6 @@ final class AppState {
         }
     }
 
-    func prepareForTermination() async {
-        stopBackgroundRefreshTasks()
-        alertsState.disconnectStream(alertStream)
-    }
-
     // MARK: - Connection / Alerts
 
     /// Check before and after awaits. A token or successful health response is

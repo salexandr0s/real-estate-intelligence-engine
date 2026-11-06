@@ -13,7 +13,6 @@ final class AppTerminationBridge {
 @MainActor
 final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
 
-    private var isTerminationInProgress = false
     private var signalSource: DispatchSourceSignal?
 
     override init() {
@@ -38,24 +37,6 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
 
             await AppTerminationBridge.shared.appState?.performInitialLaunchIfNeeded()
         }
-    }
-
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !isTerminationInProgress else { return .terminateLater }
-        isTerminationInProgress = true
-
-        Task { @MainActor in
-            await AppTerminationBridge.shared.appState?.prepareForTermination()
-            sender.reply(toApplicationShouldTerminate: true)
-        }
-
-        return .terminateLater
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        // Keep the local engine alive across app relaunches so a fresh Debug run
-        // can reconnect to the same managed runtime instead of tearing it down
-        // mid-startup while Launch Services replaces the app process.
     }
 
     private nonisolated static func terminateDuplicateAppProcesses() async {
