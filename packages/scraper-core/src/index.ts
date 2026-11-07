@@ -21,6 +21,7 @@ export { classifyScraperError } from './retries/classify.js';
 // ── Capture ──────────────────────────────────────────────────────────────────
 export { ArtifactWriter, type ArtifactWriterPort } from './capture/artifact-writer.js';
 export { computeContentHash } from './capture/content-hash.js';
+export { headlineText } from './capture/headline-text.js';
 
 // ── Health ───────────────────────────────────────────────────────────────────
 export { SourceCircuitBreaker, type CircuitState } from './health/circuit-breaker.js';
@@ -43,6 +44,14 @@ export {
   randomInt,
 } from './browser/delay.js';
 export { dismissCookieConsent, type CookieConsentConfig } from './browser/cookie-consent.js';
+export {
+  HttpStatusError,
+  navigateForCapture,
+  type CaptureNavigation,
+  type CapturePage,
+  type CaptureResponse,
+  type NavigateForCaptureOptions,
+} from './browser/navigate.js';
 export { setupRequestInterception } from './browser/request-interceptor.js';
 
 // ── Queues ──────────────────────────────────────────────────────────────────
