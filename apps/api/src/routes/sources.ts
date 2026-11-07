@@ -2,7 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import type { Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
 import type { ScraperRunMetrics } from '@immoradar/contracts';
-import { NotFoundError, TransientError, createLogger } from '@immoradar/observability';
+import {
+  ConflictError,
+  NotFoundError,
+  TransientError,
+  createLogger,
+} from '@immoradar/observability';
 import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
 import {
   QUEUE_NAMES,
@@ -144,20 +149,22 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PATCH /v1/sources/:id - Update source settings (isActive, crawlIntervalMinutes)
+  // PATCH /v1/sources/:id - Update source settings (isActive, crawlIntervalMinutes).
+  // Switching on a legally disabled source fails with 409 and changes nothing.
   app.patch<{ Params: { id: string } }>('/v1/sources/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
     const { isActive, crawlIntervalMinutes } = parseOrThrow(sourceUpdateSchema, request.body);
 
-    const existing = await sources.findById(id);
-    if (!existing) {
+    const result = await sources.updateSettings(id, { isActive, crawlIntervalMinutes });
+    if (result.outcome === 'not_found') {
       throw new NotFoundError('Source', id);
     }
-
-    const updated = await sources.updateSettings(id, { isActive, crawlIntervalMinutes });
-    if (!updated) {
-      throw new NotFoundError('Source', id);
+    if (result.outcome === 'legally_disabled') {
+      throw new ConflictError(
+        `Source ${result.source.code} is legally disabled and can't be switched on.`,
+      );
     }
+    const updated = result.source;
 
     await syncDiscoverySchedule(getDiscoveryQueue(), updated, loadConfig());
 
@@ -192,7 +199,7 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: { affected }, meta: {} });
   });
 
-  // POST /v1/sources/resume-all - Resume all sources
+  // POST /v1/sources/resume-all - Resume all sources except legally disabled ones
   app.post('/v1/sources/resume-all', async (_request, reply) => {
     const affected = await sources.updateAllActive(true);
     await syncAllDiscoverySchedules();

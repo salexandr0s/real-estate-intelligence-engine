@@ -81,9 +81,14 @@ export async function findByCode(code: string): Promise<SourceRow | null> {
   return row ? toSourceRow(row) : null;
 }
 
+/** Sources that may run: switched on, and disabled neither legally nor by failed runs. */
 export async function findActive(): Promise<SourceRow[]> {
   const rows = await query<SourceDbRow>(
-    'SELECT * FROM sources WHERE is_active = TRUE ORDER BY priority ASC, code ASC',
+    `SELECT * FROM sources
+     WHERE is_active = TRUE
+       AND legal_status <> 'disabled'
+       AND health_status <> 'disabled'
+     ORDER BY priority ASC, code ASC`,
   );
   return rows.map(toSourceRow);
 }
@@ -203,58 +208,72 @@ export async function findById(id: number): Promise<SourceRow | null> {
   return row ? toSourceRow(row) : null;
 }
 
+/**
+ * Switching a source on is the owner's override: a source that failed runs had
+ * disabled gets one new run, and the reason for that disable goes.
+ */
+const ACTIVATE_SET = `is_active = TRUE,
+  health_status = CASE WHEN health_status = 'disabled' THEN 'unknown' ELSE health_status END,
+  config = config - 'disabledReason'`;
+
+export type UpdateSettingsResult =
+  | { outcome: 'updated'; source: SourceRow }
+  | { outcome: 'not_found' }
+  /** Nothing changed: a legally disabled source can't be switched on. */
+  | { outcome: 'legally_disabled'; source: SourceRow };
+
+/**
+ * Change a source's settings. A legally disabled source is never switched on.
+ * Changes that don't switch the source on keep `disabledReason`.
+ */
 export async function updateSettings(
   id: number,
   settings: { isActive?: boolean; crawlIntervalMinutes?: number },
-): Promise<SourceRow | null> {
+): Promise<UpdateSettingsResult> {
+  const activating = settings.isActive === true;
   const setClauses: string[] = [];
-  const values: unknown[] = [];
-  let paramIdx = 1;
+  // $1 is the id, and $2 says whether this switches the source on.
+  const values: unknown[] = [id, activating];
 
-  // $1 is always the row id
-  values.push(id);
-  paramIdx++;
-
-  if (settings.isActive !== undefined) {
-    setClauses.push(`is_active = $${paramIdx}`);
-    values.push(settings.isActive);
-    paramIdx++;
-  }
+  if (activating) setClauses.push(ACTIVATE_SET);
+  if (settings.isActive === false) setClauses.push('is_active = FALSE');
   if (settings.crawlIntervalMinutes !== undefined) {
-    setClauses.push(`crawl_interval_minutes = $${paramIdx}`);
     values.push(settings.crawlIntervalMinutes);
-    paramIdx++;
+    setClauses.push(`crawl_interval_minutes = $${values.length}`);
   }
 
-  if (setClauses.length === 0) return findById(id);
+  if (setClauses.length === 0) {
+    const source = await findById(id);
+    return source ? { outcome: 'updated', source } : { outcome: 'not_found' };
+  }
 
   const rows = await query<SourceDbRow>(
-    `UPDATE sources SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    `UPDATE sources SET ${setClauses.join(', ')}
+     WHERE id = $1 AND NOT ($2::boolean AND legal_status = 'disabled')
+     RETURNING *`,
     values,
   );
   const row = rows[0];
-  return row ? toSourceRow(row) : null;
+  if (row) return { outcome: 'updated', source: toSourceRow(row) };
+
+  const current = await findById(id);
+  return current && activating && current.legalStatus === 'disabled'
+    ? { outcome: 'legally_disabled', source: current }
+    : { outcome: 'not_found' };
 }
 
-export async function updateActive(id: number, isActive: boolean): Promise<SourceRow | null> {
-  const rows = await query<SourceDbRow>(
-    `UPDATE sources
-     SET is_active = $2
-     WHERE id = $1
-     RETURNING *`,
-    [id, isActive],
-  );
-  const row = rows[0];
-  return row ? toSourceRow(row) : null;
-}
-
+/** Pause or resume every source. Resuming skips legally disabled sources. */
 export async function updateAllActive(isActive: boolean): Promise<number> {
   const rows = await query<{ count: string }>(
-    `WITH updated AS (
-       UPDATE sources SET is_active = $1 RETURNING 1
-     )
-     SELECT count(*)::text AS count FROM updated`,
-    [isActive],
+    isActive
+      ? `WITH updated AS (
+           UPDATE sources SET ${ACTIVATE_SET} WHERE legal_status <> 'disabled' RETURNING 1
+         )
+         SELECT count(*)::text AS count FROM updated`
+      : `WITH updated AS (
+           UPDATE sources SET is_active = FALSE RETURNING 1
+         )
+         SELECT count(*)::text AS count FROM updated`,
   );
   return Number(rows[0]?.count ?? 0);
 }

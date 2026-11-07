@@ -35,7 +35,11 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await query('DELETE FROM scrape_runs');
-  await query(`UPDATE sources SET health_status = 'unknown' WHERE id = $1`, [sourceId]);
+  await query(
+    `UPDATE sources SET is_active = TRUE, health_status = 'unknown', config = config - 'disabledReason'
+     WHERE id = $1`,
+    [sourceId],
+  );
 });
 
 describe('run counters', () => {
@@ -79,5 +83,53 @@ describe('source health', () => {
 
     const outcome = await sources.applyRunOutcome(sourceId, 'failed');
     expect(outcome.newStatus).toBe('degraded');
+  });
+});
+
+describe('source gating', () => {
+  it('leaves legally disabled and failure-disabled sources out of the active list', async () => {
+    await query(`UPDATE sources SET health_status = 'disabled' WHERE id = $1`, [sourceId]);
+
+    const codes = (await sources.findActive()).map((source) => source.code);
+    expect(codes).not.toContain('willhaben');
+    // The seed marks openimmo legally disabled.
+    expect(codes).not.toContain('openimmo');
+  });
+
+  it('never switches on a legally disabled source', async () => {
+    const openimmo = await sources.findByCode('openimmo');
+    const refused = await sources.updateSettings(openimmo!.id, {
+      isActive: true,
+      crawlIntervalMinutes: 240,
+    });
+    expect(refused).toMatchObject({ outcome: 'legally_disabled' });
+    expect((await sources.findByCode('openimmo'))?.crawlIntervalMinutes).toBe(
+      openimmo!.crawlIntervalMinutes,
+    );
+
+    await sources.updateAllActive(true);
+    expect((await sources.findByCode('openimmo'))?.isActive).toBe(false);
+  });
+
+  it('keeps the disable reason until the owner switches the source back on', async () => {
+    await sources.disableWithReason(sourceId, 'five failed runs');
+
+    const retimed = await sources.updateSettings(sourceId, { crawlIntervalMinutes: 240 });
+    expect(retimed).toMatchObject({
+      outcome: 'updated',
+      source: {
+        isActive: false,
+        crawlIntervalMinutes: 240,
+        config: { disabledReason: 'five failed runs' },
+      },
+    });
+
+    // Otherwise the source would stay out of findActive after the owner switched it on.
+    const activated = await sources.updateSettings(sourceId, { isActive: true });
+    expect(activated).toMatchObject({
+      outcome: 'updated',
+      source: { isActive: true, healthStatus: 'unknown' },
+    });
+    expect((await sources.findById(sourceId))?.config).not.toHaveProperty('disabledReason');
   });
 });
