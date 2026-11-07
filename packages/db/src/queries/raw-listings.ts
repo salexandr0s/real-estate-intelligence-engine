@@ -71,8 +71,10 @@ function toRawListingRow(row: RawListingDbRow): RawListingRow {
  * Idempotent upsert of a raw listing snapshot.
  * Unique key: (source_id, source_listing_key, content_sha256).
  *
- * - If the combination exists: update last_seen_at, last_scrape_run_id,
- *   and increment observation_count.
+ * - If the combination exists: the row takes the newest capture's run, status,
+ *   response status, parser version and artifact keys, and observation_count goes up.
+ *   Failure artifacts are pruned after SCRAPER_ARTIFACT_RETENTION_DAYS, so the newest
+ *   keys point at the files that last longest.
  * - If it does not exist: insert a new row.
  */
 export async function upsertRawSnapshot(input: RawListingUpsert): Promise<RawListingRow> {
@@ -94,6 +96,13 @@ export async function upsertRawSnapshot(input: RawListingUpsert): Promise<RawLis
        last_seen_at = NOW(),
        last_scrape_run_id = $17,
        extraction_status = $8,
+       response_status = COALESCE(EXCLUDED.response_status, raw_listings.response_status),
+       parser_version = EXCLUDED.parser_version,
+       body_storage_key = COALESCE(EXCLUDED.body_storage_key, raw_listings.body_storage_key),
+       screenshot_storage_key = COALESCE(
+         EXCLUDED.screenshot_storage_key, raw_listings.screenshot_storage_key
+       ),
+       har_storage_key = COALESCE(EXCLUDED.har_storage_key, raw_listings.har_storage_key),
        is_deleted_at_source = $18,
        meta = $19,
        observation_count = raw_listings.observation_count + 1
