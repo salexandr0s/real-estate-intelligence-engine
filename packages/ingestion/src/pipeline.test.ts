@@ -157,6 +157,7 @@ function createPipeline(persistAttachments = vi.fn()) {
           updateScrapeRunNormalizationCounts: vi.fn().mockResolvedValue(undefined),
         },
         scoreAndAlert: scoreAndAlertMocks(),
+        findUnscoredLatestVersion: vi.fn().mockResolvedValue(null),
         persistAttachments,
       },
     ),
@@ -257,6 +258,10 @@ function createStatefulPipeline() {
         updateScrapeRunNormalizationCounts: async () => {},
       },
       scoreAndAlert,
+      findUnscoredLatestVersion: async () => {
+        const latest = versions[versions.length - 1];
+        return latest && !scoredVersionIds.includes(latest.id) ? latest : null;
+      },
     },
   );
 
@@ -279,6 +284,39 @@ describe('FullIngestionPipeline listing versions', () => {
       { id: 3, versionNo: 3, rawListingId: 101, versionReason: 'price_change' },
     ]);
     expect(scoredVersionIds).toEqual([1, 2, 3]);
+  });
+});
+
+describe('FullIngestionPipeline scoring', () => {
+  it('fails the job when scoring fails, then scores the same version on the retry', async () => {
+    const { pipeline, versions, scoredVersionIds, scoreAndAlert } = createStatefulPipeline();
+    scoreAndAlert.findBaseline.mockRejectedValueOnce(new Error('baselines unavailable'));
+
+    await expect(pipeline.ingestDetailCapture(baseCapture, 1, 99)).rejects.toThrow(
+      'baselines unavailable',
+    );
+    expect(scoredVersionIds).toEqual([]);
+
+    // BullMQ retries with the same capture, which changes nothing this time.
+    const retry = await pipeline.ingestDetailCapture(baseCapture, 1, 99);
+    expect(retry.normalization.versionReason).toBeNull();
+    expect(versions).toHaveLength(1);
+    expect(scoredVersionIds).toEqual([1]);
+
+    // With the score in place, the next unchanged capture scores nothing.
+    expect((await pipeline.ingestDetailCapture(baseCapture, 1, 99)).scoring).toBeNull();
+    expect(scoredVersionIds).toEqual([1]);
+  });
+
+  it('leaves alone an unscored version that another raw snapshot wrote', async () => {
+    const { pipeline, versions, scoredVersionIds } = createStatefulPipeline();
+    await pipeline.ingestDetailCapture(baseCapture, 1, 99);
+
+    // Another writer, such as a normalization replay, adds a version without scoring it.
+    versions.push({ id: 2, versionNo: 2, rawListingId: 999, versionReason: 'content_change' });
+
+    expect((await pipeline.ingestDetailCapture(baseCapture, 1, 99)).scoring).toBeNull();
+    expect(scoredVersionIds).toEqual([1]);
   });
 });
 

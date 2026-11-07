@@ -3,6 +3,7 @@
  * Extracted from scripts/scrape-and-ingest.ts for reuse in workers.
  */
 
+import { loadConfig } from '@immoradar/config';
 import { FullIngestionPipeline } from '@immoradar/ingestion';
 import type { FullIngestionPipelineDeps } from '@immoradar/ingestion';
 import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@immoradar/contracts';
@@ -246,7 +247,11 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         );
       },
     },
+    findUnscoredLatestVersion: (listingId) => listingVersions.findUnscoredLatest(listingId),
     persistAttachments: async (listingId, attachments) => {
+      // The document worker only runs with documents switched on, and nothing else reads
+      // its queue. Until then the rows stay pending, and a later capture enqueues them.
+      const documentsEnabled = loadConfig().features.documentsEnabled;
       for (const attachment of attachments) {
         const doc = await documents.upsertDocument({
           listingId,
@@ -256,7 +261,8 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
           documentType: attachment.type ?? 'unknown',
         });
 
-        if (doc.status !== 'extracted') {
+        // A downloaded or extracted document keeps its status and needs no new job.
+        if (documentsEnabled && doc.status === 'pending') {
           await getDocumentQueue().add(
             `doc:${doc.id}`,
             { documentId: doc.id },

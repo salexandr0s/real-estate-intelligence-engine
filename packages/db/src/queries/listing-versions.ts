@@ -105,6 +105,29 @@ export async function appendVersion(input: AppendVersionInput): Promise<ListingV
 }
 
 /**
+ * The listing's latest version if no score points at it yet, for example because
+ * scoring failed after the version was written. Null when the latest version has a
+ * score or the listing has no versions.
+ */
+export async function findUnscoredLatest(listingId: number): Promise<ListingVersionRow | null> {
+  const rows = await query<ListingVersionDbRow>(
+    `SELECT latest.*
+     FROM (
+       SELECT * FROM listing_versions
+       WHERE listing_id = $1
+       ORDER BY version_no DESC
+       LIMIT 1
+     ) latest
+     WHERE NOT EXISTS (
+       SELECT 1 FROM listing_scores WHERE listing_scores.listing_version_id = latest.id
+     )`,
+    [listingId],
+  );
+  const row = rows[0];
+  return row ? toListingVersionRow(row) : null;
+}
+
+/**
  * Find the price from the second-most-recent version (i.e., the previous price).
  * Returns null if there is only one version or no price recorded.
  */
