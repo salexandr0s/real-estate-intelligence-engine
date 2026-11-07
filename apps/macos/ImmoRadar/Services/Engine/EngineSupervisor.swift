@@ -45,6 +45,15 @@ extension EngineSlot {
         }
     }
 
+    /// A V8 heap cap for the long-running Node services, so a leak stops at a known size.
+    var nodeHeapLimitMegabytes: Int? {
+        switch self {
+        case .api, .workerScraper: return 192
+        case .workerProcessing: return 256
+        case .oneshot, .redis, .postgres, .leftover: return nil
+        }
+    }
+
     fileprivate static let workers: [EngineSlot] = [.workerProcessing, .workerScraper]
 
     fileprivate var isWorker: Bool {

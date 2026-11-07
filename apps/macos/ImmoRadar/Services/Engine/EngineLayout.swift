@@ -122,6 +122,12 @@ struct EngineLayout: Equatable, Sendable {
         environment["API_BEARER_TOKEN"] = token
         environment["IMMORADAR_ENGINE_HOME"] = runtimeHome.path + "/"
         environment["IMMORADAR_ENGINE_TAG"] = "\(runID.uuidString).\(slot.rawValue).\(generation)."
+        if let megabytes = slot.nodeHeapLimitMegabytes {
+            // Appended last, so it wins over a heap flag that came in from the environment.
+            let cap = "--max-old-space-size=\(megabytes)"
+            let existing = environment["NODE_OPTIONS"]?.trimmingCharacters(in: .whitespaces) ?? ""
+            environment["NODE_OPTIONS"] = existing.isEmpty ? cap : "\(existing) \(cap)"
+        }
         return environment
     }
 
@@ -327,12 +333,7 @@ struct EngineLayout: Equatable, Sendable {
         environment["DATABASE_URL"] = "postgres://postgres@127.0.0.1:\(ports.postgres)/immoradar"
         environment["REDIS_URL"] = "redis://127.0.0.1:\(ports.redis)"
         environment["PROMETHEUS_ENABLED"] = "false"
-        environment["S3_BUCKET"] = artifactsDirectory.path
-        environment["S3_ENDPOINT"] = "filesystem://immoradar-local"
-        environment["S3_REGION"] = "local"
-        environment["S3_ACCESS_KEY"] = "local"
-        environment["S3_SECRET_KEY"] = "local"
-        environment["S3_FORCE_PATH_STYLE"] = "true"
+        environment["ARTIFACTS_DIR"] = artifactsDirectory.path
         environment["API_HOST"] = "127.0.0.1"
         environment["API_PORT"] = String(ports.api)
         environment["API_BASE_URL"] = "http://127.0.0.1:\(ports.api)"
