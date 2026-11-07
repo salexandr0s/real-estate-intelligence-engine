@@ -56,6 +56,11 @@ export interface ProcessingJobData {
   screenshotStorageKey?: string;
   /** Storage key for the captured HAR artifact, if saved. */
   harStorageKey?: string;
+  /**
+   * Key of the raw sighting that queued the detail page (its source_listing_key).
+   * Jobs queued before sightings existed lack it.
+   */
+  sightingKey?: string;
 }
 
 /** Job data for baseline recomputation. */
