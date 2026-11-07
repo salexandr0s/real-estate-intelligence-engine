@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { Queue, Worker } from 'bullmq';
-import type { ConnectionOptions, Job } from 'bullmq';
+import { Worker } from 'bullmq';
+import type { ConnectionOptions, Job, Queue } from 'bullmq';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { loadConfig } from '@immoradar/config';
@@ -13,7 +13,13 @@ import {
   normalizeThreadSubject,
   stripQuotedReplyText,
 } from '@immoradar/outreach';
-import { QUEUE_NAMES, getQueuePrefix, getRedisConnection } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  createQueue,
+  getQueuePrefix,
+  getRedisConnection,
+} from '@immoradar/scraper-core';
 import type { DocumentProcessingJobData, MailboxSyncJobData } from '@immoradar/scraper-core';
 
 const log = createLogger('worker:mailbox-sync');
@@ -46,10 +52,7 @@ let documentQueue: DocumentQueue | null = null;
 
 function getDocumentQueue(): DocumentQueue {
   if (!documentQueue) {
-    documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    documentQueue = createQueue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING);
   }
   return documentQueue;
 }
@@ -275,7 +278,7 @@ export async function processMailboxSyncJob(
           await docQueue.add(
             `document:${document.id}:${Date.now()}`,
             { documentId: document.id },
-            { jobId: `document:${document.id}:${Date.now()}` },
+            { jobId: `document-${document.id}-${Date.now()}` },
           );
         }
       }
@@ -314,7 +317,7 @@ export function createMailboxSyncWorker(): Worker<MailboxSyncJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 }

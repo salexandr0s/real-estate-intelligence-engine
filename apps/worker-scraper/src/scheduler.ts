@@ -1,20 +1,20 @@
 /**
- * Scheduler: registers BullMQ repeatable jobs for scraping and pipeline tasks.
+ * Registers the BullMQ schedules for scraping and pipeline tasks.
  *
- * All scheduling is done via BullMQ's upsertJobScheduler(), which persists
- * schedules in Redis. This means missed jobs are recovered after a crash —
- * unlike the previous setInterval approach which stopped on process exit.
+ * Schedules persist in Redis, so a missed run is recovered after a crash. It also means each start
+ * has to remove whatever the current config no longer wants.
  */
 
-import { Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
 import { loadConfig } from '@immoradar/config';
 import {
   QUEUE_NAMES,
-  getRedisConnection,
-  getQueuePrefix,
-  DEFAULT_JOB_RETRY_OPTS,
+  createQueue,
+  discoverySchedulerId,
+  hourlyCron,
+  removeSchedulersExcept,
+  shouldRegisterAutomatedSchedules,
+  syncDiscoverySchedule,
 } from '@immoradar/scraper-core';
 import type {
   DiscoveryJobData,
@@ -23,225 +23,128 @@ import type {
   GeocodeEnqueueJobData,
   StaleCheckJobData,
   CanaryJobData,
+  MailboxSyncJobData,
 } from '@immoradar/scraper-core';
 import { sources, scrapeRuns } from '@immoradar/db';
-import {
-  shouldClearAutomatedSchedules,
-  shouldRegisterAutomatedSchedules,
-} from './runtime-boot-mode.js';
 
 const log = createLogger('scheduler');
 
-const SYSTEM_SCHEDULER_IDS = {
-  baseline: 'baseline-hourly',
+const SCHEDULER_IDS = {
+  baseline: 'baseline-periodic',
   cluster: 'cluster-daily',
   geocode: 'geocode-enqueue-periodic',
   staleCheck: 'stale-check-periodic',
   canary: 'canary-periodic',
 } as const;
 
-type SchedulerQueues = {
-  discoveryQueue: Queue<DiscoveryJobData>;
-  baselineQueue: Queue<BaselineJobData>;
-  clusterQueue: Queue<ClusterJobData>;
-  geocodeEnqueueQueue: Queue<GeocodeEnqueueJobData>;
-  staleCheckQueue: Queue<StaleCheckJobData>;
-  canaryQueue: Queue<CanaryJobData>;
-};
-
-/**
- * Convert crawlIntervalMinutes to a cron pattern.
- * BullMQ repeatable jobs need a cron string or an `every` ms interval.
- * We use `every` for sub-hourly intervals and cron for hourly+.
- */
-function intervalToCron(minutes: number): string {
-  if (minutes <= 0) return '*/30 * * * *'; // safety fallback
-  if (minutes < 60) return `*/${minutes} * * * *`;
-  const hours = Math.round(minutes / 60);
-  if (hours >= 24) return '0 0 * * *'; // daily at midnight for 24h+ intervals
-  return `0 */${hours} * * *`;
-}
-
-async function removeSchedulerIfPresent(queue: Queue, schedulerId: string): Promise<void> {
-  try {
-    await queue.removeJobScheduler(schedulerId);
-  } catch {
-    // Removing a missing scheduler is still a successful sync.
-  }
-}
-
-async function clearAutomatedSchedulers(queues: SchedulerQueues): Promise<void> {
-  await Promise.all([
-    removeSchedulerIfPresent(queues.baselineQueue, SYSTEM_SCHEDULER_IDS.baseline),
-    removeSchedulerIfPresent(queues.clusterQueue, SYSTEM_SCHEDULER_IDS.cluster),
-    removeSchedulerIfPresent(queues.geocodeEnqueueQueue, SYSTEM_SCHEDULER_IDS.geocode),
-    removeSchedulerIfPresent(queues.staleCheckQueue, SYSTEM_SCHEDULER_IDS.staleCheck),
-    removeSchedulerIfPresent(queues.canaryQueue, SYSTEM_SCHEDULER_IDS.canary),
-  ]);
-
-  const knownSources = await sources.findAll();
-  await Promise.all(
-    knownSources.map((source) =>
-      removeSchedulerIfPresent(queues.discoveryQueue, `discovery-${source.code}`),
-    ),
-  );
-}
+const GEOCODE_BATCH_SIZE = 30;
 
 export async function startScheduler(): Promise<void> {
   const config = loadConfig();
-  const connection = getRedisConnection() as ConnectionOptions;
-  const prefix = getQueuePrefix();
 
-  const queues: SchedulerQueues = {
-    discoveryQueue: new Queue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY, {
-      connection,
-      prefix,
-    }),
-    baselineQueue: new Queue<BaselineJobData>(QUEUE_NAMES.BASELINE, {
-      connection,
-      prefix,
-    }),
-    clusterQueue: new Queue<ClusterJobData>(QUEUE_NAMES.CLUSTER, {
-      connection,
-      prefix,
-    }),
-    geocodeEnqueueQueue: new Queue<GeocodeEnqueueJobData>(QUEUE_NAMES.GEOCODE_ENQUEUE, {
-      connection,
-      prefix,
-    }),
-    staleCheckQueue: new Queue<StaleCheckJobData>(QUEUE_NAMES.STALE_CHECK, {
-      connection,
-      prefix,
-    }),
-    canaryQueue: new Queue<CanaryJobData>(QUEUE_NAMES.CANARY, {
-      connection,
-      prefix,
-    }),
-  };
+  const discoveryQueue = createQueue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY);
+  const baselineQueue = createQueue<BaselineJobData>(QUEUE_NAMES.BASELINE);
+  const clusterQueue = createQueue<ClusterJobData>(QUEUE_NAMES.CLUSTER);
+  const geocodeEnqueueQueue = createQueue<GeocodeEnqueueJobData>(QUEUE_NAMES.GEOCODE_ENQUEUE);
+  const staleCheckQueue = createQueue<StaleCheckJobData>(QUEUE_NAMES.STALE_CHECK);
+  const canaryQueue = createQueue<CanaryJobData>(QUEUE_NAMES.CANARY);
+  // The processing worker owns the mailbox schedule, and this clears it when schedules are off.
+  const mailboxQueue = createQueue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC);
 
-  if (shouldClearAutomatedSchedules(config)) {
-    await clearAutomatedSchedulers(queues);
-    log.info('Runtime boot mode is setup; automated monitoring schedules cleared');
-    return;
-  }
+  const allQueues = [
+    discoveryQueue,
+    baselineQueue,
+    clusterQueue,
+    geocodeEnqueueQueue,
+    staleCheckQueue,
+    canaryQueue,
+    mailboxQueue,
+  ];
 
-  if (!shouldRegisterAutomatedSchedules(config)) {
-    log.info('Scheduler disabled via config');
-    return;
-  }
+  try {
+    const zombieCancelled = await scrapeRuns.cancelZombieRuns(
+      config.scheduler.zombieRunTimeoutMinutes,
+    );
+    if (zombieCancelled > 0) {
+      log.warn('Cancelled zombie scrape runs', { count: zombieCancelled });
+    }
 
-  // ── Cancel zombie runs from previous crashes ───────────────────────────────
+    if (!shouldRegisterAutomatedSchedules(config)) {
+      await Promise.all(allQueues.map((queue) => removeSchedulersExcept(queue, [])));
+      log.info('Automated schedules cleared', {
+        bootMode: config.runtime.bootMode,
+        schedulerEnabled: config.scheduler.enabled,
+      });
+      return;
+    }
 
-  const zombieCancelled = await scrapeRuns.cancelZombieRuns(
-    config.scheduler.zombieRunTimeoutMinutes,
-  );
-  if (zombieCancelled > 0) {
-    log.warn('Cancelled zombie scrape runs', { count: zombieCancelled });
-  }
+    const geocodingOn = config.features.geocodingEnabled;
+    const canaryOn = config.scraper.canaryWorkerEnabled;
 
-  // ── Pipeline infrastructure schedules ──────────────────────────────────────
+    await Promise.all([
+      removeSchedulersExcept(baselineQueue, [SCHEDULER_IDS.baseline]),
+      removeSchedulersExcept(clusterQueue, [SCHEDULER_IDS.cluster]),
+      removeSchedulersExcept(staleCheckQueue, [SCHEDULER_IDS.staleCheck]),
+      removeSchedulersExcept(geocodeEnqueueQueue, geocodingOn ? [SCHEDULER_IDS.geocode] : []),
+      removeSchedulersExcept(canaryQueue, canaryOn ? [SCHEDULER_IDS.canary] : []),
+    ]);
 
-  // Baseline recomputation every hour
-  await queues.baselineQueue.upsertJobScheduler(
-    SYSTEM_SCHEDULER_IDS.baseline,
-    { pattern: '0 * * * *' },
-    {
-      name: 'baseline:recompute',
-      data: { triggeredBy: 'scheduler' },
-    },
-  );
-  log.info('Baseline scheduler registered (hourly)');
+    await baselineQueue.upsertJobScheduler(
+      SCHEDULER_IDS.baseline,
+      { pattern: hourlyCron(SCHEDULER_IDS.baseline, 6) },
+      { name: 'baseline:recompute', data: { triggeredBy: 'scheduler' } },
+    );
 
-  // Cluster rebuild daily at 03:00
-  await queues.clusterQueue.upsertJobScheduler(
-    SYSTEM_SCHEDULER_IDS.cluster,
-    { pattern: '0 3 * * *' },
-    {
-      name: 'cluster:rebuild',
-      data: { triggeredBy: 'scheduler' },
-    },
-  );
-  log.info('Cluster scheduler registered (daily 03:00)');
+    await clusterQueue.upsertJobScheduler(
+      SCHEDULER_IDS.cluster,
+      { pattern: '20 3 * * *' },
+      { name: 'cluster:rebuild', data: { triggeredBy: 'scheduler' } },
+    );
 
-  // Geocoding enqueue every 30 minutes
-  await queues.geocodeEnqueueQueue.upsertJobScheduler(
-    SYSTEM_SCHEDULER_IDS.geocode,
-    { pattern: '*/30 * * * *' },
-    {
-      name: 'geocode:enqueue',
-      data: { triggeredBy: 'scheduler', limit: 50 },
-    },
-  );
-  log.info('Geocode enqueue scheduler registered (every 30 min)');
-
-  // Stale listing detection every 6 hours
-  await queues.staleCheckQueue.upsertJobScheduler(
-    SYSTEM_SCHEDULER_IDS.staleCheck,
-    { pattern: '0 */6 * * *' },
-    {
-      name: 'stale:check',
-      data: {
-        triggeredBy: 'scheduler',
-        thresholdDays: config.scheduler.staleThresholdDays,
-      },
-    },
-  );
-  log.info('Stale check scheduler registered (every 6 hours)');
-
-  // Canary health check every 2 hours (if enabled)
-  if (config.scraper.canaryWorkerEnabled) {
-    await queues.canaryQueue.upsertJobScheduler(
-      SYSTEM_SCHEDULER_IDS.canary,
-      { pattern: '0 */2 * * *' },
+    await staleCheckQueue.upsertJobScheduler(
+      SCHEDULER_IDS.staleCheck,
+      { pattern: hourlyCron(SCHEDULER_IDS.staleCheck, 6) },
       {
-        name: 'canary:check',
-        data: { triggeredBy: 'scheduler' },
+        name: 'stale:check',
+        data: { triggeredBy: 'scheduler', thresholdDays: config.scheduler.staleThresholdDays },
       },
     );
-    log.info('Canary scheduler registered (every 2 hours)');
-  } else {
-    await removeSchedulerIfPresent(queues.canaryQueue, SYSTEM_SCHEDULER_IDS.canary);
-  }
 
-  // ── Per-source discovery schedules ─────────────────────────────────────────
-
-  const activeSources = await sources.findActive();
-  log.info(`Registering discovery schedules for ${activeSources.length} source(s)`);
-
-  for (const source of activeSources) {
-    const crawlMinutes = source.crawlIntervalMinutes ?? 30;
-    const cronPattern = intervalToCron(crawlMinutes);
-
-    const sourceConfig = source.config as Record<string, unknown> | null;
-    const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
-    const maxPagesPerRun =
-      (crawlProfile?.maxPagesPerRun as number) ??
-      (crawlProfile?.maxPages as number) ?? // backward compat with old config
-      100;
-
-    await queues.discoveryQueue.upsertJobScheduler(
-      `discovery-${source.code}`,
-      { pattern: cronPattern },
-      {
-        name: `discovery:${source.code}`,
-        data: {
-          sourceCode: source.code,
-          sourceId: source.id,
-          scrapeRunId: 0, // Will be created by the worker before scraping
-          page: 1,
-          maxPages: maxPagesPerRun, // legacy field, kept for compat
-          maxPagesPerRun,
+    if (geocodingOn) {
+      await geocodeEnqueueQueue.upsertJobScheduler(
+        SCHEDULER_IDS.geocode,
+        { pattern: hourlyCron(SCHEDULER_IDS.geocode, 1) },
+        {
+          name: 'geocode:enqueue',
+          data: { triggeredBy: 'scheduler', limit: GEOCODE_BATCH_SIZE },
         },
-        opts: DEFAULT_JOB_RETRY_OPTS,
-      },
+      );
+    }
+
+    if (canaryOn) {
+      await canaryQueue.upsertJobScheduler(
+        SCHEDULER_IDS.canary,
+        { pattern: hourlyCron(SCHEDULER_IDS.canary, 2) },
+        { name: 'canary:check', data: { triggeredBy: 'scheduler' } },
+      );
+    }
+
+    const allSources = await sources.findAll();
+    await Promise.all(
+      allSources.map((source) => syncDiscoverySchedule(discoveryQueue, source, config)),
+    );
+    await removeSchedulersExcept(
+      discoveryQueue,
+      allSources.map((source) => discoverySchedulerId(source.code)),
     );
 
-    log.info(`Discovery schedule registered`, {
-      source: source.code,
-      cron: cronPattern,
-      maxPagesPerRun,
+    log.info('Schedules registered', {
+      geocodingOn,
+      canaryOn,
+      minCrawlIntervalMinutes: config.scraper.minCrawlIntervalMinutes,
+      activeSources: allSources.filter((source) => source.isActive).map((source) => source.code),
     });
+  } finally {
+    await Promise.all(allQueues.map((queue) => queue.close()));
   }
-
-  log.info('Scheduler startup complete');
 }

@@ -3,8 +3,8 @@
  * Enqueues processing jobs with the extracted capture data.
  */
 
-import { Worker, Queue } from 'bullmq';
-import type { ConnectionOptions, Job } from 'bullmq';
+import { Worker } from 'bullmq';
+import type { ConnectionOptions, Job, Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,8 @@ import { join } from 'node:path';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  createQueue,
   getRedisConnection,
   getQueuePrefix,
   PerDomainRateLimiter,
@@ -41,15 +43,8 @@ export function createDetailWorker(): Worker<DetailJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
 
-  const processingQueue = new Queue<ProcessingJobData>(QUEUE_NAMES.PROCESSING, {
-    connection,
-    prefix,
-  });
-
-  const documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
-    connection,
-    prefix,
-  });
+  const processingQueue = createQueue<ProcessingJobData>(QUEUE_NAMES.PROCESSING);
+  const documentQueue = createQueue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING);
 
   const config = loadConfig();
   const artifactWriter = new ArtifactWriter(config.artifacts.dir);
@@ -252,7 +247,7 @@ export function createDetailWorker(): Worker<DetailJobData> {
     {
       connection,
       prefix,
-      concurrency: config.scraper.detailWorkerConcurrency,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

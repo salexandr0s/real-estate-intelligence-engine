@@ -4,13 +4,11 @@ import type { LogLevel } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
   closeRedisConnection,
-  getQueuePrefix,
-  getRedisConnection,
+  createQueue,
+  shouldRegisterAutomatedSchedules,
 } from '@immoradar/scraper-core';
 import type { MailboxSyncJobData } from '@immoradar/scraper-core';
 import { closePool, mailboxes } from '@immoradar/db';
-import { Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
 import { createIngestionWorker } from './workers/ingestion-worker.js';
 import { createBaselineWorker } from './workers/baseline-worker.js';
 import { createClusterWorker } from './workers/cluster-worker.js';
@@ -32,10 +30,7 @@ async function scheduleMailboxSync(
   mailboxAccountId: number,
   pollIntervalSeconds: number,
 ): Promise<void> {
-  const queue = new Queue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC, {
-    connection: getRedisConnection() as ConnectionOptions,
-    prefix: getQueuePrefix(),
-  });
+  const queue = createQueue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC);
   await queue.upsertJobScheduler(
     `mailbox-sync-repeat-${mailboxAccountId}`,
     { every: pollIntervalSeconds * 1000 },
@@ -113,7 +108,9 @@ runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
       secretRef: 'env:OUTREACH_SHARED_MAILBOX',
       pollIntervalSeconds: config.outreach.pollIntervalSeconds,
     });
-    await scheduleMailboxSync(mailbox.id, config.outreach.pollIntervalSeconds);
+    if (shouldRegisterAutomatedSchedules(config)) {
+      await scheduleMailboxSync(mailbox.id, config.outreach.pollIntervalSeconds);
+    }
   }
 
   logger.info(`Workers ready: ${[...workers.keys()].join(', ')}`);

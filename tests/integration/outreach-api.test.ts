@@ -25,11 +25,16 @@ const hoisted = vi.hoisted(() => ({
   createOrReuseFollowupDraft: vi.fn(),
 }));
 
-vi.mock('bullmq', () => ({
-  Queue: class {
-    add = hoisted.queueAdd;
-  },
-}));
+// Routes get their queues from createQueue. scraper-core's CommonJS build loads bullmq
+// directly, so a vi.mock('bullmq') here would not reach it.
+vi.mock('@immoradar/scraper-core', async () => {
+  const actual =
+    await vi.importActual<typeof import('@immoradar/scraper-core')>('@immoradar/scraper-core');
+  return {
+    ...actual,
+    createQueue: () => ({ add: hoisted.queueAdd }),
+  };
+});
 
 vi.mock('@immoradar/db', async () => {
   const actual = await vi.importActual<typeof import('@immoradar/db')>('@immoradar/db');
@@ -277,6 +282,8 @@ describe('mailbox/outreach API routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(hoisted.queueAdd).toHaveBeenCalledTimes(1);
+    // BullMQ rejects a custom job ID with more than two colons, which the mock above can't show.
+    expect(hoisted.queueAdd.mock.calls[0]?.[2]?.jobId).not.toContain(':');
   });
 
   it('validates mailbox sync ids', async () => {
@@ -450,6 +457,7 @@ describe('mailbox/outreach API routes', () => {
     expect(res.statusCode).toBe(200);
     expect(hoisted.createOrReuseFollowupDraft).toHaveBeenCalled();
     expect(hoisted.queueAdd).toHaveBeenCalled();
+    expect(hoisted.queueAdd.mock.calls[0]?.[2]?.jobId).not.toContain(':');
   });
 
   it('rejects follow-up when a reply already exists', async () => {

@@ -3,11 +3,13 @@
  * Enqueues detail jobs for each discovered item.
  */
 
-import { Worker, Queue } from 'bullmq';
+import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  createQueue,
   getRedisConnection,
   getQueuePrefix,
   PerDomainRateLimiter,
@@ -32,10 +34,7 @@ export function createDiscoveryWorker(shutdownSignal: AbortSignal): Worker<Disco
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
 
-  const detailQueue = new Queue<DetailJobData>(QUEUE_NAMES.SCRAPE_DETAIL, {
-    connection,
-    prefix,
-  });
+  const detailQueue = createQueue<DetailJobData>(QUEUE_NAMES.SCRAPE_DETAIL);
 
   const rateLimiter = new PerDomainRateLimiter(12);
   const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
@@ -263,7 +262,7 @@ export function createDiscoveryWorker(shutdownSignal: AbortSignal): Worker<Disco
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

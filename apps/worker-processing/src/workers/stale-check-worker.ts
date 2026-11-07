@@ -10,7 +10,12 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { StaleCheckJobData } from '@immoradar/scraper-core';
 import { listings, listingVersions } from '@immoradar/db';
 import { computeContentFingerprint } from '@immoradar/normalization';
@@ -97,7 +102,7 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

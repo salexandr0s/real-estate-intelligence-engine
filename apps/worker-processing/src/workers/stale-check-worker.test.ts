@@ -28,6 +28,7 @@ vi.mock('@immoradar/scraper-core', () => ({
   QUEUE_NAMES: {
     STALE_CHECK: 'processing-stale-check',
   },
+  WORKER_CONCURRENCY: 1,
   getRedisConnection: () => ({}),
   getQueuePrefix: () => 'test',
 }));

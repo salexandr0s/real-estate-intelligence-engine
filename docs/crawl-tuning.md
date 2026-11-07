@@ -23,7 +23,7 @@ Lower values reduce block risk but increase crawl duration.
 
 ### Crawl interval: `crawl_interval_minutes`
 
-Minutes between scheduled discovery runs. The scheduler compares `NOW() - last_successful_run_at` against this value.
+Minutes between scheduled discovery runs. The schedule uses the larger of this value and `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES`, rounded up to whole hours, at a minute derived from the source code. With the default floor of 180, a source set to 15 and a source set to 180 both run every 3 hours.
 
 | Source     | Default | Current |
 | ---------- | ------- | ------- |
@@ -34,22 +34,15 @@ Minutes between scheduled discovery runs. The scheduler compares `NOW() - last_s
 UPDATE sources SET crawl_interval_minutes = 30 WHERE code = 'willhaben';
 ```
 
-### Concurrency: `concurrency_limit`
+`PATCH /v1/sources/:id` applies a new interval at once. A change made in SQL applies the next time the scraper starts.
 
-Maximum concurrent browser contexts for this source. Currently all sources use 1.
+### Concurrency
 
-```sql
-UPDATE sources SET concurrency_limit = 1 WHERE code = 'willhaben';
-```
+Every queue runs one job at a time (`WORKER_CONCURRENCY` in `packages/scraper-core/src/queues/queue-factory.ts`), and no setting raises it. The API returns the `concurrency_limit` column, but no worker reads it.
 
 ### Max pages per run: `config.crawlProfile.maxPages`
 
-Maximum discovery pages per crawl run. Stored in the `config` JSONB column.
-
-| Source     | Default | Current |
-| ---------- | ------- | ------- |
-| (global)   | 3       | --      |
-| willhaben  | --      | 5       |
+Most list pages one run fetches for this source, stored in the `config` JSONB column. `SCRAPER_MAX_PAGES_PER_RUN` caps it, and a source without this key uses the cap.
 
 ```sql
 UPDATE sources
@@ -63,7 +56,7 @@ These apply to all sources and are set via environment variables.
 
 | Variable                             | Default | Description                                                  |
 | ------------------------------------ | ------- | ------------------------------------------------------------ |
-| `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES` | `180`   | Shortest time between two crawls of a source                 |
+| `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES` | `180`   | Shortest time between two scheduled crawls of a source; schedules run at most hourly |
 | `SCRAPER_MAX_PAGES_PER_RUN`          | `60`    | Most list pages one run fetches                              |
 | `SCRAPER_DETAIL_BUDGET_PER_RUN`      | `40`    | Most detail pages one run queues                             |
 | `SCRAPER_DETAIL_REFRESH_DAYS`        | `30`    | Age at which a listing's detail page gets fetched again      |

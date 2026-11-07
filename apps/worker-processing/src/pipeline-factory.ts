@@ -6,13 +6,11 @@
 import { FullIngestionPipeline } from '@immoradar/ingestion';
 import type { FullIngestionPipelineDeps } from '@immoradar/ingestion';
 import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@immoradar/contracts';
-import { Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
+import type { Queue } from 'bullmq';
 import {
   computeContentHash,
   QUEUE_NAMES,
-  getRedisConnection,
-  getQueuePrefix,
+  createQueue,
   DEFAULT_JOB_RETRY_OPTS,
 } from '@immoradar/scraper-core';
 import type { AlertDeliveryJobData, DocumentProcessingJobData } from '@immoradar/scraper-core';
@@ -73,20 +71,14 @@ let _documentQueue: Queue<DocumentProcessingJobData> | null = null;
 
 function getDeliveryQueue(): Queue<AlertDeliveryJobData> {
   if (!_deliveryQueue) {
-    _deliveryQueue = new Queue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    _deliveryQueue = createQueue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY);
   }
   return _deliveryQueue;
 }
 
 function getDocumentQueue(): Queue<DocumentProcessingJobData> {
   if (!_documentQueue) {
-    _documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    _documentQueue = createQueue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING);
   }
   return _documentQueue;
 }

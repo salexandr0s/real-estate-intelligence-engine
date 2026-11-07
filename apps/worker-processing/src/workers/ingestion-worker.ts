@@ -8,6 +8,7 @@ import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
+  WORKER_CONCURRENCY,
   getRedisConnection,
   getQueuePrefix,
   classifyScraperError,
@@ -50,7 +51,7 @@ export function createIngestionWorker(): Worker<ProcessingJobData> {
     {
       connection,
       prefix,
-      concurrency: 2,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

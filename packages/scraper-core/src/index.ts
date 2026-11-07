@@ -65,3 +65,16 @@ export {
   DEFAULT_JOB_RETRY_OPTS,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';
+export { createQueue, WORKER_CONCURRENCY, type QueueName } from './queues/queue-factory.js';
+export {
+  discoveryCron,
+  discoverySchedulerId,
+  hourlyCron,
+  maxPagesForSource,
+  removeSchedulersExcept,
+  shouldRegisterAutomatedSchedules,
+  stableMinuteOffset,
+  syncDiscoverySchedule,
+  type DiscoveryScheduleConfig,
+  type ScheduleModeConfig,
+} from './queues/schedule.js';

@@ -114,7 +114,6 @@ export interface PlaywrightConfig {
 
 export interface ScraperConfig {
   canaryWorkerEnabled: boolean;
-  detailWorkerConcurrency: number;
   minCrawlIntervalMinutes: number;
   maxPagesPerRun: number;
   detailBudgetPerRun: number;
@@ -260,7 +259,6 @@ function loadRuntimeBootMode(): RuntimeBootMode {
 function loadScraperConfig(): ScraperConfig {
   return {
     canaryWorkerEnabled: envBool('CANARY_WORKER_ENABLED', false),
-    detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
     minCrawlIntervalMinutes: envInt('SCRAPER_MIN_CRAWL_INTERVAL_MINUTES', 180),
     maxPagesPerRun: envInt('SCRAPER_MAX_PAGES_PER_RUN', 60),
     detailBudgetPerRun: envInt('SCRAPER_DETAIL_BUDGET_PER_RUN', 40),

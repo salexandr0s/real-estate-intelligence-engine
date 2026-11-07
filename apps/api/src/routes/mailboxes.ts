@@ -1,10 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import type { ConnectionOptions } from 'bullmq';
-import { Queue } from 'bullmq';
+import type { Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
 import { NotFoundError, ValidationError } from '@immoradar/observability';
 import { mailboxes } from '@immoradar/db';
-import { QUEUE_NAMES, getQueuePrefix, getRedisConnection } from '@immoradar/scraper-core';
+import { QUEUE_NAMES, createQueue } from '@immoradar/scraper-core';
 import type { MailboxSyncJobData } from '@immoradar/scraper-core';
 import { idParamSchema, parseOrThrow } from '../schemas.js';
 
@@ -12,10 +11,7 @@ let mailboxSyncQueue: Queue<MailboxSyncJobData> | null = null;
 
 function getMailboxSyncQueue(): Queue<MailboxSyncJobData> {
   if (!mailboxSyncQueue) {
-    mailboxSyncQueue = new Queue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    mailboxSyncQueue = createQueue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC);
   }
   return mailboxSyncQueue;
 }
@@ -68,7 +64,7 @@ export async function mailboxRoutes(app: FastifyInstance): Promise<void> {
     await queue.add(
       `mailbox-sync:${mailbox.id}:${Date.now()}`,
       { mailboxAccountId: mailbox.id, triggeredBy: 'manual' },
-      { jobId: `mailbox-sync:manual:${mailbox.id}:${Date.now()}` },
+      { jobId: `mailbox-sync-manual-${mailbox.id}-${Date.now()}` },
     );
 
     return reply.send({ data: { accepted: true }, meta: {} });
