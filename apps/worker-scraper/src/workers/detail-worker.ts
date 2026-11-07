@@ -1,255 +1,300 @@
 /**
- * BullMQ worker: scrapes individual listing detail pages.
- * Enqueues processing jobs with the extracted capture data.
+ * BullMQ worker: fetches a listing's own page and hands the capture to processing. A page that is
+ * gone (404 or 410) still goes to processing, so the listing gets retired. A blocked page fails the
+ * job instead, because a challenge page holds no listing data.
  */
 
-import { Worker } from 'bullmq';
-import type { ConnectionOptions, Job, Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DelayedError, WaitingError, Worker } from 'bullmq';
+import type { ConnectionOptions, Job } from 'bullmq';
+import type { BrowserContext, Page } from 'playwright';
+import { loadConfig } from '@immoradar/config';
+import type { DetailCapture, DetailContext, RequestPlan } from '@immoradar/contracts';
+import { deadLetter } from '@immoradar/db';
 import { createLogger } from '@immoradar/observability';
 import {
+  ArtifactWriter,
+  DEFAULT_JOB_RETRY_OPTS,
   QUEUE_NAMES,
   WORKER_CONCURRENCY,
-  createQueue,
-  getRedisConnection,
-  getQueuePrefix,
-  PerDomainRateLimiter,
-  SourceCircuitBreaker,
-  pageNavigationDelay,
-  cooldownDelay,
   classifyScraperError,
-  dismissCookieConsent,
-  ArtifactWriter,
+  createQueue,
+  getQueuePrefix,
+  getRedisConnection,
+  navigateForCapture,
+  pageNavigationDelay,
   setupRequestInterception,
-  DEFAULT_JOB_RETRY_OPTS,
 } from '@immoradar/scraper-core';
-import type {
-  DetailJobData,
-  ProcessingJobData,
-  DocumentProcessingJobData,
-} from '@immoradar/scraper-core';
-import type { DetailCapture } from '@immoradar/contracts';
-import { loadConfig } from '@immoradar/config';
-import { sources, deadLetter, documents, listings } from '@immoradar/db';
-import { createScrapeContext } from '../browser-pool.js';
+import type { DetailJobData, ProcessingJobData } from '@immoradar/scraper-core';
+import { untilAborted } from '../abort.js';
 import { getAdapter } from '../adapter-registry.js';
+import { acquirePageSlot, createScrapeContext } from '../browser-pool.js';
+import { checkSourceRunnable } from '../source-guard.js';
+import type { ScraperWorkerDeps } from './worker-deps.js';
 
 const log = createLogger('worker:detail');
 
-export function createDetailWorker(): Worker<DetailJobData> {
+/** Spreads jobs held back by an open breaker, so they don't all return at the same moment. */
+const BREAKER_DELAY_JITTER_MS = 30_000;
+
+/** The site answered with a challenge page instead of the listing. */
+export class BlockedPageError extends Error {
+  constructor() {
+    // The classifier reads "challenge" as soft_anti_bot.
+    super('Blocked by a challenge page');
+    this.name = 'BlockedPageError';
+  }
+}
+
+/**
+ * The key processing files the capture under. A captured page's own ID wins over the one
+ * discovery recorded, so a listing whose search-page ID differs still reaches the right row.
+ * Anything short of a full capture keeps the job's key, which is the sighting that queued it.
+ */
+export function chooseListingKey(
+  extractionStatus: DetailCapture<unknown>['extractionStatus'],
+  derivedKey: string,
+  jobKey: string,
+): string {
+  if (extractionStatus !== 'captured') return jobKey;
+  // Adapters build `${sourceCode}:${id}`, so a trailing colon means the page gave no ID.
+  if (derivedKey === '' || derivedKey.endsWith(':')) return jobKey;
+  return derivedKey;
+}
+
+/** The site's own ID, which a sighting key carries after the source code. */
+function externalIdOf(sourceCode: string, sourceListingKey: string): string | null {
+  const prefix = `${sourceCode}:`;
+  return sourceListingKey.startsWith(prefix) ? sourceListingKey.slice(prefix.length) : null;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobData> {
+  const { shutdownSignal, rateLimiter, circuitBreaker } = deps;
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
-
-  const processingQueue = createQueue<ProcessingJobData>(QUEUE_NAMES.PROCESSING);
-  const documentQueue = createQueue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING);
-
   const config = loadConfig();
   const artifactWriter = new ArtifactWriter(config.artifacts.dir);
-  const rateLimiter = new PerDomainRateLimiter(12);
-  const circuitBreaker = new SourceCircuitBreaker(5, 300_000);
+  const processingQueue = createQueue<ProcessingJobData>(QUEUE_NAMES.PROCESSING);
 
-  // Cache source configs to avoid per-job DB lookups
-  const rateLimitCache = new Map<string, boolean>();
-
-  async function ensureRateLimit(sourceCode: string): Promise<void> {
-    if (rateLimitCache.has(sourceCode)) return;
-    const row = await sources.findByCode(sourceCode);
-    if (row?.rateLimitRpm) {
-      rateLimiter.setDomainRpm(sourceCode, row.rateLimitRpm);
+  async function writeFailureHtml(
+    sourceCode: string,
+    scrapeRunId: number,
+    detailUrl: string,
+    html: string,
+  ): Promise<string | null> {
+    if (!config.playwright.captureHtmlOnFailure) return null;
+    try {
+      return await artifactWriter.writeHtml(sourceCode, String(scrapeRunId), detailUrl, html);
+    } catch (err) {
+      log.warn('Could not save the failure HTML', { sourceCode, detailUrl, error: messageOf(err) });
+      return null;
     }
-    rateLimitCache.set(sourceCode, true);
   }
 
-  const worker = new Worker<DetailJobData>(
-    QUEUE_NAMES.SCRAPE_DETAIL,
-    async (job: Job<DetailJobData>) => {
-      const { sourceCode, sourceId, scrapeRunId, detailUrl, discoveryUrl } = job.data;
-      const adapter = getAdapter(sourceCode);
-
-      if (circuitBreaker.isOpen(sourceCode)) {
-        log.warn('Circuit breaker open, skipping detail', { sourceCode, detailUrl });
-        return;
+  /** Best effort: a failed capture never hides the error that caused it. */
+  async function captureFailure(
+    job: DetailJobData,
+    context: BrowserContext | null,
+    page: Page | null,
+    harPath: string | undefined,
+  ): Promise<Record<string, string | null>> {
+    const { sourceCode, scrapeRunId, detailUrl } = job;
+    const runId = String(scrapeRunId);
+    const keys: Record<string, string | null> = { html: null, screenshot: null, har: null };
+    if (page && !page.isClosed()) {
+      if (config.playwright.captureScreenshotOnFailure) {
+        try {
+          keys['screenshot'] = await artifactWriter.captureScreenshot(
+            sourceCode,
+            runId,
+            detailUrl,
+            page,
+          );
+        } catch (err) {
+          log.warn('Could not save the failure screenshot', { detailUrl, error: messageOf(err) });
+        }
       }
+      const html = await page.content().catch(() => null);
+      if (html !== null)
+        keys['html'] = await writeFailureHtml(sourceCode, scrapeRunId, detailUrl, html);
+    }
+    if (context && harPath) {
+      try {
+        // Playwright writes the HAR file when the context closes.
+        await context.close();
+        keys['har'] = await artifactWriter.writeHar(
+          sourceCode,
+          runId,
+          detailUrl,
+          await readFile(harPath),
+        );
+      } catch (err) {
+        log.warn('Could not save the failure HAR', { detailUrl, error: messageOf(err) });
+      }
+    }
+    return keys;
+  }
 
-      await ensureRateLimit(sourceCode);
+  async function processDetail(job: Job<DetailJobData>, token?: string): Promise<void> {
+    const { sourceCode, sourceId, scrapeRunId, detailUrl, discoveryUrl, sourceListingKey } =
+      job.data;
+    if (!sourceListingKey) {
+      log.warn('Dropping a detail job queued before sightings existed', { sourceCode, detailUrl });
+      return;
+    }
+    const gate = await checkSourceRunnable(sourceCode);
+    if (!gate.runnable) {
+      log.info('Dropping a detail job for a source that is off', {
+        sourceCode,
+        reason: gate.reason,
+        detailUrl,
+      });
+      return;
+    }
+    if (circuitBreaker.isOpen(sourceCode)) {
+      const until =
+        (circuitBreaker.openUntil(sourceCode) ?? Date.now()) +
+        Math.floor(Math.random() * BREAKER_DELAY_JITTER_MS);
+      log.info('Breaker open, delaying the detail page', {
+        sourceCode,
+        detailUrl,
+        until: new Date(until).toISOString(),
+      });
+      // A delayed job keeps its attempts.
+      await job.moveToDelayed(until, token);
+      throw new DelayedError();
+    }
+    if (gate.source.rateLimitRpm) rateLimiter.setDomainRpm(sourceCode, gate.source.rateLimitRpm);
 
-      // When HAR capture is enabled, record to a temp file so we can save
-      // the HAR on failure. On success, the temp file is cleaned up.
-      const harEnabled = config.playwright.captureHarOnFailure;
-      const harTempPath = harEnabled
-        ? join(tmpdir(), `immoradar-har-${randomUUID()}.har`)
-        : undefined;
+    const harPath = config.playwright.captureHarOnFailure
+      ? join(tmpdir(), `immoradar-har-${randomUUID()}.har`)
+      : undefined;
+    let context: BrowserContext | null = null;
+    let page: Page | null = null;
+    let releaseSlot: (() => void) | null = null;
+    // Closing the context makes a page that is still loading fail at once.
+    const closeOnAbort = (): void => void context?.close().catch(() => {});
+    shutdownSignal.addEventListener('abort', closeOnAbort, { once: true });
 
-      const context = await createScrapeContext(
-        harTempPath ? { recordHarPath: harTempPath, sourceCode } : { sourceCode },
+    try {
+      await untilAborted(rateLimiter.waitForSlot(sourceCode), shutdownSignal);
+      await untilAborted(pageNavigationDelay(), shutdownSignal);
+      releaseSlot = await acquirePageSlot(shutdownSignal);
+      context = await createScrapeContext(
+        harPath ? { recordHarPath: harPath, sourceCode } : { sourceCode },
       );
       await setupRequestInterception(context);
+      page = await context.newPage();
 
-      let htmlStorageKey: string | undefined;
-      let screenshotStorageKey: string | undefined;
-      let harStorageKey: string | undefined;
-
-      try {
-        const page = await context.newPage();
-
-        await rateLimiter.waitForSlot(sourceCode);
-        await pageNavigationDelay();
-
-        // Use the adapter's buildDetailRequest for URL resolution
-        const detailRequest = await adapter.buildDetailRequest({
-          detailUrl,
-          sourceCode,
-          summaryPayload: {},
-          discoveredAt: new Date().toISOString(),
-        });
-        const fullUrl = detailRequest?.url ?? detailUrl;
-
-        await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30_000 });
-        await dismissCookieConsent(page, sourceCode);
-        const html = await page.content();
-
-        // Persist HTML artifact
-        if (config.playwright.captureHtmlOnFailure) {
-          try {
-            htmlStorageKey = await artifactWriter.writeHtml(
-              sourceCode,
-              String(scrapeRunId),
-              detailUrl,
-              html,
-            );
-          } catch (writeErr) {
-            log.warn('Failed to write HTML artifact', {
-              error: writeErr instanceof Error ? writeErr.message : String(writeErr),
-            });
-          }
-        }
-
-        const detailCapture = await adapter.extractDetailPage({
-          page,
-          requestPlan: { url: fullUrl, metadata: { html } },
-          sourceCode,
-          scrapeRunId,
-        });
-        const availability = adapter.detectAvailability({
-          page,
-          requestPlan: { url: fullUrl, metadata: { html } },
-          sourceCode,
-          scrapeRunId,
-        });
-
-        detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
-        detailCapture.discoveryUrl = discoveryUrl;
-        detailCapture.htmlStorageKey = htmlStorageKey ?? null;
-        detailCapture.harStorageKey = harStorageKey ?? null;
-        detailCapture.availabilityStatus = availability.status;
-
-        await processingQueue.add(
-          `process:${sourceCode}`,
-          {
-            sourceCode,
-            sourceId,
-            scrapeRunId,
-            detailUrl: fullUrl,
-            discoveryUrl,
-            captureJson: JSON.stringify(detailCapture),
-            htmlStorageKey,
-            harStorageKey,
-          },
-          DEFAULT_JOB_RETRY_OPTS,
-        );
-
-        // Enqueue document processing for any attachment URLs found on the page.
-        // Best-effort: failures here never break the main detail flow.
-        try {
-          await enqueueAttachmentDocuments(detailCapture, sourceId, documentQueue);
-        } catch (docErr) {
-          log.warn('Failed to enqueue attachment documents', {
-            detailUrl: fullUrl,
-            error: docErr instanceof Error ? docErr.message : String(docErr),
-          });
-        }
-
-        circuitBreaker.recordSuccess(sourceCode);
-        const payload = detailCapture.payload as Record<string, unknown>;
-        log.info('Detail extracted', { title: (payload.titleRaw as string) ?? 'Unknown' });
-      } catch (err) {
-        const errorClass = classifyScraperError(err);
-        circuitBreaker.recordFailure(sourceCode, errorClass);
-
-        // Capture failure artifacts (screenshot + HTML)
-        if (config.playwright.captureScreenshotOnFailure) {
-          try {
-            const pages = context.pages();
-            if (pages.length > 0) {
-              const buffer = await pages[0]!.screenshot({ fullPage: true });
-              screenshotStorageKey = await artifactWriter.writeScreenshot(
-                sourceCode,
-                String(scrapeRunId),
-                detailUrl,
-                buffer,
-              );
-              if (!htmlStorageKey) {
-                const failHtml = await pages[0]!.content();
-                htmlStorageKey = await artifactWriter.writeHtml(
-                  sourceCode,
-                  String(scrapeRunId),
-                  detailUrl,
-                  failHtml,
-                );
-              }
-            }
-          } catch (_captureErr) {
-            log.warn('Failed to capture failure artifacts');
-          }
-        }
-
-        // Capture HAR on failure — close context first to flush the HAR file
-        if (harEnabled && harTempPath) {
-          try {
-            await context.close();
-            const harBuffer = await readFile(harTempPath);
-            harStorageKey = await artifactWriter.writeHar(
-              sourceCode,
-              String(scrapeRunId),
-              detailUrl,
-              harBuffer,
-            );
-          } catch (_harErr) {
-            log.warn('Failed to capture HAR artifact');
-          }
-        }
-
-        if (errorClass === 'soft_anti_bot') {
-          log.warn('Soft block detected on detail page, applying cooldown', { sourceCode });
-          await cooldownDelay();
-        }
-
-        log.error('Detail extraction failed', {
-          detailUrl,
-          errorClass,
-          htmlStorageKey,
-          screenshotStorageKey,
-          harStorageKey,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        throw err;
-      } finally {
-        await context.close().catch(() => {});
-        // Clean up HAR temp file regardless of outcome
-        if (harTempPath) {
-          await unlink(harTempPath).catch(() => {});
-        }
+      const adapter = getAdapter(sourceCode);
+      const plan: RequestPlan = (await adapter.buildDetailRequest({
+        detailUrl,
+        // Some adapters build the page URL from the ID when the link is relative.
+        externalId: externalIdOf(sourceCode, sourceListingKey),
+        sourceCode,
+        summaryPayload: {},
+        discoveredAt: new Date().toISOString(),
+      })) ?? { url: detailUrl };
+      const navigation = await navigateForCapture(page, plan, {
+        sourceCode,
+        navigationTimeoutMs: config.playwright.navigationTimeoutMs,
+      });
+      const html = await page.content();
+      const detailContext: DetailContext = {
+        page,
+        requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
+        sourceCode,
+        scrapeRunId,
+      };
+      const capture = await adapter.extractDetailPage(detailContext);
+      // The status is the site's own answer that the listing is gone, whatever the page says.
+      const gone = navigation.status === 404 || navigation.status === 410;
+      const availability = gone ? 'not_found' : adapter.detectAvailability(detailContext).status;
+      if (availability === 'blocked' || capture.extractionStatus === 'blocked') {
+        throw new BlockedPageError();
       }
-    },
-    {
-      connection,
-      prefix,
-      concurrency: WORKER_CONCURRENCY,
-    },
-  );
+
+      const htmlStorageKey =
+        capture.extractionStatus === 'parse_failed' && !gone
+          ? await writeFailureHtml(sourceCode, scrapeRunId, detailUrl, html)
+          : null;
+      const derivedKey = adapter.deriveSourceListingKey(capture);
+      const listingKey = chooseListingKey(capture.extractionStatus, derivedKey, sourceListingKey);
+      if (capture.extractionStatus === 'captured' && listingKey !== sourceListingKey) {
+        log.warn('Detail page ID differs from the sighting', {
+          sourceCode,
+          detailUrl,
+          sightingKey: sourceListingKey,
+          pageKey: listingKey,
+        });
+      }
+
+      capture.sourceListingKeyCandidate = listingKey;
+      capture.discoveryUrl = discoveryUrl;
+      capture.responseStatus = navigation.status;
+      capture.htmlStorageKey = htmlStorageKey;
+      capture.harStorageKey = null;
+      capture.availabilityStatus = availability;
+
+      await processingQueue.add(
+        `process:${sourceCode}`,
+        {
+          sourceCode,
+          sourceId,
+          scrapeRunId,
+          detailUrl: plan.url,
+          discoveryUrl,
+          captureJson: JSON.stringify(capture),
+          htmlStorageKey: htmlStorageKey ?? undefined,
+          sightingKey: sourceListingKey,
+        },
+        DEFAULT_JOB_RETRY_OPTS,
+      );
+      circuitBreaker.recordSuccess(sourceCode);
+      log.info('Detail page captured', {
+        sourceCode,
+        detailUrl,
+        status: navigation.status,
+        extractionStatus: capture.extractionStatus,
+        availability,
+      });
+    } catch (err) {
+      if (shutdownSignal.aborted) {
+        // Back to the queue for the next start. A shutdown says nothing about the source.
+        await job.moveToWait(token);
+        throw new WaitingError();
+      }
+      const errorClass = classifyScraperError(err);
+      circuitBreaker.recordFailure(sourceCode, errorClass);
+      const artifacts = await captureFailure(job.data, context, page, harPath);
+      log.error('Detail page failed', {
+        sourceCode,
+        detailUrl,
+        errorClass,
+        artifacts,
+        error: messageOf(err),
+      });
+      throw err;
+    } finally {
+      releaseSlot?.();
+      shutdownSignal.removeEventListener('abort', closeOnAbort);
+      await context?.close().catch(() => {});
+      if (harPath) await unlink(harPath).catch(() => {});
+    }
+  }
+
+  const worker = new Worker<DetailJobData>(QUEUE_NAMES.SCRAPE_DETAIL, processDetail, {
+    connection,
+    prefix,
+    concurrency: WORKER_CONCURRENCY,
+  });
 
   worker.on('failed', (job, err) => {
     const isTerminal = job != null && job.attemptsMade >= (job.opts?.attempts ?? 1);
@@ -276,53 +321,4 @@ export function createDetailWorker(): Worker<DetailJobData> {
   });
 
   return worker;
-}
-
-/**
- * For each attachment URL on the detail capture, upsert a listing_documents
- * row (if the listing already exists) and enqueue a DOCUMENT_PROCESSING job.
- *
- * This is best-effort: if the listing hasn't been created yet (first scrape),
- * the attachmentUrls are preserved in captureJson for downstream handling.
- */
-async function enqueueAttachmentDocuments(
-  capture: DetailCapture<unknown>,
-  sourceId: number,
-  docQueue: Queue<DocumentProcessingJobData>,
-): Promise<void> {
-  const urls = capture.attachmentUrls;
-  if (!urls || urls.length === 0) return;
-
-  const sourceKey = capture.sourceListingKeyCandidate;
-  if (!sourceKey) return;
-
-  const listing = await listings.findBySourceKey(sourceId, sourceKey);
-  if (!listing) {
-    // Listing not yet created — attachmentUrls will be processed after ingestion
-    log.debug('Listing not yet created, skipping document enqueue', {
-      sourceKey,
-      attachmentCount: urls.length,
-    });
-    return;
-  }
-
-  for (const attachment of urls) {
-    const doc = await documents.upsertDocument({
-      listingId: listing.id,
-      url: attachment.url,
-      label: attachment.label ?? null,
-      mimeType: attachment.type ?? null,
-      documentType: attachment.type ?? 'unknown',
-    });
-
-    if (doc.status !== 'extracted') {
-      await docQueue.add(`doc:${doc.id}`, { documentId: doc.id }, DEFAULT_JOB_RETRY_OPTS);
-    }
-
-    log.info('Enqueued document for processing', {
-      documentId: doc.id,
-      listingId: listing.id,
-      url: attachment.url,
-    });
-  }
 }

@@ -39,7 +39,7 @@ runMain('worker-scraper', HARD_TIMEOUT_MS, async (lifecycle) => {
     circuitBreaker: new SourceCircuitBreaker(5, 300_000),
   };
   const discoveryWorker = createDiscoveryWorker(deps);
-  const detailWorker = createDetailWorker();
+  const detailWorker = createDetailWorker(deps);
 
   lifecycle.onShutdown(
     'workers',

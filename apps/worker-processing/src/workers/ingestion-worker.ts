@@ -34,7 +34,7 @@ export function detailOutcome(
   listingId: number,
 ): DetailOutcome | null {
   if (listingId > 0 || resolveLifecycleStatus(capture.availabilityStatus) != null) return 'ok';
-  // Captures don't carry a status yet; the detail worker queues only pages that loaded.
+  // Jobs queued before captures recorded a status have none, and they came from pages that loaded.
   const status = capture.responseStatus;
   if (status == null || (status >= 200 && status < 300)) return 'inconclusive';
   return null;
