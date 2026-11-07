@@ -19,7 +19,13 @@ export { ClassifiedError, withRetry } from './retries/retry.js';
 export { classifyScraperError } from './retries/classify.js';
 
 // ── Capture ──────────────────────────────────────────────────────────────────
-export { ArtifactWriter, type ArtifactWriterPort } from './capture/artifact-writer.js';
+export {
+  ArtifactWriter,
+  pruneFailureArtifacts,
+  type ArtifactWriterPort,
+  type PruneResult,
+  type ScreenshotPage,
+} from './capture/artifact-writer.js';
 export { computeContentHash } from './capture/content-hash.js';
 export { headlineText } from './capture/headline-text.js';
 

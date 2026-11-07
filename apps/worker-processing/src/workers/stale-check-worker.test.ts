@@ -8,6 +8,14 @@ const hoisted = vi.hoisted(() => ({
   markExpiredStale: vi.fn(),
   appendVersion: vi.fn(),
   computeContentFingerprint: vi.fn(() => 'expired-fingerprint'),
+  pruneFailureArtifacts: vi.fn(),
+}));
+
+vi.mock('@immoradar/config', () => ({
+  loadConfig: () => ({
+    artifacts: { dir: '/runtime/artifacts' },
+    scraper: { artifactRetentionDays: 7 },
+  }),
 }));
 
 vi.mock('bullmq', () => ({
@@ -31,6 +39,7 @@ vi.mock('@immoradar/scraper-core', () => ({
   WORKER_CONCURRENCY: 1,
   getRedisConnection: () => ({}),
   getQueuePrefix: () => 'test',
+  pruneFailureArtifacts: hoisted.pruneFailureArtifacts,
 }));
 
 vi.mock('@immoradar/normalization', () => ({
@@ -95,6 +104,30 @@ describe('createStaleCheckWorker', () => {
     hoisted.markExpiredStale.mockReset();
     hoisted.appendVersion.mockReset();
     hoisted.computeContentFingerprint.mockClear();
+    hoisted.pruneFailureArtifacts
+      .mockReset()
+      .mockResolvedValue({ removedFiles: 0, removedBytes: 0 });
+  });
+
+  it('prunes failure artifacts with the configured retention', async () => {
+    hoisted.findExpiryCandidates.mockResolvedValueOnce([]);
+
+    createStaleCheckWorker();
+    await hoisted.processor?.({ data: {} });
+
+    expect(hoisted.pruneFailureArtifacts).toHaveBeenCalledWith('/runtime/artifacts', 7);
+  });
+
+  it('still runs the stale check when pruning fails', async () => {
+    hoisted.pruneFailureArtifacts.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+    hoisted.findExpiryCandidates.mockResolvedValueOnce([candidate]);
+    hoisted.markExpiredStale.mockResolvedValue({ id: 123 });
+    hoisted.appendVersion.mockResolvedValue({ id: 999, versionNo: 4 });
+
+    createStaleCheckWorker();
+    await expect(hoisted.processor?.({ data: {} })).resolves.toBeUndefined();
+
+    expect(hoisted.markExpiredStale).toHaveBeenCalledTimes(1);
   });
 
   it('applies sightings first, then expires a candidate on the raw row it already has', async () => {
