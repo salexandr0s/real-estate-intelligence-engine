@@ -62,6 +62,22 @@ describe('run counters', () => {
   });
 });
 
+describe('run status', () => {
+  it('keeps a cancelled run cancelled', async () => {
+    const run = await scrapeRuns.create({ sourceId, triggerType: 'manual', scope: 'full' });
+    expect(await scrapeRuns.start(run.id)).toMatchObject({ status: 'running' });
+    await scrapeRuns.cancel(run.id);
+
+    // The scraper finishing its work later must not overwrite the user's cancel.
+    expect(await scrapeRuns.finish(run.id, 'succeeded', NO_PAGES)).toBeNull();
+    expect(await scrapeRuns.findById(run.id)).toMatchObject({
+      status: 'cancelled',
+      errorCode: 'user_cancelled',
+    });
+    expect(await scrapeRuns.start(run.id)).toBeNull();
+  });
+});
+
 describe('source health', () => {
   async function failedRun(daysAgo: number, errorCode: string | null): Promise<void> {
     await query(

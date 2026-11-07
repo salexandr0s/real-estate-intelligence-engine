@@ -104,11 +104,15 @@ export async function create(input: ScrapeRunCreate): Promise<ScrapeRunRow> {
   return toScrapeRunRow(rows[0]!);
 }
 
+/**
+ * Mark a queued run as running. Returns null when the run is no longer queued:
+ * it was cancelled or has already started.
+ */
 export async function start(id: number): Promise<ScrapeRunRow | null> {
   const rows = await query<ScrapeRunDbRow>(
     `UPDATE scrape_runs
      SET status = 'running', started_at = NOW()
-     WHERE id = $1
+     WHERE id = $1 AND status = 'queued'
      RETURNING *`,
     [id],
   );
@@ -120,6 +124,9 @@ export async function start(id: number): Promise<ScrapeRunRow | null> {
  * Close a run with the scraper's counters and, for a failure, its cause. The raw
  * and normalized counts stay as processing left them: it adds to them with
  * `incrementMetrics`, often after the run has finished.
+ *
+ * Returns null when the run had already ended, so a run that the user or
+ * `cancelZombieRuns` cancelled stays cancelled.
  */
 export async function finish(
   id: number,
@@ -140,7 +147,7 @@ export async function finish(
          retry_count = $9,
          error_code = $10,
          error_message = $11
-     WHERE id = $1
+     WHERE id = $1 AND status IN ('queued', 'running')
      RETURNING *`,
     [
       id,
