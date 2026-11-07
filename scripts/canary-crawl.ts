@@ -1,13 +1,16 @@
 #!/usr/bin/env npx tsx
 /**
- * Canary crawl — lightweight health check for a source adapter.
+ * Canary crawl: a quick health check for one source adapter. Writes nothing to the database.
  *
- * Fetches 1 discovery page and up to 3 detail pages without persisting
- * anything to the database. Reports success/failure rate and exits with
- * code 0 if detail success rate exceeds 80%, code 1 otherwise.
+ * Fetches up to --pages list pages, following each page's next-page plan, then up to 3 detail
+ * pages. For each list page it prints the HTTP status, whether the plan's selector was found and
+ * how many listings the parser found. For each detail page it prints the status, the selector,
+ * the key from the list page against the key derived from the detail page, the extraction status,
+ * the availability, the title and the price. Exits 0 when at least 80% of the detail pages were
+ * captured, 1 otherwise.
  *
  * Usage:
- *   npx tsx scripts/canary-crawl.ts --source <code> [--pages 1]
+ *   npx tsx scripts/canary-crawl.ts --source <code> [--pages <n>]
  *
  * Examples:
  *   npx tsx scripts/canary-crawl.ts --source willhaben
@@ -18,24 +21,23 @@ import { chromium } from 'playwright';
 import type { Browser, BrowserContext } from 'playwright';
 
 import { loadCanaryConfig } from '@immoradar/config';
-import { createLogger } from '@immoradar/observability';
 import {
   PerDomainRateLimiter,
   pageNavigationDelay,
   classifyScraperError,
-  dismissCookieConsent,
+  navigateForCapture,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
+  type CaptureNavigation,
 } from '@immoradar/scraper-core';
-import type { CrawlProfile } from '@immoradar/contracts';
+import type { CrawlProfile, DiscoveryItem, RequestPlan, SourceAdapter } from '@immoradar/contracts';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
-
-const log = createLogger('canary-crawl');
 
 const SUCCESS_THRESHOLD = 0.8;
 const MAX_DETAIL_SAMPLES = 3;
+const USAGE = 'Usage: npx tsx scripts/canary-crawl.ts --source <code> [--pages <n>]';
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 
@@ -45,46 +47,158 @@ function parseArgs(): { sourceCode: string; pages: number } {
   let pages = 1;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--source' && args[i + 1]) {
-      sourceCode = args[i + 1]!;
+    const value = args[i + 1];
+    if (args[i] === '--source' && value) {
+      sourceCode = value;
       i++;
-    }
-    if (args[i] === '--pages' && args[i + 1]) {
-      pages = parseInt(args[i + 1]!, 10);
+    } else if (args[i] === '--pages' && value) {
+      pages = Number.parseInt(value, 10);
       i++;
     }
   }
 
-  if (!sourceCode) {
-    console.error('Usage: npx tsx scripts/canary-crawl.ts --source <code> [--pages 1]');
+  if (!sourceCode || !Number.isInteger(pages) || pages < 1) {
+    console.error(USAGE);
     process.exit(1);
   }
 
   return { sourceCode, pages };
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Output ──────────────────────────────────────────────────────────────────
 
-interface CanaryResult {
-  sourceCode: string;
-  discoveryPages: number;
+function describeNavigation(nav: CaptureNavigation): string {
+  const selector = nav.selectorFound === null ? 'none' : nav.selectorFound ? 'hit' : 'miss';
+  return `status=${nav.status ?? 'none'} selector=${selector}`;
+}
+
+function describeFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `FAILED ${classifyScraperError(err)}: ${message}`;
+}
+
+// ── Crawl ───────────────────────────────────────────────────────────────────
+
+interface CanaryCounts {
+  listPages: number;
   listingsFound: number;
   detailAttempted: number;
-  detailSucceeded: number;
-  detailFailed: number;
-  successRate: number;
-  errors: string[];
-  durationMs: number;
+  detailCaptured: number;
 }
+
+async function crawl(
+  context: BrowserContext,
+  adapter: SourceAdapter<unknown, unknown>,
+  sourceCode: string,
+  pages: number,
+  navigationTimeoutMs: number,
+): Promise<CanaryCounts> {
+  const counts: CanaryCounts = {
+    listPages: 0,
+    listingsFound: 0,
+    detailAttempted: 0,
+    detailCaptured: 0,
+  };
+  const rateLimiter = new PerDomainRateLimiter(12);
+  const page = await context.newPage();
+  page.setDefaultTimeout(30_000);
+  page.setDefaultNavigationTimeout(navigationTimeoutMs);
+
+  const profile: CrawlProfile = {
+    name: `${sourceCode}-canary`,
+    sourceCode,
+    maxPages: 1, // As in the discovery worker: one seed page, then the parser's next-page plans
+    maxPagesPerRun: pages,
+    sortOrder: 'published_desc',
+  };
+
+  // ── List pages ──────────────────────────────────────────────────────────
+
+  const items: DiscoveryItem<unknown>[] = [];
+  let next: RequestPlan | null = (await adapter.buildDiscoveryRequests(profile))[0] ?? null;
+
+  for (let n = 1; next !== null && n <= pages; n++) {
+    const plan: RequestPlan = next;
+    next = null; // A failed or empty page ends the crawl, as in the discovery worker
+
+    await rateLimiter.waitForSlot(sourceCode);
+    await pageNavigationDelay();
+    try {
+      const nav = await navigateForCapture(page, plan, { sourceCode });
+      const html = await page.content();
+      const result = await adapter.extractDiscoveryPage({
+        page,
+        requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
+        profile,
+        scrapeRunId: 0, // Nothing is persisted
+      });
+
+      counts.listPages++;
+      counts.listingsFound += result.items.length;
+      items.push(...result.items);
+      console.log(
+        `list ${n}: ${describeNavigation(nav)} items=${result.items.length} ${nav.finalUrl}`,
+      );
+
+      if (result.items.length > 0) next = result.nextPagePlan;
+    } catch (err) {
+      console.log(`list ${n}: ${describeFailure(err)} ${plan.url}`);
+    }
+  }
+
+  // ── Detail pages ────────────────────────────────────────────────────────
+
+  for (const [index, item] of items.slice(0, MAX_DETAIL_SAMPLES).entries()) {
+    const n = index + 1;
+    counts.detailAttempted++;
+
+    await rateLimiter.waitForSlot(sourceCode);
+    await pageNavigationDelay();
+    try {
+      const plan = (await adapter.buildDetailRequest(item)) ?? { url: item.detailUrl };
+      const nav = await navigateForCapture(page, plan, { sourceCode });
+      const html = await page.content();
+      // The same context the detail worker gives the parser
+      const detailContext = {
+        page,
+        requestPlan: { url: plan.url, metadata: { html } },
+        sourceCode,
+        scrapeRunId: 0,
+      };
+      const capture = await adapter.extractDetailPage(detailContext);
+      const availability = adapter.detectAvailability(detailContext);
+
+      const discoveryKey = item.externalId ? `${sourceCode}:${item.externalId}` : null;
+      const detailKey = adapter.deriveSourceListingKey(capture);
+      const keys =
+        discoveryKey === detailKey
+          ? `key=${detailKey} (match)`
+          : `key=MISMATCH list=${discoveryKey ?? 'none'} detail=${detailKey}`;
+      const payload = (capture.payload ?? {}) as Record<string, unknown>;
+
+      console.log(`detail ${n}: ${describeNavigation(nav)} ${keys} ${nav.finalUrl}`);
+      console.log(
+        `  extraction=${capture.extractionStatus} availability=${availability.status}` +
+          ` title=${JSON.stringify(payload.titleRaw ?? null)}` +
+          ` price=${JSON.stringify(payload.priceRaw ?? null)}`,
+      );
+
+      if (capture.extractionStatus === 'captured') counts.detailCaptured++;
+    } catch (err) {
+      console.log(`detail ${n}: ${describeFailure(err)} ${item.detailUrl}`);
+    }
+  }
+
+  return counts;
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const { sourceCode, pages } = parseArgs();
   const config = loadCanaryConfig();
 
-  log.info('Starting canary crawl', { sourceCode, pages });
-
-  // Validate adapter exists
-  let adapter;
+  let adapter: SourceAdapter<unknown, unknown>;
   try {
     adapter = getAdapter(sourceCode);
   } catch {
@@ -92,176 +206,50 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const startTime = Date.now();
-  const rateLimiter = new PerDomainRateLimiter(12);
-  const errors: string[] = [];
+  console.log(
+    `Canary for ${sourceCode}: up to ${pages} list page(s) and ${MAX_DETAIL_SAMPLES} detail pages\n`,
+  );
 
+  const startTime = Date.now();
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
-
-  let discoveryPages = 0;
-  let listingsFound = 0;
-  let detailAttempted = 0;
-  let detailSucceeded = 0;
-  let detailFailed = 0;
+  let counts: CanaryCounts;
 
   try {
-    const viewport = pickRandomViewport();
-    const userAgent = pickRandomUserAgent();
-
     browser = await chromium.launch({ headless: config.playwright.headless });
     context = await browser.newContext({
-      viewport,
+      viewport: pickRandomViewport(),
       locale: DEFAULT_BROWSER_CONTEXT_CONFIG.locale,
       timezoneId: DEFAULT_BROWSER_CONTEXT_CONFIG.timezoneId,
-      userAgent,
+      userAgent: pickRandomUserAgent(),
       javaScriptEnabled: DEFAULT_BROWSER_CONTEXT_CONFIG.javaScriptEnabled,
     });
     await setupRequestInterception(context);
-
-    const page = await context.newPage();
-    page.setDefaultTimeout(30_000);
-    page.setDefaultNavigationTimeout(config.playwright.navigationTimeoutMs);
-
-    // ── Discovery phase ──────────────────────────────────────────────────
-
-    const profile: CrawlProfile = {
-      name: `${sourceCode}-canary`,
+    counts = await crawl(
+      context,
+      adapter,
       sourceCode,
-      maxPages: pages,
-      sortOrder: 'published_desc',
-    };
-
-    const discoveryPlans = await adapter.buildDiscoveryRequests(profile);
-    log.info(`Discovery: ${discoveryPlans.length} page(s) to fetch`);
-
-    const discoveredItems: Array<{ detailUrl: string; discoveryUrl: string }> = [];
-
-    for (const plan of discoveryPlans) {
-      try {
-        await rateLimiter.waitForSlot(sourceCode);
-        await pageNavigationDelay();
-
-        log.info(`Fetching discovery page: ${plan.url}`);
-        await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
-        await dismissCookieConsent(page, sourceCode);
-
-        const html = await page.content();
-        discoveryPages++;
-
-        const result = await adapter.extractDiscoveryPage({
-          page,
-          requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
-          profile,
-          scrapeRunId: 0, // Not persisting, use dummy ID
-        });
-
-        for (const item of result.items) {
-          discoveredItems.push({
-            detailUrl: item.detailUrl,
-            discoveryUrl: plan.url,
-          });
-        }
-
-        listingsFound += result.items.length;
-        log.info(`Discovered ${result.items.length} items`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`Discovery failed: ${msg}`);
-        log.error('Discovery page failed', { url: plan.url, error: msg });
-      }
-    }
-
-    // ── Detail phase (sample up to MAX_DETAIL_SAMPLES) ──────────────────
-
-    const sampled = discoveredItems.slice(0, MAX_DETAIL_SAMPLES);
-    log.info(`Detail: sampling ${sampled.length} of ${discoveredItems.length} listings`);
-
-    for (const item of sampled) {
-      detailAttempted++;
-      try {
-        await rateLimiter.waitForSlot(sourceCode);
-        await pageNavigationDelay();
-
-        const detailRequest = await adapter.buildDetailRequest({
-          detailUrl: item.detailUrl,
-          sourceCode,
-          summaryPayload: {},
-          discoveredAt: new Date().toISOString(),
-        });
-        const detailUrl = detailRequest?.url ?? item.detailUrl;
-
-        log.info(`Fetching detail: ${detailUrl}`);
-        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
-        await dismissCookieConsent(page, sourceCode);
-
-        const html = await page.content();
-
-        const capture = await adapter.extractDetailPage({
-          page,
-          requestPlan: { url: detailUrl, metadata: { html } },
-          sourceCode,
-          scrapeRunId: 0,
-        });
-
-        const payload = capture.payload as Record<string, unknown>;
-        const title = (payload.titleRaw as string) ?? 'Unknown';
-        log.info(`Detail OK: ${title}`);
-
-        detailSucceeded++;
-      } catch (err) {
-        const errorClass = classifyScraperError(err);
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`Detail failed (${errorClass}): ${msg}`);
-        log.error('Detail extraction failed', {
-          url: item.detailUrl,
-          errorClass,
-          error: msg,
-        });
-        detailFailed++;
-      }
-    }
+      pages,
+      config.playwright.navigationTimeoutMs,
+    );
   } finally {
     if (context) await context.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
   }
 
-  const durationMs = Date.now() - startTime;
-  const successRate = detailAttempted > 0 ? detailSucceeded / detailAttempted : 0;
-
-  const result: CanaryResult = {
-    sourceCode,
-    discoveryPages,
-    listingsFound,
-    detailAttempted,
-    detailSucceeded,
-    detailFailed,
-    successRate,
-    errors,
-    durationMs,
-  };
-
-  // ── Report ──────────────────────────────────────────────────────────────
+  const successRate =
+    counts.detailAttempted > 0 ? counts.detailCaptured / counts.detailAttempted : 0;
+  const passed = successRate >= SUCCESS_THRESHOLD;
 
   console.log('\n=== Canary Crawl Report ===');
-  console.log(`Source:           ${result.sourceCode}`);
-  console.log(`Duration:         ${(result.durationMs / 1000).toFixed(1)}s`);
-  console.log(`Discovery pages:  ${result.discoveryPages}`);
-  console.log(`Listings found:   ${result.listingsFound}`);
-  console.log(`Detail attempted: ${result.detailAttempted}`);
-  console.log(`Detail succeeded: ${result.detailSucceeded}`);
-  console.log(`Detail failed:    ${result.detailFailed}`);
-  console.log(`Success rate:     ${(result.successRate * 100).toFixed(0)}%`);
-
-  if (result.errors.length > 0) {
-    console.log(`\nErrors (${result.errors.length}):`);
-    for (const e of result.errors) {
-      console.log(`  - ${e}`);
-    }
-  }
-
-  const passed = result.successRate >= SUCCESS_THRESHOLD;
-  console.log(`\nResult:           ${passed ? 'PASS' : 'FAIL'}`);
+  console.log(`Source:           ${sourceCode}`);
+  console.log(`Duration:         ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`List pages:       ${counts.listPages}`);
+  console.log(`Listings found:   ${counts.listingsFound}`);
+  console.log(`Detail attempted: ${counts.detailAttempted}`);
+  console.log(`Detail captured:  ${counts.detailCaptured}`);
+  console.log(`Success rate:     ${(successRate * 100).toFixed(0)}%`);
+  console.log(`Result:           ${passed ? 'PASS' : 'FAIL'}`);
   console.log('===========================\n');
 
   process.exit(passed ? 0 : 1);

@@ -21,7 +21,7 @@ import {
   ScrapeRunContext,
   pageNavigationDelay,
   classifyScraperError,
-  dismissCookieConsent,
+  navigateForCapture,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   ArtifactWriter,
   pickRandomViewport,
@@ -211,8 +211,7 @@ async function main(): Promise<void> {
         await pageNavigationDelay();
 
         log.info(`Fetching discovery page ${pagesProcessed + 1}: ${currentPlan.url}`);
-        await page.goto(currentPlan.url, { waitUntil: 'networkidle', timeout: 30_000 });
-        await dismissCookieConsent(page, sourceCode);
+        await navigateForCapture(page, currentPlan, { sourceCode });
 
         const html = await page.content();
         runCtx.incrementMetric('pagesFetched');
@@ -304,8 +303,7 @@ async function main(): Promise<void> {
         await pageNavigationDelay();
 
         log.info(`Fetching detail: ${detailUrl}`);
-        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
-        await dismissCookieConsent(page, sourceCode);
+        await navigateForCapture(page, detailRequest ?? { url: detailUrl }, { sourceCode });
 
         const html = await page.content();
         runCtx.incrementMetric('http2xx');

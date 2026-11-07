@@ -11,6 +11,7 @@
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { navigateForCapture } from '@immoradar/scraper-core';
 
 const SITES: Record<string, { discoveryUrl: string; name: string }> = {
   immoscout24: {
@@ -103,7 +104,7 @@ async function captureSource(sourceCode: string): Promise<void> {
     // 1. Discovery page
     console.log(`  Navigating to: ${site.discoveryUrl}`);
     try {
-      await page.goto(site.discoveryUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+      await navigateForCapture(page, { url: site.discoveryUrl }, { sourceCode });
       await dismissCookies(page);
       await page.waitForTimeout(2000); // Let dynamic content settle
 
@@ -118,7 +119,7 @@ async function captureSource(sourceCode: string): Promise<void> {
       const detailLink = await findDetailLink(page, sourceCode);
       if (detailLink) {
         console.log(`  Navigating to detail: ${detailLink}`);
-        await page.goto(detailLink, { waitUntil: 'networkidle', timeout: 30_000 });
+        await navigateForCapture(page, { url: detailLink }, { sourceCode });
         await page.waitForTimeout(2000);
 
         const detailHtml = await page.content();
