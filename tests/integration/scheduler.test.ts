@@ -166,6 +166,12 @@ describe('startScheduler', () => {
        VALUES ($1, 'schedule', 'full', 'running', NOW() - INTERVAL '2 hours')`,
       [source!.id],
     );
+    // A run whose job was lost before a worker picked it up never leaves 'queued'.
+    await query(
+      `INSERT INTO scrape_runs (source_id, trigger_type, scope, status, scheduled_at)
+       VALUES ($1, 'manual', 'full', 'queued', NOW() - INTERVAL '2 hours')`,
+      [source!.id],
+    );
 
     setSchedulerEnabled(false);
     await startScheduler();
@@ -174,7 +180,7 @@ describe('startScheduler', () => {
       `SELECT status FROM scrape_runs WHERE source_id = $1`,
       [source!.id],
     );
-    expect(rows.map((row) => row.status)).not.toContain('running');
+    expect(rows.map((row) => row.status)).toEqual(['cancelled', 'cancelled']);
   });
 });
 

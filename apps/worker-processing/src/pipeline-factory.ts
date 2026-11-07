@@ -91,8 +91,8 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         const isNew = row.observationCount === 1;
         return { id: row.id, isNew };
       },
-      updateScrapeRunMetrics: async (runId, metricsData) => {
-        await scrapeRuns.updateMetrics(runId, metricsData);
+      updateScrapeRunMetrics: async (runId, delta) => {
+        await scrapeRuns.incrementMetrics(runId, delta);
       },
       computeContentHash,
     },
@@ -152,7 +152,7 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         return { id: row.id, versionNo: row.versionNo };
       },
       updateScrapeRunNormalizationCounts: async (runId, created, updated) => {
-        await scrapeRuns.updateMetrics(runId, {
+        await scrapeRuns.incrementMetrics(runId, {
           normalizedCreated: created,
           normalizedUpdated: updated,
         });

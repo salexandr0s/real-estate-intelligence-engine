@@ -132,6 +132,24 @@ export interface ScrapeRunMetrics {
   retryCount: number;
 }
 
+/**
+ * Run counters that processing owns. It adds to them per capture, often after the
+ * run has finished, so the scraper never writes them.
+ */
+export type ProcessingRunMetrics = Pick<
+  ScrapeRunMetrics,
+  'rawSnapshotsCreated' | 'normalizedCreated' | 'normalizedUpdated'
+>;
+
+/** Run counters that the scraper owns and writes when it finishes the run. */
+export type ScraperRunMetrics = Omit<ScrapeRunMetrics, keyof ProcessingRunMetrics>;
+
+/** Why a run ended as it did. `errorCode` is an ErrorClass for page errors. */
+export interface ScrapeRunCause {
+  errorCode: string;
+  errorMessage?: string | null;
+}
+
 export interface ScrapeRunRow {
   id: number;
   runUuid: string;

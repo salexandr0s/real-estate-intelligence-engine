@@ -276,9 +276,14 @@ export async function updateHealthStatus(
   return row ? toSourceRow(row) : null;
 }
 
+/** Failures older than this say nothing about the source's current pages. */
+const FAILURE_WINDOW_DAYS = 14;
+
 /**
- * Count consecutive failures since the last successful scrape run for a source.
- * Used for auto-disable logic.
+ * Count the failed runs since the last successful one, which sets the source's
+ * health and can disable it. Network failures and runs older than 14 days don't
+ * count, so a flaky connection or old history can't disable a source on its
+ * first new run.
  */
 export async function countConsecutiveFailures(sourceId: number): Promise<number> {
   const rows = await query<{ count: string }>(
@@ -286,13 +291,15 @@ export async function countConsecutiveFailures(sourceId: number): Promise<number
      FROM scrape_runs
      WHERE source_id = $1
        AND status IN ('failed', 'rate_limited')
+       AND error_code IS DISTINCT FROM 'transient_network'
+       AND started_at > NOW() - make_interval(days => $2)
        AND started_at > (
-         SELECT COALESCE(MAX(started_at), '1970-01-01')
+         SELECT COALESCE(MAX(started_at), '-infinity')
          FROM scrape_runs
          WHERE source_id = $1
            AND status IN ('succeeded', 'partial')
        )`,
-    [sourceId],
+    [sourceId, FAILURE_WINDOW_DAYS],
   );
   return Number(rows[0]?.count ?? 0);
 }

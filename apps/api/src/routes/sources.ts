@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
-import type { ScrapeRunMetrics } from '@immoradar/contracts';
+import type { ScraperRunMetrics } from '@immoradar/contracts';
 import { NotFoundError, TransientError, createLogger } from '@immoradar/observability';
 import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
 import {
@@ -26,12 +26,9 @@ const logger = createLogger('api:sources');
 const SCRAPE_QUEUE_READY_TIMEOUT_MS = 5_000;
 const SCRAPE_QUEUE_UNAVAILABLE_MESSAGE =
   'Scrape queue is unavailable. Check Redis and the scraper worker, then try again.';
-const EMPTY_SCRAPE_RUN_METRICS: ScrapeRunMetrics = {
+const EMPTY_SCRAPE_RUN_METRICS: ScraperRunMetrics = {
   pagesFetched: 0,
   listingsDiscovered: 0,
-  rawSnapshotsCreated: 0,
-  normalizedCreated: 0,
-  normalizedUpdated: 0,
   http2xx: 0,
   http4xx: 0,
   http5xx: 0,
@@ -385,13 +382,10 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      await scrapeRuns.finish(
-        run.id,
-        'failed',
-        EMPTY_SCRAPE_RUN_METRICS,
-        'scrape_queue_unavailable',
-        SCRAPE_QUEUE_UNAVAILABLE_MESSAGE,
-      );
+      await scrapeRuns.finish(run.id, 'failed', EMPTY_SCRAPE_RUN_METRICS, {
+        errorCode: 'scrape_queue_unavailable',
+        errorMessage: SCRAPE_QUEUE_UNAVAILABLE_MESSAGE,
+      });
 
       throw new TransientError(SCRAPE_QUEUE_UNAVAILABLE_MESSAGE, 'scrape_queue_unavailable', {
         sourceCode: source.code,
