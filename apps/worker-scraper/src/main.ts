@@ -1,10 +1,15 @@
 import { loadConfig } from '@immoradar/config';
 import { createLogger, runMain, setLogLevel, redactUrl } from '@immoradar/observability';
 import type { LogLevel } from '@immoradar/observability';
-import { closeRedisConnection } from '@immoradar/scraper-core';
+import {
+  PerDomainRateLimiter,
+  SourceCircuitBreaker,
+  closeRedisConnection,
+} from '@immoradar/scraper-core';
 import { closePool } from '@immoradar/db';
 import { createDiscoveryWorker } from './workers/discovery-worker.js';
 import { createDetailWorker } from './workers/detail-worker.js';
+import type { ScraperWorkerDeps } from './workers/worker-deps.js';
 import { closeBrowser, getBrowser } from './browser-pool.js';
 import { startScheduler } from './scheduler.js';
 
@@ -26,7 +31,14 @@ runMain('worker-scraper', HARD_TIMEOUT_MS, async (lifecycle) => {
     runtimeBootMode: config.runtime.bootMode,
   } as Record<string, unknown>);
 
-  const discoveryWorker = createDiscoveryWorker(lifecycle.shutdownSignal);
+  // One limiter and one breaker per process, so both workers share a source's rate and failure
+  // streak.
+  const deps: ScraperWorkerDeps = {
+    shutdownSignal: lifecycle.shutdownSignal,
+    rateLimiter: new PerDomainRateLimiter(12),
+    circuitBreaker: new SourceCircuitBreaker(5, 300_000),
+  };
+  const discoveryWorker = createDiscoveryWorker(deps);
   const detailWorker = createDetailWorker();
 
   lifecycle.onShutdown(
