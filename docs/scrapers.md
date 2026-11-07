@@ -455,7 +455,8 @@ Open the circuit when:
 
 - repeated 403/429 responses
 - challenge page ratio spikes
-- parse failures spike across many pages
+
+Parse failures and 404/410 pages never open it. They point at a parser that no longer matches the page or at a removed listing, not at a block.
 
 When open:
 

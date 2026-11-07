@@ -208,15 +208,14 @@ Bucket structure example:
 
 ```text
 immoradar/
-  raw-html/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.html.gz
-  screenshots/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.png
-  har/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.har.gz
+  failures/raw-html/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.html.gz
+  failures/screenshots/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.png
+  failures/har/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.har
 ```
 
 ### Retention
-- HTML and screenshots: retain long enough for parser debugging and replay
-- consider moving older artifacts to cold storage
-- do not delete artifacts required for unresolved parser regressions
+- scraper artifacts are written under `failures/`, and the stale-check job deletes them once they are older than `SCRAPER_ARTIFACT_RETENTION_DAYS` days (default 7)
+- to keep an artifact for an unresolved parser regression, copy it out of `failures/`
 
 ## 5.3 Redis
 Used for:

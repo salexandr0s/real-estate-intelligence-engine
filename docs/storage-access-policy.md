@@ -16,11 +16,17 @@
 
 ### Artifact Categories
 
-| Artifact Type | Folder            | Purpose                        | Access Level       |
-| ------------- | ----------------- | ------------------------------ | ------------------ |
-| HTML snapshots | `raw-html/`      | Raw page HTML for debugging    | Internal only      |
-| Screenshots   | `screenshots/`    | Visual captures on parse failure | Internal only    |
-| HAR files     | `har/`            | Network request traces         | Internal only      |
+| Artifact Type  | Folder                  | Purpose                          | Access Level  |
+| -------------- | ----------------------- | -------------------------------- | ------------- |
+| HTML snapshots | `failures/raw-html/`    | Raw page HTML for debugging      | Internal only |
+| Screenshots    | `failures/screenshots/` | Visual captures on parse failure | Internal only |
+| HAR files      | `failures/har/`         | Network request traces           | Internal only |
+
+### Retention
+
+- The scraper's artifact writer puts HTML snapshots, screenshots and HAR files under `failures/`.
+- The stale-check job deletes files under `failures/` that are older than `SCRAPER_ARTIFACT_RETENTION_DAYS` days (default 7). It never deletes anything outside `failures/`.
+- A storage key in the database can point at a file that has since been deleted.
 
 ### Security Rules
 
