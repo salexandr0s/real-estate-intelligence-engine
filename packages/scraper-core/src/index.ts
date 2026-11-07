@@ -43,7 +43,6 @@ export {
 
 // ── Browser Utilities ────────────────────────────────────────────────────────
 export {
-  cooldownDelay,
   interactionDelay,
   jitteredDelay,
   pageNavigationDelay,

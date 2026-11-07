@@ -29,11 +29,3 @@ export function pageNavigationDelay(): Promise<void> {
 export function interactionDelay(): Promise<void> {
   return jitteredDelay(500, 1500);
 }
-
-/**
- * Cooldown delay after a soft failure or suspicious response.
- * Range: 10000-60000ms (per scraper spec section 5.1).
- */
-export function cooldownDelay(): Promise<void> {
-  return jitteredDelay(10_000, 60_000);
-}

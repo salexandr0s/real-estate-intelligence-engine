@@ -69,11 +69,10 @@ These use fixed ranges:
 
 - `pageNavigationDelay()`: 2000--7000ms
 - `interactionDelay()`: 500--1500ms
-- `cooldownDelay()`: 10,000--60,000ms
 
 ## Circuit Breaker
 
-The circuit breaker (`SourceCircuitBreaker`) is in-memory per worker process.
+The circuit breaker (`SourceCircuitBreaker`) lives in memory, one per scraper process, shared by the discovery and detail workers. While it is open, discovery stops paging and detail jobs wait in the delayed set until it lets traffic through.
 
 | Parameter          | Value    | Description                        |
 | ------------------ | -------- | ---------------------------------- |
