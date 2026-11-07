@@ -76,9 +76,11 @@ describe('source health', () => {
     );
   }
 
-  it('does not disable a source on its first failure after old or network failures', async () => {
+  it('does not disable a source on its first failure after old, network or internal failures', async () => {
     for (let i = 0; i < 5; i++) await failedRun(30, null);
-    await failedRun(1, 'transient_network');
+    for (let i = 0; i < 3; i++) await failedRun(1, 'transient_network');
+    // A browser that won't launch or an adapter bug fails the run on our side.
+    for (let i = 0; i < 3; i++) await failedRun(1, 'internal_error');
     await failedRun(0, 'soft_anti_bot');
 
     const outcome = await sources.applyRunOutcome(sourceId, 'failed');

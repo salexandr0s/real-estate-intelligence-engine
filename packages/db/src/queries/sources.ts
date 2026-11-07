@@ -299,10 +299,16 @@ export async function updateHealthStatus(
 const FAILURE_WINDOW_DAYS = 14;
 
 /**
+ * Failures that say nothing about the source: the network dropped, or something
+ * on our side broke before a page loaded (browser launch, database, adapter bug).
+ */
+const NOT_SOURCE_FAILURES = ['transient_network', 'internal_error'];
+
+/**
  * Count the failed runs since the last successful one, which sets the source's
- * health and can disable it. Network failures and runs older than 14 days don't
- * count, so a flaky connection or old history can't disable a source on its
- * first new run.
+ * health and can disable it. Failures in NOT_SOURCE_FAILURES and runs older
+ * than 14 days don't count, so neither our own errors nor old history can
+ * disable a source on its first new run.
  */
 export async function countConsecutiveFailures(sourceId: number): Promise<number> {
   const rows = await query<{ count: string }>(
@@ -310,7 +316,7 @@ export async function countConsecutiveFailures(sourceId: number): Promise<number
      FROM scrape_runs
      WHERE source_id = $1
        AND status IN ('failed', 'rate_limited')
-       AND error_code IS DISTINCT FROM 'transient_network'
+       AND (error_code IS NULL OR error_code <> ALL($3::text[]))
        AND started_at > NOW() - make_interval(days => $2)
        AND started_at > (
          SELECT COALESCE(MAX(started_at), '-infinity')
@@ -318,7 +324,7 @@ export async function countConsecutiveFailures(sourceId: number): Promise<number
          WHERE source_id = $1
            AND status IN ('succeeded', 'partial')
        )`,
-    [sourceId, FAILURE_WINDOW_DAYS],
+    [sourceId, FAILURE_WINDOW_DAYS, NOT_SOURCE_FAILURES],
   );
   return Number(rows[0]?.count ?? 0);
 }
