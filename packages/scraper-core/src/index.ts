@@ -52,7 +52,10 @@ export {
   type CaptureResponse,
   type NavigateForCaptureOptions,
 } from './browser/navigate.js';
-export { setupRequestInterception } from './browser/request-interceptor.js';
+export {
+  setupRequestInterception,
+  type InterceptableContext,
+} from './browser/request-interceptor.js';
 
 // ── Queues ──────────────────────────────────────────────────────────────────
 export {
