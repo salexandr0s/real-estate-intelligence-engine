@@ -58,10 +58,13 @@ const HEALTH_STATUS_SCORES: Record<string, number> = {
   unknown: 50,
 };
 
-const GEOCODE_PRECISION_SCORES: Record<string, number> = {
+// Keyed by the full union, so a new precision fails to compile until it has a score.
+const GEOCODE_PRECISION_SCORES: Record<GeocodePrecision, number> = {
   source_exact: 100,
   source_approx: 80,
   street: 70,
+  // The geocoder's centroid of several street or station matches.
+  estimated: 60,
   district: 50,
   city: 30,
   none: 10,
