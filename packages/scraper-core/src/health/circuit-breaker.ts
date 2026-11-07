@@ -6,6 +6,12 @@ const logger = createLogger('circuit-breaker');
 /** Circuit breaker states following the standard pattern. */
 export type CircuitState = 'closed' | 'open' | 'half_open';
 
+/**
+ * Failures that say nothing about the source's health: a 404 or 410 means the listing is gone,
+ * and a parse failure means the page arrived. Neither counts toward opening the circuit.
+ */
+const IGNORED_ERROR_CLASSES: ReadonlySet<ErrorClass> = new Set(['terminal_page', 'parse_failure']);
+
 interface SourceState {
   state: CircuitState;
   consecutiveFailures: number;
@@ -22,9 +28,10 @@ interface SourceState {
  * - **open**: source is failing, requests are blocked until cooldown expires
  * - **half_open**: cooldown expired, one probe request is allowed to test recovery
  *
- * The circuit opens after `failureThreshold` consecutive failures.
+ * The circuit opens after `failureThreshold` consecutive failures that count. `terminal_page` and
+ * `parse_failure` don't count and leave the state as it was.
  * It transitions to half_open after `cooldownMs` elapses.
- * A single success in half_open closes the circuit; a failure re-opens it.
+ * A single success in half_open closes the circuit; a counted failure re-opens it.
  */
 export class SourceCircuitBreaker {
   private readonly sources = new Map<string, SourceState>();
@@ -56,6 +63,17 @@ export class SourceCircuitBreaker {
     return false;
   }
 
+  /**
+   * When the circuit next lets traffic through, in epoch milliseconds, or null when it lets traffic
+   * through now. A worker can delay a job until then instead of dropping it. Doesn't change state.
+   */
+  openUntil(sourceCode: string): number | null {
+    const state = this.sources.get(sourceCode);
+    if (state?.state !== 'open' || state.openedAt === null) return null;
+    const until = state.openedAt + this.cooldownMs;
+    return Date.now() < until ? until : null;
+  }
+
   /** Record a successful request for a source. Closes the circuit if half_open. */
   recordSuccess(sourceCode: string): void {
     const state = this.getState(sourceCode);
@@ -71,8 +89,16 @@ export class SourceCircuitBreaker {
     state.openedAt = null;
   }
 
-  /** Record a failed request. May open the circuit if threshold is reached. */
+  /**
+   * Record a failed request. May open the circuit if threshold is reached. `terminal_page` and
+   * `parse_failure` are ignored.
+   */
   recordFailure(sourceCode: string, errorClass: ErrorClass): void {
+    if (IGNORED_ERROR_CLASSES.has(errorClass)) {
+      logger.debug('Failure does not count toward the circuit', { sourceCode, errorClass });
+      return;
+    }
+
     const state = this.getState(sourceCode);
     state.consecutiveFailures += 1;
     state.lastFailureAt = Date.now();

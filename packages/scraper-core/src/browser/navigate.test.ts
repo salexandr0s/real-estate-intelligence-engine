@@ -61,12 +61,15 @@ describe('navigateForCapture', () => {
     },
   );
 
-  it('throws on a 500 with statusCode', async () => {
+  it('throws on a 500 with statusCode, classified as a transient failure', async () => {
     const page = fakePage(500, ['attached']);
 
-    await expect(navigateForCapture(page, plan, { sourceCode: 'willhaben' })).rejects.toMatchObject(
-      { statusCode: 500 },
+    const error = await navigateForCapture(page, plan, { sourceCode: 'willhaben' }).catch(
+      (err: unknown) => err,
     );
+
+    expect(error).toMatchObject({ statusCode: 500 });
+    expect(classifyScraperError(error)).toBe('transient_network');
   });
 
   it('returns a 404 instead of throwing, so the caller can record the listing as gone', async () => {

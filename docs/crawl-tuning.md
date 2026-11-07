@@ -82,7 +82,7 @@ The circuit breaker (`SourceCircuitBreaker`) is in-memory per worker process.
 
 **States**: `closed` → `open` (after 5 failures) → `half_open` (after cooldown) → `closed` (on probe success) or back to `open` (on probe failure).
 
-**Error classes that increment the counter**: `transient_network`, `soft_anti_bot`, `parse_failure`, `unknown`. The `terminal_page` class (404/410) does not increment.
+**Error classes that increment the counter**: `transient_network`, `soft_anti_bot`, `unknown`. The `terminal_page` class (404/410) and the `parse_failure` class do not increment, and they leave an open or half-open circuit as it was. `openUntil(sourceCode)` returns when an open circuit next lets traffic through (epoch milliseconds), or null when it lets traffic through now.
 
 ## Adding a New Crawl Profile
 
