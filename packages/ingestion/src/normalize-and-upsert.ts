@@ -391,7 +391,8 @@ export class NormalizeAndUpsert {
   }
 }
 
-function resolveLifecycleStatus(
+/** The listing status a capture's availability settles, or null when it settles none. */
+export function resolveLifecycleStatus(
   availabilityStatus: NormalizationContext['availabilityStatus'],
 ): ListingStatus | null {
   switch (availabilityStatus) {
