@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS sources (
   config                    JSONB NOT NULL DEFAULT '{}'::jsonb,
   last_successful_run_at    TIMESTAMPTZ,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_sources_legal_disabled_inactive
+    CHECK (NOT (is_active AND legal_status = 'disabled'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_active_priority
