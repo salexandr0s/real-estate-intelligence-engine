@@ -365,6 +365,15 @@ describe('Detail page parsing', () => {
     expect(p.priceRaw).toBe('1250.00');
   });
 
+  it('reads the first amount of a price text that holds more numbers', () => {
+    // Keeping every digit and dot read "€ 389.000 (inkl. 20 % USt)" as "389.000.20", 389 euros.
+    const html = `<h1>Neubauwohnung mit Terrasse - Objektnr. 5501301</h1>
+      <span class="immo_header_value">€ 389.000 (inkl. 20 % USt)</span><hr class="immo_header_hr"><span class="immo_header_desc">Kaufpreis</span>`;
+    const p = parseDetailPage(html, 'https://www.findmyhome.at/5501301', 'findmyhome', 3).payload;
+
+    expect(p.priceRaw).toBe('389.000');
+  });
+
   it('finds the postal code and city when the address starts with the street', () => {
     const html = `<h1>Wohnung nahe Schönbrunn - Objektnr. 5501300</h1>
       <table><tr><td>Anschrift</td><td align="right">Musterstraße 1/5 1120&nbsp;Wien<br></td></tr></table>`;
@@ -543,5 +552,23 @@ describe('Availability detection', () => {
     const html = '<html><body><p>Some unrelated page</p></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('unknown');
+  });
+
+  it('stays available when a project title counts its sold units', () => {
+    const html = loadFixture('detail-live.html').replace(
+      'Balkon in Leopoldstadt',
+      'Balkon, Projekt zu 80 % verkauft',
+    );
+    expect(html).toContain('80 % verkauft');
+    expect(detectDetailAvailability(html).status).toBe('available');
+  });
+
+  it('reads an h1 that opens with VERKAUFT as sold, even with listing data', () => {
+    const html = loadFixture('detail-live.html').replace(
+      '#1e5587;font-size:22px;">',
+      '#1e5587;font-size:22px;"> *** VERKAUFT ***',
+    );
+    expect(html).toContain('*** VERKAUFT ***');
+    expect(detectDetailAvailability(html).status).toBe('sold');
   });
 });

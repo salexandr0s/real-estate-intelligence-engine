@@ -1,5 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import { decodeHtmlEntities } from './discovery.js';
 import type { FindMyHomeDetailDTO, JsonLdApartmentDetail } from './dto.js';
 
@@ -150,8 +150,8 @@ function buildFailedCapture(
 }
 
 /**
- * Detects listing availability from the detail page HTML. Status words count only in the title
- * and h1, because live project pages use "verkauft" in their text for units already sold.
+ * Detects listing availability from the detail page HTML. Status words count only as notices in
+ * the title and h1, because live project pages use "verkauft" for units already sold.
  */
 export function detectDetailAvailability(html: string): SourceAvailability {
   const headline = headlineText(html);
@@ -160,8 +160,9 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   if (/nicht\s+mehr\s+verf[uü]gbar|deaktiviert|wurde\s+entfernt/i.test(headline)) {
     return { status: 'removed' };
   }
-  if (/verkauft/i.test(headline)) return { status: 'sold' };
-  if (/reserviert/i.test(headline)) return { status: 'reserved' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('reserved')) return { status: 'reserved' };
 
   if (extractApartmentLd(html)) return { status: 'available' };
   // Soft 404s have an h1 too, so only the listing's own markup counts.
@@ -208,7 +209,8 @@ function extractFromDom(
         facts.get('Brutto-Miete') ??
         facts.get('Monatliche Gesamtkosten'))
       : (header.get('Kaufpreis') ?? facts.get('Kaufpreis'));
-  const priceRaw = priceText?.replace(/[^\d.,]/g, '') || null;
+  // The first amount is the price: "€ 389.000 (inkl. 20 % USt)" holds a second number.
+  const priceRaw = priceText?.match(/\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/)?.[0] ?? null;
 
   const livingAreaStr =
     facts.get('Fläche') ?? facts.get('Wohnfläche') ?? facts.get('Flaeche') ?? null;
