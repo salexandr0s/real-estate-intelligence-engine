@@ -6,8 +6,8 @@
  * pages. For each list page it prints the HTTP status, whether the plan's selector was found and
  * how many listings the parser found. For each detail page it prints the status, the selector,
  * the key from the list page against the key derived from the detail page, the extraction status,
- * the availability, the title and the price. Exits 0 when at least 80% of the detail pages were
- * captured, 1 otherwise.
+ * the availability, the title, the price, the area, rooms, postcode and district, and whether the
+ * page gave coordinates. Exits 0 when at least 80% of the detail pages were captured, 1 otherwise.
  *
  * Usage:
  *   npx tsx scripts/canary-crawl.ts --source <code> [--pages <n>]
@@ -181,6 +181,13 @@ async function crawl(
         `  extraction=${capture.extractionStatus} availability=${availability.status}` +
           ` title=${JSON.stringify(payload.titleRaw ?? null)}` +
           ` price=${JSON.stringify(payload.priceRaw ?? null)}`,
+      );
+      console.log(
+        `  area=${JSON.stringify(payload.livingAreaRaw ?? null)}` +
+          ` rooms=${JSON.stringify(payload.roomsRaw ?? null)}` +
+          ` postcode=${JSON.stringify(payload.postalCodeRaw ?? null)}` +
+          ` district=${JSON.stringify(payload.districtRaw ?? null)}` +
+          ` geo=${payload.latRaw != null && payload.lonRaw != null ? 'yes' : 'no'}`,
       );
 
       if (capture.extractionStatus === 'captured') counts.detailCaptured++;
