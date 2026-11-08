@@ -72,6 +72,8 @@ export interface Immoscout24DiscoveryItem {
 
 export interface Immoscout24DetailDTO extends SourceRawListingBase {
   immoscout24Id: string;
+  /** IS24 estate type code ("APARTMENT", "HOUSE"); the normalizer maps it to a property type. */
+  estateTypeRaw?: string | null;
   images: string[];
   contactName: string | null;
   brokerName: string | null;

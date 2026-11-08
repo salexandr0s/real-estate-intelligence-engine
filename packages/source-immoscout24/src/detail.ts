@@ -6,6 +6,7 @@ import type {
   IS24ProductOffer,
   IS24RealEstateAgent,
 } from './dto.js';
+import { field, isRecord, positiveNumberText, readEmbeddedState, text } from './embedded-state.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
 
@@ -15,8 +16,9 @@ const BASE_URL = 'https://www.immobilienscout24.at';
  * read the same way. The ItemList entries are RealEstateListing nodes for other listings, so
  * only top-level nodes count.
  *
- * Property data (rooms, area, address) is embedded in the description text
- * and in specific HTML elements with data-testid attributes.
+ * The page also embeds the listing as an `Expose` record in `window.__APOLLO_STATE__`, with the
+ * price, areas, rooms, address and estate type as separate fields. Those fields win over values
+ * read from the description text, which names them only sometimes.
  */
 
 const JSON_LD_RE = /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
@@ -41,63 +43,73 @@ export function parseDetailPage(
   }
 
   const immoscout24Id = extractIdFromUrl(url) ?? '';
+  const facts = readExposeFacts(html, immoscout24Id);
   const images = toStringList(product.image);
   const rawDescription = product.description ?? '';
   const descriptionText = stripHtml(rawDescription);
 
-  // Prefer the Offer price. Live pages send 0 there, so the visible price is the usual source.
-  // A string price keeps its separators for normalization, which reads "455.000" as 455,000.
-  let priceRaw: string | null = null;
-  const offerPrice = firstOffer(product)?.price;
-  const offerText =
-    typeof offerPrice === 'number' && Number.isFinite(offerPrice)
-      ? String(offerPrice)
-      : typeof offerPrice === 'string'
-        ? offerPrice.trim()
-        : '';
-  if (/[1-9]/.test(offerText)) {
-    priceRaw = offerText;
-  } else {
-    // Fallback: extract from data-testid="primary-price"
-    const priceMatch = html.match(PRICE_TESTID_RE);
-    if (priceMatch?.[1]) {
-      priceRaw = normalizeDecimal(priceMatch[1].replace(/\./g, ''));
+  // The Expose price comes first, then the Offer price. Live pages send 0 in the Offer, so the
+  // visible price is the last source. A string price keeps its separators for normalization,
+  // which reads "455.000" as 455,000.
+  let priceRaw: string | null = facts?.priceRaw ?? null;
+  if (priceRaw === null) {
+    const offerPrice = firstOffer(product)?.price;
+    const offerText =
+      typeof offerPrice === 'number' && Number.isFinite(offerPrice)
+        ? String(offerPrice)
+        : typeof offerPrice === 'string'
+          ? offerPrice.trim()
+          : '';
+    if (/[1-9]/.test(offerText)) {
+      priceRaw = offerText;
+    } else {
+      // Fallback: extract from data-testid="primary-price"
+      const priceMatch = html.match(PRICE_TESTID_RE);
+      if (priceMatch?.[1]) {
+        priceRaw = normalizeDecimal(priceMatch[1].replace(/\./g, ''));
+      }
     }
   }
 
-  // Extract structured data from description text
-  const livingAreaRaw = parseArea(descriptionText);
-  const roomsRaw = parseRooms(descriptionText);
-  const balconyAreaRaw = parseBalconyArea(descriptionText);
-  const floorRaw = parseFloor(descriptionText);
-  const yearBuiltRaw = parseYearBuilt(descriptionText);
-  const addressParsed = parseAddress(descriptionText);
+  // The description text fills what the Expose record leaves out, except on a developer
+  // project: its text quotes the range across its units, and the largest area next to the
+  // cheapest unit's price would read as a bargain.
+  const fromText = facts?.isProject !== true;
+  const textAddress = parseAddress(descriptionText);
+  const street = facts?.street ?? textAddress.street;
+  const postalCode = facts?.postalCode ?? textAddress.postalCode;
+  const city = facts?.city ?? textAddress.city;
+  const addressRaw =
+    facts?.street || facts?.postalCode
+      ? formatAddress(street, postalCode, city)
+      : textAddress.addressDisplay;
 
   const payload: Immoscout24DetailDTO = {
     immoscout24Id,
     titleRaw: product.name ?? null,
     descriptionRaw: descriptionText || null,
     priceRaw,
-    livingAreaRaw,
+    livingAreaRaw: facts?.livingAreaRaw ?? (fromText ? parseArea(descriptionText) : null),
     usableAreaRaw: null,
-    roomsRaw,
-    addressRaw: addressParsed.addressDisplay,
-    postalCodeRaw: addressParsed.postalCode,
-    districtRaw: deriveDistrict(addressParsed.postalCode),
-    cityRaw: addressParsed.city,
+    roomsRaw: facts?.roomsRaw ?? (fromText ? parseRooms(descriptionText) : null),
+    addressRaw,
+    postalCodeRaw: postalCode,
+    districtRaw: deriveDistrict(postalCode),
+    cityRaw: city,
     federalStateRaw: null,
-    streetRaw: addressParsed.street,
-    floorRaw,
-    yearBuiltRaw,
+    streetRaw: street,
+    floorRaw: parseFloor(descriptionText),
+    yearBuiltRaw: facts?.yearBuiltRaw ?? parseYearBuilt(descriptionText),
     propertyTypeRaw: null,
-    operationTypeRaw: 'sale',
+    estateTypeRaw: facts?.estateTypeRaw ?? null,
+    operationTypeRaw: facts?.operationTypeRaw ?? 'sale',
     statusRaw: 'active',
     heatingTypeRaw: null,
     conditionRaw: null,
     energyCertificateRaw: null,
-    balconyAreaRaw,
+    balconyAreaRaw: facts?.balconyAreaRaw ?? (fromText ? parseBalconyArea(descriptionText) : null),
     terraceAreaRaw: null,
-    gardenAreaRaw: null,
+    gardenAreaRaw: facts?.gardenAreaRaw ?? null,
     commissionRaw: null,
     operatingCostRaw: null,
     reserveFundRaw: null,
@@ -201,6 +213,74 @@ export function extractIdFromUrl(url: string): string | null {
 }
 
 // -- Internal helpers ---------------------------------------------------------
+
+/** Listing facts from the page's `Expose` record. */
+interface ExposeFacts {
+  priceRaw: string | null;
+  livingAreaRaw: string | null;
+  roomsRaw: string | null;
+  balconyAreaRaw: string | null;
+  gardenAreaRaw: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  estateTypeRaw: string | null;
+  operationTypeRaw: 'sale' | 'rent' | null;
+  yearBuiltRaw: string | null;
+  /** A developer project: a listing whose units are listings of their own. */
+  isProject: boolean;
+}
+
+/**
+ * The `Expose` record for this listing in `window.__APOLLO_STATE__`, keyed `Expose:<id>`. A page
+ * with a single Expose record uses it even when the URL carries no ID. Null without one.
+ * Developer projects leave area and rooms empty and give the lowest unit price.
+ */
+function readExposeFacts(html: string, exposeId: string): ExposeFacts | null {
+  const state = readEmbeddedState(html, '__APOLLO_STATE__');
+  if (!isRecord(state)) return null;
+  const keys = Object.keys(state).filter((key) => key.startsWith('Expose:'));
+  const key = keys.includes(`Expose:${exposeId}`)
+    ? `Expose:${exposeId}`
+    : keys.length === 1
+      ? keys[0]
+      : undefined;
+  const expose = key ? state[key] : undefined;
+  if (!isRecord(expose)) return null;
+
+  const street = text(field(expose, 'localization', 'address', 'street'));
+  const streetNumber = text(field(expose, 'localization', 'address', 'streetNumber'));
+  const transferType = text(field(expose, 'type', 'transferType'));
+  const year = field(expose, 'condition', 'yearOfConstruction');
+  const yearText = typeof year === 'number' ? String(year) : text(year);
+
+  return {
+    priceRaw: positiveNumberText(field(expose, 'priceInformation', 'primaryPrice')),
+    livingAreaRaw:
+      positiveNumberText(field(expose, 'area', 'livingArea')) ??
+      positiveNumberText(field(expose, 'area', 'primaryArea')),
+    roomsRaw: positiveNumberText(field(expose, 'area', 'numberOfRooms')),
+    balconyAreaRaw: positiveNumberText(field(expose, 'area', 'balconyArea')),
+    gardenAreaRaw: positiveNumberText(field(expose, 'area', 'gardenArea')),
+    street: street && streetNumber ? `${street} ${streetNumber}` : street,
+    postalCode: text(field(expose, 'localization', 'address', 'zip')),
+    city: text(field(expose, 'localization', 'address', 'city')),
+    estateTypeRaw: text(field(expose, 'type', 'estateType')),
+    operationTypeRaw: transferType === 'BUY' ? 'sale' : transferType === 'RENT' ? 'rent' : null,
+    yearBuiltRaw: yearText && /^\d{4}$/.test(yearText) ? yearText : null,
+    isProject: field(expose, 'meta', 'hasChildren') === true,
+  };
+}
+
+/** "Musterstraße 12, 1150 Wien" from whichever parts exist. */
+function formatAddress(
+  street: string | null,
+  postalCode: string | null,
+  city: string | null,
+): string | null {
+  const locality = [postalCode, city].filter(Boolean).join(' ');
+  return [street, locality].filter(Boolean).join(', ') || null;
+}
 
 /**
  * Top-level JSON-LD nodes. A script holds one node, an array of nodes or a `@graph` wrapper.

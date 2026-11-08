@@ -54,8 +54,9 @@ describe('Immoscout24Adapter', () => {
     });
     // Adapters now only build page 1; dynamic pagination follows nextPagePlan
     expect(plans).toHaveLength(1);
-    expect(plans[0]!.waitForSelector).toBe('script[data-testid="collection-page-structured-data"]');
-    expect(plans[0]!.url).toContain('/regional/wien/wien/immobilien');
+    // Pages after the first lack the JSON-LD script, so the wait accepts the results list.
+    expect(plans[0]!.waitForSelector).toContain('[data-testid="results-items"]');
+    expect(plans[0]!.url).toContain('/regional/wien/wien/wohnung-kaufen');
     expect(plans[0]!.url).not.toContain('/seite-');
   });
 
@@ -316,6 +317,77 @@ describe('Discovery page parsing (CollectionPage JSON-LD)', () => {
   });
 });
 
+describe('Discovery page parsing (app state)', () => {
+  // Pages after the first carry only the app state. Live pages escape "/" as / and hold
+  // bare `undefined` values, which JSON.parse alone rejects.
+  function statePage(results: Record<string, unknown>): string {
+    const state = JSON.stringify({
+      htmlMeta: { canonicalURL: '__undefined__' },
+      reduxAsyncConnect: { pageData: { results } },
+    })
+      .replace('"__undefined__"', 'undefined')
+      .replace(/\//g, '\\u002F');
+    return `<html><body><script>window.__INITIAL_STATE__=${state};</script></body></html>`;
+  }
+
+  it('reads the listings and the next page from a page without JSON-LD', () => {
+    const html = statePage({
+      totalHits: 22057,
+      hits: [
+        {
+          exposeId: 'aaa111bbb222ccc333ddd444',
+          links: { targetURL: '/expose/aaa111bbb222ccc333ddd444' },
+          headline: 'Neubauprojekt mit 40 Einheiten',
+          addressString: '1220 Wien',
+          primaryPrice: 0,
+          primaryArea: null,
+          numberOfRooms: null,
+        },
+        {
+          exposeId: 'bbb222ccc333ddd444eee555',
+          links: { targetURL: '/expose/bbb222ccc333ddd444eee555' },
+          headline: '2-Zimmer-Wohnung mit Loggia',
+          addressString: 'Musterstraße 3, 1100 Wien',
+          primaryPrice: 249000,
+          primaryArea: 54.5,
+          numberOfRooms: 2,
+        },
+      ],
+      pagination: {
+        pageIndex: 1,
+        totalPages: 100,
+        nextURL: '/regional/wien/wien/wohnung-kaufen/seite-3',
+      },
+    });
+    expect(html).toContain('undefined');
+
+    const result = parseDiscoveryPage(html, 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-2',
+      metadata: { page: 2 },
+    });
+
+    expect(result.items.map((item) => item.externalId)).toEqual([
+      'aaa111bbb222ccc333ddd444',
+      'bbb222ccc333ddd444eee555',
+    ]);
+    // A developer project sends price 0, which means no price.
+    expect(result.items[0]!.summaryPayload.priceRaw).toBeNull();
+    expect(result.items[1]!.summaryPayload).toMatchObject({
+      detailUrl: 'https://www.immobilienscout24.at/expose/bbb222ccc333ddd444eee555',
+      titleRaw: '2-Zimmer-Wohnung mit Loggia',
+      priceRaw: '249000',
+      areaRaw: '54.5',
+      roomsRaw: '2',
+      locationRaw: 'Musterstraße 3, 1100 Wien',
+    });
+    expect(result.totalEstimate).toBe(22057);
+    expect(result.nextPagePlan!.url).toBe(
+      'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-3',
+    );
+    expect(result.nextPagePlan!.metadata!.page).toBe(3);
+  });
+});
+
 describe('Detail page parsing (Product + RealEstateAgent JSON-LD)', () => {
   it('extracts listing data from Product JSON-LD', () => {
     const html = loadFixture('detail-page.html');
@@ -533,6 +605,61 @@ describe('Detail page parsing (@graph JSON-LD)', () => {
       2,
     );
     expect(result.payload.priceRaw).toBe('455.000');
+  });
+});
+
+describe('Detail page parsing (Expose record)', () => {
+  it('reads price, area, rooms, address and type from the Expose record', () => {
+    // The description names none of these, so the values can only come from the record.
+    const result = parseDetailPage(
+      loadFixture('detail-expose.html'),
+      'https://www.immobilienscout24.at/expose/0f1e2d3c4b5a69788796a5b4',
+      'immoscout24',
+      3,
+    );
+
+    expect(result.extractionStatus).toBe('captured');
+    expect(result.payload).toMatchObject({
+      priceRaw: '389000',
+      livingAreaRaw: '72.4',
+      roomsRaw: '3',
+      balconyAreaRaw: '5.2',
+      streetRaw: 'Musterstraße 12',
+      postalCodeRaw: '1150',
+      districtRaw: '15. Bezirk',
+      cityRaw: 'Wien',
+      addressRaw: 'Musterstraße 12, 1150 Wien',
+      estateTypeRaw: 'APARTMENT',
+      operationTypeRaw: 'sale',
+      yearBuiltRaw: '1905',
+    });
+  });
+
+  it('does not read area or rooms from the text of a developer project', () => {
+    // The text quotes the range across all units. Its 155 m² next to the cheapest unit's
+    // price would score as a bargain.
+    const html = loadFixture('detail-expose.html')
+      .replace('"__typename":"Expose",', '"__typename":"Expose","meta":{"hasChildren":true},')
+      .replace('"primaryArea":72.4,"livingArea":72.4', '"primaryArea":null,"livingArea":null')
+      .replace('"numberOfRooms":3', '"numberOfRooms":null')
+      .replace(
+        '"description": "Helle Wohnung in ruhiger Lage, nahe Musterpark."',
+        '"description": "Neubauprojekt mit 2 bis 5 Zimmern und 40 bis 155 m² Wohnfläche."',
+      );
+    expect(html).toContain('"hasChildren":true');
+    expect(html).toContain('155 m²');
+
+    const result = parseDetailPage(
+      html,
+      'https://www.immobilienscout24.at/expose/0f1e2d3c4b5a69788796a5b4',
+      'immoscout24',
+      3,
+    );
+
+    expect(result.payload.livingAreaRaw).toBeNull();
+    expect(result.payload.roomsRaw).toBeNull();
+    expect(result.payload.priceRaw).toBe('389000');
+    expect(result.payload.postalCodeRaw).toBe('1150');
   });
 });
 

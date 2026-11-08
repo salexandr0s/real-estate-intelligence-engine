@@ -14,7 +14,11 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
-const SEARCH_PATH = '/regional/wien/wien/immobilien';
+// Apartments for sale in Vienna, the same scope as the other sources
+const SEARCH_PATH = '/regional/wien/wien/wohnung-kaufen';
+// Every results page has the results list; only the first has the JSON-LD script.
+const RESULTS_SELECTOR =
+  '[data-testid="results-items"], script[data-testid="collection-page-structured-data"]';
 
 export class Immoscout24Adapter implements SourceAdapter<
   Immoscout24DiscoveryItem,
@@ -31,7 +35,7 @@ export class Immoscout24Adapter implements SourceAdapter<
     return [
       {
         url: url.toString(),
-        waitForSelector: 'script[data-testid="collection-page-structured-data"]',
+        waitForSelector: RESULTS_SELECTOR,
         waitForTimeout: 5000,
         metadata: { page: 1 },
       },
