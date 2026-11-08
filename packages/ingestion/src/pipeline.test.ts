@@ -288,12 +288,13 @@ describe('FullIngestionPipeline listing versions', () => {
 });
 
 describe('FullIngestionPipeline scoring', () => {
-  it('fails the job when scoring fails, then scores the same version on the retry', async () => {
+  // Alert matching runs after the score is computed, and a stored score would end the retry early.
+  it('fails the job when alert matching fails, then scores the same version on the retry', async () => {
     const { pipeline, versions, scoredVersionIds, scoreAndAlert } = createStatefulPipeline();
-    scoreAndAlert.findBaseline.mockRejectedValueOnce(new Error('baselines unavailable'));
+    scoreAndAlert.findMatchingFilters.mockRejectedValueOnce(new Error('filters unavailable'));
 
     await expect(pipeline.ingestDetailCapture(baseCapture, 1, 99)).rejects.toThrow(
-      'baselines unavailable',
+      'filters unavailable',
     );
     expect(scoredVersionIds).toEqual([]);
 
