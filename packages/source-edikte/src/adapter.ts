@@ -26,7 +26,8 @@ import {
  *
  * Key differences from standard adapters:
  * - Discovery uses Playwright form interaction (Lotus Notes/Domino)
- * - Detail extraction includes PDF download and fact parsing
+ * - Detail extraction reads only the page HTML and lists attached PDFs in
+ *   attachmentUrls for the documents pipeline
  */
 export class EdikteAdapter implements SourceAdapter<EdikteDiscoveryItem, EdikteDetailDTO> {
   readonly sourceCode = SOURCE_CODE;
@@ -73,22 +74,11 @@ export class EdikteAdapter implements SourceAdapter<EdikteDiscoveryItem, EdikteD
   }
 
   /**
-   * Extracts structured data from an edict detail page.
-   * Downloads and parses PDF attachments for property facts.
+   * Extracts structured data from an edict detail page's HTML.
    */
   async extractDetailPage(ctx: DetailContext): Promise<DetailCapture<EdikteDetailDTO>> {
-    const page = ctx.page as {
-      url(): string;
-      content(): Promise<string>;
-      context(): {
-        request: {
-          get(url: string): Promise<{ body(): Promise<Buffer>; status(): number }>;
-        };
-      };
-    };
-
     const canonicalUrl = this.canonicalizeUrl(ctx.requestPlan.url);
-    const parsed = await parseDetailPage(page, canonicalUrl, this.sourceCode);
+    const parsed = parseDetailPage(pageHtml(ctx), canonicalUrl);
 
     return {
       ...parsed,
@@ -123,11 +113,15 @@ export class EdikteAdapter implements SourceAdapter<EdikteDiscoveryItem, EdikteD
   }
 
   /**
-   * Detects availability based on auction date and page content.
+   * Detects availability from the page content, including the auction date on it.
    */
   detectAvailability(ctx: DetailContext): SourceAvailability {
-    const html = (ctx.requestPlan.metadata?.['html'] as string) ?? '';
-    const auctionDate = (ctx.requestPlan.metadata?.['auctionDateRaw'] as string) ?? null;
-    return detectDetailAvailability(html, auctionDate);
+    return detectDetailAvailability(pageHtml(ctx));
   }
+}
+
+/** Callers pass the loaded page's HTML in the request metadata. */
+function pageHtml(ctx: DetailContext): string {
+  const html = ctx.requestPlan.metadata?.['html'];
+  return typeof html === 'string' ? html : '';
 }

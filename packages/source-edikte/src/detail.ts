@@ -1,72 +1,26 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { extractPdfText, isTextExtractionUseful, parseRealEstateFacts } from '@immoradar/documents';
-import type { FactExtraction } from '@immoradar/documents';
+import { headlineText } from '@immoradar/scraper-core';
 import type { EdikteDetailDTO } from './dto.js';
 import { BASE_URL } from './constants.js';
 
 /**
- * Minimal Playwright Page interface for detail extraction.
+ * Parses an edict detail page from its HTML alone. Attached PDFs are only listed,
+ * in attachmentUrls, for the documents pipeline to fetch and read.
  */
-interface PlaywrightPage {
-  url(): string;
-  content(): Promise<string>;
-  context(): {
-    request: {
-      get(url: string): Promise<{ body(): Promise<Buffer>; status(): number }>;
-    };
-  };
-}
-
-/**
- * Parses an edict detail page and extracts structured data.
- * Also downloads and processes PDF attachments for fact extraction.
- */
-export async function parseDetailPage(
-  page: PlaywrightPage,
+export function parseDetailPage(
+  html: string,
   canonicalUrl: string,
-  _sourceCode: string,
-): Promise<
-  Omit<
-    DetailCapture<EdikteDetailDTO>,
-    'sourceCode' | 'extractedAt' | 'parserVersion' | 'extractionStatus'
-  >
+): Omit<
+  DetailCapture<EdikteDetailDTO>,
+  'sourceCode' | 'extractedAt' | 'parserVersion' | 'extractionStatus'
 > {
-  const html = await page.content();
-
-  // Extract metadata from HTML
-  const courtName = extractCourtName(html);
-  const caseNumber = extractCaseNumber(html);
-  const auctionDateRaw = extractAuctionDate(html);
-  const locationInfo = extractLocation(html);
-  const appraisedValueRaw = extractAppraisedValue(html);
-  const minimumBidRaw = extractMinimumBid(html);
-  const viewingDatesRaw = extractViewingDates(html);
-  const legalNoticesRaw = extractLegalNotices(html);
-  const propertyCategory = extractPropertyCategory(html);
-  const publicationDate = extractPublicationDate(html);
-  const ediktId = extractEdiktId(canonicalUrl, html);
-
-  // Collect PDF attachment URLs
+  const fields = readFields(html);
+  const caseNumber = extractCaseNumber(fields, html);
+  const locationInfo = extractLocation(fields);
+  const propertyCategory = extractPropertyCategory(fields);
+  const appraisedValueRaw = leadingNumber(fields.get('Schätzwert'));
   const attachmentPdfUrls = extractPdfAttachmentUrls(html);
-
-  // Download and extract facts from PDFs
-  const { facts, method } = await extractFromPdfs(page, attachmentPdfUrls);
-
-  // Extract object size from HTML
-  const objectSize = extractObjectSize(html);
-
-  // Merge PDF facts with HTML-extracted data
-  const mergedData = mergePdfFacts(facts, {
-    appraisedValueRaw,
-    minimumBidRaw,
-    livingAreaRaw: objectSize,
-    roomsRaw: null,
-    yearBuiltRaw: null,
-  });
-
-  // Build the title from available data
-  const titleParts = [propertyCategory, locationInfo.addressRaw].filter(Boolean);
-  const titleRaw = titleParts.length > 0 ? titleParts.join(' – ') : null;
+  const ediktId = extractEdiktId(canonicalUrl, html);
 
   return {
     canonicalUrl,
@@ -74,24 +28,23 @@ export async function parseDetailPage(
     externalId: ediktId,
     payload: {
       ediktId,
-      courtName,
+      courtName: extractCourtName(fields, html),
       caseNumber,
-      auctionDateRaw,
-      appraisedValueRaw: mergedData.appraisedValueRaw,
-      minimumBidRaw: mergedData.minimumBidRaw,
-      viewingDatesRaw,
-      legalNoticesRaw,
+      auctionDateRaw: extractAuctionDate(fields),
+      appraisedValueRaw,
+      minimumBidRaw: leadingNumber(fields.get('Geringstes Gebot')),
+      viewingDatesRaw: extractViewingDates(fields),
+      legalNoticesRaw: extractLegalNotices(fields),
       attachmentPdfUrls,
-      publicationDate,
+      publicationDate: extractPublicationDate(fields),
       sourcePropertyCategory: propertyCategory,
-      pdfExtractedFacts: facts,
-      pdfExtractionMethod: method,
       // SourceRawListingBase fields
-      titleRaw,
-      priceRaw: mergedData.appraisedValueRaw,
-      livingAreaRaw: mergedData.livingAreaRaw,
-      roomsRaw: mergedData.roomsRaw,
-      yearBuiltRaw: mergedData.yearBuiltRaw,
+      titleRaw: buildTitle(propertyCategory, locationInfo.addressRaw, caseNumber),
+      priceRaw: appraisedValueRaw,
+      livingAreaRaw: leadingNumber(fields.get('Objektgröße')),
+      // Rooms and year built appear only in the attached appraisal.
+      roomsRaw: null,
+      yearBuiltRaw: null,
       addressRaw: locationInfo.addressRaw,
       postalCodeRaw: locationInfo.postalCodeRaw,
       cityRaw: locationInfo.cityRaw ?? 'Wien',
@@ -107,7 +60,49 @@ export async function parseDetailPage(
   };
 }
 
+function buildTitle(
+  category: string | null,
+  address: string | null,
+  caseNumber: string | null,
+): string | null {
+  const parts = [category, address].filter(Boolean);
+  if (parts.length > 0) return parts.join(' – ');
+  return caseNumber ? `Zwangsversteigerung ${caseNumber}` : null;
+}
+
 // ── HTML extraction helpers ────────────────────────────────────────────
+
+/**
+ * Domino renders each field as a label span followed by a value paragraph:
+ * <span class="col-sm-3 text-right">Schätzwert:</span><p class="col-sm-9">382.000,00&nbsp;EUR</p>
+ * Labels are keyed without their colon, values kept as plain text.
+ */
+function readFields(html: string): Map<string, string> {
+  const fields = new Map<string, string>();
+  const row =
+    /<span class="col-sm-3[^"]*">([\s\S]*?)<\/span>\s*<p class="col-sm-9[^"]*">([\s\S]*?)<\/p>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = row.exec(html)) !== null) {
+    const label = toText(m[1] ?? '').replace(/:$/, '');
+    const value = toText(m[2] ?? '');
+    if (label && value && !fields.has(label)) fields.set(label, value);
+  }
+  return fields;
+}
+
+function toText(fragment: string): string {
+  return fragment
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** "382.000,00 EUR" -> "382.000,00" and "85,22 m²" -> "85,22", in the page's number format. */
+function leadingNumber(value: string | undefined): string | null {
+  return value?.match(/\d[\d.,]*/)?.[0].replace(/[.,]$/, '') ?? null;
+}
 
 function extractEdiktId(url: string, html: string): string {
   // Try UNID from URL
@@ -123,10 +118,10 @@ function extractEdiktId(url: string, html: string): string {
   return path.replace(/\//g, '_').replace(/^_/, '');
 }
 
-function extractCourtName(html: string): string | null {
-  // Pattern from real page: "Dienststelle: BG Donaustadt (027)"
-  const dienstMatch = html.match(/Dienststelle:\s*([^<\n]+)/i);
-  if (dienstMatch?.[1]) return dienstMatch[1].trim();
+function extractCourtName(fields: Map<string, string>, html: string): string | null {
+  // "Dienststelle: BG Donaustadt (027)"
+  const office = fields.get('Dienststelle');
+  if (office) return office;
 
   // Fallback: look for court names in title or text
   const patterns = [
@@ -140,151 +135,75 @@ function extractCourtName(html: string): string | null {
   return null;
 }
 
-function extractCaseNumber(html: string): string | null {
-  // Pattern from real page: "Aktenzeichen: 68 E 33/25a"
-  const aktenMatch = html.match(/Aktenzeichen:\s*(\d{1,3}\s+E\s+\d+\/\d{2}[a-z]?)/i);
-  if (aktenMatch?.[1]) return aktenMatch[1].trim();
+const CASE_NUMBER = /\d{1,3}\s+E\s+\d+\/\d{2}[a-z]?(?:-\d+)?/i;
 
-  // Fallback: general case number pattern
-  const m = html.match(/\d{1,3}\s+E\s+\d+\/\d{2}[a-z]?(?:-\d+)?/i);
+function extractCaseNumber(fields: Map<string, string>, html: string): string | null {
+  // "Aktenzeichen: 68 E 33/25a". The page title carries it too.
+  const m = fields.get('Aktenzeichen')?.match(CASE_NUMBER) ?? html.match(CASE_NUMBER);
   return m ? m[0].trim() : null;
 }
 
-function extractAuctionDate(html: string): string | null {
-  // "Versteigerungstermin: 15.04.2026 um 10:00 Uhr"
-  const patterns = [
-    /Versteigerungstermin[:\s]*(\d{2}\.\d{2}\.\d{4}(?:\s+um\s+\d{2}:\d{2}(?:\s*Uhr)?)?)/i,
-    /Termin[:\s]*(\d{2}\.\d{2}\.\d{4}(?:\s+um\s+\d{2}:\d{2})?)/i,
-  ];
-  for (const p of patterns) {
-    const m = html.match(p);
-    if (m?.[1]) return m[1].trim();
-  }
-  return null;
+/**
+ * "am 15.4.2026 um 09:30 Uhr" -> "15.4.2026 um 09:30 Uhr". Only the labelled rows
+ * count, because the free text also names viewing dates and cancelled sittings.
+ * A notice that a sitting is cancelled lists its date under "Termin".
+ */
+function extractAuctionDate(fields: Map<string, string>): string | null {
+  const value = fields.get('Versteigerungstermin') ?? fields.get('Termin');
+  return (
+    value?.match(/\d{1,2}\.\d{1,2}\.\d{4}(?:\s+um\s+\d{1,2}[:.]\d{2}(?:\s*Uhr)?)?/)?.[0] ?? null
+  );
 }
 
-function extractLocation(html: string): {
+function extractLocation(fields: Map<string, string>): {
   addressRaw: string | null;
   postalCodeRaw: string | null;
   cityRaw: string | null;
 } {
-  // Pattern from real page: "PLZ/Ort:1220 Wien"
-  const plzOrtMatch = html.match(/PLZ\/Ort:\s*(\d{4})\s+([^<\n]+)/i);
-  if (plzOrtMatch) {
-    return {
-      addressRaw: `${plzOrtMatch[1]} ${plzOrtMatch[2]?.trim()}`,
-      postalCodeRaw: plzOrtMatch[1] ?? null,
-      cityRaw: plzOrtMatch[2]?.trim() ?? 'Wien',
-    };
-  }
-
-  // Fallback: try to find address with Vienna postal code
-  const addrMatch = html.match(/(\d{4})\s+(Wien[^<,;]{0,50})/i);
-  if (addrMatch) {
-    return {
-      addressRaw: addrMatch[0].trim(),
-      postalCodeRaw: addrMatch[1] ?? null,
-      cityRaw: 'Wien',
-    };
-  }
-
-  return {
-    addressRaw: null,
-    postalCodeRaw: null,
-    cityRaw: 'Wien',
-  };
+  // "PLZ/Ort: 1220 Wien". The free text quotes other offices' addresses, so it is not searched.
+  const m = fields.get('PLZ/Ort')?.match(/^(\d{4})\s+(.+)$/);
+  const postalCode = m?.[1];
+  const city = m?.[2];
+  if (!postalCode || !city) return { addressRaw: null, postalCodeRaw: null, cityRaw: null };
+  return { addressRaw: `${postalCode} ${city}`, postalCodeRaw: postalCode, cityRaw: city };
 }
 
-function extractAppraisedValue(html: string): string | null {
-  // Pattern from real page: "Schätzwert:382.000,00 EUR"
-  const patterns = [
-    /Schätzwert:\s*([\d.,]+)\s*EUR/i,
-    /Schätzwert[:\s]*€?\s*([\d.,]+)/i,
-    /Verkehrswert[:\s]*€?\s*([\d.,]+)/i,
-  ];
-  for (const p of patterns) {
-    const m = html.match(p);
-    if (m?.[1]) return m[1].trim();
-  }
-  return null;
+/**
+ * "14.4.2026, 15:30 Uhr", "20.04.2026 um 11:00 Uhr" or "05.05.2026, 15.30 bis 16:30 Uhr".
+ * A time may not run on into a date, so "14.4.2026, 15.04.2026" gives two dates.
+ */
+const VIEWING_DATE =
+  /\d{1,2}\.\d{1,2}\.\d{4}(?:,?\s*(?:(?:um|von|ab)\s+)?\d{1,2}[:.]\d{2}(?![.\d])(?:\s*(?:-|–|bis)\s*\d{1,2}[:.]\d{2}(?![.\d]))?(?:\s*Uhr)?)?/g;
+
+/** The appointments in "Besichtigungszeit". The rest of that row names meeting points and contacts. */
+function extractViewingDates(fields: Map<string, string>): string[] {
+  return fields.get('Besichtigungszeit')?.match(VIEWING_DATE) ?? [];
 }
 
-function extractMinimumBid(html: string): string | null {
-  // Pattern from real page: "Geringstes Gebot:191.000,00 EUR"
-  const patterns = [
-    /Geringstes?\s*Gebot:\s*([\d.,]+)\s*EUR/i,
-    /Mindestgebot[:\s]*€?\s*([\d.,]+)/i,
-    /geringstes?\s*Gebot[:\s]*€?\s*([\d.,]+)/i,
-  ];
-  for (const p of patterns) {
-    const m = html.match(p);
-    if (m?.[1]) return m[1].trim();
-  }
-  return null;
+/** The "Sonstiges" and "Sonstige Hinweise" rows, one per line. */
+function extractLegalNotices(fields: Map<string, string>): string | null {
+  const notices = ['Sonstiges', 'Sonstige Hinweise'].flatMap((label) => fields.get(label) ?? []);
+  return notices.length > 0 ? notices.join('\n') : null;
 }
 
-function extractObjectSize(html: string): string | null {
-  // Pattern from real page: "Objektgröße:85,22 m²"
-  const m = html.match(/Objektgröße:\s*([\d.,]+)\s*m²/i);
-  return m?.[1]?.trim() ?? null;
+function extractPropertyCategory(fields: Map<string, string>): string | null {
+  // "Kategorie(n): Reihenhaus", else "wegen: Zwangsversteigerung von Wohnungseigentum"
+  return (
+    fields.get('Kategorie(n)') ??
+    fields.get('wegen')?.match(/^Zwangsversteigerung\s+von\s+(.+)$/i)?.[1] ??
+    null
+  );
 }
 
-function extractViewingDates(html: string): string[] {
-  const dates: string[] = [];
-  const pattern = /Besichtigungstermin[e]?[:\s]*([^<]+)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(html)) !== null) {
-    if (m[1]) {
-      // Split on common separators
-      const parts = m[1]
-        .split(/[,;]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      dates.push(...parts);
-    }
-  }
-  return dates;
+/**
+ * "Bekannt gemacht am: 02.03.2026". An edict changed since shows "Letzte Änderung am"
+ * instead, which dates the change, so that row is not read as the publication date.
+ */
+function extractPublicationDate(fields: Map<string, string>): string | null {
+  return fields.get('Bekannt gemacht am')?.match(/\d{1,2}\.\d{1,2}\.\d{4}/)?.[0] ?? null;
 }
 
-function extractLegalNotices(html: string): string | null {
-  // Try to find the main edict text block
-  // Domino often wraps content in specific divs or table cells
-  const patterns = [
-    /class="[^"]*edikt[^"]*"[^>]*>([\s\S]{50,5000}?)<\//i,
-    /class="[^"]*content[^"]*"[^>]*>([\s\S]{50,5000}?)<\//i,
-  ];
-  for (const p of patterns) {
-    const m = html.match(p);
-    if (m?.[1]) {
-      const text = m[1]
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (text.length > 50) return text;
-    }
-  }
-  return null;
-}
-
-function extractPropertyCategory(html: string): string | null {
-  // Pattern from real page: "Kategorie(n):Reihenhaus"
-  const katMatch = html.match(/Kategorie\(n\):\s*([^<\n]+)/i);
-  if (katMatch?.[1]) return katMatch[1].trim();
-
-  // Also check "wegen:" field: "wegen:Zwangsversteigerung von Wohnungseigentum"
-  const wegenMatch = html.match(/wegen:\s*Zwangsversteigerung\s+von\s+([^<\n]+)/i);
-  if (wegenMatch?.[1]) return wegenMatch[1].trim();
-
-  return null;
-}
-
-function extractPublicationDate(html: string): string | null {
-  // Look for publication/Veröffentlichung dates
-  const m = html.match(/(?:Veröffentlich|Eingestellt|Datum)[^:]*:\s*(\d{2}\.\d{2}\.\d{4})/i);
-  return m?.[1] ?? null;
-}
-
-// ── PDF extraction ─────────────────────────────────────────────────────
+// ── Attachments ────────────────────────────────────────────────────────
 
 function extractPdfAttachmentUrls(html: string): Array<{ url: string; label: string }> {
   const pdfs: Array<{ url: string; label: string }> = [];
@@ -310,113 +229,64 @@ function extractPdfAttachmentUrls(html: string): Array<{ url: string; label: str
   return pdfs.filter((p) => p.url.toLowerCase().endsWith('.pdf'));
 }
 
-/**
- * Downloads PDFs and extracts structured facts from their text content.
- */
-async function extractFromPdfs(
-  page: PlaywrightPage,
-  attachments: Array<{ url: string; label: string }>,
-): Promise<{ facts: FactExtraction[]; method: 'text' | 'ai' | 'none' }> {
-  if (attachments.length === 0) {
-    return { facts: [], method: 'none' };
-  }
-
-  const allFacts: FactExtraction[] = [];
-  let method: 'text' | 'ai' | 'none' = 'none';
-
-  for (const attachment of attachments) {
-    try {
-      const response = await page.context().request.get(attachment.url);
-      if (response.status() !== 200) continue;
-
-      const buffer = await response.body();
-      const extraction = await extractPdfText(buffer);
-
-      if (isTextExtractionUseful(extraction)) {
-        const facts = parseRealEstateFacts(extraction.text);
-        allFacts.push(...facts);
-        method = 'text';
-      }
-      // AI fallback is available but not wired inline —
-      // callers can use extractFactsWithAi from @immoradar/documents
-      // for PDFs that fail text extraction. This keeps the detail
-      // parser fast and avoids API costs for every listing.
-    } catch {
-      // Failed to download or parse PDF — skip gracefully
-    }
-  }
-
-  return { facts: allFacts, method };
-}
-
-// ── Fact merging ───────────────────────────────────────────────────────
-
-interface MergeableFields {
-  appraisedValueRaw: string | null;
-  minimumBidRaw: string | null;
-  livingAreaRaw: string | number | null;
-  roomsRaw: string | number | null;
-  yearBuiltRaw: string | number | null;
-}
-
-/**
- * Merge PDF-extracted facts into the DTO fields.
- * HTML-extracted values take precedence over PDF-extracted values.
- */
-function mergePdfFacts(facts: FactExtraction[], existing: MergeableFields): MergeableFields {
-  const result = { ...existing };
-
-  for (const fact of facts) {
-    switch (fact.factType) {
-      case 'appraised_value':
-        if (result.appraisedValueRaw == null) result.appraisedValueRaw = fact.factValue;
-        break;
-      case 'minimum_bid':
-        if (result.minimumBidRaw == null) result.minimumBidRaw = fact.factValue;
-        break;
-      case 'living_area':
-        if (result.livingAreaRaw == null) result.livingAreaRaw = fact.factValue;
-        break;
-      case 'rooms':
-        if (result.roomsRaw == null) result.roomsRaw = fact.factValue;
-        break;
-      case 'building_year':
-        if (result.yearBuiltRaw == null) result.yearBuiltRaw = fact.factValue;
-        break;
-    }
-  }
-
-  return result;
-}
-
 // ── Availability detection ─────────────────────────────────────────────
 
+const REMOVED_PATTERNS = [/nicht mehr verfügbar/i, /gelöscht/i, /archiviert/i, /aufgehoben/i];
+
+// The award without a higher bid and the distribution of the proceeds both follow a sale.
+const SOLD_EDICT = /^(?:Zuschlag ohne Überbot|Meistbotsverteilung)\b/m;
+const CANCELLED_EDICT = /^Entfall des Termins\b/m;
+
+const viennaDate = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Vienna',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /**
- * Detects whether a forced auction listing is still active.
+ * Detects whether a forced auction listing is still active. An edict that follows the
+ * sale counts as sold and one that cancels the sitting as removed. An auction counts as
+ * sold once its day has passed in Vienna.
  */
-export function detectDetailAvailability(
-  html: string,
-  auctionDateRaw: string | null,
-): SourceAvailability {
+export function detectDetailAvailability(html: string): SourceAvailability {
   if (!html) return { status: 'not_found' };
 
-  // Check for removed/expired indicators
-  const removedPatterns = [/nicht mehr verfügbar/i, /gelöscht/i, /archiviert/i, /aufgehoben/i];
-  for (const p of removedPatterns) {
-    if (p.test(html)) return { status: 'removed' };
+  const fields = readFields(html);
+  // Live edicts mention deleted pledges and cancelled earlier sittings, so the
+  // removal wording only counts on a page that shows no case number.
+  if (extractCaseNumber(fields, html) === null && REMOVED_PATTERNS.some((p) => p.test(html))) {
+    return { status: 'removed' };
   }
 
-  // If auction date is in the past, mark as sold
-  if (auctionDateRaw) {
-    const dateMatch = auctionDateRaw.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-    if (dateMatch) {
-      const [, day, month, year] = dateMatch;
-      const auctionDate = new Date(`${year}-${month}-${day}`);
-      if (auctionDate < new Date()) {
-        return { status: 'sold' };
-      }
-    }
+  // The edict type opens a heading of its own, as in "Zuschlag ohne Überbot - Wohnung Top 1",
+  // under the site heading "Gerichtliche Versteigerungen". No label/value row carries it.
+  const headline = headlineText(html);
+  // A cancelled sitting is gone whether its date has passed or not.
+  if (CANCELLED_EDICT.test(headline)) return { status: 'removed' };
+  if (SOLD_EDICT.test(headline)) return { status: 'sold' };
+
+  const auctionDay = isoDay(extractAuctionDate(fields));
+  if (auctionDay !== null && auctionDay < todayInVienna()) {
+    return { status: 'sold' };
   }
 
   return { status: 'available' };
+}
+
+/** "15.4.2026 um 09:30 Uhr" -> "2026-04-15", which sorts like the date it names. */
+function isoDay(raw: string | null): string | null {
+  const m = raw?.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (!m?.[1] || !m[2] || !m[3]) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+  return `${m[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function todayInVienna(): string {
+  const parts = viennaDate.formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
