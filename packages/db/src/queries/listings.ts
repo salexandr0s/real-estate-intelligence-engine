@@ -339,7 +339,9 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        normalized_payload = EXCLUDED.normalized_payload,
        completeness_score = EXCLUDED.completeness_score,
        content_fingerprint = EXCLUDED.content_fingerprint,
-       cross_source_fingerprint = COALESCE(EXCLUDED.cross_source_fingerprint, listings.cross_source_fingerprint),
+       -- The mapper computes the fingerprint from this row's own address, so a listing
+       -- that loses its street loses its fingerprint too, and leaves its cluster.
+       cross_source_fingerprint = EXCLUDED.cross_source_fingerprint,
        normalization_version = EXCLUDED.normalization_version,
        last_seen_at = NOW(),
        last_price_change_at = CASE
