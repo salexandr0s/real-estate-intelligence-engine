@@ -48,30 +48,31 @@ export class PerDomainRateLimiter {
     bucket.tokens = Math.min(bucket.tokens, rpm);
   }
 
-  /** Block until a request slot is available for the given domain. */
+  /**
+   * Block until a request slot is available for the given domain. Each caller takes a whole token,
+   * so callers that wake at the same moment still go one interval apart.
+   */
   async waitForSlot(domain: string): Promise<void> {
     const bucket = this.getOrCreateBucket(domain);
 
-    this.refillTokens(bucket);
+    for (;;) {
+      this.refillTokens(bucket);
 
-    if (bucket.tokens >= 1) {
-      bucket.tokens -= 1;
-      return;
+      if (bucket.tokens >= 1) {
+        bucket.tokens -= 1;
+        return;
+      }
+
+      // The bucket keeps the part of a token that has already refilled, so this waits for the
+      // rest. Another caller can take the token first, which is why the loop checks again.
+      const waitMs = ((1 - bucket.tokens) * 60_000) / bucket.rpm;
+
+      logger.debug(`Rate limit: waiting ${Math.round(waitMs)}ms for ${domain}`, {
+        sourceCode: domain,
+      });
+
+      await this.sleep(waitMs);
     }
-
-    // Calculate wait time until the next token is available
-    const intervalMs = 60_000 / bucket.rpm;
-    const timeSinceLastRefill = Date.now() - bucket.lastRefillAt;
-    const waitMs = Math.max(0, intervalMs - timeSinceLastRefill);
-
-    logger.debug(`Rate limit: waiting ${Math.round(waitMs)}ms for ${domain}`, {
-      sourceCode: domain,
-    });
-
-    await this.sleep(waitMs);
-
-    this.refillTokens(bucket);
-    bucket.tokens = Math.max(0, bucket.tokens - 1);
   }
 
   /** Get the current number of available tokens for a domain. */

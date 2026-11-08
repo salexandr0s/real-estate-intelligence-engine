@@ -28,6 +28,25 @@ describe('PerDomainRateLimiter', () => {
     expect(limiter.availableTokens('remax')).toBe(3);
   });
 
+  it('lets two waiters on an empty bucket through one whole token apart', async () => {
+    const limiter = new PerDomainRateLimiter(1);
+    const start = Date.now();
+    await limiter.waitForSlot('willhaben');
+    // Half a token refills before the waiters arrive, so the first one waits only for the rest.
+    vi.advanceTimersByTime(30_000);
+
+    const passedAt: number[] = [];
+    const waiters = [1, 2].map(() =>
+      limiter.waitForSlot('willhaben').then(() => {
+        passedAt.push(Date.now() - start);
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    await Promise.all(waiters);
+
+    expect(passedAt).toEqual([60_000, 120_000]);
+  });
+
   it.each([0, -5, Number.NaN])('refuses a rate of %s, which would turn the limit off', (rpm) => {
     expect(() => new PerDomainRateLimiter(rpm)).toThrow(RangeError);
     expect(() => new PerDomainRateLimiter(12).setDomainRpm('willhaben', rpm)).toThrow(RangeError);
