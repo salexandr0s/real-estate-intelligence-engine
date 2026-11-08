@@ -233,8 +233,9 @@ describe('Detail page parsing', () => {
     expect(p.titleRaw).toContain('Leopoldstadt');
     expect(p.descriptionRaw).toContain('Balkon');
     expect(p.priceRaw).toBe('315000');
-    expect(p.livingAreaRaw).toBe('68.7');
-    expect(p.usableAreaRaw).toBe('73.2');
+    // Factsheet areas keep their separators; normalization reads "68,7" as 68.7.
+    expect(p.livingAreaRaw).toBe('68,7');
+    expect(p.usableAreaRaw).toBe('73,2');
     expect(p.roomsRaw).toBe('3');
     expect(p.floorRaw).toBe('2');
     expect(p.yearBuiltRaw).toBe('1960');
@@ -247,7 +248,7 @@ describe('Detail page parsing', () => {
     expect(p.heatingTypeRaw).toBe('Gasetagenheizung');
     expect(p.conditionRaw).toBe('Gepflegt');
     expect(p.energyCertificateRaw).toBe('D');
-    expect(p.balconyAreaRaw).toBe('6.2');
+    expect(p.balconyAreaRaw).toBe('6,2');
     expect(p.operatingCostRaw).toBe('245');
     expect(p.statusRaw).toBe('available');
   });
@@ -401,23 +402,31 @@ describe('Availability detection', () => {
     expect(status.status).toBe('sold');
   });
 
-  it('detects sold from "verkauft" text when no Product JSON-LD', () => {
-    const html = '<html><body><h1>Dieses Objekt wurde verkauft</h1></body></html>';
+  it('detects sold from a "bereits verkauft" headline when no Product JSON-LD', () => {
+    const html = '<html><body><h1>Dieses Objekt wurde bereits verkauft</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('sold');
   });
 
-  it('detects reserved listing', () => {
-    const html = '<html><body><h1>Dieses Objekt ist reserviert</h1></body></html>';
+  it('detects a reserved listing from a headline that opens with Reserviert', () => {
+    const html = '<html><body><h1>Reserviert: 3-Zimmer-Wohnung in Wien</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('reserved');
   });
 
-  it('detects rented listing', () => {
-    const html = '<html><body><h1>Dieses Objekt ist vermietet</h1></body></html>';
+  it('detects a rented listing from a headline that opens with VERMIETET', () => {
+    const html = '<html><body><h1>*** VERMIETET *** 2-Zimmer-Wohnung in Wien</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('rented');
   });
+
+  it.each(['Neubauprojekt in Wien, 80 % verkauft', 'Altbauwohnung, unbefristet vermietet'])(
+    'reads "%s" in a headline as a description, not a notice',
+    (h1) => {
+      const html = `<html><body><h1>${h1}</h1></body></html>`;
+      expect(detectDetailAvailability(html).status).toBe('unknown');
+    },
+  );
 
   it('detects not_found from "nicht verfuegbar" text', () => {
     const html = '<html><body><h1>Dieses Objekt ist nicht verf\u00FCgbar</h1></body></html>';
@@ -500,7 +509,7 @@ describe('Live detail page shape', () => {
 
     const p = parseDetailPage(html, url, 'remax', 2).payload;
     expect(p.roomsRaw).toBe('3');
-    expect(p.livingAreaRaw).toBe('68.7');
+    expect(p.livingAreaRaw).toBe('68,7');
     expect(p.latRaw).toBe('48.2201');
     expect(p.lonRaw).toBe('16.3811');
   });
@@ -513,5 +522,22 @@ describe('Live detail page shape', () => {
     );
     expect(html).toContain('"389000.00"');
     expect(parseDetailPage(html, url, 'remax', 2).payload.priceRaw).toBe('389000.00');
+  });
+
+  it('keeps the thousands group of a factsheet area', () => {
+    // Matching from the last digits read "1.250,50 m²" as 250.50.
+    const html = loadFixture('detail-page.html').replace('68,7 m&#178;', '1.250,50 m&#178;');
+    expect(html).toContain('1.250,50 m&#178;');
+    expect(parseDetailPage(html, url, 'remax', 2).payload.livingAreaRaw).toBe('1.250,50');
+  });
+
+  it('writes a fractional JSON-LD area with two decimals', () => {
+    // "72.125" would read as 72,125 m², because three digits after a dot group thousands.
+    const fixture = loadFixture('detail-datalayer.html');
+    expect(fixture).toContain('"value": 75,');
+    for (const value of ['"72,125"', '72.125']) {
+      const html = fixture.replace('"value": 75,', `"value": ${value},`);
+      expect(parseDetailPage(html, url, 'remax', 2).payload.livingAreaRaw).toBe('72.13');
+    }
   });
 });

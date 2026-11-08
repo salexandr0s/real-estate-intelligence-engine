@@ -1,5 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type { RemaxDetailDTO, RemaxDataLayer } from './dto.js';
 
 /**
@@ -217,7 +217,7 @@ export function parseDetailPage(
 
 /**
  * Detects listing availability from the detail page HTML: the listing's JSON-LD offer first,
- * then German-language markers in the title and h1.
+ * then German-language notices in the title and h1.
  */
 export function detectDetailAvailability(html: string): SourceAvailability {
   // 1. The listing's offer, when it states an availability
@@ -234,18 +234,19 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   if (/InStock/i.test(availability)) return { status: 'available' };
   if (/Discontinued/i.test(availability)) return { status: 'removed' };
 
-  // 2. German-language markers. Similar-listing teasers and footers on live pages also say
+  // 2. German-language notices. Similar-listing teasers and footers on live pages also say
   // "verkauft" or "vermietet", so only the title and h1 count.
   const headline = headlineText(html);
   if (/nicht\s+verf[u\u00FC]gbar|nicht\s+gefunden/i.test(headline)) return { status: 'not_found' };
-  if (/\bverkauft\b/i.test(headline)) return { status: 'sold' };
-  if (/\breserviert\b/i.test(headline)) return { status: 'reserved' };
-  if (/\bvermietet\b/i.test(headline)) return { status: 'rented' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('reserved')) return { status: 'reserved' };
+  if (notices.has('rented')) return { status: 'rented' };
 
   // 3. A challenge page carries no listing data, so only a page without any is checked
   if (!listing && isChallengePage(html)) return { status: 'blocked' };
 
-  // Without a stated availability or a marker, the page says nothing either way.
+  // Without a stated availability or a notice, the page says nothing either way.
   return { status: 'unknown' };
 }
 
@@ -337,26 +338,47 @@ function toStringList(value: unknown): string[] {
 function ldPrice(price: unknown): string | null {
   const text =
     typeof price === 'number' && Number.isFinite(price)
-      ? String(price)
+      ? formatLdNumber(price)
       : typeof price === 'string'
         ? price.trim()
         : '';
   return /[1-9]/.test(text) ? text : null;
 }
 
-/** A JSON-LD number, or a string holding one, as a plain number string */
+/** A JSON-LD number, or a string holding one, as a raw number string for normalization */
 function ldNumber(value: unknown): string | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
-  if (typeof value !== 'string') return null;
-  const text = value.trim();
-  return /^-?\d+(?:[.,]\d+)?$/.test(text) ? text.replace(',', '.') : null;
+  const n = ldDecimal(value);
+  return n === null ? null : formatLdNumber(n);
 }
 
-/** Latitude and longitude from one GeoCoordinates node, only when both are numbers */
+/**
+ * A JSON-LD number, or a string holding one. JSON-LD is machine format, so the single `.` or `,`
+ * in a string is its decimal mark: "72,125" is 72.125.
+ */
+function ldDecimal(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return /^-?\d+(?:[.,]\d+)?$/.test(text) ? Number(text.replace(',', '.')) : null;
+}
+
+/**
+ * A JSON number as a raw string. Normalization reads three digits after a dot as a thousands
+ * group, so a fraction gets two decimals: 72.125 becomes "72.13", not "72.125".
+ */
+function formatLdNumber(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+/**
+ * Latitude and longitude from one GeoCoordinates node, only when both are numbers. They keep
+ * every decimal: normalization reads them with parseFloat, and two decimals would move a point
+ * by up to about 550 m.
+ */
 function coordinatesOf(geo: JsonLdGeo | undefined): { lat: string; lon: string } | null {
-  const lat = ldNumber(geo?.latitude);
-  const lon = ldNumber(geo?.longitude);
-  return lat && lon ? { lat, lon } : null;
+  const lat = ldDecimal(geo?.latitude);
+  const lon = ldDecimal(geo?.longitude);
+  return lat !== null && lon !== null ? { lat: String(lat), lon: String(lon) } : null;
 }
 
 /**
@@ -627,12 +649,12 @@ function parseAustrianPrice(text: string): string | null {
 }
 
 /**
- * Normalize area value: "68,7 m2" -> "68.7", "73,2 m2" -> "73.2"
+ * The area in a factsheet value with its separators as written, as in "68,7 m²" or
+ * "1.250,50 m²". Normalization reads both forms.
  */
 function normalizeAreaValue(text: string): string | null {
-  const match = text.match(/(\d+[.,]?\d*)\s*m/);
-  if (!match?.[1]) return null;
-  return match[1].replace(',', '.');
+  const match = text.match(/(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*m/);
+  return match?.[1] ?? null;
 }
 
 /** Extract floor number from text like "2. OG" -> "2" */
