@@ -7,18 +7,32 @@ const logger = createLogger('circuit-breaker');
 export type CircuitState = 'closed' | 'open' | 'half_open';
 
 /**
- * Failures that say nothing about the source's health: a 404 or 410 means the listing is gone,
- * and a parse failure means the page arrived. Neither counts toward opening the circuit.
+ * Failures that say nothing about the source's health: a 404 or 410 means the listing is gone, a
+ * parse failure means the page arrived, and an internal error means a page, context or browser of
+ * ours closed or crashed. None of them counts toward opening the circuit.
  */
-const IGNORED_ERROR_CLASSES: ReadonlySet<ErrorClass> = new Set(['terminal_page', 'parse_failure']);
+const IGNORED_ERROR_CLASSES: ReadonlySet<ErrorClass> = new Set([
+  'terminal_page',
+  'parse_failure',
+  'internal_error',
+]);
+
+/**
+ * How long a half-open circuit waits for its probe to report back before it lets another probe
+ * through, so a probe that never reports can't hold the source shut.
+ */
+const PROBE_TIMEOUT_MS = 120_000;
 
 interface SourceState {
   state: CircuitState;
   consecutiveFailures: number;
   lastFailureAt: number | null;
   lastSuccessAt: number | null;
-  lastErrorClass: ErrorClass | null;
+  /** The class of the failure that last opened the circuit. Null while the circuit is closed. */
+  openedBy: ErrorClass | null;
   openedAt: number | null;
+  /** When the probe in flight stops holding other callers back. Null when no probe is out. */
+  probeDeadline: number | null;
 }
 
 /**
@@ -26,11 +40,13 @@ interface SourceState {
  *
  * - **closed**: normal operation, requests flow through
  * - **open**: source is failing, requests are blocked until cooldown expires
- * - **half_open**: cooldown expired, one probe request is allowed to test recovery
+ * - **half_open**: cooldown expired, one probe request at a time tests recovery
  *
- * The circuit opens after `failureThreshold` consecutive failures that count. `terminal_page` and
- * `parse_failure` don't count and leave the state as it was.
- * It transitions to half_open after `cooldownMs` elapses.
+ * The circuit opens after `failureThreshold` consecutive failures that count. `terminal_page`,
+ * `parse_failure` and `internal_error` don't count and leave the state as it was.
+ * It transitions to half_open after `cooldownMs` elapses. The first `isOpen` call after that is
+ * the probe. Other callers see the circuit open until a success or failure is recorded for the
+ * source, or until `PROBE_TIMEOUT_MS` passes without one.
  * A single success in half_open closes the circuit; a counted failure re-opens it.
  */
 export class SourceCircuitBreaker {
@@ -43,35 +59,52 @@ export class SourceCircuitBreaker {
     this.cooldownMs = cooldownMs;
   }
 
-  /** Returns true if the circuit is currently open (requests should be blocked). */
+  /**
+   * Returns true if the circuit is currently open (requests should be blocked). On a half-open
+   * circuit with no probe out, returns false once and takes that caller as the probe.
+   */
   isOpen(sourceCode: string): boolean {
     const state = this.getState(sourceCode);
 
     if (state.state === 'closed') return false;
 
+    const now = Date.now();
     if (state.state === 'open') {
-      // Check if cooldown has elapsed and transition to half_open
-      if (state.openedAt !== null && Date.now() - state.openedAt >= this.cooldownMs) {
-        state.state = 'half_open';
-        logger.info(`Circuit half-open for source: ${sourceCode}`, { sourceCode });
-        return false; // Allow one probe request
-      }
-      return true;
+      if (state.openedAt === null || now - state.openedAt < this.cooldownMs) return true;
+      state.state = 'half_open';
+      logger.info(`Circuit half-open for source: ${sourceCode}`, { sourceCode });
     }
 
-    // half_open allows requests through for probing
+    if (state.probeDeadline !== null && now < state.probeDeadline) return true;
+    state.probeDeadline = now + PROBE_TIMEOUT_MS;
     return false;
   }
 
   /**
    * When the circuit next lets traffic through, in epoch milliseconds, or null when it lets traffic
-   * through now. A worker can delay a job until then instead of dropping it. Doesn't change state.
+   * through now. While a probe is out, that is the probe's deadline, though the probe's result can
+   * close or re-open the circuit sooner. A worker can delay a job until then instead of dropping
+   * it. Doesn't change state.
    */
   openUntil(sourceCode: string): number | null {
     const state = this.sources.get(sourceCode);
-    if (state?.state !== 'open' || state.openedAt === null) return null;
-    const until = state.openedAt + this.cooldownMs;
-    return Date.now() < until ? until : null;
+    if (!state || state.state === 'closed') return null;
+
+    const now = Date.now();
+    if (state.state === 'open' && state.openedAt !== null) {
+      const until = state.openedAt + this.cooldownMs;
+      if (now < until) return until;
+    }
+    if (state.probeDeadline !== null && now < state.probeDeadline) return state.probeDeadline;
+    return null;
+  }
+
+  /**
+   * The class of the failure that last opened the circuit for a source, or null while the circuit
+   * is closed. Doesn't change state.
+   */
+  openReason(sourceCode: string): ErrorClass | null {
+    return this.sources.get(sourceCode)?.openedBy ?? null;
   }
 
   /** Record a successful request for a source. Closes the circuit if half_open. */
@@ -85,29 +118,30 @@ export class SourceCircuitBreaker {
     state.state = 'closed';
     state.consecutiveFailures = 0;
     state.lastSuccessAt = Date.now();
-    state.lastErrorClass = null;
+    state.openedBy = null;
     state.openedAt = null;
+    state.probeDeadline = null;
   }
 
   /**
-   * Record a failed request. May open the circuit if threshold is reached. `terminal_page` and
-   * `parse_failure` are ignored.
+   * Record a failed request. May open the circuit if threshold is reached. Any failure ends the
+   * probe in flight; `terminal_page`, `parse_failure` and `internal_error` change nothing else.
    */
   recordFailure(sourceCode: string, errorClass: ErrorClass): void {
+    const state = this.getState(sourceCode);
+    state.probeDeadline = null;
+
     if (IGNORED_ERROR_CLASSES.has(errorClass)) {
       logger.debug('Failure does not count toward the circuit', { sourceCode, errorClass });
       return;
     }
 
-    const state = this.getState(sourceCode);
     state.consecutiveFailures += 1;
     state.lastFailureAt = Date.now();
-    state.lastErrorClass = errorClass;
 
     if (state.state === 'half_open') {
       // Probe failed, re-open
-      state.state = 'open';
-      state.openedAt = Date.now();
+      this.open(state, errorClass);
       logger.warn(`Circuit re-opened for source: ${sourceCode} (probe failed)`, {
         sourceCode,
         errorClass,
@@ -116,8 +150,7 @@ export class SourceCircuitBreaker {
     }
 
     if (state.consecutiveFailures >= this.failureThreshold && state.state === 'closed') {
-      state.state = 'open';
-      state.openedAt = Date.now();
+      this.open(state, errorClass);
       logger.warn(
         `Circuit opened for source: ${sourceCode} after ${state.consecutiveFailures} consecutive failures`,
         { sourceCode, errorClass },
@@ -145,6 +178,12 @@ export class SourceCircuitBreaker {
     this.sources.delete(sourceCode);
   }
 
+  private open(state: SourceState, errorClass: ErrorClass): void {
+    state.state = 'open';
+    state.openedAt = Date.now();
+    state.openedBy = errorClass;
+  }
+
   private getState(sourceCode: string): SourceState {
     let state = this.sources.get(sourceCode);
     if (!state) {
@@ -153,8 +192,9 @@ export class SourceCircuitBreaker {
         consecutiveFailures: 0,
         lastFailureAt: null,
         lastSuccessAt: null,
-        lastErrorClass: null,
+        openedBy: null,
         openedAt: null,
+        probeDeadline: null,
       };
       this.sources.set(sourceCode, state);
     }

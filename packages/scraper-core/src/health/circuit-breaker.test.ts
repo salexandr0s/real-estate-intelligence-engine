@@ -37,6 +37,27 @@ describe('SourceCircuitBreaker', () => {
     expect(breaker.getCircuitState('willhaben')).toBe('half_open');
   });
 
+  it('lets one probe through a half-open circuit and holds the rest until it reports', () => {
+    const breaker = new SourceCircuitBreaker(1, 300_000);
+    breaker.recordFailure('willhaben', 'soft_anti_bot');
+    expect(breaker.openReason('willhaben')).toBe('soft_anti_bot');
+    vi.setSystemTime(START + 300_000);
+
+    expect(breaker.isOpen('willhaben')).toBe(false);
+    expect(breaker.isOpen('willhaben')).toBe(true);
+    expect(breaker.openUntil('willhaben')).toBe(START + 420_000);
+
+    // A probe that never reports frees the slot at its deadline.
+    vi.setSystemTime(START + 420_000);
+    expect(breaker.isOpen('willhaben')).toBe(false);
+    expect(breaker.isOpen('willhaben')).toBe(true);
+
+    breaker.recordSuccess('willhaben');
+    expect(breaker.isOpen('willhaben')).toBe(false);
+    expect(breaker.isOpen('willhaben')).toBe(false);
+    expect(breaker.openReason('willhaben')).toBeNull();
+  });
+
   it('reports when an open circuit lets traffic through again, and null otherwise', () => {
     const breaker = new SourceCircuitBreaker(2, 300_000);
     expect(breaker.openUntil('willhaben')).toBeNull();
