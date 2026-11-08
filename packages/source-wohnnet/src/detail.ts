@@ -1,5 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type { WohnnetDetailDTO, JsonLdProduct, WohnnetDataLayer } from './dto.js';
 import { extractIdFromUrl } from './discovery.js';
 
@@ -203,7 +203,7 @@ function buildFailedCapture(
 /**
  * A page that carries the listing as Product JSON-LD or in the dataLayer is live, whatever its
  * text says: descriptions say "bereits vermietet" for a flat sold with a tenant in it. Without
- * either, status words count only in the title and h1.
+ * either, status words count only as notices in the title and h1.
  */
 export function detectDetailAvailability(html: string): SourceAvailability {
   if (extractProductJsonLd(html)?.name) return { status: 'available' };
@@ -212,9 +212,10 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   const headline = headlineText(html);
   if (/nicht\s+mehr\s+verf[uü]gbar/i.test(headline)) return { status: 'removed' };
   if (/Objekt\s+nicht\s+gefunden/i.test(headline)) return { status: 'not_found' };
-  if (/bereits\s+verkauft/i.test(headline)) return { status: 'sold' };
-  if (/bereits\s+vermietet/i.test(headline)) return { status: 'rented' };
-  if (/reserviert/i.test(headline)) return { status: 'reserved' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('rented')) return { status: 'rented' };
+  if (notices.has('reserved')) return { status: 'reserved' };
   if (/Inserat\s+wurde\s+deaktiviert/i.test(headline)) return { status: 'removed' };
 
   if (isChallengePage(html)) return { status: 'blocked' };

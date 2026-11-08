@@ -28,6 +28,7 @@ export {
 } from './capture/artifact-writer.js';
 export { computeContentHash } from './capture/content-hash.js';
 export { headlineText } from './capture/headline-text.js';
+export { headlineNotices, type HeadlineNotice } from './capture/headline-notice.js';
 export { isChallengePage } from './capture/challenge-page.js';
 export { isEmptyDocument } from './capture/empty-document.js';
 
