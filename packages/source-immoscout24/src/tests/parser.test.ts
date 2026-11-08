@@ -58,6 +58,8 @@ describe('Immoscout24Adapter', () => {
     expect(plans[0]!.waitForSelector).toContain('[data-testid="results-items"]');
     expect(plans[0]!.url).toContain('/regional/wien/wien/wohnung-kaufen');
     expect(plans[0]!.url).not.toContain('/seite-');
+    // The default order leads with developer projects.
+    expect(new URL(plans[0]!.url).searchParams.get('sort')).toBe('CREATED_DESC');
   });
 
   it('builds detail request with correct URL', async () => {
@@ -362,7 +364,7 @@ describe('Discovery page parsing (app state)', () => {
     expect(html).toContain('undefined');
 
     const result = parseDiscoveryPage(html, 'immoscout24', {
-      url: 'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-2',
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-2?sort=CREATED_DESC',
       metadata: { page: 2 },
     });
 
@@ -382,8 +384,9 @@ describe('Discovery page parsing (app state)', () => {
       locationRaw: 'Musterstraße 3, 1100 Wien',
     });
     expect(result.totalEstimate).toBe(22057);
+    // The next page keeps the newest-first order.
     expect(result.nextPagePlan!.url).toBe(
-      'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-3',
+      'https://www.immobilienscout24.at/regional/wien/wien/wohnung-kaufen/seite-3?sort=CREATED_DESC',
     );
     expect(result.nextPagePlan!.metadata!.page).toBe(3);
   });
