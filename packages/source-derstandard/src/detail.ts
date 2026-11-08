@@ -1,12 +1,18 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
 import { isChallengePage } from '@immoradar/scraper-core';
 import type { DerStandardDetailDTO, DerStandardDetailData } from './dto.js';
+import { readFacts, readListingJsonLd, type ListingJsonLd } from './structured-data.js';
+import { decodeHtmlEntities, stripTags } from './text.js';
 
 /**
- * derstandard.at detail pages may embed listing data as JSON in
- * <script id="listing-detail-data">, or render it as DOM text in a
- * Next.js React app. We try JSON first, then fall back to DOM extraction.
+ * derstandard.at detail pages describe the listing in a JSON-LD RealEstateListing and show further
+ * facts as label and value pairs. Older pages embedded the listing as JSON in
+ * <script id="listing-detail-data">, or showed it only as page text. The embedded JSON is read
+ * first, then the JSON-LD, then the text of the old layout.
  */
+
+/** Markup of the current layout, which the old layout's text patterns misread. */
+const CURRENT_LAYOUT = /\bsc-metadata-item\b/;
 
 export function parseDetailPage(
   html: string,
@@ -14,7 +20,7 @@ export function parseDetailPage(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
-  // ── Primary path: embedded JSON ──────────────────────────────────────────
+  // ── Embedded JSON ────────────────────────────────────────────────────────
   const scriptMatch = html.match(/<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/);
 
   if (scriptMatch?.[1]) {
@@ -22,12 +28,21 @@ export function parseDetailPage(
       const detailData = JSON.parse(scriptMatch[1]) as DerStandardDetailData;
       return buildCaptureFromJson(detailData, url, sourceCode, parserVersion);
     } catch {
-      // parse failed, fall through to DOM extraction
+      // parse failed, fall through to the JSON-LD
     }
   }
 
-  // ── Fallback path: DOM text extraction ───────────────────────────────────
-  const domResult = extractFromDom(html);
+  // ── JSON-LD and labelled facts ───────────────────────────────────────────
+  const listing = readListingJsonLd(html);
+  if (listing) {
+    return buildCaptureFromJsonLd(listing, readFacts(html), url, sourceCode, parserVersion);
+  }
+
+  // ── Text of the old layout ───────────────────────────────────────────────
+  // These patterns search the whole page. On the current layout the first number after
+  // "Kaufpreis" is not the price, and the first after "Zimmer" is the price in the page title, so a
+  // current page without JSON-LD fails instead.
+  const domResult = CURRENT_LAYOUT.test(html) ? null : extractFromDom(html);
   if (domResult) {
     return buildCaptureFromDom(domResult, url, sourceCode, parserVersion);
   }
@@ -116,6 +131,102 @@ function buildCaptureFromJson(
   };
 }
 
+// ── JSON-LD path builder ─────────────────────────────────────────────────────
+
+function buildCaptureFromJsonLd(
+  listing: ListingJsonLd,
+  facts: ReadonlyMap<string, string>,
+  url: string,
+  sourceCode: string,
+  parserVersion: number,
+): DetailCapture<DerStandardDetailDTO> {
+  const standardId = listing.id ?? extractIdFromUrl(url) ?? '';
+  // "Freiflächen" lists the outdoor spaces, e.g. "Balkon, Terrasse".
+  const outdoor = facts.get('Freiflächen')?.split(/\s*,\s*/) ?? [];
+  const features = [...new Set([...listing.amenities, ...outdoor])].filter((f) => f !== '');
+  const hasBalcony = features.some((f) => /balkon|loggia/i.test(f));
+  const hasTerrace = features.some((f) => /terrasse|dachterrasse/i.test(f));
+  const hasGarden = features.some((f) => /garten/i.test(f));
+  const hasElevator = features.some((f) => /lift|aufzug|fahrstuhl/i.test(f));
+  const address = [listing.street, listing.postalCode, listing.city].filter(Boolean).join(', ');
+
+  const payload: DerStandardDetailDTO = {
+    standardId,
+    titleRaw: listing.title,
+    descriptionRaw: listing.description,
+    priceRaw:
+      numberText(listing.price) ?? factAmount(facts.get('Kaufpreis'), normalizeAustrianPrice),
+    livingAreaRaw:
+      factAmount(facts.get('Wohnfläche'), normalizeDecimal) ?? numberText(listing.floorSize),
+    usableAreaRaw: factAmount(facts.get('Nutzfläche'), normalizeDecimal),
+    roomsRaw: numberText(listing.rooms),
+    addressRaw: address || null,
+    postalCodeRaw: listing.postalCode,
+    districtRaw: null, // normalization derives the district from the postal code
+    cityRaw: listing.city,
+    streetRaw: listing.street,
+    propertyTypeRaw: listing.propertyType,
+    propertySubtypeRaw: null,
+    operationTypeRaw: 'sale', // kaufen section is always sale
+    statusRaw: 'unknown',
+    floorRaw: facts.get('Stockwerk') ?? facts.get('Etage') ?? null,
+    yearBuiltRaw: /\b(\d{4})\b/.exec(facts.get('Baujahr') ?? '')?.[1] ?? null,
+    heatingTypeRaw: facts.get('Heizungsart') ?? null,
+    conditionRaw: listing.properties.get('Zustand') ?? facts.get('Zustand') ?? null,
+    energyCertificateRaw:
+      listing.properties.get('Heizwärmebedarf (HWB) Klasse') ??
+      facts.get('Heizwärmebedarf (HWB) Klasse') ??
+      null,
+    operatingCostRaw: factAmount(
+      facts.get('Betriebskosten netto') ?? facts.get('Betriebskosten'),
+      normalizeAustrianPrice,
+    ),
+    latRaw: null, // the page gives no coordinates; geocoding fills them
+    lonRaw: null,
+    balconyAreaRaw: null,
+    terraceAreaRaw: null,
+    gardenAreaRaw: null,
+    commissionRaw: null,
+    reserveFundRaw: null,
+    attributesRaw: {
+      features,
+      hasBalcony,
+      hasTerrace,
+      hasGarden,
+      hasElevator,
+    },
+    mediaRaw: [],
+    images: listing.images,
+    contactName: listing.offeredBy,
+    contactPhone: null,
+  };
+
+  return {
+    sourceCode,
+    sourceListingKeyCandidate: standardId,
+    externalId: standardId,
+    canonicalUrl: url.split('?')[0] ?? url,
+    detailUrl: url,
+    extractedAt: new Date().toISOString(),
+    payload,
+    parserVersion,
+    extractionStatus: payload.titleRaw ? 'captured' : 'parse_failed',
+  };
+}
+
+function numberText(value: number | null): string | null {
+  return value === null ? null : String(value);
+}
+
+/** The amount in a fact such as "€ 649.000" or "46,72 m²"; null when the fact has none. */
+function factAmount(
+  fact: string | undefined,
+  normalize: (value: string) => string | null,
+): string | null {
+  const amount = /(\d[\d.]*(?:,\d+)?)/.exec(fact ?? '')?.[1];
+  return amount ? normalize(amount) : null;
+}
+
 // ── DOM extraction types and helpers ─────────────────────────────────────────
 
 interface DomExtracted {
@@ -138,52 +249,6 @@ interface DomExtracted {
   contactPhone: string | null;
   images: string[];
   features: string[];
-}
-
-/**
- * Decode common HTML entities that appear in derstandard pages.
- * Handles numeric (&#NNN; / &#xHH;) and named entities used in German text.
- */
-function decodeHtmlEntities(text: string): string {
-  const named: Record<string, string> = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&apos;': "'",
-    '&euro;': '\u20AC',
-    '&auml;': '\u00E4',
-    '&ouml;': '\u00F6',
-    '&uuml;': '\u00FC',
-    '&Auml;': '\u00C4',
-    '&Ouml;': '\u00D6',
-    '&Uuml;': '\u00DC',
-    '&szlig;': '\u00DF',
-    '&sup2;': '\u00B2',
-    '&nbsp;': ' ',
-  };
-
-  let result = text;
-  for (const [entity, char] of Object.entries(named)) {
-    result = result.split(entity).join(char);
-  }
-
-  // Numeric entities: &#123; or &#x1F;
-  result = result.replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
-  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) =>
-    String.fromCharCode(parseInt(hex, 16)),
-  );
-
-  return result;
-}
-
-/**
- * Strip HTML tags, decode entities, and collapse whitespace.
- */
-function stripTags(html: string): string {
-  return decodeHtmlEntities(html.replace(/<[^>]*>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 /**

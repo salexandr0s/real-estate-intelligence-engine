@@ -15,7 +15,7 @@ describe('DerStandardAdapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('derstandard');
     expect(adapter.sourceName).toBe('derstandard.at Immobilien');
-    expect(adapter.parserVersion).toBe(2);
+    expect(adapter.parserVersion).toBe(3);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -51,8 +51,9 @@ describe('DerStandardAdapter', () => {
     });
     // Adapters now only build page 1; dynamic pagination follows nextPagePlan
     expect(plans).toHaveLength(1);
-    expect(plans[0]!.url).toContain('page=1');
-    expect(plans[0]!.url).toContain('immobilien.derstandard.at');
+    expect(plans[0]!.url).toBe(
+      'https://immobilien.derstandard.at/suche/wien/kaufen-wohnung?page=1',
+    );
   });
 
   it('uses correct waitForSelector for discovery', async () => {
@@ -321,6 +322,105 @@ describe('Discovery page parsing', () => {
     });
     expect(result.items.length).toBe(1);
     expect(result.nextPagePlan).toBeNull();
+  });
+});
+
+describe('Discovery page parsing (card layout)', () => {
+  const plan = {
+    url: 'https://immobilien.derstandard.at/suche/wien/kaufen-wohnung?page=1',
+    metadata: { page: 1 },
+  };
+
+  it('reads a card from its address, price span and footer', () => {
+    const result = parseDiscoveryPage(loadFixture('discovery-cards.html'), 'derstandard', plan);
+    const card = result.items.find((item) => item.externalId === '90000003');
+
+    // The 17 m² in the title is the terrace, not the flat.
+    expect(card?.summaryPayload).toMatchObject({
+      titleRaw: '3-Zimmer-Wohnung mit 17 m² Terrasse',
+      locationRaw: '1190 Wien, Musterstraße, Döbling',
+      priceRaw: '649000',
+      areaRaw: '112',
+      roomsRaw: '3',
+    });
+  });
+
+  it("gives each project unit its own figures, never the project's range", () => {
+    const result = parseDiscoveryPage(loadFixture('discovery-cards.html'), 'derstandard', plan);
+
+    // The project page is not a listing, so only its units and the regular card count.
+    expect(result.items.map((item) => item.externalId)).toEqual([
+      '90000001',
+      '90000002',
+      '90000003',
+    ]);
+    expect(result.items[0]!.summaryPayload).toMatchObject({
+      titleRaw: 'Wohnen am Musterpark',
+      locationRaw: '1030 Wien',
+      priceRaw: '387000',
+      areaRaw: '46.72',
+      roomsRaw: '2',
+    });
+    // A unit without a price must not take the cheapest unit's.
+    expect(result.items[1]!.summaryPayload).toMatchObject({
+      priceRaw: null,
+      areaRaw: '231.74',
+      roomsRaw: '6',
+    });
+  });
+
+  it('follows the pager buttons and stops after the last page', () => {
+    const html = loadFixture('discovery-cards.html');
+    const next = parseDiscoveryPage(html, 'derstandard', plan).nextPagePlan;
+    expect(next?.url).toBe('https://immobilien.derstandard.at/suche/wien/kaufen-wohnung?page=2');
+    expect(next?.metadata?.page).toBe(2);
+
+    // No button names a page after 500.
+    const last = parseDiscoveryPage(html, 'derstandard', { ...plan, metadata: { page: 500 } });
+    expect(last.nextPagePlan).toBeNull();
+  });
+});
+
+describe('Detail page parsing — JSON-LD (current layout)', () => {
+  const url = 'https://immobilien.derstandard.at/detail/90000001';
+
+  it('reads the listing from its JSON-LD and labelled facts', () => {
+    const result = parseDetailPage(loadFixture('detail-jsonld.html'), url, 'derstandard', 3);
+
+    expect(result.extractionStatus).toBe('captured');
+    expect(result.externalId).toBe('90000001');
+    // The page title and the similar listings also carry prices and room counts.
+    expect(result.payload).toMatchObject({
+      titleRaw: 'Erstbezug mit Balkon am Musterpark',
+      priceRaw: '387000',
+      livingAreaRaw: '46.72',
+      roomsRaw: '2',
+      postalCodeRaw: '1030',
+      cityRaw: 'Wien',
+      streetRaw: null,
+      propertyTypeRaw: 'Apartment',
+      conditionRaw: 'Erstbezug',
+      energyCertificateRaw: 'A',
+      heatingTypeRaw: 'Fernwärme',
+      operatingCostRaw: '299.88',
+    });
+    expect(result.payload.attributesRaw).toMatchObject({
+      features: ['Fahrstuhl', 'Keller', 'Balkon'],
+      hasBalcony: true,
+      hasElevator: true,
+      hasGarden: false,
+    });
+    expect(result.payload.images).toHaveLength(2);
+  });
+
+  it('fails a current page without JSON-LD instead of reading numbers from its text', () => {
+    const html = loadFixture('detail-jsonld.html').replace(
+      /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
+      '',
+    );
+
+    // The text patterns would read the "€ 387.000" in the title as the room count.
+    expect(parseDetailPage(html, url, 'derstandard', 3).extractionStatus).toBe('parse_failed');
   });
 });
 
