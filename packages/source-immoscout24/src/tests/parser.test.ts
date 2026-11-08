@@ -738,27 +738,29 @@ describe('Detail page parsing (Expose record)', () => {
     expect(parseExposePage(html).priceRaw).toBeNull();
   });
 
-  it('gives a developer project no asking price, area or rooms', () => {
+  it('gives a developer project no asking price, area, rooms or floor', () => {
     // primaryPrice is the cheapest unit's price and changes as units sell, so it is kept as a
-    // from-price. The text quotes the range across all units; its 155 m² next to that price
-    // would score as a bargain.
+    // from-price. The record's area and rooms can describe one unit, and the text quotes ranges
+    // across all units, so neither describes the listing.
     const html = loadFixture('detail-expose.html')
       .replace('"__typename":"Expose",', '"__typename":"Expose","meta":{"hasChildren":true},')
-      .replace('"primaryArea":72.4,"livingArea":72.4', '"primaryArea":null,"livingArea":null')
-      .replace('"numberOfRooms":3', '"numberOfRooms":null')
       .replace(
         '"description": "Helle Wohnung in ruhiger Lage, nahe Musterpark."',
-        '"description": "Neubauprojekt mit 2 bis 5 Zimmern und 40 bis 155 m² Wohnfläche."',
+        '"description": "Neubauprojekt mit 2 bis 5 Zimmern und 40 bis 155 m² Wohnfläche im 1. bis 5. Stock."',
       );
     expect(html).toContain('"hasChildren":true');
+    expect(html).toContain('"livingArea":72.4');
     expect(html).toContain('155 m²');
 
-    const payload = parseExposePage(html);
-    expect(payload.livingAreaRaw).toBeNull();
-    expect(payload.roomsRaw).toBeNull();
-    expect(payload.priceRaw).toBeNull();
-    expect(payload.attributesRaw).toEqual({ priceFromRaw: '389000' });
-    expect(payload.postalCodeRaw).toBe('1150');
+    expect(parseExposePage(html)).toMatchObject({
+      priceRaw: null,
+      livingAreaRaw: null,
+      roomsRaw: null,
+      balconyAreaRaw: null,
+      floorRaw: null,
+      attributesRaw: { priceFromRaw: '389000' },
+      postalCodeRaw: '1150',
+    });
   });
 });
 

@@ -71,10 +71,9 @@ export function parseDetailPage(
 
   const { priceRaw, priceFromRaw } = readPrice(facts, product, html);
 
-  // The description text fills what the Expose record leaves out, and only through labelled
-  // values ("Wohnfläche: 72 m²"): a bare "8 m²" can be the balcony and "2 bis 4 Zimmer" a range.
-  // A developer project's text quotes ranges across its units, so it fills nothing there.
-  const fromText = facts?.isProject !== true;
+  // A developer project is not one flat: its record can carry one unit's area and rooms, and its
+  // text quotes ranges across all units. It gets no area, rooms, outdoor space or floor.
+  const isProject = facts?.isProject === true;
   const textAddress = parseAddress(descriptionText);
   const street = facts?.street ?? textAddress.street;
   const postalCode = facts?.postalCode ?? textAddress.postalCode;
@@ -89,16 +88,18 @@ export function parseDetailPage(
     titleRaw: product.name ?? null,
     descriptionRaw: descriptionText || null,
     priceRaw,
-    livingAreaRaw: facts?.livingAreaRaw ?? (fromText ? parseArea(descriptionText) : null),
+    // The description text fills what the Expose record leaves out, and only through labelled
+    // values ("Wohnfläche: 72 m²"): a bare "8 m²" can be the balcony and "2 bis 4 Zimmer" a range.
+    livingAreaRaw: isProject ? null : (facts?.livingAreaRaw ?? parseArea(descriptionText)),
     usableAreaRaw: null,
-    roomsRaw: facts?.roomsRaw ?? (fromText ? parseRooms(descriptionText) : null),
+    roomsRaw: isProject ? null : (facts?.roomsRaw ?? parseRooms(descriptionText)),
     addressRaw,
     postalCodeRaw: postalCode,
     districtRaw: deriveDistrict(postalCode),
     cityRaw: city,
     federalStateRaw: null,
     streetRaw: street,
-    floorRaw: parseFloor(descriptionText),
+    floorRaw: isProject ? null : parseFloor(descriptionText),
     yearBuiltRaw: facts?.yearBuiltRaw ?? parseYearBuilt(descriptionText),
     propertyTypeRaw: null,
     estateTypeRaw: facts?.estateTypeRaw ?? null,
@@ -107,9 +108,9 @@ export function parseDetailPage(
     heatingTypeRaw: null,
     conditionRaw: null,
     energyCertificateRaw: null,
-    balconyAreaRaw: facts?.balconyAreaRaw ?? (fromText ? parseBalconyArea(descriptionText) : null),
+    balconyAreaRaw: isProject ? null : (facts?.balconyAreaRaw ?? parseBalconyArea(descriptionText)),
     terraceAreaRaw: null,
-    gardenAreaRaw: facts?.gardenAreaRaw ?? null,
+    gardenAreaRaw: isProject ? null : (facts?.gardenAreaRaw ?? null),
     commissionRaw: null,
     operatingCostRaw: null,
     reserveFundRaw: null,
@@ -238,7 +239,8 @@ interface ExposeFacts {
 /**
  * The `Expose` record for this listing in `window.__APOLLO_STATE__`, keyed `Expose:<id>`. A page
  * with a single Expose record uses it even when the URL carries no ID. Null without one.
- * Developer projects leave area and rooms empty and give the lowest unit price.
+ * A developer project's primaryPrice is its cheapest unit's price, and its area and rooms, when
+ * present, describe one unit rather than the project.
  */
 function readExposeFacts(html: string, exposeId: string): ExposeFacts | null {
   const state = readEmbeddedState(html, '__APOLLO_STATE__');
