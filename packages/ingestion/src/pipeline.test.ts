@@ -223,10 +223,13 @@ function createStatefulPipeline(existing: CanonicalListingInput | null = null) {
   scoreAndAlert.persistScore.mockImplementation(async (_listingId: number, versionId: number) => {
     scoredVersionIds.push(versionId);
   });
-  // Like the query: the price of the second latest version that has one.
+  // Like the query: the price of the second latest version that has one, and none when the
+  // latest priced version is a backfill.
   scoreAndAlert.findPreviousPrice.mockImplementation(async () => {
-    const prices = versions.flatMap((v) => pricesByVersionId.get(v.id) ?? []);
-    return prices[prices.length - 2] ?? null;
+    const priced = versions.filter((v) => pricesByVersionId.get(v.id) != null);
+    const [previous, latest] = priced.slice(-2);
+    if (!previous || !latest || latest.versionReason === 'backfill') return null;
+    return pricesByVersionId.get(previous.id) ?? null;
   });
 
   const pipeline = new FullIngestionPipeline(

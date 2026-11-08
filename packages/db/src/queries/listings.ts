@@ -344,8 +344,11 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        cross_source_fingerprint = EXCLUDED.cross_source_fingerprint,
        normalization_version = EXCLUDED.normalization_version,
        last_seen_at = NOW(),
+       -- A price that appears, disappears or changes with our normalization version is no
+       -- repricing by the source.
        last_price_change_at = CASE
-         WHEN listings.list_price_eur_cents IS DISTINCT FROM EXCLUDED.list_price_eur_cents
+         WHEN listings.list_price_eur_cents <> EXCLUDED.list_price_eur_cents
+           AND listings.normalization_version = EXCLUDED.normalization_version
          THEN NOW()
          ELSE listings.last_price_change_at
        END,
