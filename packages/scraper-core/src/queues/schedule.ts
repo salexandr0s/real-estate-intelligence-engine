@@ -15,13 +15,13 @@ export interface ScheduleModeConfig {
   scheduler: { enabled: boolean };
 }
 
-export interface DiscoveryScheduleConfig {
-  scheduler: { enabled: boolean };
+export interface DiscoveryScheduleConfig extends ScheduleModeConfig {
   scraper: { minCrawlIntervalMinutes: number; maxPagesPerRun: number };
 }
 
 interface SchedulerStore {
-  getJobSchedulers(): Promise<Array<{ key: string }>>;
+  /** BullMQ reads the list, then each entry. An entry removed in between comes back undefined. */
+  getJobSchedulers(): Promise<Array<{ key: string } | undefined>>;
   removeJobScheduler(schedulerId: string): Promise<boolean>;
 }
 
@@ -37,10 +37,19 @@ export function stableMinuteOffset(key: string): number {
   return createHash('sha256').update(key).digest().readUInt16BE(0) % 60;
 }
 
+/** Hour steps that divide a day evenly. */
+const DAY_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 24];
+
+/**
+ * A step of N hours restarts at midnight, so a step that doesn't divide 24 leaves a short gap
+ * there: every 11 hours runs at 0, 11 and 22, two hours before the next 0. The step is rounded up
+ * to the next divisor of 24 instead.
+ */
 export function hourlyCron(schedulerId: string, everyHours: number): string {
   const minute = stableMinuteOffset(schedulerId);
+  const step = DAY_DIVISORS.find((divisor) => divisor >= everyHours) ?? 24;
   // Cron hours stop at 23, so a step of 24 would not parse.
-  return everyHours >= 24 ? `${minute} 0 * * *` : `${minute} */${everyHours} * * *`;
+  return step === 24 ? `${minute} 0 * * *` : `${minute} */${step} * * *`;
 }
 
 export function discoverySchedulerId(sourceCode: string): string {
@@ -80,7 +89,8 @@ export async function syncDiscoverySchedule(
 ): Promise<void> {
   const schedulerId = discoverySchedulerId(source.code);
 
-  if (!config.scheduler.enabled || !source.isActive) {
+  // The API syncs too, so setup mode has to be checked here as well as in the scraper.
+  if (!shouldRegisterAutomatedSchedules(config) || !source.isActive) {
     await queue.removeJobScheduler(schedulerId);
     return;
   }
@@ -115,10 +125,12 @@ export async function removeSchedulersExcept(
   queue: SchedulerStore,
   keep: readonly string[],
 ): Promise<void> {
-  const schedulers = await queue.getJobSchedulers();
+  // The scraper and processing both clear the mailbox queue at startup, so another process can
+  // remove an entry while this one lists them.
+  const keys = (await queue.getJobSchedulers()).flatMap((scheduler) =>
+    scheduler ? [scheduler.key] : [],
+  );
   await Promise.all(
-    schedulers
-      .filter((scheduler) => !keep.includes(scheduler.key))
-      .map((scheduler) => queue.removeJobScheduler(scheduler.key)),
+    keys.filter((key) => !keep.includes(key)).map((key) => queue.removeJobScheduler(key)),
   );
 }

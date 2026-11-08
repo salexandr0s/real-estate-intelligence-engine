@@ -23,7 +23,7 @@ Lower values reduce block risk but increase crawl duration.
 
 ### Crawl interval: `crawl_interval_minutes`
 
-Minutes between scheduled discovery runs. The schedule uses the larger of this value and `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES`, rounded up to whole hours, at a minute derived from the source code. With the default floor of 180, a source set to 15 and a source set to 180 both run every 3 hours.
+Minutes between scheduled discovery runs. The schedule uses the larger of this value and `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES`, rounded up to 1, 2, 3, 4, 6, 8, 12 or 24 hours so runs stay evenly spaced across midnight, at a minute derived from the source code. Anything longer than a day runs daily. With the default floor of 180, a source set to 15 and a source set to 180 both run every 3 hours.
 
 | Source     | Default | Current |
 | ---------- | ------- | ------- |

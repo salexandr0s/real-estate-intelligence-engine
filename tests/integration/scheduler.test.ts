@@ -9,7 +9,7 @@ import {
   getRedisConnection,
   syncDiscoverySchedule,
 } from '@immoradar/scraper-core';
-import type { DiscoveryJobData, QueueName } from '@immoradar/scraper-core';
+import type { DiscoveryJobData, DiscoveryScheduleConfig, QueueName } from '@immoradar/scraper-core';
 import { startScheduler } from '../../apps/worker-scraper/src/scheduler.js';
 import { seed } from '../../packages/db/seeds/seed.js';
 import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
@@ -197,7 +197,8 @@ describe('syncDiscoverySchedule', () => {
     crawlIntervalMinutes: 1440,
     config: {},
   } as Parameters<typeof syncDiscoverySchedule>[1];
-  const settings = {
+  const settings: DiscoveryScheduleConfig = {
+    runtime: { bootMode: 'active' },
     scheduler: { enabled: true },
     scraper: { minCrawlIntervalMinutes: 180, maxPagesPerRun: 60 },
   };
@@ -227,13 +228,17 @@ describe('syncDiscoverySchedule', () => {
     });
   });
 
-  it('removes the schedule of a paused source and adds none while schedules are off', async () => {
+  it('removes the schedule of a paused source and adds none while schedules are off or in setup', async () => {
     await withQueue(async (queue) => {
       await syncDiscoverySchedule(queue, source, settings);
       await syncDiscoverySchedule(queue, { ...source, isActive: false }, settings);
       expect(await queue.getJobSchedulers()).toEqual([]);
 
       await syncDiscoverySchedule(queue, source, { ...settings, scheduler: { enabled: false } });
+      expect(await queue.getJobSchedulers()).toEqual([]);
+
+      // The API syncs when a source is edited, and setup mode must not start crawls.
+      await syncDiscoverySchedule(queue, source, { ...settings, runtime: { bootMode: 'setup' } });
       expect(await queue.getJobSchedulers()).toEqual([]);
     });
   });

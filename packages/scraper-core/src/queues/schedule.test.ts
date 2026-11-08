@@ -2,9 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   discoveryCron,
   maxPagesForSource,
+  removeSchedulersExcept,
   shouldRegisterAutomatedSchedules,
   stableMinuteOffset,
 } from './schedule.js';
+
+describe('removeSchedulersExcept', () => {
+  // Two processes clear the mailbox queue at startup, so an entry can vanish mid-listing.
+  it('skips an entry another process removed while it listed them', async () => {
+    const removed: string[] = [];
+    const store = {
+      getJobSchedulers: async () => [undefined, { key: 'old' }, { key: 'kept' }],
+      removeJobScheduler: async (key: string) => {
+        removed.push(key);
+        return true;
+      },
+    };
+
+    await removeSchedulersExcept(store, ['kept']);
+    expect(removed).toEqual(['old']);
+  });
+});
 
 describe('discoveryCron', () => {
   it('holds a 15-minute source to the 180-minute floor', () => {
@@ -21,6 +39,12 @@ describe('discoveryCron', () => {
 
   it('switches to a daily run where an hour step would not parse', () => {
     expect(discoveryCron('edikte', 1440, 180)).toMatch(/^\d+ 0 \* \* \*$/);
+  });
+
+  // Every 11 hours would run at 22:00 and again at midnight, two hours apart.
+  it('rounds the step up to one that divides the day', () => {
+    expect(discoveryCron('willhaben', 660, 180)).toMatch(/^\d+ \*\/12 \* \* \*$/);
+    expect(discoveryCron('willhaben', 300, 180)).toMatch(/^\d+ \*\/6 \* \* \*$/);
   });
 
   it('gives a source the same minute on every sync', () => {
