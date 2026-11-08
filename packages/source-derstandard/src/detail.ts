@@ -1,8 +1,8 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { isChallengePage } from '@immoradar/scraper-core';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type { DerStandardDetailDTO, DerStandardDetailData } from './dto.js';
 import { readFacts, readListingJsonLd, type ListingJsonLd } from './structured-data.js';
-import { decodeHtmlEntities, stripTags } from './text.js';
+import { decodeHtmlEntities, numberText, stripTags } from './text.js';
 
 /**
  * derstandard.at detail pages describe the listing in a JSON-LD RealEstateListing and show further
@@ -58,7 +58,7 @@ function buildCaptureFromJson(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
-  const standardId = detailData.id != null ? String(detailData.id) : (extractIdFromUrl(url) ?? '');
+  const standardId = listingId(url, detailData.id != null ? String(detailData.id) : null);
   const addr = detailData.address;
   const coords = detailData.coordinates;
   const contact = detailData.contact;
@@ -75,14 +75,10 @@ function buildCaptureFromJson(
     standardId,
     titleRaw: detailData.title ?? null,
     descriptionRaw: detailData.description ?? null,
-    priceRaw: detailData.price != null ? String(detailData.price) : null,
-    livingAreaRaw: normalizeDecimal(
-      detailData.livingArea != null ? String(detailData.livingArea) : null,
-    ),
-    usableAreaRaw: normalizeDecimal(
-      detailData.usableArea != null ? String(detailData.usableArea) : null,
-    ),
-    roomsRaw: detailData.rooms != null ? String(detailData.rooms) : null,
+    priceRaw: rawText(detailData.price),
+    livingAreaRaw: areaText(rawText(detailData.livingArea)),
+    usableAreaRaw: areaText(rawText(detailData.usableArea)),
+    roomsRaw: rawText(detailData.rooms),
     addressRaw: formatAddress(addr),
     postalCodeRaw: addr?.postalCode ?? null,
     districtRaw,
@@ -92,12 +88,13 @@ function buildCaptureFromJson(
     propertySubtypeRaw: detailData.subType ?? null,
     operationTypeRaw: 'sale', // derstandard kaufen section is always sale
     statusRaw: detailData.status ?? 'unknown',
-    floorRaw: detailData.floor != null ? String(detailData.floor) : null,
-    yearBuiltRaw: detailData.yearBuilt != null ? String(detailData.yearBuilt) : null,
+    floorRaw: rawText(detailData.floor),
+    yearBuiltRaw: rawText(detailData.yearBuilt),
     heatingTypeRaw: detailData.heatingType ?? null,
     conditionRaw: detailData.condition ?? null,
     energyCertificateRaw: detailData.energyCertificate ?? null,
-    operatingCostRaw: detailData.operatingCosts != null ? String(detailData.operatingCosts) : null,
+    operatingCostRaw: rawText(detailData.operatingCosts),
+    // Coordinates keep every decimal: normalization reads them with parseFloat.
     latRaw: coords?.lat != null ? String(coords.lat) : null,
     lonRaw: coords?.lng != null ? String(coords.lng) : null,
     balconyAreaRaw: null, // derstandard does not provide typed area breakdowns
@@ -140,7 +137,7 @@ function buildCaptureFromJsonLd(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<DerStandardDetailDTO> {
-  const standardId = listing.id ?? extractIdFromUrl(url) ?? '';
+  const standardId = listingId(url, listing.id);
   // "Freiflächen" lists the outdoor spaces, e.g. "Balkon, Terrasse".
   const outdoor = facts.get('Freiflächen')?.split(/\s*,\s*/) ?? [];
   const features = [...new Set([...listing.amenities, ...outdoor])].filter((f) => f !== '');
@@ -154,12 +151,10 @@ function buildCaptureFromJsonLd(
     standardId,
     titleRaw: listing.title,
     descriptionRaw: listing.description,
-    priceRaw:
-      numberText(listing.price) ?? factAmount(facts.get('Kaufpreis'), normalizeAustrianPrice),
-    livingAreaRaw:
-      factAmount(facts.get('Wohnfläche'), normalizeDecimal) ?? numberText(listing.floorSize),
-    usableAreaRaw: factAmount(facts.get('Nutzfläche'), normalizeDecimal),
-    roomsRaw: numberText(listing.rooms),
+    priceRaw: listing.price ?? factAmount(facts.get('Kaufpreis'), normalizeAustrianPrice),
+    livingAreaRaw: factAmount(facts.get('Wohnfläche'), areaText) ?? listing.floorSize,
+    usableAreaRaw: factAmount(facts.get('Nutzfläche'), areaText),
+    roomsRaw: listing.rooms,
     addressRaw: address || null,
     postalCodeRaw: listing.postalCode,
     districtRaw: null, // normalization derives the district from the postal code
@@ -214,8 +209,18 @@ function buildCaptureFromJsonLd(
   };
 }
 
-function numberText(value: number | null): string | null {
-  return value === null ? null : String(value);
+/**
+ * The ID a capture is keyed by. Discovery keys each sighting by the ID in the listing's URL, so
+ * the page's own ID counts only when the URL has none.
+ */
+function listingId(url: string, pageId: string | null): string {
+  return extractIdFromUrl(url) ?? pageId ?? '';
+}
+
+/** A value from the embedded JSON as a raw string: a number by numberText, a string trimmed. */
+function rawText(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? numberText(value) : null;
+  return typeof value === 'string' ? value.trim() || null : null;
 }
 
 /** The amount in a fact such as "€ 649.000" or "46,72 m²"; null when the fact has none. */
@@ -286,7 +291,7 @@ function extractFromDom(html: string): DomExtracted | null {
 
   // Living area
   const areaMatch = decoded.match(/Wohnfl\u00E4che[\s\S]{0,50}?([\d.,]+)\s*m/);
-  const livingArea = areaMatch?.[1] ? normalizeDecimal(areaMatch[1]) : null;
+  const livingArea = areaMatch?.[1] ? areaText(areaMatch[1]) : null;
 
   // Rooms
   const roomsMatch = decoded.match(/Zimmer[\s\S]{0,30}?(\d+)/);
@@ -555,8 +560,14 @@ function buildFailedCapture(
   };
 }
 
+const GONE_NOTICE = /Anzeige\s+nicht\s+mehr\s+verf[uü]gbar/i;
+
+/**
+ * The embedded listing data states the listing's status, and the listing's JSON-LD means it is
+ * live, whatever the page's text says. Without either, only notices in the title and h1 count,
+ * because similar-listing teasers and footers also say "verkauft" or "nicht mehr verfügbar".
+ */
 export function detectDetailAvailability(html: string): SourceAvailability {
-  // Check for embedded detail data first
   const scriptMatch = html.match(/<script[^>]+id="listing-detail-data"[^>]*>([\s\S]*?)<\/script>/);
   if (scriptMatch?.[1]) {
     try {
@@ -567,19 +578,16 @@ export function detectDetailAvailability(html: string): SourceAvailability {
     }
   }
 
-  // For DOM-rendered pages, check if content is present (means it is available)
-  if (/<h1[^>]*>/.test(html) && /Kaufpreis|Wohnfl/.test(decodeHtmlEntities(html))) {
-    return { status: 'available' };
-  }
+  if (readListingJsonLd(html)) return { status: 'available' };
 
-  // Check for "not available" error page text
-  if (/Anzeige nicht mehr verf[uü]gbar/i.test(html)) {
-    return { status: 'not_found' };
-  }
+  const headline = headlineText(html);
+  if (GONE_NOTICE.test(headline)) return { status: 'not_found' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('rented')) return { status: 'rented' };
+  if (notices.has('reserved')) return { status: 'reserved' };
 
-  if (isChallengePage(html)) {
-    return { status: 'blocked' };
-  }
+  if (isChallengePage(html)) return { status: 'blocked' };
 
   return { status: 'unknown' };
 }
@@ -625,16 +633,12 @@ function normalizeAustrianPrice(value: string): string {
 }
 
 /**
- * Normalize Austrian decimal format to standard format.
- * Handles: "58,4" -> "58.4", "1.250,50" -> "1250.50", "86" -> "86"
+ * An area as the page writes it, such as "46,72" or "1.250". Normalization reads Austrian
+ * separators, while rewriting "72,125" as "72.125" would make it read as 72125 m².
  */
-function normalizeDecimal(value: string | null): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (trimmed.includes(',')) {
-    return trimmed.replace(/\./g, '').replace(',', '.');
-  }
-  return trimmed;
+function areaText(value: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function formatAddress(

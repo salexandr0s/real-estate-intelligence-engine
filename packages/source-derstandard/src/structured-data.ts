@@ -1,4 +1,4 @@
-import { stripTags } from './text.js';
+import { numberText, stripTags } from './text.js';
 
 /**
  * Detail pages describe the listing in a JSON-LD RealEstateListing and show further facts as
@@ -10,10 +10,15 @@ export interface ListingJsonLd {
   id: string | null;
   title: string | null;
   description: string | null;
-  /** The asking price; null when the page gives none or 0. */
-  price: number | null;
-  floorSize: number | null;
-  rooms: number | null;
+  /**
+   * The asking price as a raw string, e.g. "387000" or "649.000", for normalization to read;
+   * null when the page gives none or 0.
+   */
+  price: string | null;
+  /** Floor area in m² as a raw string; null when the page gives none or 0. */
+  floorSize: string | null;
+  /** Number of rooms as a raw string; null when the page gives none or 0. */
+  rooms: string | null;
   /** schema.org type of the property, e.g. "Apartment". */
   propertyType: string | null;
   street: string | null;
@@ -83,9 +88,9 @@ function toListing(listing: Record<string, unknown>): ListingJsonLd {
     id: text(listing['identifier']),
     title: text(listing['name']),
     description: text(listing['description']),
-    price: positiveNumber(offer?.['price']),
-    floorSize: positiveNumber(record(entity?.['floorSize'])?.['value']),
-    rooms: positiveNumber(entity?.['numberOfRooms']),
+    price: amountText(offer?.['price']),
+    floorSize: amountText(record(entity?.['floorSize'])?.['value']),
+    rooms: amountText(entity?.['numberOfRooms']),
     propertyType: text(entity?.['@type']),
     street: text(address?.['streetAddress']),
     postalCode: text(address?.['postalCode']),
@@ -129,13 +134,20 @@ function hasType(value: Record<string, unknown>, type: string): boolean {
 
 /** A non-empty trimmed string, or a number as a string; null otherwise. */
 function text(value: unknown): string | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return numberText(value);
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
 }
 
-function positiveNumber(value: unknown): number | null {
-  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
-  return typeof number === 'number' && Number.isFinite(number) && number > 0 ? number : null;
+/**
+ * An amount above zero as a raw string. A string stays as the page wrote it, so "649.000" keeps
+ * the dot that groups its thousands; it counts only when it holds a digit other than 0.
+ */
+function amountText(value: unknown): string | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? numberText(value) : null;
+  }
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return /[1-9]/.test(trimmed) ? trimmed : null;
 }

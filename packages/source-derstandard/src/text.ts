@@ -43,3 +43,11 @@ export function stripTags(html: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * A number as a raw string: whole numbers as they are, others rounded to two decimals.
+ * Normalization reads three digits after a dot as a thousands group, so "72.125" would be 72125.
+ */
+export function numberText(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}

@@ -393,7 +393,7 @@ describe('Detail page parsing — JSON-LD (current layout)', () => {
     expect(result.payload).toMatchObject({
       titleRaw: 'Erstbezug mit Balkon am Musterpark',
       priceRaw: '387000',
-      livingAreaRaw: '46.72',
+      livingAreaRaw: '46,72',
       roomsRaw: '2',
       postalCodeRaw: '1030',
       cityRaw: 'Wien',
@@ -421,6 +421,55 @@ describe('Detail page parsing — JSON-LD (current layout)', () => {
 
     // The text patterns would read the "€ 387.000" in the title as the room count.
     expect(parseDetailPage(html, url, 'derstandard', 3).extractionStatus).toBe('parse_failed');
+  });
+
+  it('keeps the thousands dot of a price the JSON-LD gives as a string', () => {
+    const html = loadFixture('detail-jsonld.html').replace(/("price":\s*)\d+/, '$1"649.000"');
+    // Normalization reads "649.000" as 649,000 euros; Number("649.000") is 649.
+    expect(parseDetailPage(html, url, 'derstandard', 3).payload.priceRaw).toBe('649.000');
+
+    // "0" is no price, so the labelled Kaufpreis counts.
+    const zero = loadFixture('detail-jsonld.html').replace(/("price":\s*)\d+/, '$1"0"');
+    expect(parseDetailPage(zero, url, 'derstandard', 3).payload.priceRaw).toBe('387000');
+  });
+
+  it('writes fractional numbers with two decimals, never three', () => {
+    // Normalization reads "72.125" as 72,125 m², taking the dot for a thousands separator.
+    const html = loadFixture('detail-jsonld.html')
+      .replace(/Wohnfläche/g, 'Fläche')
+      .replace(/("floorSize":\s*\{[^}]*"value":\s*)[\d.]+/, '$1 72.125');
+    expect(parseDetailPage(html, url, 'derstandard', 3).payload.livingAreaRaw).toBe('72.13');
+
+    const embedded =
+      '<script type="application/json" id="listing-detail-data">' +
+      '{"id": 90000001, "title": "Test", "livingArea": 72.125, "operatingCosts": 299.875}' +
+      '</script>';
+    expect(parseDetailPage(embedded, url, 'derstandard', 3).payload).toMatchObject({
+      livingAreaRaw: '72.13',
+      operatingCostRaw: '299.88',
+    });
+  });
+
+  it('keys the listing by the ID in its URL, as discovery does', async () => {
+    const adapter = new DerStandardAdapter();
+    const item = parseDiscoveryPage(loadFixture('discovery-cards.html'), 'derstandard', {
+      url: 'https://immobilien.derstandard.at/suche/wien/kaufen-wohnung?page=1',
+      metadata: { page: 1 },
+    }).items.find((card) => card.externalId === '90000003')!;
+    const detailUrl = (await adapter.buildDetailRequest(item))!.url;
+
+    // The JSON-LD and the embedded JSON both name listing 90000001.
+    const html = loadFixture('detail-jsonld.html');
+    const fromJsonLd = parseDetailPage(html, detailUrl, 'derstandard', 3);
+    expect(adapter.deriveSourceListingKey(fromJsonLd)).toBe('derstandard:90000003');
+    const embedded =
+      '<script type="application/json" id="listing-detail-data">' +
+      '{"id": 90000001, "title": "Test"}</script>';
+    expect(parseDetailPage(embedded, detailUrl, 'derstandard', 3).externalId).toBe('90000003');
+
+    // A URL without an ID leaves the JSON-LD identifier.
+    const noId = 'https://immobilien.derstandard.at/detail/';
+    expect(parseDetailPage(html, noId, 'derstandard', 3).externalId).toBe('90000001');
   });
 });
 
@@ -618,10 +667,31 @@ describe('Detail page parsing — failure cases', () => {
 });
 
 describe('Availability detection', () => {
-  it('detects available listing from DOM-rendered page', () => {
-    const html = loadFixture('detail-page.html');
-    const status = detectDetailAvailability(html);
-    expect(status.status).toBe('available');
+  it('gives no status for an old-layout page, which carries no JSON-LD', () => {
+    expect(detectDetailAvailability(loadFixture('detail-page.html')).status).toBe('unknown');
+  });
+
+  it('reads gone and sold notices from the title and h1 only', () => {
+    const teasers = '<aside class="similar-listings"><p>Kaufpreis € 300.000</p></aside>';
+    const page = (title: string, h1: string): string =>
+      `<html><head><title>${title}</title></head><body><h1>${h1}</h1>${teasers}</body></html>`;
+    const status = (html: string): string => detectDetailAvailability(html).status;
+
+    // A gone page still shows similar listings with their prices.
+    const gone = loadFixture('detail-sold.html').replace('</body>', `${teasers}</body>`);
+    expect(status(gone)).toBe('not_found');
+    expect(status(page('Verkauft: 3-Zimmer-Wohnung', 'Verkauft'))).toBe('sold');
+    expect(status(page('Wohnung, bereits vermietet', 'Wohnung'))).toBe('rented');
+    expect(status(page('Wohnung kaufen in Wien', '★ Reserviert'))).toBe('reserved');
+    // Inside a title the word describes the flat.
+    expect(status(page('Anlegerwohnung, vermietet', 'Anlegerwohnung, vermietet'))).toBe('unknown');
+
+    // The listing's JSON-LD outweighs a notice elsewhere on the page.
+    const live = loadFixture('detail-jsonld.html').replace(
+      '</main>',
+      '<p>Anzeige nicht mehr verfügbar</p><p>Verkauft</p></main>',
+    );
+    expect(status(live)).toBe('available');
   });
 
   it('detects removed listing from error page text', () => {
