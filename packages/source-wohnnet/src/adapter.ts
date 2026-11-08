@@ -19,7 +19,7 @@ const SEARCH_PATH = '/immobilien/eigentumswohnungen/wien';
 export class WohnnetAdapter implements SourceAdapter<WohnnetDiscoveryItem, WohnnetDetailDTO> {
   readonly sourceCode = 'wohnnet';
   readonly sourceName = 'wohnnet.at';
-  readonly parserVersion = 1;
+  readonly parserVersion = 2;
 
   async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);

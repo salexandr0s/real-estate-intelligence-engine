@@ -4,7 +4,7 @@ import type { SourceRawListingBase } from '@immoradar/contracts';
 
 export interface JsonLdOffer {
   '@type'?: string;
-  price?: string;
+  price?: string | number;
   priceCurrency?: string;
   availability?: string;
 }
@@ -16,7 +16,8 @@ export interface JsonLdProduct {
   description?: string;
   url?: string;
   image?: string | string[];
-  offers?: JsonLdOffer;
+  /** An array on live pages. */
+  offers?: JsonLdOffer | JsonLdOffer[];
   brand?: {
     '@type'?: string;
     name?: string;
