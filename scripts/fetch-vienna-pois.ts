@@ -6,7 +6,7 @@
  *   3. Wien.gv.at taxi stands (scraped + geocoded via Nominatim)
  *
  * Outputs:
- *   - scripts/data/vienna-pois.json          (flat JSON array)
+ *   - packages/db/data/vienna-pois.json      (flat JSON array)
  *   - apps/macos/ImmoRadar/Resources/vienna-pois.geojson  (GeoJSON FeatureCollection)
  *
  * Usage:
@@ -84,7 +84,7 @@ interface GeoJSONFeatureCollection {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const JSON_OUTPUT = join(process.cwd(), 'scripts', 'data', 'vienna-pois.json');
+const JSON_OUTPUT = join(process.cwd(), 'packages', 'db', 'data', 'vienna-pois.json');
 const GEOJSON_OUTPUT = join(
   process.cwd(),
   'apps',

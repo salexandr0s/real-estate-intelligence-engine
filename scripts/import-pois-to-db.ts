@@ -21,7 +21,7 @@ interface PoiJson {
   properties?: Record<string, unknown>;
 }
 
-const JSON_PATH = join(process.cwd(), 'scripts', 'data', 'vienna-pois.json');
+const JSON_PATH = join(process.cwd(), 'packages', 'db', 'data', 'vienna-pois.json');
 
 async function main() {
   const raw = readFileSync(JSON_PATH, 'utf-8');

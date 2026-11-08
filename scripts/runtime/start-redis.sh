@@ -19,10 +19,16 @@ DATA_DIR="$IMMORADAR_RUNTIME_HOME/redis/$REDIS_VERSION"
 
 mkdir -p "$DATA_DIR"
 
+# Redis holds only queue state, which the engine can rebuild, so RDB snapshots are enough: every
+# 15 minutes when a key changed, and at shutdown. An append-only file would add an fsync every
+# second. BullMQ needs noeviction, because an evicted key can lose a job without an error, while a
+# full Redis rejects the write.
 exec "$BIN_DIR/redis-server" \
   --bind 127.0.0.1 \
   --port "$IMMORADAR_REDIS_PORT" \
   --dir "$DATA_DIR" \
   --dbfilename dump.rdb \
-  --appendonly yes \
-  --appenddirname appendonly
+  --appendonly no \
+  --save 900 1 \
+  --maxmemory 128mb \
+  --maxmemory-policy noeviction

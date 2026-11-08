@@ -331,6 +331,9 @@ struct EngineLayout: Equatable, Sendable {
         environment["IMMORADAR_POSTGRES_PORT"] = String(ports.postgres)
         environment["IMMORADAR_REDIS_PORT"] = String(ports.redis)
         environment["DATABASE_URL"] = "postgres://postgres@127.0.0.1:\(ports.postgres)/immoradar"
+        // start-postgres.sh caps Postgres at 30 connections for the API, both workers and
+        // migrations, so a larger pool from a stale .env would run out of them.
+        environment["DATABASE_POOL_MAX"] = "4"
         environment["REDIS_URL"] = "redis://127.0.0.1:\(ports.redis)"
         environment["PROMETHEUS_ENABLED"] = "false"
         environment["ARTIFACTS_DIR"] = artifactsDirectory.path
