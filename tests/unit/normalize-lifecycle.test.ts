@@ -182,6 +182,48 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     );
   });
 
+  // Flats sold with their tenant say "bereits vermietet", so rented retires only a rental.
+  it.each([
+    ['sale', 'active'],
+    ['rent', 'rented'],
+  ] as const)('reads rented on a %s listing as %s', async (operationType, expectedStatus) => {
+    const normalizer: SourceNormalizer = {
+      sourceCode: 'immoscout24',
+      normalizationVersion: CURRENT_NORMALIZATION_VERSION,
+      normalize: vi.fn(
+        (): NormalizationResult => ({
+          success: true,
+          listing: makeListing({ operationType }),
+          warnings: [],
+          errors: [],
+          provenance: {},
+          versionReason: 'first_seen',
+        }),
+      ),
+    };
+    const upsertListing = vi.fn(async (_input: CanonicalListingInput) => ({
+      id: 123,
+      isNew: false,
+    }));
+
+    const sut = new NormalizeAndUpsert(new Map([['immoscout24', normalizer]]), {
+      findExistingListing: vi.fn(async () => makeExistingListing()),
+      upsertListing,
+      updateLifecycleStatus: vi.fn(async () => ({ id: 123 })),
+      appendListingVersion: vi.fn(async () => ({ id: 777, versionNo: 2 })),
+      updateScrapeRunNormalizationCounts: vi.fn(async () => {}),
+    });
+
+    await sut.process(
+      'immoscout24',
+      {} as SourceRawListingBase,
+      makeContext({ availabilityStatus: 'rented', responseStatus: 200 }),
+      900,
+    );
+
+    expect(upsertListing.mock.calls[0]?.[0].listingStatus).toBe(expectedStatus);
+  });
+
   // Parsers also say not_found when a live page lacks their markup, so only a 404 or 410 counts.
   it('keeps a listing active when a page that loaded says not_found', async () => {
     const existing = makeExistingListing();

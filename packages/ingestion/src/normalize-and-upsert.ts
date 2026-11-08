@@ -152,6 +152,7 @@ export class NormalizeAndUpsert {
       const lifecycleStatus = resolveLifecycleStatus(
         context.availabilityStatus,
         context.responseStatus,
+        existing?.operationType,
       );
       if (existing && lifecycleStatus) {
         return this.applyLifecycleStatusOnlyUpdate(existing, lifecycleStatus, context, scrapeRunId);
@@ -176,6 +177,7 @@ export class NormalizeAndUpsert {
     const explicitLifecycleStatus = resolveLifecycleStatus(
       context.availabilityStatus,
       context.responseStatus,
+      listing.operationType,
     );
     if (explicitLifecycleStatus) {
       listing.listingStatus = explicitLifecycleStatus;
@@ -401,18 +403,20 @@ export class NormalizeAndUpsert {
  * The listing status a capture's availability settles, or null when it settles none. Sold,
  * rented and removed count only from a page that loaded, with a 2xx status or none recorded.
  * Not found counts only with HTTP 404 or 410, because parsers also report it when a live page
- * lacks the markup they look for.
+ * lacks the markup they look for. Rented never retires a sale listing, because flats sold with
+ * their tenant say "bereits vermietet".
  */
 export function resolveLifecycleStatus(
   availabilityStatus: NormalizationContext['availabilityStatus'],
   responseStatus: number | null | undefined,
+  operationType: OperationType | null | undefined,
 ): ListingStatus | null {
   const loaded = responseStatus == null || (responseStatus >= 200 && responseStatus < 300);
   switch (availabilityStatus) {
     case 'sold':
       return loaded ? 'sold' : null;
     case 'rented':
-      return loaded ? 'rented' : null;
+      return loaded && operationType !== 'sale' ? 'rented' : null;
     case 'removed':
       return loaded ? 'withdrawn' : null;
     case 'not_found':
