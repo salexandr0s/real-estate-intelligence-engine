@@ -536,7 +536,7 @@ function detectAvailabilityFromData(data: DerStandardDetailData): SourceAvailabi
  * Extract numeric listing ID from derstandard detail URL.
  * Pattern: /detail/{id}/{slug}
  */
-export function extractIdFromUrl(url: string): string | null {
+function extractIdFromUrl(url: string): string | null {
   const m = url.match(/\/detail\/(\d+)/);
   if (m?.[1]) return m[1];
   // Fallback: last numeric segment in URL path
