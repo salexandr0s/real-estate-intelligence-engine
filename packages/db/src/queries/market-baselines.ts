@@ -73,8 +73,8 @@ function toMarketBaselineRow(row: MarketBaselineDbRow): MarketBaselineRow {
 
 // ── Queries ─────────────────────────────────────────────────────────────────
 
+/** One baseline row of a run. The run's date applies to all of them. */
 export interface UpsertBaselineInput {
-  baselineDate: Date;
   city: string;
   districtNo: number | null;
   operationType: string;
@@ -91,48 +91,61 @@ export interface UpsertBaselineInput {
 }
 
 /**
- * Upsert a market baseline on the composite unique key
- * (baseline_date, city, district_no, operation_type, property_type,
- *  area_bucket, room_bucket, source_scope).
- * The key treats a NULL district_no as equal to another NULL (migration 027),
- * so a city-wide row updates in place like a district row.
+ * Upserts a run's baselines in one statement, so scoring reads either all of the day's rows or
+ * none of them. Written one at a time, the city-wide rows came first and shadowed yesterday's
+ * district rows until the run reached each district. Each row's dimensions must be unique
+ * within the batch. The key treats a NULL district_no as equal to another NULL (migration 027),
+ * so a city-wide row updates in place like a district row. Returns the number of rows written.
  */
-export async function upsertBaseline(input: UpsertBaselineInput): Promise<MarketBaselineRow> {
-  const rows = await query<MarketBaselineDbRow>(
-    `INSERT INTO market_baselines (
-       baseline_date, city, district_no,
-       operation_type, property_type,
-       area_bucket, room_bucket, source_scope,
-       sample_size, median_ppsqm_eur,
-       trimmed_mean_ppsqm_eur, p25_ppsqm_eur, p75_ppsqm_eur, stddev_ppsqm_eur
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-     ON CONFLICT (baseline_date, city, district_no, operation_type, property_type, area_bucket, room_bucket, source_scope)
-     DO UPDATE SET
-       sample_size = EXCLUDED.sample_size,
-       median_ppsqm_eur = EXCLUDED.median_ppsqm_eur,
-       trimmed_mean_ppsqm_eur = EXCLUDED.trimmed_mean_ppsqm_eur,
-       p25_ppsqm_eur = EXCLUDED.p25_ppsqm_eur,
-       p75_ppsqm_eur = EXCLUDED.p75_ppsqm_eur,
-       stddev_ppsqm_eur = EXCLUDED.stddev_ppsqm_eur
-     RETURNING *`,
+export async function upsertBaselines(
+  baselineDate: Date,
+  baselines: readonly UpsertBaselineInput[],
+): Promise<number> {
+  if (baselines.length === 0) return 0;
+  const rows = await query<{ written: string }>(
+    `WITH written AS (
+       INSERT INTO market_baselines (
+         baseline_date, city, district_no,
+         operation_type, property_type,
+         area_bucket, room_bucket, source_scope,
+         sample_size, median_ppsqm_eur,
+         trimmed_mean_ppsqm_eur, p25_ppsqm_eur, p75_ppsqm_eur, stddev_ppsqm_eur
+       )
+       SELECT $1::date, b.*
+       FROM unnest(
+         $2::text[], $3::smallint[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[],
+         $9::integer[], $10::numeric[], $11::numeric[], $12::numeric[], $13::numeric[],
+         $14::numeric[]
+       ) AS b
+       ON CONFLICT (baseline_date, city, district_no, operation_type, property_type, area_bucket, room_bucket, source_scope)
+       DO UPDATE SET
+         sample_size = EXCLUDED.sample_size,
+         median_ppsqm_eur = EXCLUDED.median_ppsqm_eur,
+         trimmed_mean_ppsqm_eur = EXCLUDED.trimmed_mean_ppsqm_eur,
+         p25_ppsqm_eur = EXCLUDED.p25_ppsqm_eur,
+         p75_ppsqm_eur = EXCLUDED.p75_ppsqm_eur,
+         stddev_ppsqm_eur = EXCLUDED.stddev_ppsqm_eur
+       RETURNING 1
+     )
+     SELECT count(*) AS written FROM written`,
     [
-      input.baselineDate,
-      input.city,
-      input.districtNo,
-      input.operationType,
-      input.propertyType,
-      input.areaBucket,
-      input.roomBucket,
-      input.sourceScope ?? 'all_sources',
-      input.sampleSize,
-      input.medianPpsqmEur,
-      input.trimmedMeanPpsqmEur ?? null,
-      input.p25PpsqmEur ?? null,
-      input.p75PpsqmEur ?? null,
-      input.stddevPpsqmEur ?? null,
+      baselineDate,
+      baselines.map((b) => b.city),
+      baselines.map((b) => b.districtNo),
+      baselines.map((b) => b.operationType),
+      baselines.map((b) => b.propertyType),
+      baselines.map((b) => b.areaBucket),
+      baselines.map((b) => b.roomBucket),
+      baselines.map((b) => b.sourceScope ?? 'all_sources'),
+      baselines.map((b) => b.sampleSize),
+      baselines.map((b) => b.medianPpsqmEur),
+      baselines.map((b) => b.trimmedMeanPpsqmEur ?? null),
+      baselines.map((b) => b.p25PpsqmEur ?? null),
+      baselines.map((b) => b.p75PpsqmEur ?? null),
+      baselines.map((b) => b.stddevPpsqmEur ?? null),
     ],
   );
-  return toMarketBaselineRow(rows[0]!);
+  return Number(rows[0]?.written ?? 0);
 }
 
 /**

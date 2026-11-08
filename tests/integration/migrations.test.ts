@@ -100,9 +100,9 @@ describe('migration quality', () => {
   describe('market baselines on migrated database', () => {
     // A city-wide row has a NULL district_no. While the unique key treated NULLs as distinct,
     // every baseline run inserted another copy of it instead of updating it.
-    it('keeps one city-wide row when the same baseline is upserted twice', async () => {
-      const baseline = {
-        baselineDate: new Date(2000, 0, 1),
+    it('updates the city-wide and district rows in place when a run is written twice', async () => {
+      const baselineDate = new Date(2000, 0, 1);
+      const cityWide = {
         city: 'Wien',
         districtNo: null,
         operationType: 'sale',
@@ -112,14 +112,26 @@ describe('migration quality', () => {
         sampleSize: 10,
         medianPpsqmEur: 5000,
       };
-      await marketBaselines.upsertBaseline(baseline);
-      await marketBaselines.upsertBaseline({ ...baseline, sampleSize: 12, medianPpsqmEur: 5100 });
+      const district = { ...cityWide, districtNo: 3, sampleSize: 4, medianPpsqmEur: 6000 };
+      await marketBaselines.upsertBaselines(baselineDate, [cityWide, district]);
+      const written = await marketBaselines.upsertBaselines(baselineDate, [
+        { ...cityWide, sampleSize: 12, medianPpsqmEur: 5100 },
+        { ...district, sampleSize: 5, medianPpsqmEur: 6100 },
+      ]);
 
-      const rows = await query<{ sample_size: number; median_ppsqm_eur: string }>(
-        `SELECT sample_size, median_ppsqm_eur FROM market_baselines
-         WHERE baseline_date = DATE '2000-01-01' AND district_no IS NULL`,
+      const rows = await query<{
+        district_no: number | null;
+        sample_size: number;
+        median_ppsqm_eur: string;
+      }>(
+        `SELECT district_no, sample_size, median_ppsqm_eur FROM market_baselines
+         WHERE baseline_date = DATE '2000-01-01' ORDER BY district_no NULLS FIRST`,
       );
-      expect(rows).toEqual([{ sample_size: 12, median_ppsqm_eur: '5100.00' }]);
+      expect(written).toBe(2);
+      expect(rows).toEqual([
+        { district_no: null, sample_size: 12, median_ppsqm_eur: '5100.00' },
+        { district_no: 3, sample_size: 5, median_ppsqm_eur: '6100.00' },
+      ]);
     });
   });
 });

@@ -19,6 +19,7 @@ import {
 import type { BaselineJobData } from '@immoradar/scraper-core';
 import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
 import { query, marketBaselines } from '@immoradar/db';
+import type { UpsertBaselineInput } from '@immoradar/db';
 
 const log = createLogger('worker:baseline');
 
@@ -28,7 +29,7 @@ interface ListingAggRow {
   operation_type: string;
   property_type: string;
   price_per_sqm_eur: string;
-  living_area_sqm: string | null;
+  area_sqm: string | null;
   rooms: string | null;
 }
 
@@ -78,9 +79,10 @@ export interface BaselineRecomputeSummary {
  * scripts/compute-baselines.ts both run it.
  */
 export async function recomputeBaselines(): Promise<BaselineRecomputeSummary> {
+  // The area is the one price_per_sqm_eur divides by, and the one scoring buckets by.
   const rows = await query<ListingAggRow>(
-    `SELECT city, district_no, operation_type, property_type,
-            price_per_sqm_eur, living_area_sqm, rooms
+    `SELECT city, district_no, operation_type, property_type, price_per_sqm_eur,
+            COALESCE(living_area_sqm, usable_area_sqm) AS area_sqm, rooms
      FROM listings
      WHERE listing_status = 'active' AND price_per_sqm_eur IS NOT NULL`,
   );
@@ -91,7 +93,7 @@ export async function recomputeBaselines(): Promise<BaselineRecomputeSummary> {
     const ppsqm = Number(row.price_per_sqm_eur);
     if (isNaN(ppsqm) || ppsqm <= 0) continue;
 
-    const areaSqm = row.living_area_sqm != null ? Number(row.living_area_sqm) : null;
+    const areaSqm = row.area_sqm != null ? Number(row.area_sqm) : null;
     const roomCount = row.rooms != null ? Number(row.rooms) : null;
     const bucketPairs = [
       { areaBucket: getAreaBucket(areaSqm), roomBucket: getRoomBucket(roomCount) },
@@ -129,8 +131,7 @@ export async function recomputeBaselines(): Promise<BaselineRecomputeSummary> {
     }
   }
 
-  const baselineDate = new Date();
-  let upserted = 0;
+  const baselines: UpsertBaselineInput[] = [];
   let skippedSmall = 0;
 
   for (const group of groups.values()) {
@@ -151,8 +152,7 @@ export async function recomputeBaselines(): Promise<BaselineRecomputeSummary> {
     const trimmedMean =
       trimmed.length > 0 ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length : mean;
 
-    await marketBaselines.upsertBaseline({
-      baselineDate,
+    baselines.push({
       city: group.city,
       districtNo: group.districtNo,
       operationType: group.operationType,
@@ -166,9 +166,9 @@ export async function recomputeBaselines(): Promise<BaselineRecomputeSummary> {
       p75PpsqmEur: Math.round(p75 * 100) / 100,
       stddevPpsqmEur: Math.round(sd * 100) / 100,
     });
-    upserted++;
   }
 
+  const upserted = await marketBaselines.upsertBaselines(new Date(), baselines);
   return { listings: rows.length, groups: groups.size, upserted, skippedSmall };
 }
 
