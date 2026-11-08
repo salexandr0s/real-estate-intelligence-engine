@@ -190,8 +190,11 @@ export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobDat
       context = await createScrapeContext(
         harPath ? { recordHarPath: harPath, sourceCode } : { sourceCode },
       );
+      // A shutdown during Chromium's cold start found no context to close, so check again here.
+      shutdownSignal.throwIfAborted();
       await setupRequestInterception(context);
       page = await context.newPage();
+      shutdownSignal.throwIfAborted();
 
       const adapter = getAdapter(sourceCode);
       const plan: RequestPlan = (await adapter.buildDetailRequest({

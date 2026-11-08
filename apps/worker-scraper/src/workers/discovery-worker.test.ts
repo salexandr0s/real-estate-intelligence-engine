@@ -14,13 +14,14 @@ describe('resolveRunOutcome', () => {
     ['the page cap stopped it', { kind: 'page_cap' }, 60, 1200, 'partial', 'page_cap'],
     ['page 2 failed after page 1 had listings', blocked, 1, 20, 'partial', 'soft_anti_bot'],
     ['pages loaded with no listings', { kind: 'exhausted' }, 2, 0, 'failed', 'no_items'],
+    // The cause carries the breaker's reason, so a pause after network errors isn't counted.
     [
       'the breaker held it before page 1',
-      { kind: 'breaker_open' },
+      { kind: 'breaker_open', reason: 'transient_network' },
       0,
       0,
       'rate_limited',
-      'circuit_open',
+      'transient_network',
     ],
     ['the scraper shut down', { kind: 'shutdown' }, 5, 100, 'cancelled', 'shutdown'],
   ])('%s', (_, end, pages, items, status, errorCode) => {

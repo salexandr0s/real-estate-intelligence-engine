@@ -52,7 +52,8 @@ const REVALIDATION_SLOTS = 10;
 export type DiscoveryEnd =
   | { kind: 'exhausted' }
   | { kind: 'page_cap' }
-  | { kind: 'breaker_open' }
+  /** `reason` is the class of the failures that opened the breaker. */
+  | { kind: 'breaker_open'; reason: ErrorClass | null }
   | { kind: 'page_error'; errorClass: ErrorClass; message: string }
   | { kind: 'shutdown' }
   | { kind: 'cancelled' };
@@ -84,8 +85,14 @@ export function resolveRunOutcome(end: DiscoveryEnd, pages: number, items: numbe
     case 'cancelled':
       return outcome('cancelled', 'user_cancelled', 'Cancelled by user');
     case 'breaker_open':
+      // The cause is the class that opened the breaker, so a pause that network errors caused
+      // doesn't count toward switching the source off.
       if (pages === 0) {
-        return outcome('rate_limited', 'circuit_open', 'Recent failures paused this source');
+        return outcome(
+          'rate_limited',
+          end.reason ?? 'circuit_open',
+          'Recent failures paused this source',
+        );
       }
       break;
     case 'page_error':
@@ -273,6 +280,7 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
     scrapeRunId: number,
     sourceCode: string,
     err: unknown,
+    metrics: ScrapeRunMetrics,
   ): Promise<void> {
     const aborted = shutdownSignal.aborted;
     log.error('Discovery run stopped by an error', {
@@ -287,7 +295,7 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
       await scrapeRuns.finish(
         scrapeRunId,
         aborted ? 'cancelled' : 'failed',
-        EMPTY_METRICS,
+        metrics,
         aborted
           ? { errorCode: 'shutdown', errorMessage: 'The scraper stopped during the run' }
           : { errorCode: 'internal_error', errorMessage: messageOf(err) },
@@ -304,6 +312,7 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
   async function runDiscovery(job: Job<DiscoveryJobData>): Promise<void> {
     const { sourceCode, sourceId } = job.data;
     let scrapeRunId = job.data.scrapeRunId || 0;
+    let runCtx: ScrapeRunContext | null = null;
     let context: BrowserContext | null = null;
     // Closing the context makes a page that is still loading fail at once.
     const closeOnAbort = (): void => void context?.close().catch(() => {});
@@ -365,14 +374,20 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
       };
 
       log.info('Discovery run started', { sourceCode, scrapeRunId, maxPages });
-      const runCtx = new ScrapeRunContext(scrapeRunId, sourceCode);
+      runCtx = new ScrapeRunContext(scrapeRunId, sourceCode);
       let plan: RequestPlan | null =
         (await getAdapter(sourceCode).buildDiscoveryRequests(profile))[0] ?? null;
       let end: DiscoveryEnd = { kind: 'exhausted' };
       let pages = 0;
       let items = 0;
 
-      if (plan) {
+      // Chromium takes seconds to start, so a shutdown or an open breaker ends the run first.
+      // openUntil leaves the half-open probe for the page loop to claim.
+      if (shutdownSignal.aborted) {
+        end = { kind: 'shutdown' };
+      } else if (circuitBreaker.openUntil(sourceCode) !== null) {
+        end = { kind: 'breaker_open', reason: circuitBreaker.openReason(sourceCode) };
+      } else if (plan) {
         context = await createScrapeContext({ sourceCode });
         await setupRequestInterception(context);
         const page = await context.newPage();
@@ -387,7 +402,7 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
             break;
           }
           if (circuitBreaker.isOpen(sourceCode)) {
-            end = { kind: 'breaker_open' };
+            end = { kind: 'breaker_open', reason: circuitBreaker.openReason(sourceCode) };
             break;
           }
           if (pages > 0 && (await isCancelled(scrapeRunId))) {
@@ -448,8 +463,10 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
         end = { kind: 'cancelled' };
       }
 
+      // Search pages that load but list nothing usually mean the markup changed, and the detail
+      // parser may be broken too, so revalidating then would only collect false strikes.
       let queued = 0;
-      if (pages > 0 && end.kind !== 'shutdown' && end.kind !== 'cancelled') {
+      if (items > 0 && end.kind !== 'shutdown' && end.kind !== 'cancelled') {
         queued = await queueDetailPages(sourceId, sourceCode, scrapeRunId);
       }
 
@@ -484,7 +501,7 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
         queued,
       });
     } catch (err) {
-      await finishAfterError(scrapeRunId, sourceCode, err);
+      await finishAfterError(scrapeRunId, sourceCode, err, runCtx?.getMetrics() ?? EMPTY_METRICS);
     } finally {
       shutdownSignal.removeEventListener('abort', closeOnAbort);
       await context?.close().catch(() => {});
