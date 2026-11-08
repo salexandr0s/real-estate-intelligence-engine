@@ -22,7 +22,7 @@ import {
   ScrapeRunContext,
   pageNavigationDelay,
   classifyScraperError,
-  dismissCookieConsent,
+  navigateForCapture,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   ArtifactWriter,
   pickRandomViewport,
@@ -172,19 +172,14 @@ async function main(): Promise<void> {
         await pageNavigationDelay();
 
         log.info(`Fetching discovery page ${pagesProcessed + 1}: ${currentPlan.url}`);
-        await page.goto(currentPlan.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        if (currentPlan.waitForSelector) {
-          await page
-            .waitForSelector(currentPlan.waitForSelector, {
-              timeout: currentPlan.waitForTimeout ?? 10_000,
-            })
-            .catch(() => {});
-        }
-        await dismissCookieConsent(page, sourceCode);
+        // Throws on 403, 429 and 5xx, so a block page is never parsed as listings.
+        const navigation = await navigateForCapture(page, currentPlan, { sourceCode });
 
         const html = await page.content();
         runCtx.incrementMetric('pagesFetched');
-        runCtx.incrementMetric('http2xx');
+        if (navigation.status != null) {
+          runCtx.incrementMetric(navigation.status >= 400 ? 'http4xx' : 'http2xx');
+        }
         pagesProcessed++;
 
         const discoveryResult = await adapter.extractDiscoveryPage({
@@ -253,18 +248,16 @@ async function main(): Promise<void> {
         const detailUrl = detailRequest?.url ?? item.detailUrl;
 
         log.info(`Fetching detail: ${detailUrl}`);
-        await page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        if (detailRequest?.waitForSelector) {
-          await page
-            .waitForSelector(detailRequest.waitForSelector, {
-              timeout: detailRequest.waitForTimeout ?? 10_000,
-            })
-            .catch(() => {});
-        }
-        await dismissCookieConsent(page, sourceCode);
+        const detailNavigation = await navigateForCapture(
+          page,
+          { ...detailRequest, url: detailUrl },
+          { sourceCode },
+        );
 
         const html = await page.content();
-        runCtx.incrementMetric('http2xx');
+        if (detailNavigation.status != null) {
+          runCtx.incrementMetric(detailNavigation.status >= 400 ? 'http4xx' : 'http2xx');
+        }
 
         // Persist HTML artifact
         let htmlKey: string | undefined;
@@ -285,6 +278,7 @@ async function main(): Promise<void> {
         // Set sourceListingKeyCandidate
         detailCapture.sourceListingKeyCandidate = adapter.deriveSourceListingKey(detailCapture);
         detailCapture.discoveryUrl = item.discoveryUrl;
+        detailCapture.responseStatus = detailNavigation.status;
         detailCapture.htmlStorageKey = htmlKey ?? null;
 
         const payload = detailCapture.payload as Record<string, unknown>;
