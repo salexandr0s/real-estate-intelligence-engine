@@ -124,9 +124,28 @@ export function parseEurPrice(raw: string | number | null | undefined): {
 
 // ── Area Parsing ───────────────────────────────────────────────────────────
 
+/** A price or phone number read as an area lands in the millions of m². */
+const MAX_SQM = 1_000_000;
+
+/** Dots that group thousands, as in "1.866,52" or "1.866". */
+const DOT_THOUSANDS = /^\d{1,3}(\.\d{3})+(,\d+)?$/;
+
+/** A word ending in a dot, as in "ca. 85 m²" or "Wfl. 85". Its dot would read as a decimal point. */
+const ABBREVIATION = /\p{L}+\./gu;
+
+/**
+ * Leaves a dot as the only decimal mark: "1.866,52" -> "1866.52" and "120,5" -> "120.5",
+ * while "78.5" and "1866.52" stay as they are.
+ */
+function toDotDecimal(text: string): string {
+  if (DOT_THOUSANDS.test(text)) return text.replace(/\./g, '').replace(',', '.');
+  return text.replace(',', '.');
+}
+
 /**
  * Parses a raw area string into decimal square meters.
- * Handles: "58 m²", "58,4 m2", "58.4", "58,4"
+ * Handles: "58 m²", "58,4 m2", "58.4", "58,4", "1.866,52 m²"
+ * Rejects areas of MAX_SQM or more.
  */
 export function parseSqm(raw: string | number | null | undefined): {
   value: number | null;
@@ -137,7 +156,7 @@ export function parseSqm(raw: string | number | null | undefined): {
   }
 
   if (typeof raw === 'number') {
-    if (!Number.isFinite(raw) || raw <= 0) {
+    if (!Number.isFinite(raw) || raw <= 0 || raw >= MAX_SQM) {
       return {
         value: null,
         warning: {
@@ -156,17 +175,19 @@ export function parseSqm(raw: string | number | null | undefined): {
     return { value: null, warning: null };
   }
 
-  // Remove unit suffixes
-  let cleaned = text.replace(/m[²2]?\s*$/i, '').trim();
+  // Remove abbreviations and unit suffixes
+  let cleaned = text
+    .replace(ABBREVIATION, ' ')
+    .replace(/m[²2]?\s*$/i, '')
+    .trim();
 
-  // Handle comma as decimal separator
-  cleaned = cleaned.replace(',', '.');
+  cleaned = toDotDecimal(cleaned);
 
   // Remove any remaining non-numeric chars except dot and minus
   cleaned = cleaned.replace(/[^\d.\-]/g, '');
 
   const parsed = parseFloat(cleaned);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= MAX_SQM) {
     return {
       value: null,
       warning: {
@@ -183,9 +204,13 @@ export function parseSqm(raw: string | number | null | undefined): {
 
 // ── Rooms Parsing ──────────────────────────────────────────────────────────
 
+/** A price or phone number read as a room count lands far above this. */
+const MAX_ROOMS = 99;
+
 /**
  * Parses a raw rooms string into a decimal with 1 fractional digit.
  * Handles: "3 Zimmer", "2,5", "3.0", "2.5 Rooms"
+ * Rejects counts above MAX_ROOMS.
  */
 export function parseRooms(raw: string | number | null | undefined): {
   value: number | null;
@@ -196,7 +221,7 @@ export function parseRooms(raw: string | number | null | undefined): {
   }
 
   if (typeof raw === 'number') {
-    if (!Number.isFinite(raw) || raw <= 0) {
+    if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_ROOMS) {
       return {
         value: null,
         warning: {
@@ -215,17 +240,20 @@ export function parseRooms(raw: string | number | null | undefined): {
     return { value: null, warning: null };
   }
 
-  // Remove "Zimmer", "Rooms", "Raum" etc.
-  let cleaned = text.replace(/\s*(zimmer|rooms?|räume?|raum)\s*/gi, '').trim();
+  // Remove abbreviations and "Zimmer", "Rooms", "Raum" etc.
+  let cleaned = text
+    .replace(ABBREVIATION, ' ')
+    .replace(/\s*(zimmer|rooms?|räume?|raum)\s*/gi, '')
+    .trim();
 
-  // Handle comma as decimal separator
-  cleaned = cleaned.replace(',', '.');
+  // "1.866" becomes 1866, not 1.9 rooms, and fails the MAX_ROOMS check.
+  cleaned = toDotDecimal(cleaned);
 
   // Remove any remaining non-numeric chars except dot
   cleaned = cleaned.replace(/[^\d.]/g, '');
 
   const parsed = parseFloat(cleaned);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_ROOMS) {
     return {
       value: null,
       warning: {
