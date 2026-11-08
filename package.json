@@ -22,6 +22,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "db:migrate": "npm -w packages/db run migrate",
     "db:seed": "npm -w packages/db run seed",
+    "db:schema": "npx tsx scripts/generate-schema-sql.ts",
     "clean": "turbo run clean",
     "verify": "npm run lint && npm run typecheck && npm run test:unit",
     "scrape": "npx tsx scripts/scrape-and-ingest.ts",
