@@ -1,25 +1,30 @@
 /**
  * IS24 pages embed their app state as a script assignment: `window.__INITIAL_STATE__={...}` on
- * search pages and `window.__APOLLO_STATE__={...}` on detail pages. The value is a JavaScript
- * object literal that is JSON apart from bare `undefined` values, which this reader turns into
- * null. Returns null when the assignment is missing or does not parse.
+ * search pages and `window.__APOLLO_STATE__={...}` on detail pages, with or without spaces around
+ * the `=`. The value is a JavaScript object literal that is JSON apart from bare `undefined`
+ * values, which this reader turns into null. Returns null when the assignment is missing or does
+ * not parse.
  */
 export function readEmbeddedState(html: string, name: string): unknown {
-  const marker = `window.${name}=`;
-  const start = html.indexOf(marker);
-  if (start < 0) return null;
+  // `(?!=)` skips comparisons such as `window.__APOLLO_STATE__ === undefined`.
+  const assignment = new RegExp(`window\\.${escapeRegExp(name)}\\s*=(?!=)\\s*`, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = assignment.exec(html)) !== null) {
+    const start = match.index + match[0].length;
+    if (html.charAt(start) === '{') return parseObjectLiteral(html, start);
+  }
+  return null;
+}
 
-  let i = start + marker.length;
-  while (i < html.length && /\s/.test(html.charAt(i))) i++;
-  if (html.charAt(i) !== '{') return null;
-
+/** Parses the object literal that opens at `start`, or returns null. */
+function parseObjectLiteral(html: string, start: number): unknown {
   const parts: string[] = [];
-  let segmentStart = i;
+  let segmentStart = start;
   let depth = 0;
   let inString = false;
   let escaped = false;
 
-  for (; i < html.length; i++) {
+  for (let i = start; i < html.length; i++) {
     const ch = html.charAt(i);
     if (inString) {
       if (escaped) escaped = false;
@@ -50,6 +55,10 @@ export function readEmbeddedState(html: string, name: string): unknown {
   return null;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -69,7 +78,18 @@ export function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
-/** A positive finite number as a string, or null. IS24 sends 0 for "price on request". */
+/**
+ * A JSON number as a raw string: whole numbers as they are, others with two decimals. The
+ * normalizer reads three digits after a dot as a thousands group, so 72.125 must not become
+ * "72.125".
+ */
+export function numberText(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/** A positive finite number as a raw string, or null. IS24 sends 0 for "price on request". */
 export function positiveNumberText(value: unknown): string | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? String(value) : null;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? numberText(value)
+    : null;
 }

@@ -1,12 +1,19 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type {
   Immoscout24DetailDTO,
   IS24Product,
   IS24ProductOffer,
   IS24RealEstateAgent,
 } from './dto.js';
-import { field, isRecord, positiveNumberText, readEmbeddedState, text } from './embedded-state.js';
+import {
+  field,
+  isRecord,
+  numberText,
+  positiveNumberText,
+  readEmbeddedState,
+  text,
+} from './embedded-state.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
 
@@ -17,13 +24,27 @@ const BASE_URL = 'https://www.immobilienscout24.at';
  * only top-level nodes count.
  *
  * The page also embeds the listing as an `Expose` record in `window.__APOLLO_STATE__`, with the
- * price, areas, rooms, address and estate type as separate fields. Those fields win over values
- * read from the description text, which names them only sometimes.
+ * price, areas, rooms, address and estate type as separate fields. Those fields win over the
+ * description text, which fills a field only where it labels the value ("Wohnfläche: 72 m²").
  */
 
 const JSON_LD_RE = /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
-const PRICE_TESTID_RE = /data-testid="primary-price"[^>]*>[\s\S]*?(\d[\d.,]*)/;
-const SOLD_MARKER_RE = /\b(?:verkauft|sold)\b/i;
+/** The opening tag of the element that shows the price; group 1 is its tag name. */
+const PRICE_ELEMENT_RE =
+  /<([a-z][a-z0-9-]*)(?=[\s/>])[^>]*\bdata-testid=["']primary-price["'][^>]*>/i;
+const CURRENCY = String.raw`(?:€|(?<![a-z])EURO?(?![a-z]))`;
+/** "389.000", "389 000", "1.250,50" or "389000", and not part of a longer number. */
+const AMOUNT = String.raw`(?:\d{1,3}(?:[. ]\d{3})+|\d+)(?:,\d{1,2})?(?![\d.,]?\d)`;
+/**
+ * A euro amount with the currency on either side: "389.000 €", "€ 1.250,50", "EUR 299.000",
+ * "389.000,- €", or "€ ab 389.000" for the lowest price of a range.
+ */
+const EURO_AMOUNT_RE = new RegExp(
+  String.raw`${CURRENCY}\s*(?:ab\s+)?(${AMOUNT})|(?<![\d.,]|\d )(${AMOUNT})(?:,-{1,2})?\s*${CURRENCY}`,
+  'i',
+);
+/** "ab" before the amount marks the lowest price of a range. */
+const FROM_PRICE_RE = /(?<!\p{L})ab(?!\p{L})/iu;
 const NOT_FOUND_MARKER_RE = /nicht\s+gefunden|nicht\s+mehr\s+verf[u\u00fc]gbar|not\s+found/i;
 
 type JsonLdNode = Record<string, unknown>;
@@ -48,32 +69,11 @@ export function parseDetailPage(
   const rawDescription = product.description ?? '';
   const descriptionText = stripHtml(rawDescription);
 
-  // The Expose price comes first, then the Offer price. Live pages send 0 in the Offer, so the
-  // visible price is the last source. A string price keeps its separators for normalization,
-  // which reads "455.000" as 455,000.
-  let priceRaw: string | null = facts?.priceRaw ?? null;
-  if (priceRaw === null) {
-    const offerPrice = firstOffer(product)?.price;
-    const offerText =
-      typeof offerPrice === 'number' && Number.isFinite(offerPrice)
-        ? String(offerPrice)
-        : typeof offerPrice === 'string'
-          ? offerPrice.trim()
-          : '';
-    if (/[1-9]/.test(offerText)) {
-      priceRaw = offerText;
-    } else {
-      // Fallback: extract from data-testid="primary-price"
-      const priceMatch = html.match(PRICE_TESTID_RE);
-      if (priceMatch?.[1]) {
-        priceRaw = normalizeDecimal(priceMatch[1].replace(/\./g, ''));
-      }
-    }
-  }
+  const { priceRaw, priceFromRaw } = readPrice(facts, product, html);
 
-  // The description text fills what the Expose record leaves out, except on a developer
-  // project: its text quotes the range across its units, and the largest area next to the
-  // cheapest unit's price would read as a bargain.
+  // The description text fills what the Expose record leaves out, and only through labelled
+  // values ("Wohnfläche: 72 m²"): a bare "8 m²" can be the balcony and "2 bis 4 Zimmer" a range.
+  // A developer project's text quotes ranges across its units, so it fills nothing there.
   const fromText = facts?.isProject !== true;
   const textAddress = parseAddress(descriptionText);
   const street = facts?.street ?? textAddress.street;
@@ -115,7 +115,8 @@ export function parseDetailPage(
     reserveFundRaw: null,
     latRaw: null,
     lonRaw: null,
-    attributesRaw: {},
+    // A "from" price (a project's cheapest unit, "ab 389.000 €") is not an asking price.
+    attributesRaw: priceFromRaw !== null ? { priceFromRaw } : {},
     mediaRaw: [],
     images,
     contactName: agent?.name ?? null,
@@ -190,9 +191,12 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   }
 
   // Similar-listing teasers, scripts and footers on live pages also say "verkauft", so text
-  // markers count only in the title and h1.
+  // markers count only as notices in the title and h1.
   const headline = headlineText(html);
-  if (SOLD_MARKER_RE.test(headline)) return { status: 'sold' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('rented')) return { status: 'rented' };
+  if (notices.has('reserved')) return { status: 'reserved' };
   if (NOT_FOUND_MARKER_RE.test(headline)) return { status: 'not_found' };
   // A challenge page carries no listing data, so only a page without any is checked.
   if (!listing && isChallengePage(html)) return { status: 'blocked' };
@@ -252,7 +256,7 @@ function readExposeFacts(html: string, exposeId: string): ExposeFacts | null {
   const streetNumber = text(field(expose, 'localization', 'address', 'streetNumber'));
   const transferType = text(field(expose, 'type', 'transferType'));
   const year = field(expose, 'condition', 'yearOfConstruction');
-  const yearText = typeof year === 'number' ? String(year) : text(year);
+  const yearText = typeof year === 'number' ? numberText(year) : text(year);
 
   return {
     priceRaw: positiveNumberText(field(expose, 'priceInformation', 'primaryPrice')),
@@ -360,25 +364,119 @@ function normalizeDecimal(value: string): string {
   return trimmed;
 }
 
-/** Parse area from text: "65,20 m2" or "65.20 m2" -> "65.20" */
+interface ListingPrice {
+  priceRaw: string | null;
+  /** The lowest price of a range, such as a developer project's cheapest unit. */
+  priceFromRaw: string | null;
+}
+
+/**
+ * The asking price, with a "from" price kept apart from it.
+ *
+ * An Expose record is the only source when the page has one. A missing primaryPrice (IS24 sends 0
+ * for "price on request") means no price, and a developer project's primaryPrice is its cheapest
+ * unit, which changes as units sell. Without the record, the Offer price comes first. Live pages
+ * send 0 there, so the visible price is the last source. A string price keeps its separators for
+ * normalization, which reads "455.000" as 455,000.
+ */
+function readPrice(facts: ExposeFacts | null, product: IS24Product, html: string): ListingPrice {
+  if (facts) {
+    return facts.isProject
+      ? { priceRaw: null, priceFromRaw: facts.priceRaw }
+      : { priceRaw: facts.priceRaw, priceFromRaw: null };
+  }
+  const offerPrice = offerPriceText(firstOffer(product)?.price);
+  if (offerPrice !== null) return { priceRaw: offerPrice, priceFromRaw: null };
+  const visible = readVisiblePrice(html);
+  if (!visible) return { priceRaw: null, priceFromRaw: null };
+  return visible.isFrom
+    ? { priceRaw: null, priceFromRaw: visible.amount }
+    : { priceRaw: visible.amount, priceFromRaw: null };
+}
+
+/** The Offer price as a raw string, or null when it is missing or 0. */
+function offerPriceText(price: unknown): string | null {
+  if (typeof price === 'number') return positiveNumberText(price);
+  const sent = text(price);
+  return sent !== null && /[1-9]/.test(sent) ? sent : null;
+}
+
+interface VisiblePrice {
+  /** Without thousands separators: "389000", "1250.50". */
+  amount: string;
+  /** Shown as "ab 389.000 \u20ac". */
+  isFrom: boolean;
+}
+
+/**
+ * The euro amount in the `primary-price` element's own text. Null when the element is missing,
+ * says "auf Anfrage" or shows no euro amount, so text after the element never reads as a price.
+ */
+function readVisiblePrice(html: string): VisiblePrice | null {
+  const inner = elementInnerHtml(html, PRICE_ELEMENT_RE);
+  if (inner === null) return null;
+  const shown = stripHtml(
+    inner.replace(/&(?:nbsp|#160|#xa0);/gi, ' ').replace(/&(?:euro|#8364|#x20ac);/gi, '\u20ac'),
+  );
+  if (/auf\s+anfrage/i.test(shown)) return null;
+  const match = EURO_AMOUNT_RE.exec(shown);
+  const digits = match?.[1] ?? match?.[2];
+  if (!match || !digits) return null;
+  // "ab" can come before the currency or between the currency and the amount.
+  const amountStart = match.index + match[0].indexOf(digits);
+  return {
+    amount: normalizeDecimal(digits.replace(/[. ]/g, '')),
+    isFrom: FROM_PRICE_RE.test(shown.slice(0, amountStart)),
+  };
+}
+
+/**
+ * The markup inside the first element whose opening tag matches `openTag` (group 1 is the tag
+ * name), up to that element's own closing tag. Null when the element or its end is missing.
+ */
+function elementInnerHtml(html: string, openTag: RegExp): string | null {
+  const open = openTag.exec(html);
+  const tagName = open?.[1];
+  if (!open || !tagName) return null;
+  const start = open.index + open[0].length;
+  const tags = new RegExp(`<(/?)${tagName}(?=[\\s/>])[^>]*>`, 'gi');
+  tags.lastIndex = start;
+  let depth = 1;
+  let tag: RegExpExecArray | null;
+  while ((tag = tags.exec(html)) !== null) {
+    depth += tag[1] === '/' ? -1 : 1;
+    if (depth === 0) return html.slice(start, tag.index);
+  }
+  return null;
+}
+
+/**
+ * Labelled values in the description text: the label, a colon, then the value. `(?<!\p{L})` keeps
+ * compounds such as "Gesamtwohnfl\u00e4che" or "Schlafzimmer" out, and an area needs m\u00b2 right after its
+ * number, so "45 bis 120 m\u00b2" matches nothing.
+ */
+const LIVING_AREA_LABEL_RE = /(?<!\p{L})Wohnfl[a\u00e4]che\s*:\s*(\d+(?:[.,]\d+)*)\s*m\u00b2/iu;
+const ROOMS_LABEL_RE =
+  /(?<!\p{L})Zimmer\s*:\s*(\d+(?:[.,]\d)?)(?!\d|[.,]\d|\s*(?:-|\u2013|bis)\s*\d)/iu;
+const BALCONY_LABEL_RE = /(?<!\p{L})Balkon\s*:\s*(\d+(?:[.,]\d+)*)\s*m\u00b2/iu;
+
+/**
+ * Living area from "Wohnfl\u00e4che: 65,20 m\u00b2" -> "65,20", with its separators as written.
+ * Normalization reads Austrian separators, and "72,125" rewritten as "72.125" would read as 72125.
+ */
 function parseArea(text: string): string | null {
-  const m =
-    text.match(/Wohnfl[a\u00e4]che:\s*([\d.,]+)\s*m\u00b2/i) ?? text.match(/([\d.,]+)\s*m\u00b2/);
-  if (!m?.[1]) return null;
-  return normalizeDecimal(m[1]);
+  return text.match(LIVING_AREA_LABEL_RE)?.[1] ?? null;
 }
 
-/** Parse rooms from text: "3 Zimmer" -> "3" */
+/** Rooms from "Zimmer: 3" -> "3". A range such as "Zimmer: 2 bis 4" gives null. */
 function parseRooms(text: string): string | null {
-  const m = text.match(/(\d+)\s*Zimmer/);
-  return m?.[1] ?? null;
+  const m = text.match(ROOMS_LABEL_RE);
+  return m?.[1] ? normalizeDecimal(m[1]) : null;
 }
 
-/** Parse balcony area from text: "Balkon 4,50 m2" -> "4.50" */
+/** Balcony area from "Balkon: 4,50 m\u00b2" -> "4,50", with its separators as written. */
 function parseBalconyArea(text: string): string | null {
-  const m = text.match(/Balkon\s*([\d.,]+)\s*m\u00b2/i);
-  if (!m?.[1]) return null;
-  return normalizeDecimal(m[1]);
+  return text.match(BALCONY_LABEL_RE)?.[1] ?? null;
 }
 
 /** Parse floor from text: "3. Stock" -> "3" */

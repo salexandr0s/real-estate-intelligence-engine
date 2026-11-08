@@ -376,7 +376,8 @@ describe('Discovery page parsing (app state)', () => {
       detailUrl: 'https://www.immobilienscout24.at/expose/bbb222ccc333ddd444eee555',
       titleRaw: '2-Zimmer-Wohnung mit Loggia',
       priceRaw: '249000',
-      areaRaw: '54.5',
+      // A fractional JSON number keeps two decimals, so it never shows three after the dot.
+      areaRaw: '54.50',
       roomsRaw: '2',
       locationRaw: 'Musterstraße 3, 1100 Wien',
     });
@@ -407,7 +408,8 @@ describe('Detail page parsing (Product + RealEstateAgent JSON-LD)', () => {
     expect(p.priceRaw).toBe('299000');
     expect(p.descriptionRaw).toContain('Balkon');
     expect(p.descriptionRaw).toContain('Leopoldstadt');
-    expect(p.livingAreaRaw).toBe('65.20');
+    // As the description writes it, so normalization reads the Austrian separators.
+    expect(p.livingAreaRaw).toBe('65,20');
     expect(p.roomsRaw).toBe('3');
     expect(p.images.length).toBe(3);
   });
@@ -456,7 +458,7 @@ describe('Detail page parsing (Product + RealEstateAgent JSON-LD)', () => {
       'immoscout24',
       2,
     );
-    expect(result.payload.balconyAreaRaw).toBe('4.50');
+    expect(result.payload.balconyAreaRaw).toBe('4,50');
   });
 
   it('extracts floor and year built from description', () => {
@@ -578,20 +580,83 @@ describe('Availability detection (JSON-LD based)', () => {
 });
 
 describe('Detail page parsing (@graph JSON-LD)', () => {
-  it('reads the Product inside @graph and the visible price when the Offer says 0', () => {
-    const result = parseDetailPage(
-      loadFixture('detail-graph.html'),
-      'https://www.immobilienscout24.at/expose/0a1b2c3d4e5f60718293a4b5',
-      'immoscout24',
-      2,
-    );
+  // The fixture has no app state, so the Offer, the visible price and the text are the sources.
+  const GRAPH_URL = 'https://www.immobilienscout24.at/expose/0a1b2c3d4e5f60718293a4b5';
+  const VISIBLE_PRICE = '<div data-testid="primary-price">ab 389.000<span> €</span></div>';
+
+  function parseGraphPage(html: string) {
+    return parseDetailPage(html, GRAPH_URL, 'immoscout24', 3).payload;
+  }
+
+  it('reads the Product inside @graph and keeps an "ab" visible price apart from the asking price', () => {
+    // The Offer says 0, and "ab 389.000 €" is the lowest price of a range.
+    const result = parseDetailPage(loadFixture('detail-graph.html'), GRAPH_URL, 'immoscout24', 2);
 
     expect(result.extractionStatus).toBe('captured');
     expect(result.payload.titleRaw).toBe('Altbauwohnung mit Balkon nahe Musterpark');
-    expect(result.payload.priceRaw).toBe('389000');
+    expect(result.payload.priceRaw).toBeNull();
+    expect(result.payload.attributesRaw).toEqual({ priceFromRaw: '389000' });
     expect(result.payload.images).toHaveLength(2);
     // The ItemList holds other listings, so their provider is not this listing's agent.
     expect(result.payload.contactName).toBeNull();
+  });
+
+  it('reads the visible price from its own element only', () => {
+    const html = loadFixture('detail-graph.html');
+    expect(html).toContain(VISIBLE_PRICE);
+    const withPrice = (markup: string) => parseGraphPage(html.replace(VISIBLE_PRICE, markup));
+
+    // "Preis auf Anfrage" has no amount, and the area in the next element is not a price.
+    const onRequest = withPrice(
+      '<div data-testid="primary-price">Preis auf Anfrage</div><div>65,2 m²</div>',
+    );
+    expect(onRequest.priceRaw).toBeNull();
+    expect(onRequest.attributesRaw).toEqual({});
+
+    const nested = withPrice(
+      '<div data-testid="primary-price"><div>Kaufpreis</div><div>389.000&nbsp;€</div></div>',
+    );
+    expect(nested.priceRaw).toBe('389000');
+    expect(nested.attributesRaw).toEqual({});
+
+    // Austrian notations: "389.000,- €", and "€ ab 389.000" for the lowest price of a range.
+    expect(withPrice('<div data-testid="primary-price">389.000,- €</div>').priceRaw).toBe('389000');
+    const fromAfterCurrency = withPrice('<div data-testid="primary-price">€ ab 389.000</div>');
+    expect(fromAfterCurrency.priceRaw).toBeNull();
+    expect(fromAfterCurrency.attributesRaw).toEqual({ priceFromRaw: '389000' });
+  });
+
+  it('gives a fractional Offer price two decimals', () => {
+    // "389000.125" would read as 389,000,125 euros: three digits after a dot are a thousands group.
+    const html = loadFixture('detail-graph.html').replace('"price": 0,', '"price": 389000.125,');
+    expect(html).toContain('389000.125');
+    expect(parseGraphPage(html).priceRaw).toBe('389000.13');
+  });
+
+  it('fills area, rooms and balcony from labelled description values only', () => {
+    // Without the app state the text is the only source. A bare "120 m²" or "4 Zimmer" can be the
+    // top of a project's range, and the first "m²" can be the balcony.
+    const withDescription = (description: string) =>
+      parseGraphPage(
+        loadFixture('detail-graph.html').replace(
+          /"description": "[^"]*"/g,
+          `"description": "${description}"`,
+        ),
+      );
+
+    expect(
+      withDescription('Neubauprojekt mit 2 bis 4 Zimmer und 45 bis 120 m² Wohnfläche.'),
+    ).toMatchObject({ livingAreaRaw: null, roomsRaw: null });
+    expect(withDescription('Wohnfläche: 45 bis 120 m², Zimmer: 2 bis 4.')).toMatchObject({
+      livingAreaRaw: null,
+      roomsRaw: null,
+    });
+    expect(
+      withDescription('Wohnung mit 8 m² Balkon und 72 m² Wohnfläche.').livingAreaRaw,
+    ).toBeNull();
+    expect(
+      withDescription('Wohnfläche: 72 m², Schlafzimmer: 2, Zimmer: 3, Balkon: 8 m².'),
+    ).toMatchObject({ livingAreaRaw: '72', roomsRaw: '3', balconyAreaRaw: '8' });
   });
 
   it('keeps the separators of a string Offer price for normalization', () => {
@@ -621,9 +686,9 @@ describe('Detail page parsing (Expose record)', () => {
     expect(result.extractionStatus).toBe('captured');
     expect(result.payload).toMatchObject({
       priceRaw: '389000',
-      livingAreaRaw: '72.4',
+      livingAreaRaw: '72.40',
       roomsRaw: '3',
-      balconyAreaRaw: '5.2',
+      balconyAreaRaw: '5.20',
       streetRaw: 'Musterstraße 12',
       postalCodeRaw: '1150',
       districtRaw: '15. Bezirk',
@@ -635,9 +700,45 @@ describe('Detail page parsing (Expose record)', () => {
     });
   });
 
-  it('does not read area or rooms from the text of a developer project', () => {
-    // The text quotes the range across all units. Its 155 m² next to the cheapest unit's
-    // price would score as a bargain.
+  const EXPOSE_URL = 'https://www.immobilienscout24.at/expose/0f1e2d3c4b5a69788796a5b4';
+
+  function parseExposePage(html: string) {
+    return parseDetailPage(html, EXPOSE_URL, 'immoscout24', 3).payload;
+  }
+
+  it('reads the Expose record when the state assignment has spaces around "="', () => {
+    const html = loadFixture('detail-expose.html').replace(
+      'window.__APOLLO_STATE__={',
+      'window.__APOLLO_STATE__ = {',
+    );
+    expect(html).toContain('window.__APOLLO_STATE__ = {');
+    expect(parseExposePage(html)).toMatchObject({ priceRaw: '389000', livingAreaRaw: '72.40' });
+  });
+
+  it('gives a fractional Expose number two decimals', () => {
+    // The normalizer would read "72.125" as 72,125 m².
+    const html = loadFixture('detail-expose.html').replace(
+      '"primaryArea":72.4,"livingArea":72.4',
+      '"primaryArea":72.125,"livingArea":72.125',
+    );
+    expect(html).toContain('"livingArea":72.125');
+    expect(parseExposePage(html).livingAreaRaw).toBe('72.13');
+  });
+
+  it('takes no Offer or visible price when the Expose record has no price', () => {
+    // The record's 0 means "price on request", and the other sources must not fill it in.
+    const html = loadFixture('detail-expose.html')
+      .replace('"primaryPrice":389000', '"primaryPrice":0')
+      .replace('"priceCurrency": "EUR",', '"priceCurrency": "EUR", "price": 389000,')
+      .replace('</h1>', '</h1><div data-testid="primary-price">389.000 €</div>');
+    expect(html).toContain('"price": 389000,');
+    expect(parseExposePage(html).priceRaw).toBeNull();
+  });
+
+  it('gives a developer project no asking price, area or rooms', () => {
+    // primaryPrice is the cheapest unit's price and changes as units sell, so it is kept as a
+    // from-price. The text quotes the range across all units; its 155 m² next to that price
+    // would score as a bargain.
     const html = loadFixture('detail-expose.html')
       .replace('"__typename":"Expose",', '"__typename":"Expose","meta":{"hasChildren":true},')
       .replace('"primaryArea":72.4,"livingArea":72.4', '"primaryArea":null,"livingArea":null')
@@ -649,17 +750,12 @@ describe('Detail page parsing (Expose record)', () => {
     expect(html).toContain('"hasChildren":true');
     expect(html).toContain('155 m²');
 
-    const result = parseDetailPage(
-      html,
-      'https://www.immobilienscout24.at/expose/0f1e2d3c4b5a69788796a5b4',
-      'immoscout24',
-      3,
-    );
-
-    expect(result.payload.livingAreaRaw).toBeNull();
-    expect(result.payload.roomsRaw).toBeNull();
-    expect(result.payload.priceRaw).toBe('389000');
-    expect(result.payload.postalCodeRaw).toBe('1150');
+    const payload = parseExposePage(html);
+    expect(payload.livingAreaRaw).toBeNull();
+    expect(payload.roomsRaw).toBeNull();
+    expect(payload.priceRaw).toBeNull();
+    expect(payload.attributesRaw).toEqual({ priceFromRaw: '389000' });
+    expect(payload.postalCodeRaw).toBe('1150');
   });
 });
 
