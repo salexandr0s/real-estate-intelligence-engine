@@ -52,6 +52,19 @@ const NETWORK_PATTERNS = [
 
 const NETWORK_NAMES = ['timeouterror', 'aborterror', 'fetcherror'];
 
+/**
+ * Playwright's messages for a page, context or browser of ours that closed or crashed. "page
+ * crashed" covers both "Page crashed" and "Navigation failed because page crashed!".
+ */
+const INTERNAL_PATTERNS = [
+  'target page, context or browser has been closed',
+  'page crashed',
+  'target crashed',
+];
+
+/** A closed-target error can carry the close reason as its message, so its name counts too. */
+const INTERNAL_NAMES = ['targetclosederror'];
+
 const PARSE_PATTERNS = [
   'selector not found',
   'element not found',
@@ -94,12 +107,13 @@ function includesAny(text: string, fragments: readonly string[]): boolean {
  * Classification order:
  * 1. A numeric `statusCode` on the error: 404 and 410 are terminal, 403, 429 and 503 are soft
  *    anti-bot signals, and the other 5xx are transient
- * 2. Chromium network errors (`net::ERR_*`), which are transient
- * 3. Terminal page messages (listing-removed indicators)
- * 4. Soft anti-bot messages (challenge page indicators)
- * 5. Transient network messages (timeouts, DNS, connection failures)
- * 6. Parse failures (selector not found, validation errors)
- * 7. Unknown (fallback)
+ * 2. A page, context or browser of ours that closed or crashed, which is an internal error
+ * 3. Chromium network errors (`net::ERR_*`), which are transient
+ * 4. Terminal page messages (listing-removed indicators)
+ * 5. Soft anti-bot messages (challenge page indicators)
+ * 6. Transient network messages (timeouts, DNS, connection failures)
+ * 7. Parse failures (selector not found, validation errors)
+ * 8. Unknown (fallback)
  */
 export function classifyScraperError(error: unknown): ErrorClass {
   const statusCode = statusCodeOf(error);
@@ -111,7 +125,11 @@ export function classifyScraperError(error: unknown): ErrorClass {
   const message = error.message.toLowerCase();
   const name = error.name.toLowerCase();
 
-  // Checked before the text patterns, because the URL in the message can contain any of them.
+  // Checked before the text patterns: a closed or crashed page says nothing about the site, and
+  // the URL in the message can contain any of the patterns below.
+  if (includesAny(message, INTERNAL_PATTERNS) || includesAny(name, INTERNAL_NAMES)) {
+    return 'internal_error';
+  }
   if (message.includes('net::err_')) return 'transient_network';
   if (includesAny(message, TERMINAL_PATTERNS)) return 'terminal_page';
   if (includesAny(message, CHALLENGE_INDICATORS)) return 'soft_anti_bot';

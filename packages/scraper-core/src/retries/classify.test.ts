@@ -22,6 +22,17 @@ describe('classifyScraperError', () => {
   });
 
   it.each([
+    ['Error', 'page.goto: Target page, context or browser has been closed'],
+    ['Error', 'page.waitForURL: Navigation failed because page crashed!'],
+    ['Error', 'page.content: Target crashed '],
+    // The message is the close reason when the code that closed the page gave one.
+    ['TargetClosedError', 'page.goto: Browser recycled by the pool'],
+  ])('classifies %s "%s" as internal_error', (name, message) => {
+    const error = Object.assign(new Error(message), { name });
+    expect(classifyScraperError(error)).toBe('internal_error');
+  });
+
+  it.each([
     [404, 'terminal_page'],
     [403, 'soft_anti_bot'],
     [503, 'soft_anti_bot'],

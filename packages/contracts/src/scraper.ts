@@ -239,11 +239,16 @@ export interface RawListingRow {
 
 // ── Retry / Error Classification ────────────────────────────────────────────
 
+/**
+ * `internal_error` is a failure on our side, such as a page, context or browser of ours that closed
+ * or crashed. It is also the run error code for those failures, and never counts against a source.
+ */
 export type ErrorClass =
   | 'transient_network'
   | 'soft_anti_bot'
   | 'parse_failure'
   | 'terminal_page'
+  | 'internal_error'
   | 'unknown';
 
 export interface RetryPolicy {
