@@ -3,11 +3,13 @@
  * Canary crawl: a quick health check for one source adapter. Writes nothing to the database.
  *
  * Fetches up to --pages list pages, following each page's next-page plan, then up to 3 detail
- * pages. For each list page it prints the HTTP status, whether the plan's selector was found and
- * how many listings the parser found. For each detail page it prints the status, the selector,
- * the key from the list page against the key derived from the detail page, the extraction status,
- * the availability, the title, the price, the area, rooms, postcode and district, and whether the
- * page gave coordinates. Exits 0 when at least 80% of the detail pages were captured, 1 otherwise.
+ * pages spread over the listings found: the first, the last and one in between. For each list
+ * page it prints the HTTP status, whether the plan's selector was found and how many listings the
+ * parser found. For each detail page it prints the status, the selector, the key from the list
+ * page against the key derived from the detail page, the extraction status, the availability, the
+ * title, the price, a developer project's from-price when the parser kept one, the area, rooms,
+ * postcode and district, and whether the page gave coordinates. Exits 0 when at least 80% of the
+ * detail pages were captured, 1 otherwise.
  *
  * Usage:
  *   npx tsx scripts/canary-crawl.ts --source <code> [--pages <n>]
@@ -79,6 +81,18 @@ function describeFailure(err: unknown): string {
 }
 
 // ── Crawl ───────────────────────────────────────────────────────────────────
+
+/**
+ * Up to `count` items spread over the list: the first, the last and evenly in between.
+ * The first few results can all be of one kind, such as developer projects, which would hide a
+ * parser fault on the rest.
+ */
+function spreadSample<T>(items: readonly T[], count: number): T[] {
+  if (items.length <= count) return [...items];
+  if (count <= 1) return items.slice(0, count);
+  const step = (items.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => items[Math.round(i * step)]!);
+}
 
 interface CanaryCounts {
   listPages: number;
@@ -152,7 +166,7 @@ async function crawl(
 
   // ── Detail pages ────────────────────────────────────────────────────────
 
-  for (const [index, item] of items.slice(0, MAX_DETAIL_SAMPLES).entries()) {
+  for (const [index, item] of spreadSample(items, MAX_DETAIL_SAMPLES).entries()) {
     const n = index + 1;
     counts.detailAttempted++;
 
@@ -179,12 +193,19 @@ async function crawl(
           ? `key=${detailKey} (match)`
           : `key=MISMATCH list=${discoveryKey ?? 'none'} detail=${detailKey}`;
       const payload = (capture.payload ?? {}) as Record<string, unknown>;
+      const attributes = payload.attributesRaw;
+      // A developer project's lowest unit price, kept apart from the asking price
+      const priceFrom =
+        typeof attributes === 'object' && attributes !== null && 'priceFromRaw' in attributes
+          ? attributes.priceFromRaw
+          : null;
 
       console.log(`detail ${n}: ${describeNavigation(nav)} ${keys} ${nav.finalUrl}`);
       console.log(
         `  extraction=${capture.extractionStatus} availability=${availability.status}` +
           ` title=${JSON.stringify(payload.titleRaw ?? null)}` +
-          ` price=${JSON.stringify(payload.priceRaw ?? null)}`,
+          ` price=${JSON.stringify(payload.priceRaw ?? null)}` +
+          (priceFrom != null ? ` priceFrom=${JSON.stringify(priceFrom)}` : ''),
       );
       console.log(
         `  area=${JSON.stringify(payload.livingAreaRaw ?? null)}` +
