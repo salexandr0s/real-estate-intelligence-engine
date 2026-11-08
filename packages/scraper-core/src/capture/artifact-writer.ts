@@ -176,7 +176,13 @@ async function pruneDirectory(
   let modifiedMs: number;
   let entries;
   try {
-    modifiedMs = (await lstat(path)).mtimeMs;
+    const info = await lstat(path);
+    // readdir would follow the link and prune wherever it points.
+    if (info.isSymbolicLink()) {
+      logger.warn('Not pruning a folder that is a symlink', { path });
+      return;
+    }
+    modifiedMs = info.mtimeMs;
     entries = await readdir(path, { withFileTypes: true });
   } catch (err) {
     if (hasErrorCode(err, 'ENOENT')) return;
@@ -216,7 +222,8 @@ async function pruneDirectory(
 
 /**
  * Removes files under `<dir>/failures` last modified more than `days` days ago, and folders there
- * that are left empty. Nothing outside `<dir>/failures` is touched, and symlinks are skipped.
+ * that are left empty. Nothing outside `<dir>/failures` is touched, and symlinks are skipped: when
+ * `failures` itself is a symlink, nothing is removed.
  *
  * @param dir The artifacts directory (`config.artifacts.dir`)
  * @param days Retention in days (`config.scraper.artifactRetentionDays`); must be positive

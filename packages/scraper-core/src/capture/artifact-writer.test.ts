@@ -87,6 +87,17 @@ describe('pruneFailureArtifacts', () => {
     expect(await readdir(join(artifactsDir, 'failures'))).toEqual(['link']);
   });
 
+  it('removes nothing when the failures folder itself is a symlink', async () => {
+    const behindLink = await fileAgedDays('elsewhere/old.html.gz', 30);
+    await symlink(join(artifactsDir, 'elsewhere'), join(artifactsDir, 'failures'));
+
+    await expect(pruneFailureArtifacts(artifactsDir, 7)).resolves.toEqual({
+      removedFiles: 0,
+      removedBytes: 0,
+    });
+    expect(await exists(behindLink)).toBe(true);
+  });
+
   it('does nothing when there is no failures folder yet', async () => {
     await expect(pruneFailureArtifacts(artifactsDir, 7)).resolves.toEqual({
       removedFiles: 0,
