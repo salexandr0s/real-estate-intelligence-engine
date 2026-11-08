@@ -157,4 +157,6 @@ export interface NormalizationContext {
   canonicalUrl: string;
   detailUrl: string;
   availabilityStatus?: import('./scraper.js').SourceAvailability['status'];
+  /** HTTP status of the detail page, which decides whether its availability counts. */
+  responseStatus?: number | null;
 }

@@ -180,6 +180,44 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     );
   });
 
+  // Parsers also say not_found when a live page lacks their markup, so only a 404 or 410 counts.
+  it('keeps a listing active when a page that loaded says not_found', async () => {
+    const existing = makeExistingListing();
+    const normalizer: SourceNormalizer = {
+      sourceCode: 'immoscout24',
+      normalizationVersion: 2,
+      normalize: vi.fn(
+        (): NormalizationResult => ({
+          success: false,
+          listing: null,
+          warnings: [],
+          errors: ['missing_title'],
+          provenance: {},
+          versionReason: null,
+        }),
+      ),
+    };
+    const updateLifecycleStatus = vi.fn(async () => ({ id: existing.id }));
+
+    const sut = new NormalizeAndUpsert(new Map([['immoscout24', normalizer]]), {
+      findExistingListing: vi.fn(async () => existing),
+      upsertListing: vi.fn(async () => ({ id: existing.id, isNew: false })),
+      updateLifecycleStatus,
+      appendListingVersion: vi.fn(async () => ({ id: 888, versionNo: 2 })),
+      updateScrapeRunNormalizationCounts: vi.fn(async () => {}),
+    });
+
+    const result = await sut.process(
+      'immoscout24',
+      {} as SourceRawListingBase,
+      makeContext({ availabilityStatus: 'not_found', responseStatus: 200 }),
+      900,
+    );
+
+    expect(updateLifecycleStatus).not.toHaveBeenCalled();
+    expect(result.listingId).toBe(0);
+  });
+
   it('applies withdrawn status-only update when normalization fails but not_found is explicit', async () => {
     const existing = makeExistingListing();
     const normalizer: SourceNormalizer = {
@@ -212,7 +250,7 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     const result = await sut.process(
       'immoscout24',
       {} as SourceRawListingBase,
-      makeContext({ availabilityStatus: 'not_found' }),
+      makeContext({ availabilityStatus: 'not_found', responseStatus: 404 }),
       900,
     );
 
