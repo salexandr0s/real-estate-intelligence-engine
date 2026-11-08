@@ -1,4 +1,4 @@
-import type { DetailCapture, RawListingUpsert, ScrapeRunMetrics } from '@immoradar/contracts';
+import type { DetailCapture, ProcessingRunMetrics, RawListingUpsert } from '@immoradar/contracts';
 import { createLogger } from '@immoradar/observability';
 
 const log = createLogger('ingestion:raw');
@@ -21,7 +21,8 @@ export interface IngestRawResult {
 
 export interface RawIngestionDeps {
   upsertRawSnapshot: (input: RawListingUpsert) => Promise<{ id: number; isNew: boolean }>;
-  updateScrapeRunMetrics: (runId: number, metrics: Partial<ScrapeRunMetrics>) => Promise<void>;
+  /** Adds the delta to the run's counters; it never sets them. */
+  updateScrapeRunMetrics: (runId: number, delta: Partial<ProcessingRunMetrics>) => Promise<void>;
   computeContentHash: (payload: Record<string, unknown>) => string;
 }
 
@@ -70,7 +71,7 @@ export class IngestRawListing {
 
     const { id: rawListingId, isNew } = await this.deps.upsertRawSnapshot(upsertInput);
 
-    const metricsDelta: Partial<ScrapeRunMetrics> = {};
+    const metricsDelta: Partial<ProcessingRunMetrics> = {};
     if (isNew) {
       metricsDelta.rawSnapshotsCreated = 1;
     }
@@ -99,7 +100,9 @@ export class IngestRawListing {
   }
 }
 
-function resolveRawExtractionStatus(capture: DetailCapture<unknown>): RawListingUpsert['extractionStatus'] {
+function resolveRawExtractionStatus(
+  capture: DetailCapture<unknown>,
+): RawListingUpsert['extractionStatus'] {
   if (capture.availabilityStatus === 'not_found') return 'not_found';
   if (capture.availabilityStatus === 'blocked') return 'blocked';
   return capture.extractionStatus;

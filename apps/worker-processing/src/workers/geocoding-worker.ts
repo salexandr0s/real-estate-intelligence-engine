@@ -7,7 +7,12 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { GeocodingJobData } from '@immoradar/scraper-core';
 import { geocodeListing } from '@immoradar/geocoding';
 import { listings } from '@immoradar/db';
@@ -74,7 +79,7 @@ export function createGeocodingWorker(): Worker<GeocodingJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
       limiter: {
         max: 1,
         duration: 1100, // ~1 req/sec with slight buffer for Nominatim

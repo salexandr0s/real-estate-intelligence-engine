@@ -18,6 +18,7 @@ import type { Browser, BrowserContext } from 'playwright';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
+  WORKER_CONCURRENCY,
   getRedisConnection,
   getQueuePrefix,
   getAdapter,
@@ -343,7 +344,7 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

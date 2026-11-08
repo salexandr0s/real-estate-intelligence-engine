@@ -26,10 +26,22 @@ export interface FullIngestionResult {
   scoring: ScoreAndAlertResult | null;
 }
 
+/** A listing version that no score points at yet. */
+export interface UnscoredListingVersion {
+  id: number;
+  rawListingId: number;
+  versionReason: VersionReason;
+}
+
 export interface FullIngestionPipelineDeps {
   raw: RawIngestionDeps;
   normalization: NormalizationDeps;
   scoreAndAlert: ScoreAndAlertDeps;
+  /**
+   * The listing's latest version if nothing has scored it yet. A retried job uses it
+   * to score the version an earlier attempt wrote before scoring failed.
+   */
+  findUnscoredLatestVersion: (listingId: number) => Promise<UnscoredListingVersion | null>;
   persistAttachments?: (
     listingId: number,
     attachments: Array<{ url: string; label?: string; type?: string }>,
@@ -44,6 +56,7 @@ export class FullIngestionPipeline {
   private readonly rawIngestor: IngestRawListing;
   private readonly normalizer: NormalizeAndUpsert;
   private readonly scorer: ScoreAndAlert;
+  private readonly findUnscoredLatestVersion: FullIngestionPipelineDeps['findUnscoredLatestVersion'];
   private readonly persistAttachments: (
     listingId: number,
     attachments: Array<{ url: string; label?: string; type?: string }>,
@@ -55,6 +68,7 @@ export class FullIngestionPipeline {
     this.rawIngestor = new IngestRawListing(deps.raw);
     this.normalizer = new NormalizeAndUpsert(normalizers, deps.normalization);
     this.scorer = new ScoreAndAlert(deps.scoreAndAlert);
+    this.findUnscoredLatestVersion = deps.findUnscoredLatestVersion;
     this.persistAttachments = deps.persistAttachments ?? (async () => {});
     this.getSourceHealthScore = deps.getSourceHealthScore ?? (async () => 90);
     this.getLocationConfidence = deps.getLocationConfidence ?? (async () => 75);
@@ -86,6 +100,7 @@ export class FullIngestionPipeline {
         canonicalUrl: capture.canonicalUrl,
         detailUrl: capture.detailUrl,
         availabilityStatus: capture.availabilityStatus,
+        responseStatus: capture.responseStatus ?? null,
       },
       scrapeRunId,
     );
@@ -96,40 +111,30 @@ export class FullIngestionPipeline {
       versionReason: normResult.versionReason,
     });
 
-    // Stage 3: Score and alert (only if listing was created/changed)
+    // Stage 3: Score and alert. A scoring error fails the job so that BullMQ retries it.
     let scoreResult: ScoreAndAlertResult | null = null;
+    const listing = normResult.listing;
+    const version = listing ? await this.findVersionToScore(rawResult, normResult) : null;
 
-    if (
-      normResult.listingId > 0 &&
-      normResult.listingVersionId != null &&
-      normResult.versionReason != null &&
-      normResult.listing != null
-    ) {
-      try {
-        const [sourceHealthScore, locationConfidence] = await Promise.all([
-          this.getSourceHealthScore(sourceId),
-          this.getLocationConfidence(normResult.listingId),
-        ]);
+    if (listing && version) {
+      const [sourceHealthScore, locationConfidence] = await Promise.all([
+        this.getSourceHealthScore(sourceId),
+        this.getLocationConfidence(normResult.listingId),
+      ]);
 
-        scoreResult = await this.scorer.process({
-          listingId: normResult.listingId,
-          listingVersionId: normResult.listingVersionId,
-          versionReason: normResult.versionReason as VersionReason,
-          listing: normResult.listing,
-          sourceHealthScore,
-          locationConfidence,
-        });
+      scoreResult = await this.scorer.process({
+        listingId: normResult.listingId,
+        listingVersionId: version.id,
+        versionReason: version.versionReason,
+        listing,
+        sourceHealthScore,
+        locationConfidence,
+      });
 
-        log.info('Stage 3 complete: scored and alerts checked', {
-          overallScore: scoreResult.overallScore,
-          alertsCreated: scoreResult.alertsCreated,
-        });
-      } catch (_err) {
-        log.error('Scoring failed, continuing without score', {
-          listingId: normResult.listingId,
-          errorClass: 'scoring_failure',
-        });
-      }
+      log.info('Stage 3 complete: scored and alerts checked', {
+        overallScore: scoreResult.overallScore,
+        alertsCreated: scoreResult.alertsCreated,
+      });
     }
 
     // Stage 4: Persist attachment documents once the listing exists
@@ -140,10 +145,11 @@ export class FullIngestionPipeline {
           listingId: normResult.listingId,
           attachmentCount: capture.attachmentUrls?.length ?? 0,
         });
-      } catch (_err) {
+      } catch (err) {
         log.error('Attachment persistence failed, continuing without document enqueue', {
           listingId: normResult.listingId,
           errorClass: 'attachment_persistence_failure',
+          error: err instanceof Error ? err.message : String(err),
         });
       }
     }
@@ -153,5 +159,31 @@ export class FullIngestionPipeline {
       normalization: normResult,
       scoring: scoreResult,
     };
+  }
+
+  /**
+   * The version this capture wrote or, when the capture changed nothing, the latest
+   * version if this capture's raw snapshot wrote it and nothing scored it. That is a
+   * retry of a job whose scoring failed after the version was written.
+   */
+  private async findVersionToScore(
+    rawResult: IngestRawResult,
+    normResult: NormalizeAndUpsertResult,
+  ): Promise<{ id: number; versionReason: VersionReason } | null> {
+    if (normResult.listingId <= 0) return null;
+    if (normResult.listingVersionId != null && normResult.versionReason != null) {
+      return { id: normResult.listingVersionId, versionReason: normResult.versionReason };
+    }
+    // A retry carries the same payload, so its raw snapshot exists already.
+    if (rawResult.isNewSnapshot) return null;
+
+    const unscored = await this.findUnscoredLatestVersion(normResult.listingId);
+    if (!unscored || unscored.rawListingId !== rawResult.rawListingId) return null;
+
+    log.info('Scoring the version an earlier attempt left unscored', {
+      listingId: normResult.listingId,
+      listingVersionId: unscored.id,
+    });
+    return { id: unscored.id, versionReason: unscored.versionReason };
   }
 }

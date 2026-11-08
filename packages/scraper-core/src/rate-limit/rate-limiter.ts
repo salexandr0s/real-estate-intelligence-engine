@@ -9,6 +9,16 @@ interface TokenBucket {
 }
 
 /**
+ * A rate of 0 or NaN makes the wait Infinity or NaN, which setTimeout turns into 1 ms, so the
+ * limit would silently stop applying.
+ */
+function assertPositiveRpm(rpm: number): void {
+  if (!Number.isFinite(rpm) || rpm <= 0) {
+    throw new RangeError(`Requests per minute must be a positive number, got ${rpm}`);
+  }
+}
+
+/**
  * Per-domain rate limiter using the token bucket algorithm.
  *
  * Each domain gets its own bucket with a configurable requests-per-minute (RPM) limit.
@@ -19,40 +29,50 @@ export class PerDomainRateLimiter {
   private readonly buckets = new Map<string, TokenBucket>();
   private readonly defaultRpm: number;
 
+  /** @throws RangeError when `defaultRpm` is not a positive number */
   constructor(defaultRpm = 12) {
+    assertPositiveRpm(defaultRpm);
     this.defaultRpm = defaultRpm;
   }
 
-  /** Configure the RPM limit for a specific domain. */
+  /**
+   * Configure the RPM limit for a specific domain. A bucket created here starts with `rpm` tokens,
+   * and lowering the limit drops the tokens above it, so no burst exceeds the new limit.
+   *
+   * @throws RangeError when `rpm` is not a positive number
+   */
   setDomainRpm(domain: string, rpm: number): void {
-    const bucket = this.getOrCreateBucket(domain);
+    assertPositiveRpm(rpm);
+    const bucket = this.getOrCreateBucket(domain, rpm);
     bucket.rpm = rpm;
+    bucket.tokens = Math.min(bucket.tokens, rpm);
   }
 
-  /** Block until a request slot is available for the given domain. */
+  /**
+   * Block until a request slot is available for the given domain. Each caller takes a whole token,
+   * so callers that wake at the same moment still go one interval apart.
+   */
   async waitForSlot(domain: string): Promise<void> {
     const bucket = this.getOrCreateBucket(domain);
 
-    this.refillTokens(bucket);
+    for (;;) {
+      this.refillTokens(bucket);
 
-    if (bucket.tokens >= 1) {
-      bucket.tokens -= 1;
-      return;
+      if (bucket.tokens >= 1) {
+        bucket.tokens -= 1;
+        return;
+      }
+
+      // The bucket keeps the part of a token that has already refilled, so this waits for the
+      // rest. Another caller can take the token first, which is why the loop checks again.
+      const waitMs = ((1 - bucket.tokens) * 60_000) / bucket.rpm;
+
+      logger.debug(`Rate limit: waiting ${Math.round(waitMs)}ms for ${domain}`, {
+        sourceCode: domain,
+      });
+
+      await this.sleep(waitMs);
     }
-
-    // Calculate wait time until the next token is available
-    const intervalMs = 60_000 / bucket.rpm;
-    const timeSinceLastRefill = Date.now() - bucket.lastRefillAt;
-    const waitMs = Math.max(0, intervalMs - timeSinceLastRefill);
-
-    logger.debug(`Rate limit: waiting ${Math.round(waitMs)}ms for ${domain}`, {
-      sourceCode: domain,
-    });
-
-    await this.sleep(waitMs);
-
-    this.refillTokens(bucket);
-    bucket.tokens = Math.max(0, bucket.tokens - 1);
   }
 
   /** Get the current number of available tokens for a domain. */
@@ -68,13 +88,13 @@ export class PerDomainRateLimiter {
     this.buckets.clear();
   }
 
-  private getOrCreateBucket(domain: string): TokenBucket {
+  private getOrCreateBucket(domain: string, rpm = this.defaultRpm): TokenBucket {
     let bucket = this.buckets.get(domain);
     if (!bucket) {
       bucket = {
-        tokens: this.defaultRpm,
+        tokens: rpm,
         lastRefillAt: Date.now(),
-        rpm: this.defaultRpm,
+        rpm,
       };
       this.buckets.set(domain, bucket);
     }

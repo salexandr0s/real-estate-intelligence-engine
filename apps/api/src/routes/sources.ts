@@ -1,10 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import type { ConnectionOptions } from 'bullmq';
-import { Queue } from 'bullmq';
-import type { ScrapeRunMetrics, SourceRow } from '@immoradar/contracts';
-import { NotFoundError, TransientError, createLogger } from '@immoradar/observability';
+import type { Queue } from 'bullmq';
+import { loadConfig } from '@immoradar/config';
+import type { ScraperRunMetrics } from '@immoradar/contracts';
+import {
+  ConflictError,
+  NotFoundError,
+  TransientError,
+  createLogger,
+} from '@immoradar/observability';
 import { sources, scrapeRuns, canaryResults } from '@immoradar/db';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  createQueue,
+  maxPagesForSource,
+  syncDiscoverySchedule,
+} from '@immoradar/scraper-core';
 import type { DiscoveryJobData } from '@immoradar/scraper-core';
 import {
   parseOrThrow,
@@ -21,12 +31,9 @@ const logger = createLogger('api:sources');
 const SCRAPE_QUEUE_READY_TIMEOUT_MS = 5_000;
 const SCRAPE_QUEUE_UNAVAILABLE_MESSAGE =
   'Scrape queue is unavailable. Check Redis and the scraper worker, then try again.';
-const EMPTY_SCRAPE_RUN_METRICS: ScrapeRunMetrics = {
+const EMPTY_SCRAPE_RUN_METRICS: ScraperRunMetrics = {
   pagesFetched: 0,
   listingsDiscovered: 0,
-  rawSnapshotsCreated: 0,
-  normalizedCreated: 0,
-  normalizedUpdated: 0,
   http2xx: 0,
   http4xx: 0,
   http5xx: 0,
@@ -36,12 +43,7 @@ const EMPTY_SCRAPE_RUN_METRICS: ScrapeRunMetrics = {
 
 function getDiscoveryQueue(): Queue<DiscoveryJobData> {
   if (!discoveryQueue) {
-    const connection = getRedisConnection() as ConnectionOptions;
-    const prefix = getQueuePrefix();
-    discoveryQueue = new Queue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY, {
-      connection,
-      prefix,
-    });
+    discoveryQueue = createQueue<DiscoveryJobData>(QUEUE_NAMES.SCRAPE_DISCOVERY);
   }
   return discoveryQueue;
 }
@@ -63,50 +65,11 @@ async function withTimeout<T>(
   }
 }
 
-function intervalToCron(minutes: number): string {
-  if (minutes <= 0) return '*/30 * * * *';
-  if (minutes < 60) return `*/${minutes} * * * *`;
-  const hours = Math.round(minutes / 60);
-  if (hours >= 24) return '0 0 * * *';
-  return `0 */${hours} * * *`;
-}
-
-async function syncDiscoverySchedule(source: SourceRow): Promise<void> {
+async function syncAllDiscoverySchedules(): Promise<void> {
   const queue = getDiscoveryQueue();
-  const schedulerId = `discovery-${source.code}`;
-
-  if (!source.isActive) {
-    try {
-      await queue.removeJobScheduler(schedulerId);
-    } catch {
-      // Scheduler may not exist yet; removing a missing schedule is still a successful sync.
-    }
-    return;
-  }
-
-  const crawlMinutes = source.crawlIntervalMinutes ?? 30;
-  const cronPattern = intervalToCron(crawlMinutes);
-
-  const sourceConfig = source.config as Record<string, unknown> | null;
-  const crawlProfile = sourceConfig?.crawlProfile as Record<string, unknown> | undefined;
-  const maxPagesPerRun =
-    (crawlProfile?.maxPagesPerRun as number) ?? (crawlProfile?.maxPages as number) ?? 100;
-
-  await queue.upsertJobScheduler(
-    schedulerId,
-    { pattern: cronPattern },
-    {
-      name: `discovery:${source.code}`,
-      data: {
-        sourceCode: source.code,
-        sourceId: source.id,
-        scrapeRunId: 0,
-        page: 1,
-        maxPages: maxPagesPerRun,
-        maxPagesPerRun,
-      },
-    },
-  );
+  const config = loadConfig();
+  const allSources = await sources.findAll();
+  await Promise.all(allSources.map((source) => syncDiscoverySchedule(queue, source, config)));
 }
 
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
@@ -186,22 +149,24 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PATCH /v1/sources/:id - Update source settings (isActive, crawlIntervalMinutes)
+  // PATCH /v1/sources/:id - Update source settings (isActive, crawlIntervalMinutes).
+  // Switching on a legally disabled source fails with 409 and changes nothing.
   app.patch<{ Params: { id: string } }>('/v1/sources/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
     const { isActive, crawlIntervalMinutes } = parseOrThrow(sourceUpdateSchema, request.body);
 
-    const existing = await sources.findById(id);
-    if (!existing) {
+    const result = await sources.updateSettings(id, { isActive, crawlIntervalMinutes });
+    if (result.outcome === 'not_found') {
       throw new NotFoundError('Source', id);
     }
-
-    const updated = await sources.updateSettings(id, { isActive, crawlIntervalMinutes });
-    if (!updated) {
-      throw new NotFoundError('Source', id);
+    if (result.outcome === 'legally_disabled') {
+      throw new ConflictError(
+        `Source ${result.source.code} is legally disabled and can't be switched on.`,
+      );
     }
+    const updated = result.source;
 
-    await syncDiscoverySchedule(updated);
+    await syncDiscoverySchedule(getDiscoveryQueue(), updated, loadConfig());
 
     return reply.send({
       data: {
@@ -230,16 +195,14 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/sources/pause-all - Pause all sources
   app.post('/v1/sources/pause-all', async (_request, reply) => {
     const affected = await sources.updateAllActive(false);
-    const updatedSources = await sources.findAll();
-    await Promise.all(updatedSources.map(syncDiscoverySchedule));
+    await syncAllDiscoverySchedules();
     return reply.send({ data: { affected }, meta: {} });
   });
 
-  // POST /v1/sources/resume-all - Resume all sources
+  // POST /v1/sources/resume-all - Resume all sources except legally disabled ones
   app.post('/v1/sources/resume-all', async (_request, reply) => {
     const affected = await sources.updateAllActive(true);
-    const updatedSources = await sources.findAll();
-    await Promise.all(updatedSources.map(syncDiscoverySchedule));
+    await syncAllDiscoverySchedules();
     return reply.send({ data: { affected }, meta: {} });
   });
 
@@ -406,18 +369,7 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       browserType: 'chromium',
     });
 
-    const sourceConfig = source.config as Record<string, unknown> | null;
-    const crawlProfile =
-      typeof sourceConfig?.crawlProfile === 'object' && sourceConfig.crawlProfile != null
-        ? (sourceConfig.crawlProfile as Record<string, unknown>)
-        : undefined;
-    const rawMaxPagesPerRun = (crawlProfile?.maxPagesPerRun ?? crawlProfile?.maxPages) as
-      | number
-      | undefined;
-    const maxPagesPerRun =
-      typeof rawMaxPagesPerRun === 'number' && !Number.isNaN(rawMaxPagesPerRun)
-        ? rawMaxPagesPerRun
-        : 100;
+    const maxPagesPerRun = maxPagesForSource(source.config, loadConfig().scraper.maxPagesPerRun);
 
     try {
       await queue.add(`discovery:${source.code}`, {
@@ -437,13 +389,10 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      await scrapeRuns.finish(
-        run.id,
-        'failed',
-        EMPTY_SCRAPE_RUN_METRICS,
-        'scrape_queue_unavailable',
-        SCRAPE_QUEUE_UNAVAILABLE_MESSAGE,
-      );
+      await scrapeRuns.finish(run.id, 'failed', EMPTY_SCRAPE_RUN_METRICS, {
+        errorCode: 'scrape_queue_unavailable',
+        errorMessage: SCRAPE_QUEUE_UNAVAILABLE_MESSAGE,
+      });
 
       throw new TransientError(SCRAPE_QUEUE_UNAVAILABLE_MESSAGE, 'scrape_queue_unavailable', {
         sourceCode: source.code,
@@ -487,8 +436,6 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       const { limit: queryLimit } = parseOrThrow(paginationQuerySchema, request.query);
       const limit = queryLimit ?? 20;
 
-      const connection = getRedisConnection() as ConnectionOptions;
-      const prefix = getQueuePrefix();
       const queueNames = [
         QUEUE_NAMES.SCRAPE_DISCOVERY,
         QUEUE_NAMES.SCRAPE_DETAIL,
@@ -508,7 +455,7 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       }> = [];
 
       for (const queueName of queueNames) {
-        const q = new Queue(queueName, { connection, prefix });
+        const q = createQueue(queueName);
         const failed = await q.getFailed(0, limit);
         for (const job of failed) {
           allFailed.push({

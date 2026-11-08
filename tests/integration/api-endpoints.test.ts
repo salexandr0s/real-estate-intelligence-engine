@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { resetConfig } from '@immoradar/config';
+import { query } from '@immoradar/db';
 import { buildApp } from '../../apps/api/src/app.js';
 import { seed } from '../../packages/db/seeds/seed.js';
 
@@ -243,6 +244,25 @@ describe('API endpoints', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json<{ data: unknown[] }>();
       expect(body.data).toBeInstanceOf(Array);
+    });
+  });
+
+  describe('PATCH /v1/sources/:id', () => {
+    it.skipIf(!hasDb)('returns 409 when asked to switch on a legally disabled source', async () => {
+      // The seed marks openimmo legally disabled.
+      const [source] = await query<{ id: string }>(
+        `SELECT id FROM sources WHERE code = 'openimmo'`,
+      );
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/v1/sources/${source!.id}`,
+        headers: AUTH_HEADER,
+        payload: { isActive: true },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({
+        error: { code: 'conflict', message: expect.stringContaining('legally disabled') },
+      });
     });
   });
 

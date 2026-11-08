@@ -38,7 +38,7 @@
 ### Selector breakage (DOM change)
 
 - **Symptoms**: Parse failures on pages that return HTTP 200. Extraction produces null/empty fields that were previously populated.
-- **Detection**: Rising `parse_failure` error class in circuit breaker. `extraction_status = 'parse_failed'` on new raw_listings rows.
+- **Detection**: Rising `parse_failure` errors in worker logs (the circuit breaker does not count them). `extraction_status = 'parse_failed'` on new raw_listings rows.
 - **Resolution**:
   1. Capture fresh fixtures: `npx tsx scripts/capture-site-html.ts --source {source_code}`
   2. Diff old vs new fixture HTML to identify structural changes
@@ -52,7 +52,7 @@
 - **Symptoms**: HTTP 403 or 429 responses. Circuit breaker opens. `captcha_count` or `http_4xx` metrics spike.
 - **Detection**: `scrape_runs.status = 'rate_limited'` or `'failed'`. `sources.health_status` transitions to `'blocked'`.
 - **Resolution**:
-  1. Stop manual triggers — let the cooldown timer expire (`SCRAPER_COOLDOWN_AFTER_BLOCK_MS`)
+  1. Stop manual triggers and let the circuit breaker cooldown (5 min) expire
   2. Check if the block is IP-based or behavioral
   3. If behavioral: increase jitter delays, reduce `rate_limit_rpm`, reduce `maxPages`
   4. If IP-based: wait longer or investigate proxy options

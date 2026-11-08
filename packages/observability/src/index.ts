@@ -263,6 +263,7 @@ export type { ProcessLifecycle } from './process-lifecycle.js';
 
 export {
   registry,
+  enableDefaultMetrics,
   scrapeRunsTotal,
   scrapePagesTotal,
   scrapeListingsDiscovered,

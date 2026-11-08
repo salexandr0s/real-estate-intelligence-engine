@@ -1,11 +1,13 @@
 import { query } from '../client.js';
 import type {
+  ProcessingRunMetrics,
+  ScrapeRunCause,
   ScrapeRunCreate,
-  ScrapeRunMetrics,
   ScrapeRunRow,
   ScrapeRunStatus,
   ScrapeRunTriggerType,
   ScrapeRunScope,
+  ScraperRunMetrics,
 } from '@immoradar/contracts';
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
@@ -102,11 +104,15 @@ export async function create(input: ScrapeRunCreate): Promise<ScrapeRunRow> {
   return toScrapeRunRow(rows[0]!);
 }
 
+/**
+ * Mark a queued run as running. Returns null when the run is no longer queued:
+ * it was cancelled or has already started.
+ */
 export async function start(id: number): Promise<ScrapeRunRow | null> {
   const rows = await query<ScrapeRunDbRow>(
     `UPDATE scrape_runs
      SET status = 'running', started_at = NOW()
-     WHERE id = $1
+     WHERE id = $1 AND status = 'queued'
      RETURNING *`,
     [id],
   );
@@ -114,12 +120,19 @@ export async function start(id: number): Promise<ScrapeRunRow | null> {
   return row ? toScrapeRunRow(row) : null;
 }
 
+/**
+ * Close a run with the scraper's counters and, for a failure, its cause. The raw
+ * and normalized counts stay as processing left them: it adds to them with
+ * `incrementMetrics`, often after the run has finished.
+ *
+ * Returns null when the run had already ended, so a run that the user or
+ * `cancelZombieRuns` cancelled stays cancelled.
+ */
 export async function finish(
   id: number,
   status: 'succeeded' | 'partial' | 'failed' | 'cancelled' | 'rate_limited',
-  metrics: ScrapeRunMetrics,
-  errorCode?: string,
-  errorMessage?: string,
+  metrics: ScraperRunMetrics,
+  cause?: ScrapeRunCause,
 ): Promise<ScrapeRunRow | null> {
   const rows = await query<ScrapeRunDbRow>(
     `UPDATE scrape_runs
@@ -127,33 +140,27 @@ export async function finish(
          finished_at = NOW(),
          pages_fetched = $3,
          listings_discovered = $4,
-         raw_snapshots_created = $5,
-         normalized_created = $6,
-         normalized_updated = $7,
-         http_2xx = $8,
-         http_4xx = $9,
-         http_5xx = $10,
-         captcha_count = $11,
-         retry_count = $12,
-         error_code = $13,
-         error_message = $14
-     WHERE id = $1
+         http_2xx = $5,
+         http_4xx = $6,
+         http_5xx = $7,
+         captcha_count = $8,
+         retry_count = $9,
+         error_code = $10,
+         error_message = $11
+     WHERE id = $1 AND status IN ('queued', 'running')
      RETURNING *`,
     [
       id,
       status,
       metrics.pagesFetched,
       metrics.listingsDiscovered,
-      metrics.rawSnapshotsCreated,
-      metrics.normalizedCreated,
-      metrics.normalizedUpdated,
       metrics.http2xx,
       metrics.http4xx,
       metrics.http5xx,
       metrics.captchaCount,
       metrics.retryCount,
-      errorCode ?? null,
-      errorMessage ?? null,
+      cause?.errorCode ?? null,
+      cause?.errorMessage ?? null,
     ],
   );
   const row = rows[0];
@@ -208,7 +215,10 @@ export async function findRecentAll(
   return rows.map((row) => ({ ...toScrapeRunRow(row), sourceCode: row.source_code }));
 }
 
-/** Cancel scrape runs stuck in 'running' state for longer than the threshold. */
+/**
+ * Cancel runs a crash left open: running for longer than the threshold, or still
+ * queued that long after they were scheduled.
+ */
 export async function cancelZombieRuns(thresholdMinutes = 30): Promise<number> {
   const [row] = await query<{ count: string }>(
     `WITH cancelled AS (
@@ -216,13 +226,34 @@ export async function cancelZombieRuns(thresholdMinutes = 30): Promise<number> {
        SET status = 'cancelled',
            finished_at = NOW(),
            error_code = 'zombie_timeout',
-           error_message = 'Cancelled: stuck in running state for > ' || $1 || ' minutes'
-       WHERE status = 'running'
-         AND started_at < NOW() - make_interval(mins => $1)
+           error_message = 'Cancelled: stuck in ' || status || ' state for > ' || $1::int || ' minutes'
+       WHERE (status = 'running' AND started_at < NOW() - make_interval(mins => $1::int))
+          OR (status = 'queued' AND scheduled_at < NOW() - make_interval(mins => $1::int))
        RETURNING id
      )
      SELECT COUNT(*) AS count FROM cancelled`,
     [thresholdMinutes],
+  );
+  return Number(row!.count);
+}
+
+/**
+ * Cancel the runs a stopped scraper left running. An engine runs one scraper, so when it starts,
+ * every scheduled or app-started run still marked running was cut off. Runs a command-line script
+ * started belong to that script's process and are left alone.
+ */
+export async function cancelInterruptedRuns(): Promise<number> {
+  const [row] = await query<{ count: string }>(
+    `WITH cancelled AS (
+       UPDATE scrape_runs
+       SET status = 'cancelled',
+           finished_at = NOW(),
+           error_code = 'interrupted',
+           error_message = 'The scraper stopped during the run'
+       WHERE status = 'running' AND worker_host IN ('discovery-worker', 'api')
+       RETURNING id
+     )
+     SELECT COUNT(*) AS count FROM cancelled`,
   );
   return Number(row!.count);
 }
@@ -272,31 +303,26 @@ export async function getRecentSuccessRate(
   };
 }
 
+/** Set the scraper's counters during a run. Processing counts go through `incrementMetrics`. */
 export async function updateMetrics(
   id: number,
-  metrics: Partial<ScrapeRunMetrics>,
+  metrics: Partial<ScraperRunMetrics>,
 ): Promise<ScrapeRunRow | null> {
   const rows = await query<ScrapeRunDbRow>(
     `UPDATE scrape_runs
      SET pages_fetched = COALESCE($2, pages_fetched),
          listings_discovered = COALESCE($3, listings_discovered),
-         raw_snapshots_created = COALESCE($4, raw_snapshots_created),
-         normalized_created = COALESCE($5, normalized_created),
-         normalized_updated = COALESCE($6, normalized_updated),
-         http_2xx = COALESCE($7, http_2xx),
-         http_4xx = COALESCE($8, http_4xx),
-         http_5xx = COALESCE($9, http_5xx),
-         captcha_count = COALESCE($10, captcha_count),
-         retry_count = COALESCE($11, retry_count)
+         http_2xx = COALESCE($4, http_2xx),
+         http_4xx = COALESCE($5, http_4xx),
+         http_5xx = COALESCE($6, http_5xx),
+         captcha_count = COALESCE($7, captcha_count),
+         retry_count = COALESCE($8, retry_count)
      WHERE id = $1
      RETURNING *`,
     [
       id,
       metrics.pagesFetched ?? null,
       metrics.listingsDiscovered ?? null,
-      metrics.rawSnapshotsCreated ?? null,
-      metrics.normalizedCreated ?? null,
-      metrics.normalizedUpdated ?? null,
       metrics.http2xx ?? null,
       metrics.http4xx ?? null,
       metrics.http5xx ?? null,
@@ -306,4 +332,27 @@ export async function updateMetrics(
   );
   const row = rows[0];
   return row ? toScrapeRunRow(row) : null;
+}
+
+/**
+ * Add one capture's processing counts to its run. Each column adds in place, so
+ * concurrent captures and the scraper's `finish` can't overwrite each other.
+ */
+export async function incrementMetrics(
+  id: number,
+  delta: Partial<ProcessingRunMetrics>,
+): Promise<void> {
+  const raw = delta.rawSnapshotsCreated ?? 0;
+  const created = delta.normalizedCreated ?? 0;
+  const updated = delta.normalizedUpdated ?? 0;
+  if (raw === 0 && created === 0 && updated === 0) return;
+
+  await query(
+    `UPDATE scrape_runs
+     SET raw_snapshots_created = raw_snapshots_created + $2,
+         normalized_created = normalized_created + $3,
+         normalized_updated = normalized_updated + $4
+     WHERE id = $1`,
+    [id, raw, created, updated],
+  );
 }

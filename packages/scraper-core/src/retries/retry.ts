@@ -24,6 +24,7 @@ export class ClassifiedError extends Error {
  * - soft_anti_bot: retryable once (handled by maxAttempts in policy)
  * - parse_failure: retryable once (fresh context may help)
  * - terminal_page: never retryable
+ * - internal_error: retryable, like unknown (a fresh page may work)
  * - unknown: retryable (may be transient)
  */
 function isRetryable(errorClass: ErrorClass): boolean {

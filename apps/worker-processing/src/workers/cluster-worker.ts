@@ -7,7 +7,12 @@ import { createHash } from 'node:crypto';
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { ClusterJobData } from '@immoradar/scraper-core';
 import { query, clusters } from '@immoradar/db';
 
@@ -194,7 +199,7 @@ export function createClusterWorker(): Worker<ClusterJobData> {
         totalListingsClustered: totalMembers,
       });
     },
-    { connection, prefix, concurrency: 1 },
+    { connection, prefix, concurrency: WORKER_CONCURRENCY },
   );
 
   worker.on('failed', (job, err) => {

@@ -24,6 +24,7 @@ import { extractPdfText, parseRealEstateFacts } from '@immoradar/documents';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
+  WORKER_CONCURRENCY,
   getQueuePrefix,
   getRedisConnection,
   type DocumentProcessingJobData,
@@ -298,7 +299,8 @@ async function downloadRemoteDocument(params: {
       );
     }
 
-    const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? null;
+    const mimeType =
+      response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? null;
     if (!isAcceptedDocumentContentType(mimeType, currentUrl.toString())) {
       throw new DocumentDownloadError(
         'unsupported_content_type',
@@ -328,7 +330,7 @@ async function downloadDocument(params: {
   source: SourceRow;
 }): Promise<{ buffer: Buffer; mimeType: string | null; finalUrl: string }> {
   const config = loadConfig();
-  const storagePath = params.storageKey ? join(config.s3.bucket, params.storageKey) : null;
+  const storagePath = params.storageKey ? join(config.artifacts.dir, params.storageKey) : null;
 
   if (storagePath) {
     try {
@@ -533,7 +535,7 @@ export function createDocumentWorker(): Worker<DocumentProcessingJobData> {
     {
       connection,
       prefix,
-      concurrency: 2,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

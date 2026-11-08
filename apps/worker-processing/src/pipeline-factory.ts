@@ -3,16 +3,15 @@
  * Extracted from scripts/scrape-and-ingest.ts for reuse in workers.
  */
 
+import { loadConfig } from '@immoradar/config';
 import { FullIngestionPipeline } from '@immoradar/ingestion';
 import type { FullIngestionPipelineDeps } from '@immoradar/ingestion';
 import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@immoradar/contracts';
-import { Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
+import type { Queue } from 'bullmq';
 import {
   computeContentHash,
   QUEUE_NAMES,
-  getRedisConnection,
-  getQueuePrefix,
+  createQueue,
   DEFAULT_JOB_RETRY_OPTS,
 } from '@immoradar/scraper-core';
 import type { AlertDeliveryJobData, DocumentProcessingJobData } from '@immoradar/scraper-core';
@@ -59,10 +58,13 @@ const HEALTH_STATUS_SCORES: Record<string, number> = {
   unknown: 50,
 };
 
-const GEOCODE_PRECISION_SCORES: Record<string, number> = {
+// Keyed by the full union, so a new precision fails to compile until it has a score.
+const GEOCODE_PRECISION_SCORES: Record<GeocodePrecision, number> = {
   source_exact: 100,
   source_approx: 80,
   street: 70,
+  // The geocoder's centroid of several street or station matches.
+  estimated: 60,
   district: 50,
   city: 30,
   none: 10,
@@ -73,20 +75,14 @@ let _documentQueue: Queue<DocumentProcessingJobData> | null = null;
 
 function getDeliveryQueue(): Queue<AlertDeliveryJobData> {
   if (!_deliveryQueue) {
-    _deliveryQueue = new Queue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    _deliveryQueue = createQueue<AlertDeliveryJobData>(QUEUE_NAMES.ALERT_DELIVERY);
   }
   return _deliveryQueue;
 }
 
 function getDocumentQueue(): Queue<DocumentProcessingJobData> {
   if (!_documentQueue) {
-    _documentQueue = new Queue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    _documentQueue = createQueue<DocumentProcessingJobData>(QUEUE_NAMES.DOCUMENT_PROCESSING);
   }
   return _documentQueue;
 }
@@ -99,8 +95,8 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         const isNew = row.observationCount === 1;
         return { id: row.id, isNew };
       },
-      updateScrapeRunMetrics: async (runId, metricsData) => {
-        await scrapeRuns.updateMetrics(runId, metricsData);
+      updateScrapeRunMetrics: async (runId, delta) => {
+        await scrapeRuns.incrementMetrics(runId, delta);
       },
       computeContentHash,
     },
@@ -160,7 +156,7 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         return { id: row.id, versionNo: row.versionNo };
       },
       updateScrapeRunNormalizationCounts: async (runId, created, updated) => {
-        await scrapeRuns.updateMetrics(runId, {
+        await scrapeRuns.incrementMetrics(runId, {
           normalizedCreated: created,
           normalizedUpdated: updated,
         });
@@ -254,7 +250,11 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         );
       },
     },
+    findUnscoredLatestVersion: (listingId) => listingVersions.findUnscoredLatest(listingId),
     persistAttachments: async (listingId, attachments) => {
+      // The document worker only runs with documents switched on, and nothing else reads
+      // its queue. Until then the rows stay pending, and a later capture enqueues them.
+      const documentsEnabled = loadConfig().features.documentsEnabled;
       for (const attachment of attachments) {
         const doc = await documents.upsertDocument({
           listingId,
@@ -264,7 +264,8 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
           documentType: attachment.type ?? 'unknown',
         });
 
-        if (doc.status !== 'extracted') {
+        // A downloaded or extracted document keeps its status and needs no new job.
+        if (documentsEnabled && doc.status === 'pending') {
           await getDocumentQueue().add(
             `doc:${doc.id}`,
             { documentId: doc.id },

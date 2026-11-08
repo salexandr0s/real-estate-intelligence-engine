@@ -1,4 +1,6 @@
-import { query } from '../client.js';
+import { execute, query, queryWithClient, transaction } from '../client.js';
+import { appendVersion } from './listing-versions.js';
+import type { AppendVersionInput } from './listing-versions.js';
 import type {
   ListingRow,
   OperationType,
@@ -230,7 +232,8 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
  *
  * On insert: sets first_seen_at and last_seen_at.
  * On update: updates last_seen_at, detects price/status/content changes
- * and sets the corresponding timestamps.
+ * and sets the corresponding timestamps. Stored coordinates stay when the source
+ * sends none, so a geocoded listing isn't geocoded again on every fetch.
  */
 export async function upsertListing(input: CanonicalListingInput): Promise<ListingRow> {
   const rows = await query<ListingDbRow>(
@@ -282,9 +285,12 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        street = EXCLUDED.street,
        house_number = EXCLUDED.house_number,
        address_display = EXCLUDED.address_display,
-       latitude = EXCLUDED.latitude,
-       longitude = EXCLUDED.longitude,
-       geocode_precision = EXCLUDED.geocode_precision,
+       latitude = COALESCE(EXCLUDED.latitude, listings.latitude),
+       longitude = COALESCE(EXCLUDED.longitude, listings.longitude),
+       geocode_precision = CASE
+         WHEN EXCLUDED.latitude IS NOT NULL THEN EXCLUDED.geocode_precision
+         ELSE listings.geocode_precision
+       END,
        list_price_eur_cents = EXCLUDED.list_price_eur_cents,
        monthly_operating_cost_eur_cents = EXCLUDED.monthly_operating_cost_eur_cents,
        reserve_fund_eur_cents = EXCLUDED.reserve_fund_eur_cents,
@@ -905,34 +911,100 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
   }
 }
 
-// ── Stale Listing Detection ──────────────────────────────────────────────────
+// ── Expiry ──────────────────────────────────────────────────────────────────
 
-/** Find active listings not observed within the threshold. */
-export async function findStaleActive(thresholdDays: number, limit = 100): Promise<ListingRow[]> {
+/**
+ * Move discovery sightings into the canonical last_seen_at. Returns the rows it moved.
+ * A sighting moves once it is a day newer, because every sweep sights every listing again,
+ * and expiry reads the sighting itself.
+ */
+export async function reconcileLastSeen(): Promise<number> {
+  const result = await execute(
+    `UPDATE listings l
+     SET last_seen_at = s.last_sighted_at
+     FROM raw_listing_sightings s
+     WHERE s.source_id = l.source_id
+       AND s.source_listing_key = l.source_listing_key
+       AND s.last_sighted_at > l.last_seen_at + INTERVAL '1 day'`,
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * What an active listing needs before it expires, over `l`, its source `src` and its sighting
+ * `s`, with the threshold in days as $1. Silence never qualifies: it takes three spaced live
+ * fetches with no listing, while the same source is healthy and parsed another page after the
+ * last of them. That last condition keeps a site redesign from expiring a whole source.
+ */
+const EXPIRY_EVIDENCE = `
+  l.listing_status = 'active'
+  AND src.is_active
+  AND src.health_status = 'healthy'
+  AND s.inconclusive_count >= 3
+  AND l.last_seen_at < NOW() - make_interval(days => $1)
+  AND (s.last_sighted_at IS NULL OR s.last_sighted_at < NOW() - make_interval(days => $1))
+  AND EXISTS (
+    SELECT 1 FROM raw_listing_sightings ok
+    WHERE ok.source_id = s.source_id AND ok.last_detail_parsed_at > s.last_inconclusive_at
+  )`;
+
+/** Active listings whose own detail page stopped giving a listing, oldest first. */
+export async function findExpiryCandidates(
+  thresholdDays: number,
+  limit = 100,
+): Promise<ListingRow[]> {
   const rows = await query<ListingDbRow>(
     `SELECT l.*
      FROM listings l
-     JOIN sources s ON s.id = l.source_id
-     WHERE l.listing_status = 'active'
-       AND s.health_status = 'healthy'
-       AND l.last_seen_at < NOW() - make_interval(days => $1)
-     ORDER BY l.last_seen_at ASC
+     JOIN sources src ON src.id = l.source_id
+     JOIN raw_listing_sightings s
+       ON s.source_id = l.source_id AND s.source_listing_key = l.source_listing_key
+     WHERE ${EXPIRY_EVIDENCE}
+     ORDER BY l.last_seen_at
      LIMIT $2`,
     [thresholdDays, limit],
   );
   return rows.map(toListingRow);
 }
 
-/** Mark a single listing as expired. */
-export async function markExpired(id: number): Promise<ListingRow | null> {
-  const rows = await query<ListingDbRow>(
-    `UPDATE listings
-     SET listing_status = 'expired',
-         last_status_change_at = NOW()
-     WHERE id = $1 AND listing_status = 'active'
-     RETURNING *`,
-    [id],
-  );
-  const row = rows[0];
-  return row ? toListingRow(row) : null;
+export interface ExpireStaleInput {
+  thresholdDays: number;
+  sourceStatusRaw: string;
+  /** The status change to record. Its listing ID and fingerprint also go on the listing. */
+  version: AppendVersionInput;
+}
+
+/**
+ * Expire a listing that failed revalidation and append its version, in one transaction. The
+ * evidence is checked again here, because a detail page may have parsed since the candidates
+ * were read. last_seen_at and current_raw_listing_id stay as they are, because this is a decision
+ * and not an observation. Returns false when the listing no longer qualifies.
+ */
+export async function expireStale(input: ExpireStaleInput): Promise<boolean> {
+  return transaction(async (client) => {
+    const rows = await queryWithClient<{ id: string }>(
+      client,
+      `UPDATE listings l
+       SET listing_status = 'expired',
+           source_status_raw = $3,
+           content_fingerprint = $4,
+           last_status_change_at = NOW()
+       FROM sources src, raw_listing_sightings s
+       WHERE l.id = $2
+         AND src.id = l.source_id
+         AND s.source_id = l.source_id
+         AND s.source_listing_key = l.source_listing_key
+         AND ${EXPIRY_EVIDENCE}
+       RETURNING l.id`,
+      [
+        input.thresholdDays,
+        input.version.listingId,
+        input.sourceStatusRaw,
+        input.version.contentFingerprint,
+      ],
+    );
+    if (rows.length === 0) return false;
+    await appendVersion(input.version, client);
+    return true;
+  });
 }

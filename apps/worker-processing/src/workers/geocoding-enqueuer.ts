@@ -1,12 +1,18 @@
 /**
  * BullMQ worker: finds listings needing geocoding and enqueues individual geocoding jobs.
- * Runs every 30 minutes via scheduler.
+ * Runs hourly via scheduler.
  */
 
-import { Worker, Queue } from 'bullmq';
+import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  createQueue,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { GeocodeEnqueueJobData, GeocodingJobData } from '@immoradar/scraper-core';
 import { listings } from '@immoradar/db';
 
@@ -16,10 +22,7 @@ export function createGeocodingEnqueuer(): Worker<GeocodeEnqueueJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
 
-  const geocodingQueue = new Queue<GeocodingJobData>(QUEUE_NAMES.GEOCODING, {
-    connection,
-    prefix,
-  });
+  const geocodingQueue = createQueue<GeocodingJobData>(QUEUE_NAMES.GEOCODING);
 
   const worker = new Worker<GeocodeEnqueueJobData>(
     QUEUE_NAMES.GEOCODE_ENQUEUE,
@@ -58,7 +61,7 @@ export function createGeocodingEnqueuer(): Worker<GeocodeEnqueueJobData> {
 
       log.info('Geocoding jobs enqueued', { enqueued });
     },
-    { connection, prefix, concurrency: 1 },
+    { connection, prefix, concurrency: WORKER_CONCURRENCY },
   );
 
   worker.on('failed', (job, err) => {

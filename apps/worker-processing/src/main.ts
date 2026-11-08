@@ -1,28 +1,20 @@
-// Register source adapters before any worker is created (canary needs them)
-import './adapter-registry.js';
-
 import { loadConfig } from '@immoradar/config';
+import type { AppConfig } from '@immoradar/config';
 import { createLogger, runMain, setLogLevel, redactUrl } from '@immoradar/observability';
 import type { LogLevel } from '@immoradar/observability';
-import { closeRedisConnection } from '@immoradar/scraper-core';
-import { closePool } from '@immoradar/db';
+import {
+  QUEUE_NAMES,
+  closeRedisConnection,
+  createQueue,
+  removeSchedulersExcept,
+  shouldRegisterAutomatedSchedules,
+} from '@immoradar/scraper-core';
+import type { MailboxSyncJobData } from '@immoradar/scraper-core';
+import { closePool, mailboxes } from '@immoradar/db';
 import { createIngestionWorker } from './workers/ingestion-worker.js';
 import { createBaselineWorker } from './workers/baseline-worker.js';
-import { createGeocodingWorker } from './workers/geocoding-worker.js';
 import { createClusterWorker } from './workers/cluster-worker.js';
-import { createGeocodingEnqueuer } from './workers/geocoding-enqueuer.js';
 import { createStaleCheckWorker } from './workers/stale-check-worker.js';
-import { createCanaryWorker } from './workers/canary-worker.js';
-import { createDeliveryWorker } from './workers/delivery-worker.js';
-import { createDocumentWorker } from './workers/document-worker.js';
-import { closePushSession } from '@immoradar/alerts';
-import { createMailboxSyncWorker } from './workers/mailbox-sync-worker.js';
-import { createOutreachSendWorker } from './workers/outreach-send-worker.js';
-import { mailboxes } from '@immoradar/db';
-import { Queue } from 'bullmq';
-import type { ConnectionOptions } from 'bullmq';
-import { QUEUE_NAMES, getQueuePrefix, getRedisConnection } from '@immoradar/scraper-core';
-import type { MailboxSyncJobData } from '@immoradar/scraper-core';
 
 const logger = createLogger('worker-processing');
 
@@ -31,6 +23,68 @@ const HARD_TIMEOUT_MS = 8_000;
 // Worker.close() waits for running jobs with no limit, so shutdown moves on after this long.
 const WORKER_CLOSE_GRACE_MS = 5_000;
 const PUSH_SESSION_CLOSE_TIMEOUT_MS = 1_000;
+
+interface Closable {
+  close(): Promise<void>;
+}
+
+/**
+ * Loads one optional feature's modules, then runs the returned function to create its workers.
+ * Nothing is created once shutdown has begun, because the workers step may already have closed the
+ * ones that exist. A failure is logged with the feature name and the other workers keep running.
+ */
+async function startOptionalWorkers(
+  feature: string,
+  shutdownSignal: AbortSignal,
+  load: () => Promise<() => void>,
+): Promise<void> {
+  try {
+    const start = await load();
+    if (!shutdownSignal.aborted) start();
+  } catch (err) {
+    logger.error(`The ${feature} workers failed to start, so the service runs without them`, {
+      feature,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+  }
+}
+
+/**
+ * Leaves the mailbox queue with one scheduler, for the shared mailbox, when outreach and automated
+ * schedules are both on, and with none otherwise. Every other entry is removed, including a
+ * repeatable job left over under the old `mailbox-sync:repeat:<id>` name.
+ */
+async function syncMailboxSchedule(config: AppConfig): Promise<void> {
+  let mailboxAccountId: number | null = null;
+  if (config.outreach.enabled && config.outreach.imap.user) {
+    const mailbox = await mailboxes.ensureSharedMailbox({
+      userId: 1,
+      email: config.outreach.imap.user,
+      displayName: config.outreach.fromName || null,
+      secretRef: 'env:OUTREACH_SHARED_MAILBOX',
+      pollIntervalSeconds: config.outreach.pollIntervalSeconds,
+    });
+    mailboxAccountId = mailbox.id;
+  }
+
+  const queue = createQueue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC);
+  try {
+    if (mailboxAccountId === null || !shouldRegisterAutomatedSchedules(config)) {
+      await removeSchedulersExcept(queue, []);
+      return;
+    }
+    const schedulerId = `mailbox-sync-repeat-${mailboxAccountId}`;
+    await removeSchedulersExcept(queue, [schedulerId]);
+    await queue.upsertJobScheduler(
+      schedulerId,
+      { every: config.outreach.pollIntervalSeconds * 1000 },
+      { name: 'mailbox-sync', data: { mailboxAccountId, triggeredBy: 'scheduler' } },
+    );
+  } finally {
+    await queue.close();
+  }
+}
 
 runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   const config = loadConfig();
@@ -41,88 +95,103 @@ runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
     redisUrl: redactUrl(config.redis.url),
   } as Record<string, unknown>);
 
-  const ingestionWorker = createIngestionWorker();
-  const baselineWorker = createBaselineWorker();
-  const clusterWorker = createClusterWorker();
-  const geocodingEnqueuer = createGeocodingEnqueuer();
-  const staleCheckWorker = createStaleCheckWorker();
+  const workers = new Map<string, Closable>();
+  const deliveryEnabled =
+    config.alerts.pushEnabled || config.alerts.emailEnabled || config.alerts.webhookEnabled;
+  let closePushSession: (() => Promise<void>) | undefined;
 
-  // Canary worker — gated on feature flag
-  const canaryWorker = config.scraper.canaryEnabled ? createCanaryWorker() : null;
-
-  // Geocoding worker — gated on feature flag
-  const geocodingWorker = config.features.geocodingEnabled ? createGeocodingWorker() : null;
-
-  // Document processing worker
-  const documentWorker = createDocumentWorker();
-  const mailboxSyncWorker = config.outreach.enabled ? createMailboxSyncWorker() : null;
-  const outreachSendWorker = config.outreach.enabled ? createOutreachSendWorker() : null;
-
-  // Alert delivery worker — gated on any delivery channel being enabled
-  const deliveryWorker =
-    config.alerts.pushEnabled || config.alerts.emailEnabled || config.alerts.webhookEnabled
-      ? createDeliveryWorker()
-      : null;
-
+  // Steps run in registration order: the workers, then the push session, Redis and the pool. All of
+  // them are registered before the first await, so a signal that arrives while an optional module
+  // loads still runs every step.
   lifecycle.onShutdown(
     'workers',
     async () => {
-      await Promise.all(
-        [
-          ingestionWorker,
-          baselineWorker,
-          clusterWorker,
-          geocodingEnqueuer,
-          staleCheckWorker,
-          documentWorker,
-          mailboxSyncWorker,
-          outreachSendWorker,
-          canaryWorker,
-          geocodingWorker,
-          deliveryWorker,
-        ].map((worker) => worker?.close()),
-      );
+      await Promise.all([...workers.values()].map((worker) => worker.close()));
     },
     WORKER_CLOSE_GRACE_MS,
   );
-  lifecycle.onShutdown('push session', closePushSession, PUSH_SESSION_CLOSE_TIMEOUT_MS);
+  if (deliveryEnabled) {
+    lifecycle.onShutdown(
+      'push session',
+      async () => {
+        await closePushSession?.();
+      },
+      PUSH_SESSION_CLOSE_TIMEOUT_MS,
+    );
+  }
   lifecycle.onShutdown('redis', closeRedisConnection);
   lifecycle.onShutdown('database pool', closePool);
 
-  if (config.outreach.enabled && config.outreach.imap.user) {
-    const mailbox = await mailboxes.ensureSharedMailbox({
-      userId: 1,
-      email: config.outreach.imap.user,
-      displayName: config.outreach.fromName || null,
-      secretRef: 'env:OUTREACH_SHARED_MAILBOX',
-      pollIntervalSeconds: config.outreach.pollIntervalSeconds,
+  workers.set('ingestion', createIngestionWorker());
+  workers.set('baseline', createBaselineWorker());
+  workers.set('cluster', createClusterWorker());
+  workers.set('stale-check', createStaleCheckWorker());
+
+  // Optional workers load on demand, so a feature that is off costs no memory. Canary pulls in
+  // Playwright and every adapter, documents the PDF parser, outreach and delivery the mail libraries.
+  if (config.features.geocodingEnabled) {
+    await startOptionalWorkers('geocoding', lifecycle.shutdownSignal, async () => {
+      const { createGeocodingEnqueuer } = await import('./workers/geocoding-enqueuer.js');
+      const { createGeocodingWorker } = await import('./workers/geocoding-worker.js');
+      return () => {
+        workers.set('geocode-enqueue', createGeocodingEnqueuer());
+        workers.set('geocoding', createGeocodingWorker());
+      };
     });
-    const queue = new Queue<MailboxSyncJobData>(QUEUE_NAMES.MAILBOX_SYNC, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
-    await queue.add(
-      `mailbox-sync:repeat:${mailbox.id}`,
-      { mailboxAccountId: mailbox.id, triggeredBy: 'scheduler' },
-      {
-        jobId: `mailbox-sync:repeat:${mailbox.id}`,
-        repeat: { every: config.outreach.pollIntervalSeconds * 1000 },
-      },
-    );
   }
 
-  const workerNames = [
-    'ingestion',
-    'baseline',
-    'cluster',
-    'geocode-enqueue',
-    'stale-check',
-    'document',
-  ];
-  if (canaryWorker) workerNames.push('canary');
-  if (geocodingWorker) workerNames.push('geocoding');
-  if (deliveryWorker) workerNames.push('alert-delivery');
-  if (mailboxSyncWorker) workerNames.push('mailbox-sync');
-  if (outreachSendWorker) workerNames.push('outreach-send');
-  logger.info(`Workers ready: ${workerNames.join(', ')}`);
+  if (config.scraper.canaryWorkerEnabled) {
+    await startOptionalWorkers('canary', lifecycle.shutdownSignal, async () => {
+      await import('./adapter-registry.js');
+      const { createCanaryWorker } = await import('./workers/canary-worker.js');
+      return () => {
+        workers.set('canary', createCanaryWorker());
+      };
+    });
+  }
+
+  if (config.features.documentsEnabled) {
+    await startOptionalWorkers('document', lifecycle.shutdownSignal, async () => {
+      const { createDocumentWorker } = await import('./workers/document-worker.js');
+      return () => {
+        workers.set('document', createDocumentWorker());
+      };
+    });
+  }
+
+  if (config.outreach.enabled) {
+    await startOptionalWorkers('outreach', lifecycle.shutdownSignal, async () => {
+      const { createMailboxSyncWorker } = await import('./workers/mailbox-sync-worker.js');
+      const { createOutreachSendWorker } = await import('./workers/outreach-send-worker.js');
+      return () => {
+        workers.set('mailbox-sync', createMailboxSyncWorker());
+        workers.set('outreach-send', createOutreachSendWorker());
+      };
+    });
+  }
+
+  if (deliveryEnabled) {
+    await startOptionalWorkers('alert delivery', lifecycle.shutdownSignal, async () => {
+      const { createDeliveryWorker } = await import('./workers/delivery-worker.js');
+      const alerts = await import('@immoradar/alerts');
+      return () => {
+        closePushSession = alerts.closePushSession;
+        workers.set('alert-delivery', createDeliveryWorker());
+      };
+    });
+  }
+
+  // After shutdown begins the redis step may already have run, and a new queue would open a
+  // connection that nothing closes.
+  if (lifecycle.shutdownSignal.aborted) return;
+  try {
+    await syncMailboxSchedule(config);
+  } catch (err) {
+    // The workers keep running, and the next start syncs the schedule again.
+    logger.error('Could not sync the mailbox schedule', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  logger.info(`Workers ready: ${[...workers.keys()].join(', ')}`);
 });

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { loadConfig } from '@immoradar/config';
-import { registry } from '@immoradar/observability';
+import { enableDefaultMetrics, registry } from '@immoradar/observability';
 import { constantTimeEquals } from '../middleware/auth.js';
 
 function getRemoteAddress(request: FastifyRequest): string {
@@ -24,6 +24,8 @@ function isLoopbackAddress(address: string): boolean {
 }
 
 export async function metricsRoutes(app: FastifyInstance): Promise<void> {
+  enableDefaultMetrics();
+
   const config = loadConfig();
   const metricsToken = config.observability.metricsToken;
 

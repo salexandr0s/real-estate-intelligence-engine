@@ -132,6 +132,24 @@ export interface ScrapeRunMetrics {
   retryCount: number;
 }
 
+/**
+ * Run counters that processing owns. It adds to them per capture, often after the
+ * run has finished, so the scraper never writes them.
+ */
+export type ProcessingRunMetrics = Pick<
+  ScrapeRunMetrics,
+  'rawSnapshotsCreated' | 'normalizedCreated' | 'normalizedUpdated'
+>;
+
+/** Run counters that the scraper owns and writes when it finishes the run. */
+export type ScraperRunMetrics = Omit<ScrapeRunMetrics, keyof ProcessingRunMetrics>;
+
+/** Why a run ended as it did. `errorCode` is an ErrorClass for page errors. */
+export interface ScrapeRunCause {
+  errorCode: string;
+  errorMessage?: string | null;
+}
+
 export interface ScrapeRunRow {
   id: number;
   runUuid: string;
@@ -221,11 +239,16 @@ export interface RawListingRow {
 
 // ── Retry / Error Classification ────────────────────────────────────────────
 
+/**
+ * `internal_error` is a failure on our side, such as a page, context or browser of ours that closed
+ * or crashed. It is also the run error code for those failures, and never counts against a source.
+ */
 export type ErrorClass =
   | 'transient_network'
   | 'soft_anti_bot'
   | 'parse_failure'
   | 'terminal_page'
+  | 'internal_error'
   | 'unknown';
 
 export interface RetryPolicy {

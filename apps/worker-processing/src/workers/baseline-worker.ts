@@ -6,7 +6,12 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { BaselineJobData } from '@immoradar/scraper-core';
 import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
 import { query, marketBaselines } from '@immoradar/db';
@@ -181,7 +186,7 @@ export function createBaselineWorker(): Worker<BaselineJobData> {
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

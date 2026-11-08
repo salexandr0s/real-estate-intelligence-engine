@@ -1,89 +1,95 @@
 /**
- * BullMQ worker: detects and expires stale listings.
+ * BullMQ worker: moves discovery sightings into listings.last_seen_at, then
+ * expires listings whose own detail pages stopped giving a listing.
  *
- * A listing is "stale" if it's still active but hasn't been observed
- * within the configured threshold (default: 7 days). For each stale listing:
- * 1. Mark as 'expired'
- * 2. Create a listing_version with version_reason 'status_change'
+ * Silence never expires anything. listings.findExpiryCandidates says what counts
+ * as evidence. One pass handles at most 100 listings, and the next scheduled run
+ * takes the rest.
  *
- * Expiry is a silent fallback only. Sources that are not healthy are excluded
- * upstream from the stale query so we do not mass-expire listings during
- * source outages or blocking events.
+ * Each run also prunes scraper failure artifacts older than
+ * SCRAPER_ARTIFACT_RETENTION_DAYS.
  */
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
+import { loadConfig } from '@immoradar/config';
 import { createLogger } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+  pruneFailureArtifacts,
+} from '@immoradar/scraper-core';
 import type { StaleCheckJobData } from '@immoradar/scraper-core';
-import { listings, listingVersions } from '@immoradar/db';
+import { listings } from '@immoradar/db';
 import { computeContentFingerprint } from '@immoradar/normalization';
 
 const log = createLogger('worker:stale-check');
 
 const DEFAULT_THRESHOLD_DAYS = 7;
-const DEFAULT_BATCH_SIZE = 100;
-const MAX_EXPIRED_PER_RUN = 1000;
+const EXPIRED_STATUS_RAW = 'expired_revalidation_failed';
+
+/** Failure artifacts are debugging aids, so a failed prune is logged and never fails the job. */
+async function pruneArtifacts(artifactsDir: string, retentionDays: number): Promise<void> {
+  try {
+    const { removedFiles, removedBytes } = await pruneFailureArtifacts(artifactsDir, retentionDays);
+    log.info('Pruned failure artifacts', { removedFiles, removedBytes, retentionDays });
+  } catch (err) {
+    log.error('Failed to prune failure artifacts', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
   const connection = getRedisConnection() as ConnectionOptions;
   const prefix = getQueuePrefix();
+  const config = loadConfig();
 
   const worker = new Worker<StaleCheckJobData>(
     QUEUE_NAMES.STALE_CHECK,
     async (job: Job<StaleCheckJobData>) => {
+      // Before the database work, so a database outage doesn't also stop the pruning.
+      await pruneArtifacts(config.artifacts.dir, config.scraper.artifactRetentionDays);
+
       const thresholdDays = job.data.thresholdDays ?? DEFAULT_THRESHOLD_DAYS;
-      const batchSize = job.data.batchSize ?? DEFAULT_BATCH_SIZE;
 
-      log.info('Stale check started', { thresholdDays, batchSize });
+      const reconciled = await listings.reconcileLastSeen();
+      const candidates = await listings.findExpiryCandidates(thresholdDays);
 
-      let totalExpired = 0;
+      let expired = 0;
+      for (const listing of candidates) {
+        try {
+          const expiredFingerprint = computeContentFingerprint({
+            title: listing.title,
+            description: listing.description ?? null,
+            listPriceEurCents: listing.listPriceEurCents ?? null,
+            livingAreaSqm: listing.livingAreaSqm ?? null,
+            usableAreaSqm: listing.usableAreaSqm ?? null,
+            rooms: listing.rooms ?? null,
+            propertyType: listing.propertyType,
+            propertySubtype: listing.propertySubtype ?? null,
+            districtNo: listing.districtNo ?? null,
+            postalCode: listing.postalCode ?? null,
+            city: listing.city,
+            contactName: listing.contactName ?? null,
+            contactCompany: listing.contactCompany ?? null,
+            contactEmail: listing.contactEmail ?? null,
+            contactPhone: listing.contactPhone ?? null,
+            hasBalcony: listing.hasBalcony ?? null,
+            hasTerrace: listing.hasTerrace ?? null,
+            hasGarden: listing.hasGarden ?? null,
+            hasElevator: listing.hasElevator ?? null,
+            parkingAvailable: listing.parkingAvailable ?? null,
+            isFurnished: listing.isFurnished ?? null,
+            listingStatus: 'expired',
+          });
 
-      // Process in batches, capped to prevent unbounded runtime
-      let batch = await listings.findStaleActive(thresholdDays, batchSize);
-
-      while (batch.length > 0 && totalExpired < MAX_EXPIRED_PER_RUN) {
-        for (const listing of batch) {
-          try {
-            // 1. Mark as expired
-            const expiredFingerprint = computeContentFingerprint({
-              title: listing.title,
-              description: listing.description ?? null,
-              listPriceEurCents: listing.listPriceEurCents ?? null,
-              livingAreaSqm: listing.livingAreaSqm ?? null,
-              usableAreaSqm: listing.usableAreaSqm ?? null,
-              rooms: listing.rooms ?? null,
-              propertyType: listing.propertyType,
-              propertySubtype: listing.propertySubtype ?? null,
-              districtNo: listing.districtNo ?? null,
-              postalCode: listing.postalCode ?? null,
-              city: listing.city,
-              contactName: listing.contactName ?? null,
-              contactCompany: listing.contactCompany ?? null,
-              contactEmail: listing.contactEmail ?? null,
-              contactPhone: listing.contactPhone ?? null,
-              hasBalcony: listing.hasBalcony ?? null,
-              hasTerrace: listing.hasTerrace ?? null,
-              hasGarden: listing.hasGarden ?? null,
-              hasElevator: listing.hasElevator ?? null,
-              parkingAvailable: listing.parkingAvailable ?? null,
-              isFurnished: listing.isFurnished ?? null,
-              listingStatus: 'expired',
-            });
-            const updated = await listings.updateLifecycleStatus({
-              id: listing.id,
-              currentRawListingId: listing.currentRawListingId,
-              latestScrapeRunId: listing.latestScrapeRunId,
-              listingStatus: 'expired',
-              sourceStatusRaw: 'expired_stale',
-              contentFingerprint: expiredFingerprint,
-            });
-            if (!updated) continue; // Already changed by another process
-
-            totalExpired++;
-
-            // 2. Create version row
-            await listingVersions.appendVersion({
+          const expiredNow = await listings.expireStale({
+            thresholdDays,
+            sourceStatusRaw: EXPIRED_STATUS_RAW,
+            version: {
               listingId: listing.id,
               rawListingId: listing.currentRawListingId,
               versionReason: 'status_change',
@@ -95,34 +101,26 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
               normalizedSnapshot: {
                 ...listing.normalizedPayload,
                 listingStatus: 'expired',
-                sourceStatusRaw: 'expired_stale',
+                sourceStatusRaw: EXPIRED_STATUS_RAW,
               },
-            });
-          } catch (err) {
-            log.error('Failed to expire listing', {
-              listingId: listing.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
+            },
+          });
+          // False when a page parsed or the listing changed after the candidates were read.
+          if (expiredNow) expired++;
+        } catch (err) {
+          log.error('Failed to expire listing', {
+            listingId: listing.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
-
-        // Fetch next batch
-        batch = await listings.findStaleActive(thresholdDays, batchSize);
       }
 
-      if (totalExpired >= MAX_EXPIRED_PER_RUN) {
-        log.warn('Stale check hit cap, more listings may remain', {
-          totalExpired,
-          cap: MAX_EXPIRED_PER_RUN,
-        });
-      }
-
-      log.info('Stale check complete', { totalExpired });
+      log.info('Stale check complete', { reconciled, candidates: candidates.length, expired });
     },
     {
       connection,
       prefix,
-      concurrency: 1,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

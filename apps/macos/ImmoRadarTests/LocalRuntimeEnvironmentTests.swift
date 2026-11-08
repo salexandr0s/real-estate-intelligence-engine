@@ -133,4 +133,44 @@ final class LocalRuntimeEnvironmentTests: XCTestCase {
 
         XCTAssertTrue(candidates.contains(URL(fileURLWithPath: "/opt/homebrew/bin/node")))
     }
+
+    func testEnvParserMatchesNode() {
+        // The expected values are what Node 22's util.parseEnv returns for the same text. npm and
+        // tsx commands read .env with it, so a Debug engine must read the file the same way.
+        let parsed = EngineLayout.parseEnv("""
+        # comment
+        export EXPORTED=yes
+        INLINE=value # comment
+        URL=postgres://user:pa#ss@host/db
+        DOUBLE="kept # inside" # outside
+        SINGLE='raw\\n'
+        ESCAPED="line1\\nline2"
+        MULTI="first
+        second"
+        BACKTICK=`tick`
+        SPACES=\u{20}\u{20}
+        SWALLOWED=next
+        CRLF=crlf\r
+        DUP=first
+        DUP=second
+        UNCLOSED="no closing quote
+        TAIL=tail
+        """)
+
+        XCTAssertEqual(parsed, [
+            "EXPORTED": "yes",
+            "INLINE": "value",
+            "URL": "postgres://user:pa",
+            "DOUBLE": "kept # inside",
+            "SINGLE": "raw\\n",
+            "ESCAPED": "line1\nline2",
+            "MULTI": "first\nsecond",
+            "BACKTICK": "tick",
+            "SPACES": "SWALLOWED=next",
+            "CRLF": "crlf",
+            "DUP": "second",
+            "UNCLOSED": "\"no closing quote",
+            "TAIL": "tail",
+        ])
+    }
 }

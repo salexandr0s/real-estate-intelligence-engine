@@ -178,7 +178,7 @@ immoradar/
 ├── .github/
 │   └── workflows/
 │
-├── .env.example
+├── example.env
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json

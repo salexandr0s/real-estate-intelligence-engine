@@ -1,5 +1,10 @@
 // ── Environment Configuration ───────────────────────────────────────────────
 
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join } from 'node:path';
+import { parseEnv } from 'node:util';
+
 function envStr(key: string, fallback?: string): string {
   const val = process.env[key];
   if (val !== undefined) return val;
@@ -52,27 +57,108 @@ function envTrustProxy(): boolean | string {
   return raw;
 }
 
+function loadArtifactsDir(): string {
+  const configured = envStr('ARTIFACTS_DIR', '').trim();
+  if (configured) {
+    if (!isAbsolute(configured)) {
+      throw new Error(
+        `Invalid ARTIFACTS_DIR: ${configured}. Use an absolute path, because a relative one writes wherever the process started.`,
+      );
+    }
+    return configured;
+  }
+  const runtimeHome = envStr('IMMORADAR_RUNTIME_HOME', '');
+  if (runtimeHome) return join(runtimeHome, 'artifacts');
+  return join(homedir(), 'Library', 'Application Support', 'ImmoRadar', 'runtime', 'artifacts');
+}
+
+const REPO_PACKAGE_NAME = 'immoradar';
+
+function isRepoPackage(dir: string): boolean {
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    return (
+      typeof pkg === 'object' && pkg !== null && 'name' in pkg && pkg.name === REPO_PACKAGE_NAME
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** The nearest folder holding `turbo.json`, if its package.json is the ImmoRadar root. */
+function findRepoRoot(startDir: string): string | null {
+  let dir = startDir;
+  for (;;) {
+    if (existsSync(join(dir, 'turbo.json'))) return isRepoPackage(dir) ? dir : null;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function readEnvFile(path: string): NodeJS.Dict<string> {
+  let contents: string;
+  try {
+    contents = readFileSync(path, 'utf8');
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not read ${path}: ${reason}`, { cause: err });
+  }
+  return parseEnv(contents);
+}
+
+/**
+ * Loads `.env.local`, then `.env`, from the ImmoRadar checkout that holds this module, for npm and
+ * tsx commands. The search starts from this module's folder, not the working folder, so a script
+ * started from inside another project never reads that project's files. A variable that is already
+ * set is never replaced, so the shell wins over `.env.local`, and `.env.local` wins over `.env`. The
+ * app sets `IMMORADAR_RUNTIME_HOME` on everything it starts and supplies the whole environment
+ * itself.
+ *
+ * A value that spans several lines raises a warning that names its key, because an unclosed double
+ * quote runs on into the lines after it and hides the variables set there.
+ */
+export function loadRepoEnvFiles(startDir: string = __dirname): void {
+  if (process.env['IMMORADAR_RUNTIME_HOME']) return;
+  const root = findRepoRoot(startDir);
+  if (!root) return;
+  for (const name of ['.env.local', '.env']) {
+    const path = join(root, name);
+    if (!existsSync(path)) continue;
+    for (const [key, value] of Object.entries(readEnvFile(path))) {
+      if (value === undefined) continue;
+      if (value.includes('\n')) {
+        process.emitWarning(
+          `${key} in ${path} has a value that spans several lines. Check it for an unclosed double quote, which hides the lines after it.`,
+        );
+      }
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
+  }
+}
+
+function loadRepoEnvFilesOutsideTests(): void {
+  if (process.env['VITEST']) return;
+  loadRepoEnvFiles();
+}
+
 export interface PlaywrightConfig {
-  browser: string;
   headless: boolean;
-  defaultTimeoutMs: number;
   navigationTimeoutMs: number;
-  locale: string;
-  timezoneId: string;
-  maxContextsPerWorker: number;
+  browserIdleCloseMs: number;
+  browserRecycleAfterContexts: number;
   captureScreenshotOnFailure: boolean;
   captureHtmlOnFailure: boolean;
   captureHarOnFailure: boolean;
 }
 
 export interface ScraperConfig {
-  defaultRateLimitRpm: number;
-  defaultConcurrencyPerSource: number;
-  cooldownAfterBlockMs: number;
-  jitterMinMs: number;
-  jitterMaxMs: number;
-  canaryEnabled: boolean;
-  detailWorkerConcurrency: number;
+  canaryWorkerEnabled: boolean;
+  minCrawlIntervalMinutes: number;
+  maxPagesPerRun: number;
+  detailBudgetPerRun: number;
+  detailRefreshDays: number;
+  artifactRetentionDays: number;
   browserRuntime: 'playwright' | 'patchright';
   patchrightSourceCodes: string[];
 }
@@ -115,13 +201,8 @@ export interface AppConfig {
     prometheusEnabled: boolean;
     metricsToken: string;
   };
-  s3: {
-    endpoint: string;
-    region: string;
-    bucket: string;
-    accessKey: string;
-    secretKey: string;
-    forcePathStyle: boolean;
+  artifacts: {
+    dir: string;
   };
   playwright: PlaywrightConfig;
   scraper: ScraperConfig;
@@ -184,7 +265,7 @@ export interface AppConfig {
   };
   features: {
     geocodingEnabled: boolean;
-    crossSourceClusteringEnabled: boolean;
+    documentsEnabled: boolean;
   };
   copilot: {
     anthropicApiKey: string;
@@ -200,13 +281,10 @@ let _canaryConfig: CanaryConfig | null = null;
 
 function loadPlaywrightConfig(): PlaywrightConfig {
   return {
-    browser: envStr('PLAYWRIGHT_BROWSER', 'chromium'),
     headless: envBool('PLAYWRIGHT_HEADLESS', true),
-    defaultTimeoutMs: envInt('PLAYWRIGHT_DEFAULT_TIMEOUT_MS', 30000),
-    navigationTimeoutMs: envInt('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', 45000),
-    locale: envStr('PLAYWRIGHT_LOCALE', 'de-AT'),
-    timezoneId: envStr('PLAYWRIGHT_TIMEZONE_ID', 'Europe/Vienna'),
-    maxContextsPerWorker: envInt('PLAYWRIGHT_MAX_CONTEXTS_PER_WORKER', 2),
+    navigationTimeoutMs: envInt('PLAYWRIGHT_NAVIGATION_TIMEOUT_MS', 30000),
+    browserIdleCloseMs: envInt('PLAYWRIGHT_BROWSER_IDLE_CLOSE_MS', 60000),
+    browserRecycleAfterContexts: envInt('PLAYWRIGHT_BROWSER_RECYCLE_AFTER_CONTEXTS', 200),
     captureScreenshotOnFailure: envBool('PLAYWRIGHT_CAPTURE_SCREENSHOT_ON_FAILURE', true),
     captureHtmlOnFailure: envBool('PLAYWRIGHT_CAPTURE_HTML_ON_FAILURE', true),
     captureHarOnFailure: envBool('PLAYWRIGHT_CAPTURE_HAR_ON_FAILURE', false),
@@ -220,13 +298,12 @@ function loadRuntimeBootMode(): RuntimeBootMode {
 
 function loadScraperConfig(): ScraperConfig {
   return {
-    defaultRateLimitRpm: envInt('SCRAPER_DEFAULT_RATE_LIMIT_RPM', 12),
-    defaultConcurrencyPerSource: envInt('SCRAPER_DEFAULT_CONCURRENCY_PER_SOURCE', 1),
-    cooldownAfterBlockMs: envInt('SCRAPER_COOLDOWN_AFTER_BLOCK_MS', 900000),
-    jitterMinMs: envInt('SCRAPER_JITTER_MIN_MS', 2000),
-    jitterMaxMs: envInt('SCRAPER_JITTER_MAX_MS', 7000),
-    canaryEnabled: envBool('SCRAPER_CANARY_ENABLED', true),
-    detailWorkerConcurrency: envInt('DETAIL_WORKER_CONCURRENCY', 3),
+    canaryWorkerEnabled: envBool('CANARY_WORKER_ENABLED', false),
+    minCrawlIntervalMinutes: envInt('SCRAPER_MIN_CRAWL_INTERVAL_MINUTES', 180),
+    maxPagesPerRun: envInt('SCRAPER_MAX_PAGES_PER_RUN', 60),
+    detailBudgetPerRun: envInt('SCRAPER_DETAIL_BUDGET_PER_RUN', 40),
+    detailRefreshDays: envInt('SCRAPER_DETAIL_REFRESH_DAYS', 30),
+    artifactRetentionDays: envInt('SCRAPER_ARTIFACT_RETENTION_DAYS', 7),
     browserRuntime:
       envStr('SCRAPER_BROWSER_RUNTIME', 'playwright') === 'patchright'
         ? 'patchright'
@@ -237,6 +314,7 @@ function loadScraperConfig(): ScraperConfig {
 
 export function loadCanaryConfig(): CanaryConfig {
   if (_canaryConfig) return _canaryConfig;
+  loadRepoEnvFilesOutsideTests();
 
   _canaryConfig = {
     nodeEnv: envStr('NODE_ENV', 'development'),
@@ -250,6 +328,7 @@ export function loadCanaryConfig(): CanaryConfig {
 
 export function loadConfig(): AppConfig {
   if (_config) return _config;
+  loadRepoEnvFilesOutsideTests();
 
   const nodeEnv = envStr('NODE_ENV', 'development');
   const docsPublic = envBool('API_DOCS_PUBLIC', nodeEnv !== 'production');
@@ -277,7 +356,7 @@ export function loadConfig(): AppConfig {
     },
     database: {
       url: envStr('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/immoradar'),
-      poolMax: envInt('DATABASE_POOL_MAX', 20),
+      poolMax: envInt('DATABASE_POOL_MAX', 4),
       statementTimeoutMs: envInt('DATABASE_STATEMENT_TIMEOUT_MS', 10000),
     },
     redis: {
@@ -285,22 +364,17 @@ export function loadConfig(): AppConfig {
       prefix: envStr('BULLMQ_PREFIX', 'immoradar'),
     },
     observability: {
-      prometheusEnabled: envBool('PROMETHEUS_ENABLED', true),
+      prometheusEnabled: envBool('PROMETHEUS_ENABLED', false),
       metricsToken,
     },
-    s3: {
-      endpoint: envStr('S3_ENDPOINT', 'http://localhost:9000'),
-      region: envStr('S3_REGION', 'eu-central-1'),
-      bucket: envStr('S3_BUCKET', 'immoradar'),
-      accessKey: envStr('S3_ACCESS_KEY', 'minioadmin'),
-      secretKey: envStr('S3_SECRET_KEY', 'minioadmin'),
-      forcePathStyle: envBool('S3_FORCE_PATH_STYLE', true),
+    artifacts: {
+      dir: loadArtifactsDir(),
     },
     playwright: loadPlaywrightConfig(),
     scraper: loadScraperConfig(),
     documents: {
       downloadTimeoutMs: envInt('DOCUMENT_DOWNLOAD_TIMEOUT_MS', 20000),
-      maxBytes: envInt('DOCUMENT_MAX_BYTES', 25000000),
+      maxBytes: envInt('DOCUMENT_MAX_BYTES', 10000000),
     },
     runtime: {
       bootMode: loadRuntimeBootMode(),
@@ -357,7 +431,7 @@ export function loadConfig(): AppConfig {
     },
     features: {
       geocodingEnabled: envBool('FEATURE_GEOCODING_ENABLED', false),
-      crossSourceClusteringEnabled: envBool('FEATURE_CROSS_SOURCE_CLUSTERING_ENABLED', false),
+      documentsEnabled: envBool('FEATURE_DOCUMENTS_ENABLED', false),
     },
     copilot: {
       anthropicApiKey: envStr('ANTHROPIC_API_KEY', ''),

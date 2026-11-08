@@ -12,7 +12,12 @@ import {
   alertDeliveryDuration,
   pushTokensActive,
 } from '@immoradar/observability';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  getRedisConnection,
+  getQueuePrefix,
+} from '@immoradar/scraper-core';
 import type { AlertDeliveryJobData } from '@immoradar/scraper-core';
 import { alerts, deadLetter, deviceTokens, appUsers } from '@immoradar/db';
 import { sendAlertEmail, sendAlertPush, sendAlertWebhook } from '@immoradar/alerts';
@@ -197,7 +202,7 @@ export function createDeliveryWorker(): Worker<AlertDeliveryJobData> {
     {
       connection,
       prefix,
-      concurrency: 5,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 

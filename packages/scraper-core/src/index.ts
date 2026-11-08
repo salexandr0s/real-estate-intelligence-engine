@@ -19,8 +19,15 @@ export { ClassifiedError, withRetry } from './retries/retry.js';
 export { classifyScraperError } from './retries/classify.js';
 
 // ── Capture ──────────────────────────────────────────────────────────────────
-export { ArtifactWriter, type ArtifactWriterPort } from './capture/artifact-writer.js';
+export {
+  ArtifactWriter,
+  pruneFailureArtifacts,
+  type ArtifactWriterPort,
+  type PruneResult,
+  type ScreenshotPage,
+} from './capture/artifact-writer.js';
 export { computeContentHash } from './capture/content-hash.js';
+export { headlineText } from './capture/headline-text.js';
 
 // ── Health ───────────────────────────────────────────────────────────────────
 export { SourceCircuitBreaker, type CircuitState } from './health/circuit-breaker.js';
@@ -36,14 +43,24 @@ export {
 
 // ── Browser Utilities ────────────────────────────────────────────────────────
 export {
-  cooldownDelay,
   interactionDelay,
   jitteredDelay,
   pageNavigationDelay,
   randomInt,
 } from './browser/delay.js';
 export { dismissCookieConsent, type CookieConsentConfig } from './browser/cookie-consent.js';
-export { setupRequestInterception } from './browser/request-interceptor.js';
+export {
+  HttpStatusError,
+  navigateForCapture,
+  type CaptureNavigation,
+  type CapturePage,
+  type CaptureResponse,
+  type NavigateForCaptureOptions,
+} from './browser/navigate.js';
+export {
+  setupRequestInterception,
+  type InterceptableContext,
+} from './browser/request-interceptor.js';
 
 // ── Queues ──────────────────────────────────────────────────────────────────
 export {
@@ -65,3 +82,16 @@ export {
   DEFAULT_JOB_RETRY_OPTS,
 } from './queues/queue-names.js';
 export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queues/connection.js';
+export { createQueue, WORKER_CONCURRENCY, type QueueName } from './queues/queue-factory.js';
+export {
+  discoveryCron,
+  discoverySchedulerId,
+  hourlyCron,
+  maxPagesForSource,
+  removeSchedulersExcept,
+  shouldRegisterAutomatedSchedules,
+  stableMinuteOffset,
+  syncDiscoverySchedule,
+  type DiscoveryScheduleConfig,
+  type ScheduleModeConfig,
+} from './queues/schedule.js';

@@ -23,7 +23,7 @@ Lower values reduce block risk but increase crawl duration.
 
 ### Crawl interval: `crawl_interval_minutes`
 
-Minutes between scheduled discovery runs. The scheduler compares `NOW() - last_successful_run_at` against this value.
+Minutes between scheduled discovery runs. The schedule uses the larger of this value and `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES`, rounded up to 1, 2, 3, 4, 6, 8, 12 or 24 hours so runs stay evenly spaced across midnight, at a minute derived from the source code. Anything longer than a day runs daily. With the default floor of 180, a source set to 15 and a source set to 180 both run every 3 hours.
 
 | Source     | Default | Current |
 | ---------- | ------- | ------- |
@@ -34,22 +34,15 @@ Minutes between scheduled discovery runs. The scheduler compares `NOW() - last_s
 UPDATE sources SET crawl_interval_minutes = 30 WHERE code = 'willhaben';
 ```
 
-### Concurrency: `concurrency_limit`
+`PATCH /v1/sources/:id` applies a new interval at once. A change made in SQL applies the next time the scraper starts.
 
-Maximum concurrent browser contexts for this source. Currently all sources use 1.
+### Concurrency
 
-```sql
-UPDATE sources SET concurrency_limit = 1 WHERE code = 'willhaben';
-```
+Every queue runs one job at a time (`WORKER_CONCURRENCY` in `packages/scraper-core/src/queues/queue-factory.ts`), and no setting raises it. The API returns the `concurrency_limit` column, but no worker reads it.
 
 ### Max pages per run: `config.crawlProfile.maxPages`
 
-Maximum discovery pages per crawl run. Stored in the `config` JSONB column.
-
-| Source     | Default | Current |
-| ---------- | ------- | ------- |
-| (global)   | 3       | --      |
-| willhaben  | --      | 5       |
+Most list pages one run fetches for this source, stored in the `config` JSONB column. `SCRAPER_MAX_PAGES_PER_RUN` caps it, and a source without this key uses the cap.
 
 ```sql
 UPDATE sources
@@ -61,26 +54,25 @@ WHERE code = 'willhaben';
 
 These apply to all sources and are set via environment variables.
 
-| Variable                          | Default   | Description                              |
-| --------------------------------- | --------- | ---------------------------------------- |
-| `SCRAPER_COOLDOWN_AFTER_BLOCK_MS`| `900000`  | Cooldown after a block is detected (15 min) |
-| `SCRAPER_DEFAULT_RATE_LIMIT_RPM` | `12`      | Default RPM for sources without explicit config |
-| `SCRAPER_DEFAULT_CONCURRENCY_PER_SOURCE` | `1` | Default concurrency per source        |
-| `SCRAPER_CANARY_ENABLED`         | `true`    | Enable canary crawl probes               |
-| `SCRAPER_JITTER_MIN_MS`          | `2000`    | Registered in config but not yet wired to delay functions |
-| `SCRAPER_JITTER_MAX_MS`          | `7000`    | Registered in config but not yet wired to delay functions |
+| Variable                             | Default | Description                                                  |
+| ------------------------------------ | ------- | ------------------------------------------------------------ |
+| `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES` | `180`   | Shortest time between two scheduled crawls of a source; schedules run at most hourly |
+| `SCRAPER_MAX_PAGES_PER_RUN`          | `60`    | Most list pages one run fetches                              |
+| `SCRAPER_DETAIL_BUDGET_PER_RUN`      | `40`    | Most detail pages one run queues                             |
+| `SCRAPER_DETAIL_REFRESH_DAYS`        | `30`    | Age at which a listing's detail page gets fetched again      |
+| `SCRAPER_ARTIFACT_RETENTION_DAYS`    | `7`     | Days to keep failure HTML and screenshots                    |
+| `CANARY_WORKER_ENABLED`              | `false` | Runs the canary worker on a schedule; `npm run canary` works either way |
 
 **Delay functions** (in `packages/scraper-core/src/browser/delay.ts`):
 
-These currently use hardcoded ranges. The `SCRAPER_JITTER_*` env vars are defined in config but **not yet wired** to these functions — changing the env vars has no effect until the delay functions are updated to read from config.
+These use fixed ranges:
 
-- `pageNavigationDelay()`: 2000--7000ms (hardcoded)
-- `interactionDelay()`: 500--1500ms (hardcoded)
-- `cooldownDelay()`: 10,000--60,000ms (hardcoded)
+- `pageNavigationDelay()`: 2000--7000ms
+- `interactionDelay()`: 500--1500ms
 
 ## Circuit Breaker
 
-The circuit breaker (`SourceCircuitBreaker`) is in-memory per worker process.
+The circuit breaker (`SourceCircuitBreaker`) lives in memory, one per scraper process, shared by the discovery and detail workers. While it is open, discovery stops paging and detail jobs wait in the delayed set until it lets traffic through.
 
 | Parameter          | Value    | Description                        |
 | ------------------ | -------- | ---------------------------------- |
@@ -89,7 +81,7 @@ The circuit breaker (`SourceCircuitBreaker`) is in-memory per worker process.
 
 **States**: `closed` → `open` (after 5 failures) → `half_open` (after cooldown) → `closed` (on probe success) or back to `open` (on probe failure).
 
-**Error classes that increment the counter**: `transient_network`, `soft_anti_bot`, `parse_failure`, `unknown`. The `terminal_page` class (404/410) does not increment.
+**Error classes that increment the counter**: `transient_network`, `soft_anti_bot`, `unknown`. The `terminal_page` class (404/410) and the `parse_failure` class do not increment, and they leave an open or half-open circuit as it was. `openUntil(sourceCode)` returns when an open circuit next lets traffic through (epoch milliseconds), or null when it lets traffic through now.
 
 ## Adding a New Crawl Profile
 
@@ -150,7 +142,7 @@ UPDATE sources SET legal_status = 'approved' WHERE code = 'willhaben';
 
 ## Recovering from a Blocked State
 
-1. **Wait for cooldown**: The `SCRAPER_COOLDOWN_AFTER_BLOCK_MS` (default 15 min) must elapse. The circuit breaker cooldown (5 min) must also elapse.
+1. **Wait for cooldown**: The circuit breaker cooldown (5 min) must elapse.
 
 2. **Check circuit breaker state**: Look for `circuit_breaker_half_open` in worker logs. The next scheduled run will send a probe request.
 

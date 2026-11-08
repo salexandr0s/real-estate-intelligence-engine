@@ -1,11 +1,17 @@
 import nodemailer, { type Transporter } from 'nodemailer';
-import { Queue, Worker } from 'bullmq';
-import type { ConnectionOptions, Job } from 'bullmq';
+import { Worker } from 'bullmq';
+import type { ConnectionOptions, Job, Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
 import { mailboxes, outreach } from '@immoradar/db';
 import { createLogger } from '@immoradar/observability';
 import { applyOutreachTransition } from '@immoradar/outreach';
-import { QUEUE_NAMES, getQueuePrefix, getRedisConnection } from '@immoradar/scraper-core';
+import {
+  QUEUE_NAMES,
+  WORKER_CONCURRENCY,
+  createQueue,
+  getQueuePrefix,
+  getRedisConnection,
+} from '@immoradar/scraper-core';
 import type { OutreachSendJobData } from '@immoradar/scraper-core';
 
 const log = createLogger('worker:outreach-send');
@@ -51,10 +57,7 @@ function getTransporter(config = loadConfig()): MailTransport {
 
 function getSendQueue(): SendQueue {
   if (!followupQueue) {
-    followupQueue = new Queue<OutreachSendJobData>(QUEUE_NAMES.OUTREACH_SEND, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    followupQueue = createQueue<OutreachSendJobData>(QUEUE_NAMES.OUTREACH_SEND);
   }
   return followupQueue;
 }
@@ -247,7 +250,7 @@ export function createOutreachSendWorker(): Worker<OutreachSendJobData> {
     {
       connection,
       prefix,
-      concurrency: 2,
+      concurrency: WORKER_CONCURRENCY,
     },
   );
 }

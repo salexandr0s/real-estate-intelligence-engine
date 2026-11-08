@@ -1,11 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import type { ConnectionOptions } from 'bullmq';
-import { Queue } from 'bullmq';
+import type { Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
 import { listings, mailboxes, outreach } from '@immoradar/db';
 import { ConflictError, NotFoundError, ValidationError } from '@immoradar/observability';
 import { applyOutreachTransition } from '@immoradar/outreach';
-import { QUEUE_NAMES, getQueuePrefix, getRedisConnection } from '@immoradar/scraper-core';
+import { QUEUE_NAMES, createQueue } from '@immoradar/scraper-core';
 import type { OutreachSendJobData } from '@immoradar/scraper-core';
 import {
   idParamSchema,
@@ -20,10 +19,7 @@ let outreachSendQueue: Queue<OutreachSendJobData> | null = null;
 
 function getOutreachSendQueue(): Queue<OutreachSendJobData> {
   if (!outreachSendQueue) {
-    outreachSendQueue = new Queue<OutreachSendJobData>(QUEUE_NAMES.OUTREACH_SEND, {
-      connection: getRedisConnection() as ConnectionOptions,
-      prefix: getQueuePrefix(),
-    });
+    outreachSendQueue = createQueue<OutreachSendJobData>(QUEUE_NAMES.OUTREACH_SEND);
   }
   return outreachSendQueue;
 }
@@ -51,7 +47,7 @@ function queueSend(
     `outreach:${sendKind}:${threadId}:${Date.now()}`,
     { threadId, sendKind, triggeredBy },
     {
-      jobId: `outreach:${sendKind}:${threadId}:${Date.now()}`,
+      jobId: `outreach-${sendKind}-${threadId}-${Date.now()}`,
     },
   );
 }

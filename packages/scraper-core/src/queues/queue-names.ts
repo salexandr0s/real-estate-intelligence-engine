@@ -36,9 +36,9 @@ export interface DetailJobData {
   sourceId: number;
   scrapeRunId: number;
   detailUrl: string;
-  discoveryUrl: string;
-  title: string;
-  externalId?: string;
+  discoveryUrl: string | null;
+  /** Sighting key. Jobs queued before sightings existed lack it, and the detail worker drops them. */
+  sourceListingKey?: string;
 }
 
 /** Job data for processing a raw detail capture. */
@@ -47,7 +47,7 @@ export interface ProcessingJobData {
   sourceId: number;
   scrapeRunId: number;
   detailUrl: string;
-  discoveryUrl: string;
+  discoveryUrl: string | null;
   /** Serialized DetailCapture JSON. */
   captureJson: string;
   /** Storage key for the captured HTML artifact, if saved. */
@@ -56,6 +56,11 @@ export interface ProcessingJobData {
   screenshotStorageKey?: string;
   /** Storage key for the captured HAR artifact, if saved. */
   harStorageKey?: string;
+  /**
+   * Key of the raw sighting that queued the detail page (its source_listing_key).
+   * Jobs queued before sightings existed lack it.
+   */
+  sightingKey?: string;
 }
 
 /** Job data for baseline recomputation. */
@@ -100,7 +105,6 @@ export interface GeocodeEnqueueJobData {
 export interface StaleCheckJobData {
   triggeredBy: 'scheduler' | 'manual';
   thresholdDays?: number;
-  batchSize?: number;
 }
 
 /** Job data for canary health check. */

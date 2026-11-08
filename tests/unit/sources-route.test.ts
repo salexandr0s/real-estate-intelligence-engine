@@ -18,20 +18,10 @@ const hoisted = vi.hoisted(() => ({
   findBySourceCode: vi.fn(),
 }));
 
-vi.mock('bullmq', () => ({
-  Queue: class {
-    removeJobScheduler = vi.fn();
-    upsertJobScheduler = vi.fn();
-    add = vi.fn();
-  },
-}));
-
 vi.mock('@immoradar/scraper-core', () => ({
   QUEUE_NAMES: {
     SCRAPE_DISCOVERY: 'scrape-discovery',
   },
-  getRedisConnection: () => ({}),
-  getQueuePrefix: () => 'test',
 }));
 
 vi.mock('@immoradar/db', async () => {
@@ -131,9 +121,7 @@ describe('GET /v1/sources', () => {
         updatedAt: new Date('2026-03-28T08:00:00.000Z'),
       },
     ]);
-    hoisted.findListingCounts.mockResolvedValue([
-      { sourceId: 1, totalListingsIngested: 1234 },
-    ]);
+    hoisted.findListingCounts.mockResolvedValue([{ sourceId: 1, totalListingsIngested: 1234 }]);
     hoisted.findLifecycleSummaries.mockResolvedValue([
       {
         sourceId: 1,

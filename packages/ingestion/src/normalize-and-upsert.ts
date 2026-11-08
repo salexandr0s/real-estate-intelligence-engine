@@ -149,7 +149,10 @@ export class NormalizeAndUpsert {
     );
 
     if (!result.success || !result.listing) {
-      const lifecycleStatus = resolveLifecycleStatus(context.availabilityStatus);
+      const lifecycleStatus = resolveLifecycleStatus(
+        context.availabilityStatus,
+        context.responseStatus,
+      );
       if (existing && lifecycleStatus) {
         return this.applyLifecycleStatusOnlyUpdate(existing, lifecycleStatus, context, scrapeRunId);
       }
@@ -170,7 +173,10 @@ export class NormalizeAndUpsert {
     }
 
     const listing = result.listing;
-    const explicitLifecycleStatus = resolveLifecycleStatus(context.availabilityStatus);
+    const explicitLifecycleStatus = resolveLifecycleStatus(
+      context.availabilityStatus,
+      context.responseStatus,
+    );
     if (explicitLifecycleStatus) {
       listing.listingStatus = explicitLifecycleStatus;
       listing.sourceStatusRaw = context.availabilityStatus ?? explicitLifecycleStatus;
@@ -391,17 +397,26 @@ export class NormalizeAndUpsert {
   }
 }
 
-function resolveLifecycleStatus(
+/**
+ * The listing status a capture's availability settles, or null when it settles none. Sold,
+ * rented and removed count only from a page that loaded, with a 2xx status or none recorded.
+ * Not found counts only with HTTP 404 or 410, because parsers also report it when a live page
+ * lacks the markup they look for.
+ */
+export function resolveLifecycleStatus(
   availabilityStatus: NormalizationContext['availabilityStatus'],
+  responseStatus: number | null | undefined,
 ): ListingStatus | null {
+  const loaded = responseStatus == null || (responseStatus >= 200 && responseStatus < 300);
   switch (availabilityStatus) {
     case 'sold':
-      return 'sold';
+      return loaded ? 'sold' : null;
     case 'rented':
-      return 'rented';
+      return loaded ? 'rented' : null;
     case 'removed':
+      return loaded ? 'withdrawn' : null;
     case 'not_found':
-      return 'withdrawn';
+      return responseStatus === 404 || responseStatus === 410 ? 'withdrawn' : null;
     default:
       return null;
   }

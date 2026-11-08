@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import type { ConnectionOptions } from 'bullmq';
-import { Queue } from 'bullmq';
+import type { Queue } from 'bullmq';
 import { query } from '@immoradar/db';
 import { velocityToTemperature } from '@immoradar/contracts';
-import { QUEUE_NAMES, getRedisConnection, getQueuePrefix } from '@immoradar/scraper-core';
+import { QUEUE_NAMES, createQueue } from '@immoradar/scraper-core';
 import type { RescoreJobData } from '@immoradar/scraper-core';
 import { parseOrThrow, districtTrendQuerySchema } from '../schemas.js';
 import { z } from 'zod';
@@ -12,9 +11,7 @@ let rescoreQueue: Queue<RescoreJobData> | null = null;
 
 function getRescoreQueue(): Queue<RescoreJobData> {
   if (!rescoreQueue) {
-    const connection = getRedisConnection() as ConnectionOptions;
-    const prefix = getQueuePrefix();
-    rescoreQueue = new Queue<RescoreJobData>(QUEUE_NAMES.RESCORE, { connection, prefix });
+    rescoreQueue = createQueue<RescoreJobData>(QUEUE_NAMES.RESCORE);
   }
   return rescoreQueue;
 }

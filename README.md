@@ -13,7 +13,7 @@ The goal of the project is to explore how to build a serious native Mac client t
 - a **scraper worker** for source-specific raw capture
 - a **processing worker** for normalization, scoring, and alerts
 - shared domain packages for contracts, DB access, filtering, scoring, and more
-- local infrastructure for **PostgreSQL**, **Redis**, and **S3-compatible object storage**
+- local infrastructure for **PostgreSQL** and **Redis**, with scraper artifacts in a local folder (`ARTIFACTS_DIR`)
 
 This is a self-hosted, learning-oriented system. It is **not** an official integration, not a hosted SaaS product, and not a guarantee that any scraping or automation use is allowed.
 
@@ -128,7 +128,6 @@ If you do not use Docker locally, you will need your own working instances of:
 
 - PostgreSQL
 - Redis
-- S3-compatible object storage
 
 ## Quick start
 
@@ -157,8 +156,7 @@ This starts:
 
 - PostgreSQL on `localhost:5432`
 - Redis on `localhost:6379`
-- MinIO on `localhost:9000`
-- MinIO console on `localhost:9001`
+- MinIO on `localhost:9000`, with its console on `localhost:9001`. Nothing in ImmoRadar uses it: scraper artifacts go to the folder in `ARTIFACTS_DIR`.
 
 ### 3. Run migrations and seed data
 

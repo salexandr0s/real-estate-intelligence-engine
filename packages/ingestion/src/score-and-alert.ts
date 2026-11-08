@@ -233,18 +233,6 @@ export class ScoreAndAlert {
     score.baselineSampleSize = baseline.bucketSampleSize;
     score.baselineFreshnessHours = baselineFreshnessHours;
 
-    // 3. Persist score
-    await this.deps.persistScore(listingId, listingVersionId, score);
-
-    const scoredAt = new Date();
-    await this.deps.updateListingScore(listingId, score.overallScore, scoredAt);
-
-    log.info('Listing scored', {
-      listingId,
-      overallScore: score.overallScore,
-      districtPriceScore: score.districtPriceScore,
-    });
-
     // 4. Find matching filters
     const matchingFilters = await this.deps.findMatchingFilters({
       operationType: listing.operationType,
@@ -406,6 +394,18 @@ export class ScoreAndAlert {
     if (alertsCreated > 0) {
       log.info('Alerts created', { listingId, alertsCreated, alertType });
     }
+
+    // 6. Persist the score last. A stored score marks the version done, so a failure before this
+    // point leaves it unscored and the retry matches it again. Alert dedupe keys stop repeats, and
+    // the listing's old score keeps the retry's alert type the same.
+    await this.deps.persistScore(listingId, listingVersionId, score);
+    await this.deps.updateListingScore(listingId, score.overallScore, new Date());
+
+    log.info('Listing scored', {
+      listingId,
+      overallScore: score.overallScore,
+      districtPriceScore: score.districtPriceScore,
+    });
 
     return {
       scored: true,

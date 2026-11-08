@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  enableDefaultMetrics,
   registry,
   scrapeRunsTotal,
   apiRequestDuration,
@@ -15,6 +16,18 @@ import {
 } from '@immoradar/observability';
 
 describe('Prometheus metrics', () => {
+  it('leaves default metrics off until asked for, and a second call is harmless', async () => {
+    const hasProcessMetrics = async () =>
+      (await registry.getMetricsAsJSON()).some(({ name }) => name === 'process_cpu_seconds_total');
+
+    expect(await hasProcessMetrics()).toBe(false);
+
+    enableDefaultMetrics();
+    enableDefaultMetrics();
+
+    expect(await hasProcessMetrics()).toBe(true);
+  });
+
   it('registry exposes metrics in text format', async () => {
     const output = await registry.metrics();
     expect(output).toContain('# HELP');

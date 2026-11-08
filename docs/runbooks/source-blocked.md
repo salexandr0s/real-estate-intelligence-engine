@@ -28,7 +28,7 @@ SELECT id, started_at, status, error_code,
 
 ## Resolution
 
-1. **Wait for cooldown**: Default block cooldown is 15 minutes (`SCRAPER_COOLDOWN_AFTER_BLOCK_MS`). Do not trigger manual runs during cooldown.
+1. **Wait for cooldown**: The circuit breaker stays open for 5 minutes. Do not trigger manual runs during cooldown.
 2. **Check robots.txt**: Visit the source site's `/robots.txt` for policy changes.
 3. **Reduce rate limit**: Lower `rate_limit_rpm` (e.g., 10 to 6) and increase jitter delays.
 4. **Rotate user-agent**: Verify the user-agent pool in `browser-pool.ts` is current.
