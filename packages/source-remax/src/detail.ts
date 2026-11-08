@@ -1,35 +1,63 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
+import { headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type { RemaxDetailDTO, RemaxDataLayer } from './dto.js';
 
 /**
  * RE/MAX Austria detail pages provide data through three channels:
- *  1. JSON-LD `Product` block -- name, images, price, geo coordinates
- *  2. `window.dataLayer` object -- immoId, immoType, transaction, location
- *  3. HTML sections -- "Daten & Fakten" list, energy, agent, costs
+ *  1. JSON-LD `@graph` scripts: the listing as `RealEstateListing`, often next to a `Product`
+ *     node, with name, description and image. Its `offers` may only name a separate Offer node
+ *     by `@id`, and an Apartment or House node carries rooms, floor size and coordinates.
+ *  2. `dataLayer.push({...})`: immoId, immoType, transaction, location
+ *  3. HTML sections: "Daten & Fakten" list, energy, agent, costs
  *
- * We use JSON-LD as primary, dataLayer for enrichment, and HTML as fallback.
+ * We use JSON-LD as primary, dataLayer for enrichment, and HTML as fallback. Rooms and living
+ * area are the exception: the HTML factsheet wins and the Apartment or House node fills gaps.
  */
 
 // -- Internal JSON-LD shapes (typed loosely to work with JSON.parse) ----------
 
 interface JsonLdOffer {
-  price?: string;
+  /** An entry with only an `@id` points to the Offer node with that id */
+  '@id'?: string;
+  price?: string | number;
   priceCurrency?: string;
   availability?: string;
 }
 
 interface JsonLdGeo {
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | string;
+  longitude?: number | string;
+}
+
+/** The Apartment or House node: the property itself, described apart from the listing */
+interface JsonLdAccommodation {
+  numberOfRooms?: number | string;
+  /** A QuantitativeValue such as `{ "value": 75, "unitCode": "MTK" }` */
+  floorSize?: { value?: number | string };
+  geo?: JsonLdGeo;
 }
 
 interface JsonLdProduct {
   name?: string;
   description?: string;
-  image?: string[];
-  offers?: JsonLdOffer[];
+  /** One URL or a list of them */
+  image?: string | string[];
+  /** One Offer or a list of them */
+  offers?: JsonLdOffer | JsonLdOffer[];
   geo?: JsonLdGeo;
 }
+
+const DATA_LAYER_RE = /dataLayer(?:\.push\(|\s*=)\s*(\{[\s\S]*?\})/g;
+const DATA_LAYER_KEYS = [
+  'immoId',
+  'immoType',
+  'immoTransaction',
+  'immoPostcode',
+  'immoLocation',
+  'immoRegion',
+  'maklerId',
+  'maklerName',
+] as const;
 
 interface JsonLdAgent {
   name?: string;
@@ -48,6 +76,10 @@ export function parseDetailPage(
   const product =
     findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'RealEstateListing') ??
     findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'Product');
+  const accommodation =
+    findJsonLdByType<JsonLdAccommodation>(jsonLdBlocks, 'Apartment') ??
+    findJsonLdByType<JsonLdAccommodation>(jsonLdBlocks, 'House') ??
+    findJsonLdByType<JsonLdAccommodation>(jsonLdBlocks, 'Accommodation');
   const agent = findJsonLdByType<JsonLdAgent>(jsonLdBlocks, 'RealEstateAgent');
   const dataLayer = parseDataLayer(html);
 
@@ -58,11 +90,12 @@ export function parseDetailPage(
   // even when JSON-LD and dataLayer are absent.
 
   // -- JSON-LD Product data --------------------------------------------------
-  const offer = product?.offers?.[0] ?? null;
-  const priceFromLd = offer?.price ?? null;
-  const imagesFromLd = product?.image ?? [];
-  const geoLat = product?.geo?.latitude ?? null;
-  const geoLon = product?.geo?.longitude ?? null;
+  const offer = offersOf(product, jsonLdBlocks)[0] ?? null;
+  const priceFromLd = ldPrice(offer?.price);
+  const imagesFromLd = toStringList(product?.image);
+  // Latitude and longitude come as a pair from one node: the listing's own geo, else the
+  // Apartment or House.
+  const geo = coordinatesOf(product?.geo) ?? coordinatesOf(accommodation?.geo);
 
   // -- HTML-parsed data ------------------------------------------------------
   const facts = parseDatenUndFakten(html);
@@ -76,16 +109,16 @@ export function parseDetailPage(
   // -- Merge sources ---------------------------------------------------------
   const titleRaw = product?.name ?? extractH1(html) ?? null;
 
-  const priceRaw = priceFromLd
-    ? priceFromLd.replace(/[.,]/g, '') // "315000" already clean from JSON-LD
-    : facts['Kaufpreis']
-      ? parseAustrianPrice(facts['Kaufpreis'])
-      : null;
+  const priceRaw =
+    priceFromLd ?? (facts['Kaufpreis'] ? parseAustrianPrice(facts['Kaufpreis']) : null);
 
-  const roomsRaw = facts['Zimmer'] ?? null;
+  // The factsheet wins for rooms and living area; the Apartment or House node fills gaps.
+  const roomsRaw = facts['Zimmer'] ?? ldNumber(accommodation?.numberOfRooms);
 
   const livingAreaRaw = facts['Wohnfl\u00E4che'] ?? facts['Wohnflaeche'] ?? null;
-  const livingAreaNorm = livingAreaRaw ? normalizeAreaValue(livingAreaRaw) : null;
+  const livingAreaNorm =
+    (livingAreaRaw ? normalizeAreaValue(livingAreaRaw) : null) ??
+    ldNumber(accommodation?.floorSize?.value);
 
   const usableAreaRaw = facts['Nutzfl\u00E4che'] ?? facts['Nutzflaeche'] ?? null;
   const usableAreaNorm = usableAreaRaw ? normalizeAreaValue(usableAreaRaw) : null;
@@ -155,8 +188,8 @@ export function parseDetailPage(
     operatingCostRaw,
     reserveFundRaw: reserveFundNorm,
     commissionRaw: commission,
-    latRaw: geoLat != null ? String(geoLat) : null,
-    lonRaw: geoLon != null ? String(geoLon) : null,
+    latRaw: geo?.lat ?? null,
+    lonRaw: geo?.lon ?? null,
     attributesRaw: {},
     mediaRaw: [],
     images,
@@ -183,37 +216,42 @@ export function parseDetailPage(
 // -- Availability detection --------------------------------------------------
 
 /**
- * Detects listing availability from the detail page HTML.
- * Checks JSON-LD Product availability, German-language markers, and missing data.
+ * Detects listing availability from the detail page HTML: the listing's JSON-LD offer first,
+ * then German-language markers in the title and h1.
  */
 export function detectDetailAvailability(html: string): SourceAvailability {
-  // 1. Check JSON-LD Product for availability field
+  // 1. The listing's offer, when it states an availability
   const jsonLdBlocks = parseJsonLdBlocks(html);
-  const product = findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'Product');
+  const listing =
+    findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'RealEstateListing') ??
+    findJsonLdByType<JsonLdProduct>(jsonLdBlocks, 'Product');
 
-  if (product) {
-    const availability = product.offers?.[0]?.availability ?? '';
-    if (/SoldOut/i.test(availability)) return { status: 'sold' };
-    if (/InStock/i.test(availability)) return { status: 'available' };
-    if (/Discontinued/i.test(availability)) return { status: 'removed' };
-  }
+  const availability =
+    offersOf(listing, jsonLdBlocks)
+      .map((offer) => offer.availability)
+      .find((value): value is string => typeof value === 'string') ?? '';
+  if (/SoldOut/i.test(availability)) return { status: 'sold' };
+  if (/InStock/i.test(availability)) return { status: 'available' };
+  if (/Discontinued/i.test(availability)) return { status: 'removed' };
 
-  // 2. Check for German-language unavailability markers
-  if (/nicht\s+verf[u\u00FC]gbar/i.test(html)) return { status: 'not_found' };
-  if (/verkauft/i.test(html) && !product) return { status: 'sold' };
-  if (/reserviert/i.test(html)) return { status: 'reserved' };
-  if (/vermietet/i.test(html)) return { status: 'rented' };
-  if (/captcha|blocked|challenge/i.test(html)) return { status: 'blocked' };
+  // 2. German-language markers. Similar-listing teasers and footers on live pages also say
+  // "verkauft" or "vermietet", so only the title and h1 count.
+  const headline = headlineText(html);
+  if (/nicht\s+verf[u\u00FC]gbar|nicht\s+gefunden/i.test(headline)) return { status: 'not_found' };
+  if (/\bverkauft\b/i.test(headline)) return { status: 'sold' };
+  if (/\breserviert\b/i.test(headline)) return { status: 'reserved' };
+  if (/\bvermietet\b/i.test(headline)) return { status: 'rented' };
 
-  // 3. If no JSON-LD product at all, probably not found
-  if (!product) return { status: 'not_found' };
+  // 3. A challenge page carries no listing data, so only a page without any is checked
+  if (!listing && isChallengePage(html)) return { status: 'blocked' };
 
+  // Without a stated availability or a marker, the page says nothing either way.
   return { status: 'unknown' };
 }
 
 // -- Parsing helpers ---------------------------------------------------------
 
-/** Parse all JSON-LD blocks from the page as unknown objects */
+/** Parse all JSON-LD nodes from the page, unwrapping `@graph` and top-level arrays */
 function parseJsonLdBlocks(html: string): unknown[] {
   const blocks: unknown[] = [];
   const regex = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/g;
@@ -221,40 +259,132 @@ function parseJsonLdBlocks(html: string): unknown[] {
 
   while ((match = regex.exec(html)) !== null) {
     if (!match[1]) continue;
+    let parsed: unknown;
     try {
-      blocks.push(JSON.parse(match[1]));
+      parsed = JSON.parse(match[1]);
     } catch {
-      // skip malformed JSON-LD blocks
+      continue; // skip malformed JSON-LD blocks
+    }
+    const roots: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    for (const root of roots) {
+      const graph =
+        typeof root === 'object' && root !== null && '@graph' in root ? root['@graph'] : null;
+      if (Array.isArray(graph)) {
+        blocks.push(...graph);
+      } else {
+        blocks.push(root);
+      }
     }
   }
 
   return blocks;
 }
 
-/** Find a JSON-LD block by its @type field */
+/** Find a JSON-LD node whose @type is the given name, or a list that contains it */
 function findJsonLdByType<T>(blocks: unknown[], typeName: string): T | null {
   for (const block of blocks) {
-    if (
-      typeof block === 'object' &&
-      block !== null &&
-      '@type' in block &&
-      (block as Record<string, unknown>)['@type'] === typeName
-    ) {
+    if (typeof block !== 'object' || block === null || !('@type' in block)) continue;
+    const type = block['@type'];
+    if (type === typeName || (Array.isArray(type) && type.includes(typeName))) {
       return block as T;
     }
   }
   return null;
 }
 
-/** Parse window.dataLayer from a script block */
-function parseDataLayer(html: string): RemaxDataLayer | null {
-  const match = html.match(/window\.dataLayer\s*=\s*(\{[\s\S]*?\});/);
-  if (!match?.[1]) return null;
+/**
+ * `offers` is one Offer or a list of them. An entry with only an `@id` stands for the Offer node
+ * with that id, which live pages put next to the listing in `@graph`.
+ */
+function offersOf(node: JsonLdProduct | null, blocks: unknown[]): JsonLdOffer[] {
+  const offers: unknown = node?.offers;
+  const entries: unknown[] = Array.isArray(offers) ? offers : [offers];
+  const result: JsonLdOffer[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const offer = entry as JsonLdOffer;
+    const id = offer['@id'];
+    const referenced =
+      typeof id === 'string' && offer.price == null && offer.availability == null
+        ? findJsonLdById<JsonLdOffer>(blocks, id)
+        : null;
+    result.push(referenced ?? offer);
+  }
+  return result;
+}
 
+/** Find the JSON-LD node with the given `@id` */
+function findJsonLdById<T>(blocks: unknown[], id: string): T | null {
+  for (const block of blocks) {
+    if (typeof block === 'object' && block !== null && '@id' in block && block['@id'] === id) {
+      return block as T;
+    }
+  }
+  return null;
+}
+
+/** `image` is one URL or a list of them */
+function toStringList(value: unknown): string[] {
+  const list: unknown[] = Array.isArray(value) ? value : [value];
+  return list.filter((item): item is string => typeof item === 'string');
+}
+
+/**
+ * A JSON-LD price as text. A string keeps its separators, because normalization tells
+ * "389.000" from "389000.00" and dropping them would read the second as 38,900,000. A price
+ * of 0 is not a real price, so it counts as missing.
+ */
+function ldPrice(price: unknown): string | null {
+  const text =
+    typeof price === 'number' && Number.isFinite(price)
+      ? String(price)
+      : typeof price === 'string'
+        ? price.trim()
+        : '';
+  return /[1-9]/.test(text) ? text : null;
+}
+
+/** A JSON-LD number, or a string holding one, as a plain number string */
+function ldNumber(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return /^-?\d+(?:[.,]\d+)?$/.test(text) ? text.replace(',', '.') : null;
+}
+
+/** Latitude and longitude from one GeoCoordinates node, only when both are numbers */
+function coordinatesOf(geo: JsonLdGeo | undefined): { lat: string; lon: string } | null {
+  const lat = ldNumber(geo?.latitude);
+  const lon = ldNumber(geo?.longitude);
+  return lat && lon ? { lat, lon } : null;
+}
+
+/**
+ * Read the listing fields from `dataLayer.push({ immoId: "1000/2000", ... })`. The argument is
+ * a JavaScript object literal with bare keys, not JSON, so each key is matched on its own.
+ */
+function parseDataLayer(html: string): RemaxDataLayer | null {
+  for (const call of html.matchAll(DATA_LAYER_RE)) {
+    const literal = call[1] ?? '';
+    const dataLayer: RemaxDataLayer = {};
+    for (const key of DATA_LAYER_KEYS) {
+      const value = new RegExp(`[{,\\s]["']?${key}["']?\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(
+        literal,
+      )?.[1];
+      if (value !== undefined) dataLayer[key] = unescapeJsString(value);
+    }
+    if (Object.keys(dataLayer).length > 0) return dataLayer;
+  }
+  return null;
+}
+
+/** Decode backslash escapes in a double-quoted value, keeping the raw text when that fails */
+function unescapeJsString(raw: string): string {
   try {
-    return JSON.parse(match[1]) as RemaxDataLayer;
+    const decoded: unknown = JSON.parse(`"${raw}"`);
+    return typeof decoded === 'string' ? decoded : raw;
   } catch {
-    return null;
+    return raw;
   }
 }
 

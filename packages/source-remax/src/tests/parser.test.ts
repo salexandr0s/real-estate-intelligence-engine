@@ -17,7 +17,7 @@ describe('RemaxAdapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('remax');
     expect(adapter.sourceName).toBe('RE/MAX Austria');
-    expect(adapter.parserVersion).toBe(2);
+    expect(adapter.parserVersion).toBe(3);
   });
 
   it('canonicalizes path-based URLs correctly', () => {
@@ -425,16 +425,25 @@ describe('Availability detection', () => {
     expect(status.status).toBe('not_found');
   });
 
-  it('detects not_found from missing data', () => {
+  it('returns unknown for a page without JSON-LD whose body says nicht gefunden', () => {
+    // not_found from a parser means the page says so in its title or h1.
     const html = '<html><body><p>Seite nicht gefunden</p></body></html>';
     const status = detectDetailAvailability(html);
-    expect(status.status).toBe('not_found');
+    expect(status.status).toBe('unknown');
   });
 
-  it('detects blocked from captcha marker', () => {
-    const html = '<html><body><div class="captcha">Please verify</div></body></html>';
+  it('detects blocked from a challenge title', () => {
+    const html = '<html><head><title>Just a moment...</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('blocked');
+  });
+
+  it('does not read a page that loads reCAPTCHA as blocked', () => {
+    // Blocked fails the detail job, so loading reCAPTCHA alone must not count.
+    const html = `<html><head><title>Wohnung in Wien zu kaufen - REMAX</title>
+      <script src="https://www.google.com/recaptcha/api.js?render=explicit"></script></head>
+      <body><h1>Wohnung in Wien zu kaufen</h1><div class="g-recaptcha"></div></body></html>`;
+    expect(detectDetailAvailability(html).status).toBe('unknown');
   });
 
   it('returns unknown when JSON-LD exists but no availability signal', () => {
@@ -443,5 +452,66 @@ describe('Availability detection', () => {
     </body></html>`;
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('unknown');
+  });
+});
+
+// -- 5. Live page shape (@graph JSON-LD and dataLayer.push) -------------------
+
+describe('Live detail page shape', () => {
+  const url = 'https://www.remax.at/index.php?page=objekt&t=1&srid=-1&s=1&id=900001&p=1&lang=de';
+
+  it('reads dataLayer.push, the referenced Offer and the Apartment node inside @graph', () => {
+    const result = parseDetailPage(loadFixture('detail-datalayer.html'), url, 'remax', 2);
+
+    expect(result.extractionStatus).toBe('captured');
+    const p = result.payload;
+    expect(p.titleRaw).toBe('75m² Wohnung in Wien - 3 Zimmer, EUR 389.000, mit Balkon');
+    expect(p.images).toEqual(['https://www.remax.at/media/objekt/1000-2000/1.jpg']);
+    expect(p.immoId).toBe('1000/2000');
+    expect(p.propertyTypeRaw).toBe('Wohnung');
+    expect(p.operationTypeRaw).toBe('sale');
+    expect(p.postalCodeRaw).toBe('1020');
+    expect(p.cityRaw).toBe('Wien');
+    expect(p.federalStateRaw).toBe('Wien');
+    expect(p.contactName).toBe('Max Muster');
+    // The listing's offers only name the Offer node by @id.
+    expect(p.priceRaw).toBe('389000');
+    // This page has no factsheet, so rooms, area and coordinates come from the Apartment node.
+    expect(p.roomsRaw).toBe('3');
+    expect(p.livingAreaRaw).toBe('75');
+    expect(p.latRaw).toBe('48.2');
+    expect(p.lonRaw).toBe('16.4');
+  });
+
+  it('reads availability from the referenced Offer and ignores teaser badges', () => {
+    const html = loadFixture('detail-datalayer.html');
+    expect(detectDetailAvailability(html).status).toBe('available');
+    // Without an availability on the Offer, the verkauft and vermietet teasers still don't count.
+    const silent = html.replace('https://schema.org/InStock', '');
+    expect(detectDetailAvailability(silent).status).toBe('unknown');
+  });
+
+  it('keeps factsheet and listing values when an Apartment node says otherwise', () => {
+    // The Apartment node only fills gaps; it never replaces the factsheet or the listing's geo.
+    const apartment = `<script type="application/ld+json">{"@type":"Apartment","numberOfRooms":9,
+      "floorSize":{"value":999},"geo":{"latitude":1,"longitude":1}}</script>`;
+    const html = loadFixture('detail-page.html').replace('</body>', `${apartment}</body>`);
+    expect(html).toContain(apartment);
+
+    const p = parseDetailPage(html, url, 'remax', 2).payload;
+    expect(p.roomsRaw).toBe('3');
+    expect(p.livingAreaRaw).toBe('68.7');
+    expect(p.latRaw).toBe('48.2201');
+    expect(p.lonRaw).toBe('16.3811');
+  });
+
+  it('keeps the separators of a string Offer price for normalization', () => {
+    // Dropping them would turn 389000.00 into 38900000.
+    const html = loadFixture('detail-datalayer.html').replace(
+      '"price": 389000,',
+      '"price": "389000.00",',
+    );
+    expect(html).toContain('"389000.00"');
+    expect(parseDetailPage(html, url, 'remax', 2).payload.priceRaw).toBe('389000.00');
   });
 });

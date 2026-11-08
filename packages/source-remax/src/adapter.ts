@@ -19,7 +19,7 @@ const SEARCH_PATH = '/de/immobilien/immobilien-suchen';
 export class RemaxAdapter implements SourceAdapter<RemaxDiscoveryItem, RemaxDetailDTO> {
   readonly sourceCode = 'remax';
   readonly sourceName = 'RE/MAX Austria';
-  readonly parserVersion = 2;
+  readonly parserVersion = 3;
 
   async buildDiscoveryRequests(profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);
