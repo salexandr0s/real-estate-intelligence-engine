@@ -133,6 +133,14 @@ describe('source health', () => {
     const outcome = await sources.applyRunOutcome(sourceId, 'failed');
     expect(outcome.newStatus).toBe('degraded');
   });
+
+  // Stale listings expire only on a healthy source, so a source that always times out must not be one.
+  it('marks a source degraded when a run fails on the network', async () => {
+    await failedRun(0, 'transient_network');
+
+    const outcome = await sources.applyRunOutcome(sourceId, 'failed');
+    expect(outcome.newStatus).toBe('degraded');
+  });
 });
 
 describe('source gating', () => {

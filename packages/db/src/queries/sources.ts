@@ -347,8 +347,10 @@ export async function disableWithReason(id: number, reason: string): Promise<Sou
 }
 
 /**
- * Check and update source health based on recent scrape run outcomes.
- * Returns the previous and new health status.
+ * Set a source's health after a failed run and return the previous and new status. A failure
+ * that doesn't count toward disabling the source, such as a network error, still leaves it
+ * degraded: a source whose runs all time out is not healthy, and stale listings only expire on
+ * a healthy source.
  */
 export async function checkAndUpdateHealth(sourceId: number): Promise<{
   previousStatus: SourceHealthStatus;
@@ -364,9 +366,7 @@ export async function checkAndUpdateHealth(sourceId: number): Promise<{
   const consecutiveFailures = await countConsecutiveFailures(sourceId);
 
   let newStatus: SourceHealthStatus;
-  if (consecutiveFailures === 0) {
-    newStatus = 'healthy';
-  } else if (consecutiveFailures <= 2) {
+  if (consecutiveFailures <= 2) {
     newStatus = 'degraded';
   } else if (consecutiveFailures <= 4) {
     newStatus = 'blocked';
