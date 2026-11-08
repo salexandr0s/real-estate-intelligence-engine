@@ -237,6 +237,27 @@ export async function cancelZombieRuns(thresholdMinutes = 30): Promise<number> {
   return Number(row!.count);
 }
 
+/**
+ * Cancel the runs a stopped scraper left running. An engine runs one scraper, so when it starts,
+ * every scheduled or app-started run still marked running was cut off. Runs a command-line script
+ * started belong to that script's process and are left alone.
+ */
+export async function cancelInterruptedRuns(): Promise<number> {
+  const [row] = await query<{ count: string }>(
+    `WITH cancelled AS (
+       UPDATE scrape_runs
+       SET status = 'cancelled',
+           finished_at = NOW(),
+           error_code = 'interrupted',
+           error_message = 'The scraper stopped during the run'
+       WHERE status = 'running' AND worker_host IN ('discovery-worker', 'api')
+       RETURNING id
+     )
+     SELECT COUNT(*) AS count FROM cancelled`,
+  );
+  return Number(row!.count);
+}
+
 /** Find the rolling average of listings_discovered for recent successful runs. */
 export async function findRecentAverage(
   sourceId: number,

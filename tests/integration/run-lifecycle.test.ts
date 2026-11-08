@@ -76,6 +76,37 @@ describe('run status', () => {
     });
     expect(await scrapeRuns.start(run.id)).toBeNull();
   });
+
+  it('closes the runs a stopped scraper left running and nothing else', async () => {
+    async function runningRun(workerHost: string): Promise<number> {
+      const run = await scrapeRuns.create({
+        sourceId,
+        triggerType: 'manual',
+        scope: 'full',
+        workerHost,
+      });
+      await scrapeRuns.start(run.id);
+      return run.id;
+    }
+    const scheduled = await runningRun('discovery-worker');
+    const fromApp = await runningRun('api');
+    const fromScript = await runningRun('cli');
+    const queued = await scrapeRuns.create({
+      sourceId,
+      triggerType: 'manual',
+      scope: 'full',
+      workerHost: 'api',
+    });
+
+    expect(await scrapeRuns.cancelInterruptedRuns()).toBe(2);
+    expect(await scrapeRuns.findById(scheduled)).toMatchObject({
+      status: 'cancelled',
+      errorCode: 'interrupted',
+    });
+    expect((await scrapeRuns.findById(fromApp))?.status).toBe('cancelled');
+    expect((await scrapeRuns.findById(fromScript))?.status).toBe('running');
+    expect((await scrapeRuns.findById(queued.id))?.status).toBe('queued');
+  });
 });
 
 describe('source health', () => {
