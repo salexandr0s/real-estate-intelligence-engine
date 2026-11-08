@@ -1,8 +1,9 @@
 // ── Environment Configuration ───────────────────────────────────────────────
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
+import { parseEnv } from 'node:util';
 
 function envStr(key: string, fallback?: string): string {
   const val = process.env[key];
@@ -71,29 +72,68 @@ function loadArtifactsDir(): string {
   return join(homedir(), 'Library', 'Application Support', 'ImmoRadar', 'runtime', 'artifacts');
 }
 
+const REPO_PACKAGE_NAME = 'immoradar';
+
+function isRepoPackage(dir: string): boolean {
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    return (
+      typeof pkg === 'object' && pkg !== null && 'name' in pkg && pkg.name === REPO_PACKAGE_NAME
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** The nearest folder holding `turbo.json`, if its package.json is the ImmoRadar root. */
 function findRepoRoot(startDir: string): string | null {
   let dir = startDir;
   for (;;) {
-    if (existsSync(join(dir, 'turbo.json'))) return dir;
+    if (existsSync(join(dir, 'turbo.json'))) return isRepoPackage(dir) ? dir : null;
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
   }
 }
 
+function readEnvFile(path: string): NodeJS.Dict<string> {
+  let contents: string;
+  try {
+    contents = readFileSync(path, 'utf8');
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not read ${path}: ${reason}`, { cause: err });
+  }
+  return parseEnv(contents);
+}
+
 /**
- * Loads `.env.local`, then `.env`, from the nearest folder holding `turbo.json`, for npm and tsx
- * commands run from a checkout. `process.loadEnvFile` never replaces a variable that is already set,
- * so the shell wins over `.env.local`, and `.env.local` wins over `.env`. The app sets
- * `IMMORADAR_RUNTIME_HOME` on everything it starts and supplies the whole environment itself.
+ * Loads `.env.local`, then `.env`, from the ImmoRadar checkout that holds this module, for npm and
+ * tsx commands. The search starts from this module's folder, not the working folder, so a script
+ * started from inside another project never reads that project's files. A variable that is already
+ * set is never replaced, so the shell wins over `.env.local`, and `.env.local` wins over `.env`. The
+ * app sets `IMMORADAR_RUNTIME_HOME` on everything it starts and supplies the whole environment
+ * itself.
+ *
+ * A value that spans several lines raises a warning that names its key, because an unclosed double
+ * quote runs on into the lines after it and hides the variables set there.
  */
-export function loadRepoEnvFiles(startDir: string = process.cwd()): void {
+export function loadRepoEnvFiles(startDir: string = __dirname): void {
   if (process.env['IMMORADAR_RUNTIME_HOME']) return;
   const root = findRepoRoot(startDir);
   if (!root) return;
   for (const name of ['.env.local', '.env']) {
     const path = join(root, name);
-    if (existsSync(path)) process.loadEnvFile(path);
+    if (!existsSync(path)) continue;
+    for (const [key, value] of Object.entries(readEnvFile(path))) {
+      if (value === undefined) continue;
+      if (value.includes('\n')) {
+        process.emitWarning(
+          `${key} in ${path} has a value that spans several lines. Check it for an unclosed double quote, which hides the lines after it.`,
+        );
+      }
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
   }
 }
 

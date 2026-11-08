@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadCanaryConfig, loadConfig, loadRepoEnvFiles, resetConfig } from './index.js';
 
@@ -108,6 +108,11 @@ describe('loadRepoEnvFiles', () => {
   ] as const;
   let root: string;
 
+  function markCheckout(dir: string, packageName = 'immoradar'): void {
+    writeFileSync(join(dir, 'turbo.json'), '{}');
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: packageName }));
+  }
+
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'immoradar-env-'));
   });
@@ -117,10 +122,11 @@ describe('loadRepoEnvFiles', () => {
     for (const key of SET_BY_TESTS) {
       delete process.env[key];
     }
+    vi.restoreAllMocks();
   });
 
   it('prefers the shell, then .env.local, then .env, from anywhere in the checkout', () => {
-    writeFileSync(join(root, 'turbo.json'), '{}');
+    markCheckout(root);
     writeFileSync(
       join(root, '.env.local'),
       'IMMORADAR_TEST_FROM_SHELL=local\nIMMORADAR_TEST_FROM_LOCAL=local\n',
@@ -145,9 +151,43 @@ describe('loadRepoEnvFiles', () => {
     loadRepoEnvFiles(root);
     expect(process.env.IMMORADAR_TEST_FROM_BASE).toBeUndefined();
 
-    writeFileSync(join(root, 'turbo.json'), '{}');
+    markCheckout(root);
     process.env.IMMORADAR_RUNTIME_HOME = '/tmp/engine-home';
     loadRepoEnvFiles(root);
     expect(process.env.IMMORADAR_TEST_FROM_BASE).toBeUndefined();
+  });
+
+  it('reads nothing from the Turbo root of another project', () => {
+    markCheckout(root, 'other-project');
+    writeFileSync(join(root, '.env'), 'IMMORADAR_TEST_FROM_BASE=base\n');
+    const packageDir = join(root, 'apps', 'api');
+    mkdirSync(packageDir, { recursive: true });
+
+    loadRepoEnvFiles(packageDir);
+
+    expect(process.env.IMMORADAR_TEST_FROM_BASE).toBeUndefined();
+  });
+
+  it('names the file and the cause when a .env cannot be read', () => {
+    markCheckout(root);
+    mkdirSync(join(root, '.env'));
+
+    expect(() => loadRepoEnvFiles(root)).toThrow(`Could not read ${join(root, '.env')}: EISDIR`);
+  });
+
+  it('warns with the key, never the value, when a value runs over several lines', () => {
+    markCheckout(root);
+    writeFileSync(
+      join(root, '.env'),
+      'IMMORADAR_TEST_FROM_BASE="opened-but-never-closed\nIMMORADAR_TEST_FROM_LOCAL="closed"\n',
+    );
+    const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+
+    loadRepoEnvFiles(root);
+
+    expect(emitWarning).toHaveBeenCalledTimes(1);
+    const message = String(emitWarning.mock.calls[0]?.[0]);
+    expect(message).toContain('IMMORADAR_TEST_FROM_BASE');
+    expect(message).not.toContain('opened-but-never-closed');
   });
 });
