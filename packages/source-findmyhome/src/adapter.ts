@@ -1,7 +1,7 @@
-// findmyhome.at source adapter (parser v2).
+// findmyhome.at source adapter (parser v3).
 // Discovery parsing reads HTML cards with Bootstrap grid layout.
 // Card structure: <h3 class="obj_list">, <strong>Ort/Flaeche/Zimmer</strong>, /{numericId} detail URLs.
-// Detail parsing still uses JSON-LD Apartment schema.
+// Detail pages are rendered in the DOM and carry no JSON-LD.
 
 import type {
   CrawlProfile,
@@ -27,7 +27,7 @@ export class FindMyHomeAdapter implements SourceAdapter<
 > {
   readonly sourceCode = 'findmyhome';
   readonly sourceName = 'findmyhome.at';
-  readonly parserVersion = 2;
+  readonly parserVersion = 3;
 
   async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);
@@ -64,7 +64,8 @@ export class FindMyHomeAdapter implements SourceAdapter<
   ): Promise<RequestPlan | null> {
     return {
       url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
-      waitForSelector: 'script[type="application/ld+json"]',
+      // Waiting for JSON-LD would use up the whole timeout, since these pages have none.
+      waitForSelector: '.immo_header_value, h1',
       waitForTimeout: 5000,
     };
   }

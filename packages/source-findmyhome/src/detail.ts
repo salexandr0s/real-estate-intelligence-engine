@@ -1,12 +1,15 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
+import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import { decodeHtmlEntities } from './discovery.js';
 import type { FindMyHomeDetailDTO, JsonLdApartmentDetail } from './dto.js';
 
 const JSON_LD_REGEX = /<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
+const HEADER_VALUE_REGEX = /class="immo_header_value"/i;
 
 /**
- * findmyhome.at detail pages serve structured data via JSON-LD Apartment/RealEstateListing schema.
- * Fields extracted: name, description, price, floorSize, numberOfRooms, address, geo,
- * photo array, yearBuilt, amenityFeature, contactPoint, additionalProperty.
+ * findmyhome.at renders detail pages in the DOM: an h1 title, a header with place, price and area
+ * (`span.immo_header_value`) and a facts table. JSON-LD Apartment or RealEstateListing data, which
+ * older pages carried, is still read first when present.
  */
 export function parseDetailPage(
   html: string,
@@ -81,8 +84,12 @@ export function parseDetailPage(
       contactPhone: apartment.contactPoint?.telephone ?? null,
     };
   } else {
-    // DOM fallback — extract from HTML table rows and OG meta tags
-    payload = extractFromDom(html, findmyhomeId);
+    const facts = extractFacts(html);
+    // No header values and no facts table: a soft 404 or a redesign, not a listing page.
+    if (!holdsListing(html, facts)) {
+      return buildFailedCapture(url, sourceCode, parserVersion);
+    }
+    payload = extractFromDom(html, findmyhomeId, facts);
   }
 
   if (!payload.titleRaw) {
@@ -143,39 +150,24 @@ function buildFailedCapture(
 }
 
 /**
- * Detects listing availability from the detail page HTML.
- * Checks for "nicht mehr verfügbar" / "verkauft" / "deaktiviert" markers,
- * and falls back to JSON-LD presence.
+ * Detects listing availability from the detail page HTML. Status words count only in the title
+ * and h1, because live project pages use "verkauft" in their text for units already sold.
  */
 export function detectDetailAvailability(html: string): SourceAvailability {
-  // Check for explicit unavailability markers in page content
-  if (/nicht\s+mehr\s+verf[uü]gbar|deaktiviert|wurde\s+entfernt/i.test(html)) {
-    return { status: 'not_found' };
+  const headline = headlineText(html);
+  // A gone page can come with a 200, and only `removed` retires a listing then. The worker
+  // reports 404 and 410 as not_found on its own.
+  if (/nicht\s+mehr\s+verf[uü]gbar|deaktiviert|wurde\s+entfernt/i.test(headline)) {
+    return { status: 'removed' };
   }
+  if (/verkauft/i.test(headline)) return { status: 'sold' };
+  if (/reserviert/i.test(headline)) return { status: 'reserved' };
 
-  if (/bereits\s+verkauft|verkauft/i.test(html)) {
-    return { status: 'sold' };
-  }
+  if (extractApartmentLd(html)) return { status: 'available' };
+  // Soft 404s have an h1 too, so only the listing's own markup counts.
+  if (holdsListing(html, extractFacts(html))) return { status: 'available' };
 
-  if (/reserviert/i.test(html)) {
-    return { status: 'reserved' };
-  }
-
-  // Check if there is a valid JSON-LD Apartment block or price indicator — if so, listing is available
-  const apartment = extractApartmentLd(html);
-  if (apartment) {
-    return { status: 'available' };
-  }
-
-  // DOM-based: check for price or listing header
-  if (/class="immo_header_value"/i.test(html) || /<h1[^>]*>.*<\/h1>/i.test(html)) {
-    return { status: 'available' };
-  }
-
-  // No JSON-LD and no explicit markers — could be a blocked page or unknown state
-  if (/captcha|blocked|challenge/i.test(html)) {
-    return { status: 'blocked' };
-  }
+  if (isChallengePage(html)) return { status: 'blocked' };
 
   return { status: 'unknown' };
 }
@@ -184,52 +176,50 @@ export function detectDetailAvailability(html: string): SourceAvailability {
 
 /**
  * Extract listing data from HTML when JSON-LD is absent.
- * Uses OG meta tags, table rows, and header price spans.
+ * Uses the h1, OG meta tags, the facts table, and header price spans.
  */
-function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO {
-  // Title from og:title or <h1>
-  const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i)?.[1] ?? null;
-  const h1Title =
-    html
-      .match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
-      ?.replace(/<[^>]+>/g, '')
-      .trim() ?? null;
-  const titleRaw = ogTitle ?? h1Title;
+function extractFromDom(
+  html: string,
+  findmyhomeId: string,
+  facts: Map<string, string>,
+): FindMyHomeDetailDTO {
+  // og:title is the same on every page, so the h1 is the title. Its " - Objektnr. N" suffix is
+  // the listing ID, not part of the title. Stripping comments skips the commented-out h1 these
+  // pages also carry.
+  const h1Html = html.replace(/<!--[\s\S]*?-->/g, '').match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
+  const h1Title = h1Html ? cleanText(h1Html).replace(/\s*-\s*Objektnr\.\s*\d+$/i, '') : null;
+  const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i)?.[1];
+  const titleRaw = h1Title || (ogTitle ? cleanText(ogTitle) : null);
 
   // Description from og:description or page text
   const ogDesc = html.match(/<meta\s+property="og:description"\s+content="([^"]*)"/i)?.[1] ?? null;
 
-  // Price from span.immo_header_value or table
-  const priceMatch = html.match(/class="immo_header_value"[^>]*>([\s\S]*?)<\/span>/i);
-  const priceRaw =
-    priceMatch?.[1]
-      ?.replace(/<[^>]+>/g, '')
-      .replace(/[^\d.,]/g, '')
-      .trim() ?? null;
+  const propertyTypeRaw =
+    facts.get('Immobilienart') ?? facts.get('Typ') ?? facts.get('Objekttyp') ?? null;
+  // Immobilienart reads "Wohnung - Eigentum", "Eigentum" or "Miete".
+  const operationTypeRaw = /\bmiete\b/i.test(propertyTypeRaw ?? '') ? 'rent' : 'sale';
 
-  // Extract table rows: <tr><td>Label</td><td>Value</td></tr>
-  const facts = new Map<string, string>();
-  const rowPattern = /<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
-  let rowMatch: RegExpExecArray | null;
-  while ((rowMatch = rowPattern.exec(html)) !== null) {
-    const key = rowMatch[1]!.replace(/<[^>]+>/g, '').trim();
-    const value = rowMatch[2]!.replace(/<[^>]+>/g, '').trim();
-    if (key && value) facts.set(key, value);
-  }
+  // The first header value is the postal code, so the price is read by its label. Rent pages
+  // show the monthly total in place of a purchase price.
+  const header = extractHeaderValues(html);
+  const priceText =
+    operationTypeRaw === 'rent'
+      ? (header.get('Gesamtkosten') ??
+        facts.get('Brutto-Miete') ??
+        facts.get('Monatliche Gesamtkosten'))
+      : (header.get('Kaufpreis') ?? facts.get('Kaufpreis'));
+  const priceRaw = priceText?.replace(/[^\d.,]/g, '') || null;
 
   const livingAreaStr =
     facts.get('Fläche') ?? facts.get('Wohnfläche') ?? facts.get('Flaeche') ?? null;
   const roomsStr = facts.get('Zimmer') ?? null;
-  const locationStr = facts.get('Ort') ?? facts.get('Lage') ?? null;
+  const locationStr = facts.get('Anschrift') ?? facts.get('Ort') ?? facts.get('Lage') ?? null;
 
-  // Extract postal code from location like "1050 Wien"
-  const postalMatch = locationStr?.match(/(\d{4})\s/);
-  const postalCodeRaw = postalMatch?.[1] ?? null;
-  const cityRaw =
-    locationStr
-      ?.replace(/^\d{4}\s*/, '')
-      .split(',')[0]
-      ?.trim() ?? null;
+  // Anschrift reads "1130 Wien, Hietzing / Wien 13., Hie" or "Musterstraße 1/5 1120 Wien",
+  // so the postal code and city are matched wherever they sit.
+  const place = locationStr?.match(/(?:^|\s)(\d{4})\s+([^\d,][^,]*?)\s*(?:,|$)/);
+  const postalCodeRaw = place?.[1] ?? null;
+  const cityRaw = place?.[2] ?? null;
 
   // Images from og:image
   const ogImage = html.match(/<meta\s+property="og:image"\s+content="([^"]*)"/i)?.[1];
@@ -237,7 +227,7 @@ function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO
 
   return {
     findmyhomeId,
-    titleRaw: titleRaw ? stripHtml(titleRaw) : null,
+    titleRaw,
     descriptionRaw: ogDesc ? stripHtml(ogDesc) : null,
     priceRaw: priceRaw ? normalizeDecimal(priceRaw) : null,
     livingAreaRaw: livingAreaStr
@@ -250,12 +240,12 @@ function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO
     districtRaw: null,
     cityRaw,
     federalStateRaw: null,
-    floorRaw: facts.get('Stockwerk') ?? facts.get('Etage') ?? null,
+    floorRaw: facts.get('Stock') ?? facts.get('Stockwerk') ?? facts.get('Etage') ?? null,
     yearBuiltRaw: facts.get('Baujahr') ?? null,
-    propertyTypeRaw: facts.get('Typ') ?? facts.get('Objekttyp') ?? null,
-    operationTypeRaw: 'sale',
+    propertyTypeRaw,
+    operationTypeRaw,
     statusRaw: 'active',
-    heatingTypeRaw: facts.get('Heizung') ?? null,
+    heatingTypeRaw: facts.get('Heizung') ?? facts.get('Befeuerung') ?? null,
     conditionRaw: facts.get('Zustand') ?? null,
     energyCertificateRaw: facts.get('Energieklasse') ?? facts.get('Energieausweis') ?? null,
     balconyAreaRaw: null,
@@ -276,6 +266,52 @@ function extractFromDom(html: string, findmyhomeId: string): FindMyHomeDetailDTO
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Rows of the facts table, `<tr><td>Label</td><td>Value</td></tr>`, by label. Labels lose a
+ * trailing colon and any note in brackets, so "Betriebskosten (inkl. MwSt):" is "Betriebskosten".
+ */
+function extractFacts(html: string): Map<string, string> {
+  const facts = new Map<string, string>();
+  const rowPattern = /<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowPattern.exec(html)) !== null) {
+    const key = cleanText(rowMatch[1]!)
+      .replace(/\s*\([^)]*\)/g, '')
+      .replace(/:$/, '')
+      .trim();
+    const value = cleanText(rowMatch[2]!);
+    if (key && value) facts.set(key, value);
+  }
+  return facts;
+}
+
+/** Header values by label, from `immo_header_value` and `immo_header_desc` span pairs. */
+function extractHeaderValues(html: string): Map<string, string> {
+  const header = new Map<string, string>();
+  // A value can hold a link but never a span, so a match cannot run on into the next pair.
+  const pairPattern =
+    /<span\s+class="immo_header_value"[^>]*>((?:(?!<\/span>)[\s\S])*)<\/span>\s*(?:<hr[^>]*>\s*)?<span\s+class="immo_header_desc"[^>]*>([\s\S]*?)<\/span>/gi;
+  let pairMatch: RegExpExecArray | null;
+  while ((pairMatch = pairPattern.exec(html)) !== null) {
+    const label = cleanText(pairMatch[2]!);
+    const value = cleanText(pairMatch[1]!);
+    if (label && value) header.set(label, value);
+  }
+  return header;
+}
+
+/** Text of an HTML fragment. Titles and facts carry entities such as `&amp;` and `&nbsp;`. */
+function cleanText(html: string): string {
+  return decodeHtmlEntities(html.replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** A listing page has the header values or the facts table; a soft 404 has neither. */
+function holdsListing(html: string, facts: Map<string, string>): boolean {
+  return HEADER_VALUE_REGEX.test(html) || facts.size > 0;
+}
 
 /**
  * Extracts the JSON-LD Apartment or RealEstateListing block from the HTML.

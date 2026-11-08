@@ -23,7 +23,7 @@ describe('FindMyHomeAdapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('findmyhome');
     expect(adapter.sourceName).toBe('findmyhome.at');
-    expect(adapter.parserVersion).toBe(2);
+    expect(adapter.parserVersion).toBe(3);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -330,6 +330,71 @@ describe('Detail page parsing', () => {
     expect(result.payload.images).toEqual([]);
   });
 
+  it('takes the title from the h1, decoded and without the "Objektnr." suffix', () => {
+    // og:title is "Immobilie von FindMyHome.at" on every page.
+    const html = loadFixture('detail-live.html');
+    const result = parseDetailPage(html, 'https://www.findmyhome.at/5501234', 'findmyhome', 3);
+
+    expect(result.extractionStatus).toBe('captured');
+    expect(result.payload.titleRaw).toBe('Schöne 3-Zimmer Wohnung & Balkon in Leopoldstadt');
+  });
+
+  it('reads price, address and property type by their labels', () => {
+    // The first header value is the postal code, not the price.
+    const html = loadFixture('detail-live.html');
+    const p = parseDetailPage(html, 'https://www.findmyhome.at/5501234', 'findmyhome', 3).payload;
+
+    expect(p.priceRaw).toBe('310000.00');
+    expect(p.addressRaw).toBe('1020 Wien, Leopoldstadt / Wien 2., Leo');
+    expect(p.postalCodeRaw).toBe('1020');
+    expect(p.cityRaw).toBe('Wien');
+    expect(p.propertyTypeRaw).toBe('Wohnung - Eigentum');
+    expect(p.operationTypeRaw).toBe('sale');
+    // The row reads "Betriebskosten (inkl. MwSt):", which an exact label lookup missed.
+    expect(p.operatingCostRaw).toBe('€ 285,00');
+  });
+
+  it('reads a rent page as rent, priced by its monthly total', () => {
+    const html = `<h1>Mietwohnung nahe Prater - Objektnr. 5501299</h1>
+      <span class="immo_header_value">1020</span><hr class="immo_header_hr"><span class="immo_header_desc">Ort</span>
+      <span class="immo_header_value">€ 1.250,00</span><hr class="immo_header_hr"><span class="immo_header_desc">Gesamtkosten</span>
+      <table><tr><td>Immobilienart</td><td>Miete</td></tr></table>`;
+    const p = parseDetailPage(html, 'https://www.findmyhome.at/5501299', 'findmyhome', 3).payload;
+
+    expect(p.operationTypeRaw).toBe('rent');
+    expect(p.priceRaw).toBe('1250.00');
+  });
+
+  it('finds the postal code and city when the address starts with the street', () => {
+    const html = `<h1>Wohnung nahe Schönbrunn - Objektnr. 5501300</h1>
+      <table><tr><td>Anschrift</td><td align="right">Musterstraße 1/5 1120&nbsp;Wien<br></td></tr></table>`;
+    const p = parseDetailPage(html, 'https://www.findmyhome.at/5501300', 'findmyhome', 3).payload;
+
+    expect(p.postalCodeRaw).toBe('1120');
+    expect(p.cityRaw).toBe('Wien');
+  });
+
+  it('returns a failed capture for a page without the price header or facts table', () => {
+    const html = loadFixture('detail-soft-404.html');
+    const result = parseDetailPage(html, 'https://www.findmyhome.at/5501234', 'findmyhome', 2);
+
+    expect(result.extractionStatus).toBe('parse_failed');
+    expect(result.payload.titleRaw).toBeNull();
+  });
+
+  it('derives the key discovery gave the sighting', async () => {
+    const adapter = new FindMyHomeAdapter();
+    const item = parseDiscoveryPage(loadFixture('discovery-page.html'), 'findmyhome', {
+      url: 'https://www.findmyhome.at/immobiliensuche?seite=1',
+      metadata: { page: 1 },
+    }).items[0]!;
+    const plan = await adapter.buildDetailRequest(item);
+    const capture = parseDetailPage(loadFixture('detail-live.html'), plan!.url, 'findmyhome', 2);
+
+    // The discovery worker keys a sighting as `${sourceCode}:${externalId}`.
+    expect(adapter.deriveSourceListingKey(capture)).toBe(`findmyhome:${item.externalId}`);
+  });
+
   it('strips HTML tags from description', () => {
     const html = loadFixture('detail-page.html');
     const result = parseDetailPage(
@@ -438,26 +503,38 @@ describe('Availability detection', () => {
     expect(status.status).toBe('available');
   });
 
-  it('detects not_found from "nicht mehr verfugbar" marker', () => {
+  it('reports a "nicht mehr verfügbar" page as removed, which retires it even on a 200', () => {
     const html = loadFixture('detail-sold.html');
     const status = detectDetailAvailability(html);
-    expect(status.status).toBe('not_found');
+    expect(status.status).toBe('removed');
   });
 
-  it('detects sold listing', () => {
-    const html = '<html><body><div>Dieses Objekt wurde bereits verkauft.</div></body></html>';
+  it('detects sold listing from its headline', () => {
+    const html = '<html><body><h1>Dieses Objekt wurde bereits verkauft.</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('sold');
   });
 
-  it('detects reserved listing', () => {
-    const html = '<html><body><div class="status">reserviert</div></body></html>';
+  it('detects reserved listing from its headline', () => {
+    const html = '<html><head><title>Reserviert | FindMyHome</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('reserved');
   });
 
-  it('detects blocked page', () => {
-    const html = '<html><body><div class="captcha">Please verify you are human</div></body></html>';
+  it('stays available when the description says "verkauft"', () => {
+    // Project listings mark their sold units in the description.
+    const html = loadFixture('detail-live.html');
+    expect(detectDetailAvailability(html).status).toBe('available');
+  });
+
+  it('reads a soft 404 as unknown, not available or blocked', () => {
+    // It has an h1 and loads reCAPTCHA like every page on the site, but holds no listing.
+    const html = loadFixture('detail-soft-404.html');
+    expect(detectDetailAvailability(html).status).toBe('unknown');
+  });
+
+  it('detects a challenge page', () => {
+    const html = '<html><head><title>Just a moment...</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('blocked');
   });
