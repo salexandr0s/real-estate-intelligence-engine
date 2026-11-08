@@ -125,9 +125,12 @@ describe('startScheduler', () => {
     const staleCheck = await schedulersOf(QUEUE_NAMES.STALE_CHECK);
     expect(staleCheck[0]?.pattern).toMatch(/^\d+ \*\/6 \* \* \*$/);
 
-    // Both features are off by default here, so their old schedules go.
+    // The canary worker is off by default, so its old schedule goes. Geocoding is on by
+    // default, so the planted schedule gives way to the hourly one.
     expect(await schedulersOf(QUEUE_NAMES.CANARY)).toEqual([]);
-    expect(await schedulersOf(QUEUE_NAMES.GEOCODE_ENQUEUE)).toEqual([]);
+    const geocode = await schedulersOf(QUEUE_NAMES.GEOCODE_ENQUEUE);
+    expect(geocode.map((scheduler) => scheduler.key)).toEqual(['geocode-enqueue-periodic']);
+    expect(geocode[0]?.pattern).toMatch(/^\d+ \*\/1 \* \* \*$/);
   });
 
   it('leaves the same minute on a second start', async () => {

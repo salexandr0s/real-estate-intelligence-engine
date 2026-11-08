@@ -8,6 +8,27 @@ import type { GeocodePrecision } from '@immoradar/contracts';
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const USER_AGENT = 'ImmoRadar/0.1 (geocoding)';
+/** Nominatim allows one request a second. The extra 100 ms covers timer and clock drift. */
+const MIN_REQUEST_SPACING_MS = 1100;
+
+// Nominatim bans an IP that goes over its limit, and one geocoding job can send several
+// requests. Every request in this process joins one chain, however many callers there
+// are: it waits for the previous request to finish, then starts at least
+// MIN_REQUEST_SPACING_MS after the previous one started.
+let previousRequest: Promise<unknown> = Promise.resolve();
+let lastRequestStartedAt = Number.NEGATIVE_INFINITY;
+
+function whenNominatimIsFree<T>(send: () => Promise<T>): Promise<T> {
+  const turn = previousRequest.then(async () => {
+    const wait = lastRequestStartedAt + MIN_REQUEST_SPACING_MS - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastRequestStartedAt = Date.now();
+    return send();
+  });
+  // The next caller waits for this request whether it succeeds or fails.
+  previousRequest = turn.catch(() => undefined);
+  return turn;
+}
 
 interface NominatimResult {
   lat: string;
@@ -46,15 +67,15 @@ export async function geocodeAddress(opts: {
 
   try {
     const url = `${NOMINATIM_BASE}/search?${params.toString()}`;
-    const response = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(10_000),
+    // The body is read inside the turn, so the next request starts after this one ends.
+    const results = await whenNominatimIsFree(async () => {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(10_000),
+      });
+      return response.ok ? ((await response.json()) as NominatimResult[]) : null;
     });
-
-    if (!response.ok) return null;
-
-    const results = (await response.json()) as NominatimResult[];
-    if (results.length === 0) return null;
+    if (!results || results.length === 0) return null;
 
     const result = results[0]!;
     const lat = parseFloat(result.lat);

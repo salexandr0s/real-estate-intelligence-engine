@@ -20,6 +20,7 @@ const ENV_KEYS = [
   'IMMORADAR_RUNTIME_BOOT_MODE',
   'IMMORADAR_RUNTIME_HOME',
   'ARTIFACTS_DIR',
+  'FEATURE_GEOCODING_ENABLED',
 ] as const;
 
 describe('config loaders', () => {
@@ -78,6 +79,16 @@ describe('config loaders', () => {
     resetConfig();
     process.env.API_TRUST_PROXY = '1';
     expect(() => loadConfig()).toThrow(/API_TRUST_PROXY/);
+  });
+
+  // A bundled install has no .env, so the default decides whether listings get coordinates.
+  it('turns geocoding on unless the env turns it off', () => {
+    delete process.env.FEATURE_GEOCODING_ENABLED;
+    expect(loadConfig().features.geocodingEnabled).toBe(true);
+
+    resetConfig();
+    process.env.FEATURE_GEOCODING_ENABLED = 'false';
+    expect(loadConfig().features.geocodingEnabled).toBe(false);
   });
 
   it('parses the runtime boot mode for bundled local launches', () => {

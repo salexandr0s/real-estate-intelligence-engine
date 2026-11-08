@@ -1,7 +1,7 @@
 /**
  * BullMQ worker: geocodes listings that lack coordinates.
  * Uses tiered strategy: Nominatim → district centroid → city centroid.
- * Rate-limited to 1 request/second to respect Nominatim usage policy.
+ * One job can send several Nominatim requests, so the client spaces them, not this worker.
  */
 
 import { Worker } from 'bullmq';
@@ -80,9 +80,11 @@ export function createGeocodingWorker(): Worker<GeocodingJobData> {
       connection,
       prefix,
       concurrency: WORKER_CONCURRENCY,
+      // One job start per 1.1 s across all workers on this queue. It doesn't bound the
+      // requests inside a job; the Nominatim client does that.
       limiter: {
         max: 1,
-        duration: 1100, // ~1 req/sec with slight buffer for Nominatim
+        duration: 1100,
       },
     },
   );
