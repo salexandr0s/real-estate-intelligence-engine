@@ -1,6 +1,7 @@
 /**
- * BullMQ worker: finds listings needing geocoding and enqueues individual geocoding jobs.
- * Runs hourly via scheduler.
+ * BullMQ worker: finds listings due for geocoding and enqueues one job per listing.
+ * Runs hourly via scheduler. The Nominatim client spaces its own requests, so the
+ * jobs go in without a delay.
  */
 
 import { Worker } from 'bullmq';
@@ -37,13 +38,23 @@ export function createGeocodingEnqueuer(): Worker<GeocodeEnqueueJobData> {
         return;
       }
 
+      // Counting the attempts before enqueueing lets an overlapping run skip these
+      // listings. If Redis fails partway, the ones not enqueued lose one attempt and
+      // wait out its backoff.
+      const counted = new Set(
+        await listings.markGeocodeAttempts(needsGeocoding.map((listing) => listing.id)),
+      );
+
       let enqueued = 0;
       for (const listing of needsGeocoding) {
+        if (!counted.has(listing.id)) continue;
         await geocodingQueue.add(
-          `geocode:${listing.id}`,
+          `geocode-${listing.id}`,
           {
             listingId: listing.id,
-            address: listing.street ?? null,
+            address: listing.street
+              ? `${listing.street}${listing.houseNumber ? ` ${listing.houseNumber}` : ''}`
+              : null,
             postalCode: listing.postalCode ?? null,
             city: listing.city,
             districtNo: listing.districtNo ?? null,
@@ -52,8 +63,9 @@ export function createGeocodingEnqueuer(): Worker<GeocodeEnqueueJobData> {
             addressDisplay: listing.addressDisplay ?? null,
           },
           {
-            // Stagger jobs by 1.5s to respect Nominatim rate limits
-            delay: enqueued * 1500,
+            // A listing already waiting in the queue isn't added twice. With no TTL,
+            // BullMQ releases the id when that job completes or finally fails.
+            deduplication: { id: `geocode-${listing.id}` },
           },
         );
         enqueued++;

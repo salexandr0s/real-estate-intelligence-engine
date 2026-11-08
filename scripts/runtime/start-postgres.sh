@@ -63,8 +63,23 @@ fi
 
 # Every client connects over TCP. Without a socket there is no lock file in /tmp that a stale PID
 # can turn into a startup failure.
+#
+# The other settings size Postgres for a fanless laptop that also runs Redis, the API and two
+# workers. Three Node pools of 4 connections (the app sets DATABASE_POOL_MAX) plus migrations and
+# psql fit in max_connections=30. With synchronous_commit=off a crash can lose about the last
+# 0.6 s of commits, but fsync stays on, so it can't corrupt data.
 exec "$BIN_DIR/postgres" \
   -D "$DATA_DIR" \
   -h 127.0.0.1 \
   -p "$IMMORADAR_POSTGRES_PORT" \
-  -c unix_socket_directories=
+  -c unix_socket_directories= \
+  -c shared_buffers=64MB \
+  -c work_mem=8MB \
+  -c maintenance_work_mem=32MB \
+  -c max_connections=30 \
+  -c max_parallel_workers_per_gather=0 \
+  -c autovacuum_max_workers=1 \
+  -c jit=off \
+  -c max_wal_size=256MB \
+  -c checkpoint_timeout=15min \
+  -c synchronous_commit=off

@@ -430,7 +430,8 @@ export function loadConfig(): AppConfig {
       },
     },
     features: {
-      geocodingEnabled: envBool('FEATURE_GEOCODING_ENABLED', false),
+      // On by default: a bundled install has no .env, and the map needs coordinates.
+      geocodingEnabled: envBool('FEATURE_GEOCODING_ENABLED', true),
       documentsEnabled: envBool('FEATURE_DOCUMENTS_ENABLED', false),
     },
     copilot: {

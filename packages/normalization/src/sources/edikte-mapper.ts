@@ -17,25 +17,32 @@ export interface EdikteRawListing extends SourceRawListingBase {
   courtName?: string | null;
   /** Case number (Aktenzeichen) */
   caseNumber?: string | null;
-  /** Scheduled auction date (ISO string) */
-  auctionDate?: string | null;
+  /** Auction date as the edict prints it (e.g., "15.4.2026 um 09:30 Uhr") */
+  auctionDateRaw?: string | null;
   /** Appraised value as raw string (e.g., "EUR 250.000,00") */
   appraisedValueRaw?: string | null;
   /** Minimum bid as raw string */
   minimumBidRaw?: string | null;
-  /** Scheduled property viewing dates (ISO strings) */
-  viewingDates?: string[] | null;
+  /** Viewing appointments as the edict prints them (e.g., "14.4.2026, 15:30 Uhr") */
+  viewingDatesRaw?: string[] | null;
   /** Source-reported property category (e.g., "Eigentumswohnung") */
   sourcePropertyCategory?: string | null;
 }
+
+/** The first date in "15.4.2026 um 09:30 Uhr" or "05.05.2026, 15.30 bis 16:30 Uhr", with its time. */
+const PRINTED_DATE =
+  /(\d{1,2})\.(\d{1,2})\.(\d{4})(?:,?\s*(?:(?:um|von|ab)\s+)?(\d{1,2})[:.](\d{2})(?![.\d]))?/;
+
+const viennaOffset = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Vienna',
+  timeZoneName: 'longOffset',
+});
 
 /**
  * Ediktsdatei (Austrian court auction) normalizer.
  * Enriches base normalization with auction-specific metadata.
  */
 export class EdikteMapper extends BaseSourceMapper {
-  override readonly normalizationVersion = 2;
-
   constructor() {
     super('edikte');
   }
@@ -61,10 +68,10 @@ export class EdikteMapper extends BaseSourceMapper {
       ediktId: rawPayload.ediktId ?? null,
       courtName: rawPayload.courtName ?? null,
       caseNumber: rawPayload.caseNumber ?? null,
-      auctionDate: rawPayload.auctionDate ?? null,
+      auctionDate: toViennaIso(rawPayload.auctionDateRaw),
       appraisedValueEurCents: appraisedResult.value,
       minimumBidEurCents: minimumBidResult.value,
-      viewingDates: rawPayload.viewingDates ?? [],
+      viewingDates: (rawPayload.viewingDatesRaw ?? []).flatMap((raw) => toViennaIso(raw) ?? []),
       sourcePropertyCategory: rawPayload.sourcePropertyCategory ?? null,
     };
 
@@ -81,4 +88,36 @@ export class EdikteMapper extends BaseSourceMapper {
 
     return result;
   }
+}
+
+/**
+ * A date printed in Vienna, as ISO 8601: "15.4.2026 um 09:30 Uhr" -> "2026-04-15T09:30:00+02:00".
+ * A date printed without a time stays a calendar date, "2026-04-15".
+ */
+function toViennaIso(raw: string | null | undefined): string | null {
+  const m = raw?.match(PRINTED_DATE);
+  if (!m?.[1] || !m[2] || !m[3]) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const calendarDay = new Date(Date.UTC(Number(m[3]), month - 1, day));
+  if (calendarDay.getUTCMonth() !== month - 1 || calendarDay.getUTCDate() !== day) return null;
+
+  const date = `${m[3]}-${pad(month)}-${pad(day)}`;
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  if (!m[4] || !m[5] || hour > 23 || minute > 59) return date;
+
+  const wallClock = `${date}T${pad(hour)}:${pad(minute)}:00`;
+  // Read as UTC, the wall-clock time is at most two hours off the real instant, and
+  // Vienna changes its offset only at night, so both instants share one offset.
+  const zone =
+    viennaOffset
+      .formatToParts(Date.parse(`${wallClock}Z`))
+      .find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+  // "GMT+02:00" -> "+02:00"; a bare "GMT" is UTC.
+  return `${wallClock}${zone === 'GMT' ? 'Z' : zone.slice(3)}`;
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
 }

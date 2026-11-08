@@ -14,7 +14,14 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
-const SEARCH_PATH = '/regional/wien/wien/immobilien';
+// Apartments for sale in Vienna, the same scope as the other sources
+const SEARCH_PATH = '/regional/wien/wien/wohnung-kaufen';
+// Newest first. The default order leads with developer projects, and a search shows at most 100
+// pages, far fewer than it finds, so new listings could fall outside every sweep.
+const SORT_NEWEST_FIRST = 'CREATED_DESC';
+// Every results page has the results list; only the first has the JSON-LD script.
+const RESULTS_SELECTOR =
+  '[data-testid="results-items"], script[data-testid="collection-page-structured-data"]';
 
 export class Immoscout24Adapter implements SourceAdapter<
   Immoscout24DiscoveryItem,
@@ -22,16 +29,18 @@ export class Immoscout24Adapter implements SourceAdapter<
 > {
   readonly sourceCode = 'immoscout24';
   readonly sourceName = 'ImmobilienScout24.at';
-  readonly parserVersion = 2;
+  readonly parserVersion = 3;
 
   async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);
+    // Later pages keep the query, so the whole sweep reads newest first
+    url.searchParams.set('sort', SORT_NEWEST_FIRST);
 
     // Only seed page 1 — the discovery worker follows nextPagePlan from parsers
     return [
       {
         url: url.toString(),
-        waitForSelector: 'script[data-testid="collection-page-structured-data"]',
+        waitForSelector: RESULTS_SELECTOR,
         waitForTimeout: 5000,
         metadata: { page: 1 },
       },

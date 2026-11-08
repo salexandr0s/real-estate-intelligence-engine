@@ -26,13 +26,19 @@ import {
   pageNavigationDelay,
   classifyScraperError,
   dismissCookieConsent,
+  navigateForCapture,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   pickRandomViewport,
   pickRandomUserAgent,
   setupRequestInterception,
 } from '@immoradar/scraper-core';
 import type { CanaryJobData } from '@immoradar/scraper-core';
-import type { CrawlProfile, BaselineLookup, SourceRawListingBase } from '@immoradar/contracts';
+import type {
+  CrawlProfile,
+  BaselineLookup,
+  RequestPlan,
+  SourceRawListingBase,
+} from '@immoradar/contracts';
 import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
 import { sources, canaryResults, marketBaselines } from '@immoradar/db';
 import {
@@ -126,7 +132,7 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
 
         await rateLimiter.waitForSlot(sourceCode);
         await pageNavigationDelay();
-        await page.goto(plan.url, { waitUntil: 'networkidle', timeout: 30_000 });
+        await navigateForCapture(page, plan, { sourceCode, navigationTimeoutMs: 30_000 });
         await dismissCookieConsent(page, sourceCode);
 
         const html = await page.content();
@@ -158,9 +164,10 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
           summaryPayload: {},
           discoveredAt: new Date().toISOString(),
         });
-        const detailUrl = detailRequest?.url ?? firstItem.detailUrl;
+        const detailPlan: RequestPlan = detailRequest ?? { url: firstItem.detailUrl };
+        const detailUrl = detailPlan.url;
 
-        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+        await navigateForCapture(page, detailPlan, { sourceCode, navigationTimeoutMs: 30_000 });
         await dismissCookieConsent(page, sourceCode);
         const detailHtml = await page.content();
 
@@ -221,19 +228,13 @@ export function createCanaryWorker(): Worker<CanaryJobData> {
           // Look up real baseline if available, else use a synthetic one
           let baseline: BaselineLookup;
           try {
-            const baselineResult = await marketBaselines.findBaselineWithFallback({
+            baseline = await marketBaselines.findScoringBaselines({
               districtNo: listing.districtNo ?? null,
               operationType: listing.operationType,
               propertyType: listing.propertyType,
               areaBucket: getAreaBucket(effectiveArea),
               roomBucket: getRoomBucket(listing.rooms ?? null),
             });
-            baseline = {
-              districtBaselinePpsqmEur: baselineResult.baseline?.medianPpsqmEur ?? null,
-              bucketBaselinePpsqmEur: baselineResult.baseline?.medianPpsqmEur ?? null,
-              bucketSampleSize: baselineResult.baseline?.sampleSize ?? 0,
-              fallbackLevel: baselineResult.fallbackLevel,
-            };
           } catch {
             baseline = {
               districtBaselinePpsqmEur: null,

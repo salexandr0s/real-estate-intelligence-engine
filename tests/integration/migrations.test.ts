@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { runMigrations, query } from '@immoradar/db';
+import { runMigrations, query, marketBaselines } from '@immoradar/db';
 import { DEFAULT_SOURCE_SEEDS, seed } from '../../packages/db/seeds/seed.js';
 import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
 
@@ -94,6 +94,44 @@ describe('migration quality', () => {
 
       const sources = await query<{ count: string }>('SELECT count(*)::text AS count FROM sources');
       expect(Number(sources[0]?.count)).toBe(DEFAULT_SOURCE_SEEDS.length);
+    });
+  });
+
+  describe('market baselines on migrated database', () => {
+    // A city-wide row has a NULL district_no. While the unique key treated NULLs as distinct,
+    // every baseline run inserted another copy of it instead of updating it.
+    it('updates the city-wide and district rows in place when a run is written twice', async () => {
+      const baselineDate = new Date(2000, 0, 1);
+      const cityWide = {
+        city: 'Wien',
+        districtNo: null,
+        operationType: 'sale',
+        propertyType: 'apartment',
+        areaBucket: 'all',
+        roomBucket: 'all',
+        sampleSize: 10,
+        medianPpsqmEur: 5000,
+      };
+      const district = { ...cityWide, districtNo: 3, sampleSize: 4, medianPpsqmEur: 6000 };
+      await marketBaselines.upsertBaselines(baselineDate, [cityWide, district]);
+      const written = await marketBaselines.upsertBaselines(baselineDate, [
+        { ...cityWide, sampleSize: 12, medianPpsqmEur: 5100 },
+        { ...district, sampleSize: 5, medianPpsqmEur: 6100 },
+      ]);
+
+      const rows = await query<{
+        district_no: number | null;
+        sample_size: number;
+        median_ppsqm_eur: string;
+      }>(
+        `SELECT district_no, sample_size, median_ppsqm_eur FROM market_baselines
+         WHERE baseline_date = DATE '2000-01-01' ORDER BY district_no NULLS FIRST`,
+      );
+      expect(written).toBe(2);
+      expect(rows).toEqual([
+        { district_no: null, sample_size: 12, median_ppsqm_eur: '5100.00' },
+        { district_no: 3, sample_size: 5, median_ppsqm_eur: '6100.00' },
+      ]);
     });
   });
 });

@@ -134,20 +134,20 @@ export async function findUnscoredLatest(listingId: number): Promise<ListingVers
 }
 
 /**
- * Find the price from the second-most-recent version (i.e., the previous price).
- * Returns null if there is only one version or no price recorded.
+ * The price of the priced version before the latest one, or null when there is none. Also null
+ * when the latest priced version is a backfill: it corrects how we parsed a price the source did
+ * not change, so the difference is no price move.
  */
 export async function findPreviousPrice(listingId: number): Promise<number | null> {
-  const rows = await query<{ list_price_eur_cents: string | null }>(
-    `SELECT list_price_eur_cents FROM listing_versions
+  const rows = await query<{ list_price_eur_cents: string; version_reason: VersionReason }>(
+    `SELECT list_price_eur_cents, version_reason FROM listing_versions
      WHERE listing_id = $1 AND list_price_eur_cents IS NOT NULL
      ORDER BY version_no DESC
-     OFFSET 1
-     LIMIT 1`,
+     LIMIT 2`,
     [listingId],
   );
-  if (rows.length === 0 || rows[0]!.list_price_eur_cents == null) return null;
-  return Number(rows[0]!.list_price_eur_cents);
+  if (rows.length < 2 || rows[0]!.version_reason === 'backfill') return null;
+  return Number(rows[1]!.list_price_eur_cents);
 }
 
 /**

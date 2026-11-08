@@ -8,7 +8,8 @@
  * 3. Edict detail page (metadata fields, PDF attachment links)
  * 4. Sample PDF document
  *
- * Output: packages/source-edikte/fixtures/
+ * Output: /tmp/immoradar-captures/edikte-recon/, next to capture-site-html.ts's captures. It stays
+ * out of the repo because edicts and their PDFs name people and property addresses.
  *
  * Usage:
  *   npx tsx scripts/recon-edikte.ts
@@ -22,14 +23,10 @@ import { join } from 'node:path';
 const BASE_URL = 'https://edikte.justiz.gv.at';
 const SEARCH_FORM_URL = `${BASE_URL}/edikte/ex/exedi3.nsf/suche?OpenForm`;
 
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = join(__dirname, '..', 'packages', 'source-edikte', 'fixtures');
+const OUTPUT_DIR = '/tmp/immoradar-captures/edikte-recon';
 
 function save(filename: string, content: string | Buffer): void {
-  const path = join(FIXTURES_DIR, filename);
+  const path = join(OUTPUT_DIR, filename);
   writeFileSync(path, content);
   const size = typeof content === 'string' ? content.length : content.length;
   console.log(`  Saved: ${filename} (${(size / 1024).toFixed(1)} KB)`);
@@ -37,10 +34,10 @@ function save(filename: string, content: string | Buffer): void {
 
 async function main(): Promise<void> {
   const headed = process.argv.includes('--headed');
-  mkdirSync(FIXTURES_DIR, { recursive: true });
+  mkdirSync(OUTPUT_DIR, { recursive: true });
 
   console.log('=== Edikte.justiz.gv.at Reconnaissance ===\n');
-  console.log(`Output: ${FIXTURES_DIR}`);
+  console.log(`Output: ${OUTPUT_DIR}`);
   console.log(`Mode: ${headed ? 'headed (visible browser)' : 'headless'}\n`);
 
   const browser = await chromium.launch({ headless: !headed });
@@ -62,7 +59,7 @@ async function main(): Promise<void> {
 
     const formHtml = await page.content();
     save('search-form.html', formHtml);
-    await page.screenshot({ path: join(FIXTURES_DIR, 'search-form.png'), fullPage: true });
+    await page.screenshot({ path: join(OUTPUT_DIR, 'search-form.png'), fullPage: true });
     console.log('  Saved: search-form.png');
 
     // Analyze form structure
@@ -172,7 +169,7 @@ async function main(): Promise<void> {
     console.log('\nStep 3: Capturing results page...');
     const resultsHtml = await page.content();
     save('results-page.html', resultsHtml);
-    await page.screenshot({ path: join(FIXTURES_DIR, 'results-page.png'), fullPage: true });
+    await page.screenshot({ path: join(OUTPUT_DIR, 'results-page.png'), fullPage: true });
     console.log('  Saved: results-page.png');
 
     // Analyze results structure
@@ -226,7 +223,7 @@ async function main(): Promise<void> {
 
       const detailHtml = await page.content();
       save('detail-page.html', detailHtml);
-      await page.screenshot({ path: join(FIXTURES_DIR, 'detail-page.png'), fullPage: true });
+      await page.screenshot({ path: join(OUTPUT_DIR, 'detail-page.png'), fullPage: true });
       console.log('  Saved: detail-page.png');
 
       // Analyze detail structure
@@ -296,7 +293,7 @@ async function main(): Promise<void> {
 
     // ── Summary ──────────────────────────────────────────────────────────
     console.log('\n=== Reconnaissance Complete ===');
-    console.log(`Output directory: ${FIXTURES_DIR}`);
+    console.log(`Output directory: ${OUTPUT_DIR}`);
     console.log('\nFiles generated:');
     console.log('  search-form.html     — Raw search form page');
     console.log('  form-analysis.json   — Parsed form fields and options');
@@ -315,7 +312,7 @@ async function main(): Promise<void> {
     try {
       const html = await page.content();
       save('error-page.html', html);
-      await page.screenshot({ path: join(FIXTURES_DIR, 'error-screenshot.png') });
+      await page.screenshot({ path: join(OUTPUT_DIR, 'error-screenshot.png') });
     } catch {
       // Nothing to save
     }

@@ -15,7 +15,7 @@ describe('WohnnetAdapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('wohnnet');
     expect(adapter.sourceName).toBe('wohnnet.at');
-    expect(adapter.parserVersion).toBe(1);
+    expect(adapter.parserVersion).toBe(2);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -343,6 +343,31 @@ describe('Detail page parsing', () => {
     expect(attrs['contactPhone']).toBe('+43 1 555 1234');
     expect(attrs['contactEmail']).toBe('info@wik-immo.at');
   });
+
+  it('reads the price from a JSON-LD offers array when the dataLayer is missing', () => {
+    // Live pages list offers as an array with a numeric price.
+    const html = `<script type="application/ld+json">{"@type":"Product","name":"Anlegerwohnung","offers":[{"@type":"Offer","price":329400}]}</script>`;
+    const result = parseDetailPage(
+      html,
+      'https://www.wohnnet.at/immobilien/test-290000001',
+      'wohnnet',
+      2,
+    );
+    expect(result.payload.priceRaw).toBe('329400');
+  });
+
+  it('derives the key discovery gave the sighting', async () => {
+    const adapter = new WohnnetAdapter();
+    const item = parseDiscoveryPage(loadFixture('discovery-page.html'), 'wohnnet', {
+      url: 'https://www.wohnnet.at/immobilien/eigentumswohnungen/wien?seite=1',
+      metadata: { page: 1 },
+    }).items[0]!;
+    const plan = await adapter.buildDetailRequest(item);
+    const capture = parseDetailPage(loadFixture('detail-page.html'), plan!.url, 'wohnnet', 1);
+
+    // The discovery worker keys a sighting as `${sourceCode}:${externalId}`.
+    expect(adapter.deriveSourceListingKey(capture)).toBe(`wohnnet:${item.externalId}`);
+  });
 });
 
 describe('Availability detection', () => {
@@ -358,28 +383,47 @@ describe('Availability detection', () => {
     expect(status.status).toBe('removed');
   });
 
-  it('detects sold listing', () => {
-    const html = '<html><body><p>Das Objekt wurde bereits verkauft.</p></body></html>';
+  it('detects sold listing from its headline', () => {
+    const html = '<html><body><h1>Das Objekt wurde bereits verkauft.</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('sold');
   });
 
-  it('detects reserved listing', () => {
-    const html = '<html><body><p>Dieses Objekt ist reserviert.</p></body></html>';
+  it('detects reserved listing from its headline', () => {
+    const html = '<html><body><h1>Dieses Objekt ist reserviert.</h1></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('reserved');
   });
 
-  it('detects rented listing', () => {
-    const html = '<html><body><p>Dieses Objekt wurde bereits vermietet.</p></body></html>';
+  it('detects rented listing from its headline', () => {
+    const html = '<html><head><title>Bereits vermietet</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('rented');
   });
 
-  it('detects blocked page', () => {
-    const html = '<html><body>Please complete the captcha to continue.</body></html>';
+  it('stays available when the description says "bereits vermietet"', () => {
+    // Investor flats are sold with the tenant in place, and projects list their sold units.
+    const html = loadFixture('detail-tenanted.html');
+    expect(detectDetailAvailability(html).status).toBe('available');
+  });
+
+  it('ignores status words outside the headline', () => {
+    const html = '<html><body><p>Die Wohnung ist bereits vermietet.</p></body></html>';
+    expect(detectDetailAvailability(html).status).toBe('unknown');
+  });
+
+  it('detects a challenge page', () => {
+    const html = '<html><head><title>Just a moment...</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('blocked');
+  });
+
+  it('is not blocked by the reCAPTCHA and consent scripts the site loads', () => {
+    // A false blocked fails the detail job and counts toward the source's breaker.
+    const html = `<html><head><title>Wohnprojekt in Wien</title>
+      <script src="https://www.gstatic.com/recaptcha/releases/release/recaptcha__de_at.js"></script>
+      </head><body><script type="text/x-blocked-script">loadForm();</script></body></html>`;
+    expect(detectDetailAvailability(html).status).toBe('unknown');
   });
 
   it('returns unknown for ambiguous content', () => {

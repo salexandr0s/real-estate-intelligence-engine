@@ -1,7 +1,7 @@
 /**
  * BullMQ worker: fetches a listing's own page and hands the capture to processing. A page that is
- * gone (404 or 410) still goes to processing, so the listing gets retired. A blocked page fails the
- * job instead, because a challenge page holds no listing data.
+ * gone (404 or 410) still goes to processing, so the listing gets retired. A blocked or blank page
+ * fails the job instead, because neither holds listing data.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -24,6 +24,7 @@ import {
   createQueue,
   getQueuePrefix,
   getRedisConnection,
+  isEmptyDocument,
   navigateForCapture,
   pageNavigationDelay,
   setupRequestInterception,
@@ -32,6 +33,7 @@ import type { DetailJobData, ProcessingJobData } from '@immoradar/scraper-core';
 import { untilAborted } from '../abort.js';
 import { getAdapter } from '../adapter-registry.js';
 import { acquirePageSlot, createScrapeContext } from '../browser-pool.js';
+import { BlockedPageError, EmptyPageError } from '../page-errors.js';
 import { checkSourceRunnable } from '../source-guard.js';
 import type { ScraperWorkerDeps } from './worker-deps.js';
 
@@ -39,15 +41,6 @@ const log = createLogger('worker:detail');
 
 /** Spreads jobs held back by an open breaker, so they don't all return at the same moment. */
 const BREAKER_DELAY_JITTER_MS = 30_000;
-
-/** The site answered with a challenge page instead of the listing. */
-export class BlockedPageError extends Error {
-  constructor() {
-    // The classifier reads "challenge" as soft_anti_bot.
-    super('Blocked by a challenge page');
-    this.name = 'BlockedPageError';
-  }
-}
 
 /**
  * The key processing files the capture under. A captured page's own ID wins over the one
@@ -210,6 +203,10 @@ export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobDat
         navigationTimeoutMs: config.playwright.navigationTimeoutMs,
       });
       const html = await page.content();
+      // The status is the site's own answer that the listing is gone, whatever the page says.
+      const gone = navigation.status === 404 || navigation.status === 410;
+      // Sent on to processing, a blank page would count as a fetch that found no listing.
+      if (!gone && isEmptyDocument(html)) throw new EmptyPageError();
       const detailContext: DetailContext = {
         page,
         requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
@@ -217,8 +214,6 @@ export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobDat
         scrapeRunId,
       };
       const capture = await adapter.extractDetailPage(detailContext);
-      // The status is the site's own answer that the listing is gone, whatever the page says.
-      const gone = navigation.status === 404 || navigation.status === 410;
       const availability = gone ? 'not_found' : adapter.detectAvailability(detailContext).status;
       if (availability === 'blocked' || capture.extractionStatus === 'blocked') {
         throw new BlockedPageError();

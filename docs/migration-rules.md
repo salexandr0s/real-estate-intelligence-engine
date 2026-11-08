@@ -35,16 +35,23 @@ Renaming breaks all existing queries. Use the add-backfill-drop pattern:
 ### 4. Test migrations from both empty and seeded state
 
 Every migration must pass:
+
 - **Forward from empty**: `npm run db:migrate` on a fresh database
 - **Forward from seeded**: `npm run db:migrate && npm run db:seed` then apply the new migration
 
 The existing migration test infrastructure verifies both paths (see `tests/integration/migrations.test.ts`).
 
-### 5. Schema file is the single source of truth
+### 5. Migrations are the source of truth
 
-The authoritative schema definition is `packages/db/migrations/001-initial-schema.sql`. All table definitions, constraints, indexes, and triggers are defined there.
+Real databases are built only by the files in `packages/db/migrations/`, applied in filename order. An applied file never changes: the runner stores a checksum for each file and refuses to run when one differs. Fix a mistake with a new migration.
 
-When adding migrations, keep the initial schema file as the canonical reference for what the final schema looks like. Incremental migrations should be additive.
+`schema.sql` at the repo root is the whole schema in one file, for reading. It is generated from the migrations, so regenerate it in the same change as a new migration and commit both:
+
+```bash
+SCHEMA_ADMIN_URL=postgres://<user>@<host>:<port>/postgres npm run db:schema
+```
+
+The server needs CREATEDB rights; the script builds a scratch database, dumps it and drops it. The integration suite fails when `schema.sql` and the migrations disagree.
 
 ### 6. All migrations must be idempotent
 
@@ -68,17 +75,17 @@ DROP INDEX IF EXISTS idx_old_name;
 ALTER TABLE listings DROP COLUMN IF EXISTS old_field;
 ```
 
-### 7. Wrap migrations in transactions
+### 7. Let the runner own the transaction
+
+The runner applies each file inside one transaction and records it in `_migrations` in that same transaction, so a failed file leaves nothing behind. Don't write `BEGIN` or `COMMIT` in a migration: a `COMMIT` would end the runner's transaction early. Start every file with:
 
 ```sql
-BEGIN;
-
--- migration statements here
-
-COMMIT;
+SET LOCAL statement_timeout = 0;
 ```
 
-This ensures partial failures don't leave the schema in an inconsistent state.
+The pool's statement timeout (10 s by default) applies to migrations too, and a backfill on real data can take longer. `SET LOCAL` ends with the transaction.
+
+Some early files (001 and 005 to 008) still contain `BEGIN` and `COMMIT`. They are applied everywhere, so they stay as they are.
 
 ### 8. Document rollback strategy as a compensating migration
 

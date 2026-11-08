@@ -1,4 +1,4 @@
-import { query, transaction, queryWithClient } from '../client.js';
+import { query, execute, transaction, queryWithClient } from '../client.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +79,66 @@ export function dedupeClusterMemberInputs(
   }
 
   return uniqueMembers;
+}
+
+export interface CrossSourceGroup {
+  fingerprint: string;
+  /** Best-scored listing per source, best first. The first becomes the canonical listing. */
+  members: ClusterMemberInput[];
+}
+
+interface CrossSourceGroupDbRow {
+  fingerprint: string;
+  listing_ids: string[];
+  source_ids: string[];
+  prices: (string | null)[];
+}
+
+/**
+ * Finds every cross-source fingerprint that active listings from two or more sources share.
+ */
+export async function findCrossSourceGroups(): Promise<CrossSourceGroup[]> {
+  // The id tiebreak keeps the member and canonical choice stable between rebuilds when
+  // scores tie, which they often do while listings are still unscored.
+  const rows = await query<CrossSourceGroupDbRow>(
+    `SELECT
+       cross_source_fingerprint AS fingerprint,
+       array_agg(id::text ORDER BY current_score DESC NULLS LAST, id) AS listing_ids,
+       array_agg(source_id::text ORDER BY current_score DESC NULLS LAST, id) AS source_ids,
+       array_agg(list_price_eur_cents::text ORDER BY current_score DESC NULLS LAST, id) AS prices
+     FROM listings
+     WHERE cross_source_fingerprint IS NOT NULL AND listing_status = 'active'
+     GROUP BY cross_source_fingerprint
+     HAVING COUNT(DISTINCT source_id) >= 2`,
+  );
+
+  return rows.map((row) => ({
+    fingerprint: row.fingerprint,
+    members: dedupeClusterMemberInputs(
+      row.listing_ids.map((listingId, i) => {
+        const price = row.prices[i];
+        return {
+          listingId: Number(listingId),
+          sourceId: Number(row.source_ids[i]),
+          listPriceEurCents: price != null ? Number(price) : null,
+        };
+      }),
+    ),
+  }));
+}
+
+/**
+ * Deletes every cluster whose fingerprint is not in `fingerprints`, together with its
+ * members (listing_cluster_members cascades). An empty list deletes all clusters.
+ * Returns the number of clusters deleted.
+ */
+export async function deleteExcept(fingerprints: readonly string[]): Promise<number> {
+  const result = await execute(
+    `DELETE FROM listing_clusters
+     WHERE fingerprint <> ALL($1::text[])`,
+    [fingerprints],
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function upsertCluster(

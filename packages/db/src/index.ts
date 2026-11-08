@@ -4,6 +4,10 @@ export { getPool, query, execute, transaction, queryWithClient, closePool } from
 // ── Migration runner ────────────────────────────────────────────────────────
 export { runMigrations } from './migrate.js';
 
+// ── Default rows for a fresh install ────────────────────────────────────────
+export { bootstrapDefaults, DEFAULT_SOURCE_SEEDS } from './bootstrap.js';
+export type { BootstrapResult, SourceSeed } from './bootstrap.js';
+
 // ── Query modules ───────────────────────────────────────────────────────────
 export * as sources from './queries/sources.js';
 export * as scrapeRuns from './queries/scrape-runs.js';

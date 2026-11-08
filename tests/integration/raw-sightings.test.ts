@@ -17,6 +17,10 @@ const MIGRATION_024 = path.resolve(
   __dirname,
   '../../packages/db/migrations/024-raw-listing-sightings.sql',
 );
+const MIGRATION_029 = path.resolve(
+  __dirname,
+  '../../packages/db/migrations/029-findmyhome-postcode-prices.sql',
+);
 
 const testDb = createPostgresTestDatabase({
   namePrefix: 'immoradar_test_sightings',
@@ -454,5 +458,131 @@ describe('upsertListing', () => {
     expect(updated.latitude).toBe(48.2);
     expect(updated.longitude).toBe(16.37);
     expect(updated.geocodePrecision).toBe('street');
+  });
+});
+
+describe('migration 029', () => {
+  let findmyhomeId: number;
+
+  beforeAll(async () => {
+    const rows = await query<{ id: string }>(`SELECT id FROM sources WHERE code = 'findmyhome'`);
+    findmyhomeId = Number(rows[0]!.id);
+  });
+
+  /** A 70 m² listing with one raw row and one version per price, oldest first. */
+  async function insertPricedListing(
+    source: number,
+    key: string,
+    prices: ReadonlyArray<{ priceRaw: string; cents: number }>,
+  ): Promise<void> {
+    const rawIds: number[] = [];
+    for (const { priceRaw } of prices) {
+      const raw = await query<{ id: string }>(
+        `INSERT INTO raw_listings (
+           source_id, source_listing_key, canonical_url, detail_url, content_sha256,
+           first_scrape_run_id, last_scrape_run_id, extraction_status, raw_payload
+         ) VALUES ($1, $2, $3, $3, $4, $5, $5, 'captured', $6::jsonb)
+         RETURNING id`,
+        [
+          source,
+          key,
+          `https://example.com/${key}`,
+          String(++fixtureNo).padStart(64, '0'),
+          scrapeRunId,
+          JSON.stringify({ priceRaw }),
+        ],
+      );
+      rawIds.push(Number(raw[0]!.id));
+    }
+
+    const listing = await query<{ id: string }>(
+      `INSERT INTO listings (
+         source_id, source_listing_key, current_raw_listing_id, latest_scrape_run_id,
+         canonical_url, operation_type, property_type, title, city, content_fingerprint,
+         list_price_eur_cents, living_area_sqm, current_score, last_scored_at
+       ) VALUES ($1, $2, $3, $4, $5, 'sale', 'apartment', 'Fixture', 'Wien', $6, $7, 70, 80, NOW())
+       RETURNING id`,
+      [
+        source,
+        key,
+        rawIds[rawIds.length - 1],
+        scrapeRunId,
+        `https://example.com/${key}`,
+        'b'.repeat(64),
+        prices[prices.length - 1]!.cents,
+      ],
+    );
+
+    for (const [index, { cents }] of prices.entries()) {
+      await query(
+        `INSERT INTO listing_versions (
+           listing_id, raw_listing_id, version_no, version_reason, content_fingerprint,
+           listing_status, list_price_eur_cents, living_area_sqm, price_per_sqm_eur
+         ) VALUES ($1, $2, $3, $4, $5, 'active', $6, 70, $7)`,
+        [
+          listing[0]!.id,
+          rawIds[index],
+          index + 1,
+          index === 0 ? 'first_seen' : 'price_change',
+          'b'.repeat(64),
+          cents,
+          Math.round(cents / 70) / 100,
+        ],
+      );
+    }
+  }
+
+  it('clears the postal codes findmyhome stored as prices, and nothing else', async () => {
+    const postcode = { priceRaw: '1100', cents: 110000 };
+    const real = { priceRaw: '389.000', cents: 38900000 };
+    await insertPricedListing(findmyhomeId, 'fmh-postcode', [postcode]);
+    await insertPricedListing(findmyhomeId, 'fmh-real', [real]);
+    // Fetched again after the parser fix, so only its first version holds the postal code.
+    await insertPricedListing(findmyhomeId, 'fmh-refetched', [postcode, real]);
+    // No other source stored postal codes as prices, so 1,100 euros there is a price.
+    await insertPricedListing(sourceId, 'other-1100', [postcode]);
+    await rerunBackfill();
+
+    await transaction(async (client) => {
+      await client.query(fs.readFileSync(MIGRATION_029, 'utf8'));
+    });
+
+    const listingRows = await query<{ key: string; price: string | null; scored: boolean }>(
+      `SELECT source_listing_key AS key, list_price_eur_cents::text AS price,
+              (price_per_sqm_eur IS NOT NULL AND current_score IS NOT NULL
+                AND last_scored_at IS NOT NULL) AS scored
+       FROM listings ORDER BY id`,
+    );
+    expect(listingRows).toEqual([
+      { key: 'fmh-postcode', price: null, scored: false },
+      { key: 'fmh-real', price: '38900000', scored: true },
+      { key: 'fmh-refetched', price: '38900000', scored: true },
+      { key: 'other-1100', price: '110000', scored: true },
+    ]);
+
+    const versionRows = await query<{ key: string; price: string | null; perSqm: boolean }>(
+      `SELECT l.source_listing_key AS key, v.list_price_eur_cents::text AS price,
+              v.price_per_sqm_eur IS NOT NULL AS "perSqm"
+       FROM listing_versions v JOIN listings l ON l.id = v.listing_id
+       ORDER BY l.id, v.version_no`,
+    );
+    expect(versionRows).toEqual([
+      { key: 'fmh-postcode', price: null, perSqm: false },
+      { key: 'fmh-real', price: '38900000', perSqm: true },
+      { key: 'fmh-refetched', price: null, perSqm: false },
+      { key: 'fmh-refetched', price: '38900000', perSqm: true },
+      { key: 'other-1100', price: '110000', perSqm: true },
+    ]);
+
+    const sightingRows = await query<{ key: string; fetched: boolean }>(
+      `SELECT source_listing_key AS key, last_detail_ok_at IS NOT NULL AS fetched
+       FROM raw_listing_sightings ORDER BY source_listing_key COLLATE "C"`,
+    );
+    expect(sightingRows).toEqual([
+      { key: 'fmh-postcode', fetched: false },
+      { key: 'fmh-real', fetched: true },
+      { key: 'fmh-refetched', fetched: true },
+      { key: 'other-1100', fetched: true },
+    ]);
   });
 });

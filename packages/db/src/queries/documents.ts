@@ -122,6 +122,11 @@ export interface UpsertDocumentInput {
   status?: string;
 }
 
+/**
+ * Every capture of a listing lists its documents again. A document that is already
+ * downloaded, extracted or failed keeps its status then, so a failed download isn't
+ * queued again on every capture.
+ */
 export async function upsertDocument(input: UpsertDocumentInput): Promise<DocumentRow> {
   if (input.checksum == null) {
     const existingByUrl = await query<DocumentDbRow>(
@@ -143,7 +148,7 @@ export async function upsertDocument(input: UpsertDocumentInput): Promise<Docume
            label = COALESCE($6, label),
            page_count = COALESCE($7, page_count),
            status = CASE
-             WHEN status IN ('downloaded', 'extracted') AND $8 = 'pending' THEN status
+             WHEN status IN ('downloaded', 'extracted', 'failed') AND $8 = 'pending' THEN status
              ELSE COALESCE($8, status)
            END,
            last_seen_at = NOW(),
@@ -179,7 +184,8 @@ export async function upsertDocument(input: UpsertDocumentInput): Promise<Docume
        label = COALESCE(EXCLUDED.label, listing_documents.label),
        page_count = COALESCE(EXCLUDED.page_count, listing_documents.page_count),
        status = CASE
-         WHEN listing_documents.status IN ('downloaded', 'extracted') AND EXCLUDED.status = 'pending'
+         WHEN listing_documents.status IN ('downloaded', 'extracted', 'failed')
+           AND EXCLUDED.status = 'pending'
            THEN listing_documents.status
          ELSE COALESCE(EXCLUDED.status, listing_documents.status)
        END,
@@ -245,6 +251,8 @@ export async function updateStatus(
     clearFailure?: boolean;
   },
 ): Promise<DocumentRow | null> {
+  // The casts type $8 to $10 up front. A bare parameter in a CASE test can leave
+  // Postgres unable to settle its type, and then every call fails.
   const rows = await query<DocumentDbRow>(
     `UPDATE listing_documents SET
        status = $2,
@@ -254,14 +262,12 @@ export async function updateStatus(
        size_bytes = COALESCE($6, size_bytes),
        page_count = COALESCE($7, page_count),
        last_error_code = CASE
-         WHEN $8 THEN NULL
-         WHEN $9 IS NOT NULL THEN $9
-         ELSE last_error_code
+         WHEN $8::boolean THEN NULL
+         ELSE COALESCE($9::text, last_error_code)
        END,
        last_error_message = CASE
-         WHEN $8 THEN NULL
-         WHEN $10 IS NOT NULL THEN $10
-         ELSE last_error_message
+         WHEN $8::boolean THEN NULL
+         ELSE COALESCE($10::text, last_error_message)
        END,
        updated_at = NOW()
      WHERE id = $1

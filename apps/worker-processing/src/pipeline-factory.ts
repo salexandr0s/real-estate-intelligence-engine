@@ -5,8 +5,8 @@
 
 import { loadConfig } from '@immoradar/config';
 import { FullIngestionPipeline } from '@immoradar/ingestion';
-import type { FullIngestionPipelineDeps } from '@immoradar/ingestion';
-import type { BaselineLookup, ListingStatus, GeocodePrecision } from '@immoradar/contracts';
+import type { FullIngestionPipelineDeps, RescoreDeps } from '@immoradar/ingestion';
+import type { ListingStatus, GeocodePrecision } from '@immoradar/contracts';
 import type { Queue } from 'bullmq';
 import {
   computeContentHash,
@@ -87,7 +87,21 @@ function getDocumentQueue(): Queue<DocumentProcessingJobData> {
   return _documentQueue;
 }
 
-export function buildPipelineDeps(): FullIngestionPipelineDeps {
+async function getSourceHealthScore(sourceId: number): Promise<number> {
+  const source = await sources.findById(sourceId);
+  if (!source) return 50;
+  return HEALTH_STATUS_SCORES[source.healthStatus] ?? 50;
+}
+
+async function getLocationConfidence(listingId: number): Promise<number> {
+  const listing = await listings.findById(listingId);
+  if (!listing) return 50;
+  const precision = listing.geocodePrecision as GeocodePrecision | null;
+  if (!precision) return 50;
+  return GEOCODE_PRECISION_SCORES[precision] ?? 50;
+}
+
+function buildPipelineDeps(): FullIngestionPipelineDeps {
   return {
     raw: {
       upsertRawSnapshot: async (input) => {
@@ -163,22 +177,14 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
       },
     },
     scoreAndAlert: {
-      findBaseline: async (districtNo, operationType, propertyType, areaBucket, roomBucket) => {
-        const result = await marketBaselines.findBaselineWithFallback({
+      findBaseline: (districtNo, operationType, propertyType, areaBucket, roomBucket) =>
+        marketBaselines.findScoringBaselines({
           districtNo,
           operationType,
           propertyType,
           areaBucket,
           roomBucket,
-        });
-        const bl: BaselineLookup = {
-          districtBaselinePpsqmEur: result.baseline?.medianPpsqmEur ?? null,
-          bucketBaselinePpsqmEur: result.baseline?.medianPpsqmEur ?? null,
-          bucketSampleSize: result.baseline?.sampleSize ?? 0,
-          fallbackLevel: result.fallbackLevel,
-        };
-        return bl;
-      },
+        }),
       scoreListing,
       persistScore: async (listingId, listingVersionId, score) => {
         await listingScores.insertScore(listingId, listingVersionId, score);
@@ -274,17 +280,32 @@ export function buildPipelineDeps(): FullIngestionPipelineDeps {
         }
       }
     },
-    getSourceHealthScore: async (sourceId: number) => {
-      const source = await sources.findById(sourceId);
-      if (!source) return 50;
-      return HEALTH_STATUS_SCORES[source.healthStatus] ?? 50;
-    },
-    getLocationConfidence: async (listingId: number) => {
-      const listing = await listings.findById(listingId);
-      if (!listing) return 50;
-      const precision = listing.geocodePrecision as GeocodePrecision | null;
-      if (!precision) return 50;
-      return GEOCODE_PRECISION_SCORES[precision] ?? 50;
+    getSourceHealthScore,
+    getLocationConfidence,
+  };
+}
+
+/**
+ * Rescoring reads and writes through ingestion's deps, so a rescored listing gets the score
+ * ingestion would give it now. It leaves the nearest-POI cache alone, which baselines don't change.
+ */
+export function buildRescoreDeps(): RescoreDeps {
+  const scoring = buildPipelineDeps().scoreAndAlert;
+  return {
+    findBaseline: scoring.findBaseline,
+    scoreListing: scoring.scoreListing,
+    findPreviousPrice: scoring.findPreviousPrice,
+    computeProximity: scoring.computeProximity,
+    getListingCoordinates: scoring.getListingCoordinates,
+    findLatestBaselineDate: scoring.findLatestBaselineDate,
+    persistScore: scoring.persistScore,
+    updateListingScore: scoring.updateListingScore,
+    getSourceHealthScore,
+    getLocationConfidence,
+    findActiveListings: listings.findActiveForRescore,
+    findLatestVersion: async (listingId) => {
+      const [latest] = await listingVersions.findByListingId(listingId, 1);
+      return latest ? { id: latest.id, versionReason: latest.versionReason } : null;
     },
   };
 }

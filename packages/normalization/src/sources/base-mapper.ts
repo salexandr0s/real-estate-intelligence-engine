@@ -9,6 +9,7 @@ import type {
   OperationType,
   PropertyType,
 } from '@immoradar/contracts';
+import { CURRENT_NORMALIZATION_VERSION } from '@immoradar/contracts';
 import { createLogger } from '@immoradar/observability';
 import {
   parseEurPrice,
@@ -28,8 +29,6 @@ import { resolveDistrict, postalCodeToDistrict } from '../district/lookup.js';
 import { normalizePropertyType, normalizeOperationType } from '../canonical/property-type.js';
 
 const logger = createLogger('normalization');
-
-const NORMALIZATION_VERSION = 2;
 
 /**
  * Maps source-reported availability strings to canonical listing statuses.
@@ -80,7 +79,7 @@ const _HARD_FAIL_FIELDS = [
  */
 export class BaseSourceMapper implements SourceNormalizer {
   readonly sourceCode: string;
-  readonly normalizationVersion = NORMALIZATION_VERSION;
+  readonly normalizationVersion = CURRENT_NORMALIZATION_VERSION;
 
   constructor(sourceCode: string) {
     this.sourceCode = sourceCode;

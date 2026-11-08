@@ -17,7 +17,7 @@ interface CrossSourceFields {
  * Computes a SHA-256 cross-source fingerprint from normalized address,
  * living area, and price (rounded to nearest 1000 EUR).
  *
- * Returns a hex string, or null if insufficient data (needs at least
+ * Returns a hex string, or null if insufficient data (needs a street
  * address + one of area or price).
  */
 export function computeCrossSourceFingerprint(
@@ -75,14 +75,15 @@ function normalizeGermanStreet(raw: string): string {
 
 /**
  * Builds a normalized address string from available location fields.
- * Returns null if no usable address components exist.
+ * Returns null without a street: postal code and city alone are shared by every
+ * listing in the district, so unrelated listings would get the same fingerprint.
  */
 function buildNormalizedAddress(listing: Partial<CanonicalListingInput>): string | null {
-  const parts: string[] = [];
+  const street = listing.street ? normalizeGermanStreet(listing.street) : '';
+  if (!street) return null;
 
-  if (listing.street) {
-    parts.push(normalizeGermanStreet(listing.street));
-  }
+  const parts: string[] = [street];
+
   if (listing.houseNumber) {
     parts.push(listing.houseNumber.toLowerCase().trim());
   }
@@ -93,7 +94,7 @@ function buildNormalizedAddress(listing: Partial<CanonicalListingInput>): string
     parts.push(listing.city.toLowerCase().trim());
   }
 
-  // Need at least city/postal + street for a meaningful address
+  // A street name alone repeats across towns, so it needs a house number, postal code or city
   if (parts.length < 2) return null;
 
   return parts.join('|');

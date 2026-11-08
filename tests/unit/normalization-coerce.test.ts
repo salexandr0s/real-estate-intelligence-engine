@@ -93,6 +93,27 @@ describe('parseSqm', () => {
     expect(result.value).toBeNull();
     expect(result.warning).not.toBeNull();
   });
+
+  it('rejects a million m² or more, as from a misread price or phone number', () => {
+    expect(parseSqm('999999').value).toBe(999999);
+    expect(parseSqm('1000000').value).toBeNull();
+    expect(parseSqm('+43 1 000 00 00').warning?.code).toBe('area_parse_failed');
+    expect(parseSqm(1_000_000).warning?.code).toBe('area_invalid_number');
+  });
+
+  it('reads dots that group thousands as separators, as in "1.866,52 m²"', () => {
+    expect(parseSqm('1.866,52 m²').value).toBe(1866.52);
+    expect(parseSqm('1.866').value).toBe(1866);
+    expect(parseSqm('78.5').value).toBe(78.5);
+    expect(parseSqm('120,5').value).toBe(120.5);
+    expect(parseSqm('1866.52').value).toBe(1866.52);
+  });
+
+  it('ignores the dot of an abbreviation such as "ca."', () => {
+    // Read as a decimal point, it made "ca. 85 m²" 0.85 m² and the price per m² 100 times too high.
+    expect(parseSqm('ca. 85 m²').value).toBe(85);
+    expect(parseSqm('ca. 1.866,52 m²').value).toBe(1866.52);
+  });
 });
 
 describe('parseRooms', () => {
@@ -112,6 +133,23 @@ describe('parseRooms', () => {
     const result = parseRooms(null);
     expect(result.value).toBeNull();
     expect(result.warning).toBeNull();
+  });
+
+  it('rejects more than 99 rooms, as from a misread price or phone number', () => {
+    expect(parseRooms('99').value).toBe(99);
+    expect(parseRooms('100').value).toBeNull();
+    expect(parseRooms('0660 0000000').warning?.code).toBe('rooms_parse_failed');
+    expect(parseRooms(120).warning?.code).toBe('rooms_invalid_number');
+  });
+
+  it('rejects a figure with thousands separators instead of reading its first group', () => {
+    expect(parseRooms('1.866').value).toBeNull();
+    expect(parseRooms('1.866,52').value).toBeNull();
+    expect(parseRooms('3.5').value).toBe(3.5);
+  });
+
+  it('ignores the dot of an abbreviation such as "ca."', () => {
+    expect(parseRooms('ca. 3 Zimmer').value).toBe(3);
   });
 });
 

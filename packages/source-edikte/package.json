@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "@immoradar/contracts": "*",
-    "@immoradar/documents": "*",
     "@immoradar/scraper-core": "*"
   },
   "devDependencies": {
+    "@immoradar/normalization": "*",
     "vitest": "^4.1.12"
   }
 }

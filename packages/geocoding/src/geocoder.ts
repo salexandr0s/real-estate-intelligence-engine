@@ -4,9 +4,11 @@
  * Priority order:
  * 0. Skip if listing already has coordinates (source_exact / source_approx)
  * 1. Street + postal code → Nominatim (precision: street)
- * 2. NLP street extraction from text → Nominatim (precision: street)
- * 3. NLP U-Bahn station match from text → direct coords (precision: street)
- * 4. Postal code → Nominatim (precision: postal_code)
+ * 2. NLP street extraction from text → Nominatim (precision: street, or estimated for
+ *    the midpoint of several streets)
+ * 3. NLP U-Bahn station match from text → direct coords (precision: street, or
+ *    estimated for the midpoint of several stations)
+ * 4. Postal code → Nominatim (precision: district)
  * 5. District centroid from postal code (precision: district)
  * 6. District centroid from district number (precision: district)
  * 7. NLP district extraction from text → centroid (precision: district)

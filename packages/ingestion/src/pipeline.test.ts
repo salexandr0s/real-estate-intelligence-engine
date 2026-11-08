@@ -212,15 +212,24 @@ function toExistingListing(listing: CanonicalListingInput): ExistingListing {
 }
 
 /** Keeps raw snapshots, the listing, its versions and their scores in memory, as the database would. */
-function createStatefulPipeline() {
+function createStatefulPipeline(existing: CanonicalListingInput | null = null) {
   const rawIdsByHash = new Map<string, number>();
   const versions: StoredVersion[] = [];
+  const pricesByVersionId = new Map<number, number | null>();
   const scoredVersionIds: number[] = [];
-  let stored: CanonicalListingInput | null = null;
+  let stored: CanonicalListingInput | null = existing;
 
   const scoreAndAlert = scoreAndAlertMocks();
   scoreAndAlert.persistScore.mockImplementation(async (_listingId: number, versionId: number) => {
     scoredVersionIds.push(versionId);
+  });
+  // Like the query: the price of the second latest version that has one, and none when the
+  // latest priced version is a backfill.
+  scoreAndAlert.findPreviousPrice.mockImplementation(async () => {
+    const priced = versions.filter((v) => pricesByVersionId.get(v.id) != null);
+    const [previous, latest] = priced.slice(-2);
+    if (!previous || !latest || latest.versionReason === 'backfill') return null;
+    return pricesByVersionId.get(previous.id) ?? null;
   });
 
   const pipeline = new FullIngestionPipeline(
@@ -253,6 +262,7 @@ function createStatefulPipeline() {
             versionReason: input.versionReason,
           };
           versions.push(version);
+          pricesByVersionId.set(version.id, input.listPriceEurCents);
           return version;
         },
         updateScrapeRunNormalizationCounts: async () => {},
@@ -318,6 +328,75 @@ describe('FullIngestionPipeline scoring', () => {
 
     expect((await pipeline.ingestDetailCapture(baseCapture, 1, 99)).scoring).toBeNull();
     expect(scoredVersionIds).toEqual([1]);
+  });
+});
+
+/**
+ * An existing listing from the previous normalization version, its price cleared the way
+ * migration 029 cleared findmyhome's postal codes.
+ */
+function listingFromPreviousNormalization(): CanonicalListingInput {
+  const { listing } = new TestNormalizer().normalize(baseCapture.payload, {
+    sourceId: 1,
+    sourceListingKey: 'edikte:abc',
+    rawListingId: 100,
+    scrapeRunId: 98,
+    canonicalUrl: baseCapture.canonicalUrl,
+    detailUrl: baseCapture.detailUrl,
+  });
+  if (!listing) throw new Error('TestNormalizer returned no listing');
+  return {
+    ...listing,
+    listPriceEurCents: null,
+    contentFingerprint: 'fingerprint-from-previous-normalization',
+    normalizationVersion: CURRENT_NORMALIZATION_VERSION - 1,
+  };
+}
+
+describe('FullIngestionPipeline normalization upgrades', () => {
+  const filterMatch = {
+    evaluatedIds: [7],
+    matched: [{ filterId: 7, userId: 5, alertChannels: ['in_app'] }],
+  };
+
+  // An upgrade that writes no version leaves the listing unscored, and one classed as a price
+  // change sends each matching filter a false Preisänderung alert for the cleared price.
+  it('scores an upgraded listing under a backfill version without alerting its filters', async () => {
+    const { pipeline, versions, scoredVersionIds, scoreAndAlert } = createStatefulPipeline(
+      listingFromPreviousNormalization(),
+    );
+    scoreAndAlert.findMatchingFilters.mockResolvedValue(filterMatch);
+
+    const result = await pipeline.ingestDetailCapture(baseCapture, 1, 99);
+
+    expect(versions).toEqual([
+      { id: 1, versionNo: 1, rawListingId: 101, versionReason: 'backfill' },
+    ]);
+    expect(scoredVersionIds).toEqual([1]);
+    expect(result.scoring?.alertsCreated).toBe(0);
+    expect(scoreAndAlert.createAlert).not.toHaveBeenCalled();
+    expect(scoreAndAlert.updateMatchedAt).not.toHaveBeenCalled();
+  });
+
+  // The backfill stamps the current version, so the next real change alerts again, and the drop
+  // is measured from the corrected price the backfill version stored.
+  it('alerts a price drop after the backfill, measured from the backfilled price', async () => {
+    const { pipeline, versions, scoreAndAlert } = createStatefulPipeline(
+      listingFromPreviousNormalization(),
+    );
+    scoreAndAlert.findMatchingFilters.mockResolvedValue(filterMatch);
+    scoreAndAlert.createAlert.mockResolvedValue({ id: 1 });
+
+    await pipeline.ingestDetailCapture(baseCapture, 1, 99);
+    const result = await pipeline.ingestDetailCapture(priceCut, 1, 99);
+
+    expect(versions.map((v) => v.versionReason)).toEqual(['backfill', 'price_change']);
+    expect(result.scoring?.alertsCreated).toBe(1);
+    expect(scoreAndAlert.createAlert).toHaveBeenCalledTimes(1);
+    expect(scoreAndAlert.createAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ alertType: 'price_drop', listingVersionId: 2 }),
+    );
+    expect(scoreAndAlert.updateMatchedAt).toHaveBeenCalledWith([7]);
   });
 });
 

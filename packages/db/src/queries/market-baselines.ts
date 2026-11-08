@@ -1,4 +1,10 @@
+import type { BaselineLookup } from '@immoradar/contracts';
 import { query } from '../client.js';
+
+/** Bucket value of the rows that cover every area and room count. */
+export const ALL_BUCKETS = 'all';
+
+const DEFAULT_CITY = 'Wien';
 
 // ── Row types ───────────────────────────────────────────────────────────────
 
@@ -67,8 +73,8 @@ function toMarketBaselineRow(row: MarketBaselineDbRow): MarketBaselineRow {
 
 // ── Queries ─────────────────────────────────────────────────────────────────
 
+/** One baseline row of a run. The run's date applies to all of them. */
 export interface UpsertBaselineInput {
-  baselineDate: Date;
   city: string;
   districtNo: number | null;
   operationType: string;
@@ -85,46 +91,61 @@ export interface UpsertBaselineInput {
 }
 
 /**
- * Upsert a market baseline on the composite unique key
- * (baseline_date, city, district_no, operation_type, property_type,
- *  area_bucket, room_bucket, source_scope).
+ * Upserts a run's baselines in one statement, so scoring reads either all of the day's rows or
+ * none of them. Written one at a time, the city-wide rows came first and shadowed yesterday's
+ * district rows until the run reached each district. Each row's dimensions must be unique
+ * within the batch. The key treats a NULL district_no as equal to another NULL (migration 027),
+ * so a city-wide row updates in place like a district row. Returns the number of rows written.
  */
-export async function upsertBaseline(input: UpsertBaselineInput): Promise<MarketBaselineRow> {
-  const rows = await query<MarketBaselineDbRow>(
-    `INSERT INTO market_baselines (
-       baseline_date, city, district_no,
-       operation_type, property_type,
-       area_bucket, room_bucket, source_scope,
-       sample_size, median_ppsqm_eur,
-       trimmed_mean_ppsqm_eur, p25_ppsqm_eur, p75_ppsqm_eur, stddev_ppsqm_eur
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-     ON CONFLICT (baseline_date, city, district_no, operation_type, property_type, area_bucket, room_bucket, source_scope)
-     DO UPDATE SET
-       sample_size = EXCLUDED.sample_size,
-       median_ppsqm_eur = EXCLUDED.median_ppsqm_eur,
-       trimmed_mean_ppsqm_eur = EXCLUDED.trimmed_mean_ppsqm_eur,
-       p25_ppsqm_eur = EXCLUDED.p25_ppsqm_eur,
-       p75_ppsqm_eur = EXCLUDED.p75_ppsqm_eur,
-       stddev_ppsqm_eur = EXCLUDED.stddev_ppsqm_eur
-     RETURNING *`,
+export async function upsertBaselines(
+  baselineDate: Date,
+  baselines: readonly UpsertBaselineInput[],
+): Promise<number> {
+  if (baselines.length === 0) return 0;
+  const rows = await query<{ written: string }>(
+    `WITH written AS (
+       INSERT INTO market_baselines (
+         baseline_date, city, district_no,
+         operation_type, property_type,
+         area_bucket, room_bucket, source_scope,
+         sample_size, median_ppsqm_eur,
+         trimmed_mean_ppsqm_eur, p25_ppsqm_eur, p75_ppsqm_eur, stddev_ppsqm_eur
+       )
+       SELECT $1::date, b.*
+       FROM unnest(
+         $2::text[], $3::smallint[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[],
+         $9::integer[], $10::numeric[], $11::numeric[], $12::numeric[], $13::numeric[],
+         $14::numeric[]
+       ) AS b
+       ON CONFLICT (baseline_date, city, district_no, operation_type, property_type, area_bucket, room_bucket, source_scope)
+       DO UPDATE SET
+         sample_size = EXCLUDED.sample_size,
+         median_ppsqm_eur = EXCLUDED.median_ppsqm_eur,
+         trimmed_mean_ppsqm_eur = EXCLUDED.trimmed_mean_ppsqm_eur,
+         p25_ppsqm_eur = EXCLUDED.p25_ppsqm_eur,
+         p75_ppsqm_eur = EXCLUDED.p75_ppsqm_eur,
+         stddev_ppsqm_eur = EXCLUDED.stddev_ppsqm_eur
+       RETURNING 1
+     )
+     SELECT count(*) AS written FROM written`,
     [
-      input.baselineDate,
-      input.city,
-      input.districtNo,
-      input.operationType,
-      input.propertyType,
-      input.areaBucket,
-      input.roomBucket,
-      input.sourceScope ?? 'all_sources',
-      input.sampleSize,
-      input.medianPpsqmEur,
-      input.trimmedMeanPpsqmEur ?? null,
-      input.p25PpsqmEur ?? null,
-      input.p75PpsqmEur ?? null,
-      input.stddevPpsqmEur ?? null,
+      baselineDate,
+      baselines.map((b) => b.city),
+      baselines.map((b) => b.districtNo),
+      baselines.map((b) => b.operationType),
+      baselines.map((b) => b.propertyType),
+      baselines.map((b) => b.areaBucket),
+      baselines.map((b) => b.roomBucket),
+      baselines.map((b) => b.sourceScope ?? 'all_sources'),
+      baselines.map((b) => b.sampleSize),
+      baselines.map((b) => b.medianPpsqmEur),
+      baselines.map((b) => b.trimmedMeanPpsqmEur ?? null),
+      baselines.map((b) => b.p25PpsqmEur ?? null),
+      baselines.map((b) => b.p75PpsqmEur ?? null),
+      baselines.map((b) => b.stddevPpsqmEur ?? null),
     ],
   );
-  return toMarketBaselineRow(rows[0]!);
+  return Number(rows[0]?.written ?? 0);
 }
 
 /**
@@ -152,86 +173,111 @@ export async function findBaseline(
   return row ? toMarketBaselineRow(row) : null;
 }
 
-/**
- * Find a baseline with progressive fallbacks:
- *
- * 1. Exact match: district + type + area_bucket + room_bucket
- * 2. District + type only (any bucket)
- * 3. City-wide + type + area_bucket + room_bucket
- * 4. City-wide + type only
- *
- * Returns the best match and which fallback level was used.
- */
-export async function findBaselineWithFallback(params: {
+export type BaselineFallbackLevel = BaselineLookup['fallbackLevel'];
+
+export interface BaselineQuery {
   districtNo: number | null;
   operationType: string;
   propertyType: string;
   areaBucket: string;
   roomBucket: string;
   city?: string;
-}): Promise<{
-  baseline: MarketBaselineRow | null;
-  fallbackLevel: 'district_bucket' | 'district_type' | 'city_bucket' | 'city_type' | 'none';
-}> {
-  const city = params.city ?? 'Wien';
+}
 
-  // Level 1: Exact district + bucket match
-  if (params.districtNo != null) {
-    const exact = await findBaseline(
-      params.districtNo,
+function fallbackLevelOf(row: MarketBaselineRow): Exclude<BaselineFallbackLevel, 'none'> {
+  const allBuckets = row.areaBucket === ALL_BUCKETS;
+  if (row.districtNo != null) return allBuckets ? 'district_type' : 'district_bucket';
+  return allBuckets ? 'city_type' : 'city_bucket';
+}
+
+/**
+ * The bucket baseline: the most specific row of the newest baseline date that has one. A row
+ * from an older run loses to a newer, broader one, because the listings behind it may be gone.
+ * Within one date the order is:
+ *
+ * 1. district_bucket: the district's row for the listing's area and room buckets
+ * 2. district_type: the district's row for all buckets
+ * 3. city_bucket: the city-wide row for the listing's buckets
+ * 4. city_type: the city-wide row for all buckets
+ *
+ * Returns the row and the level it matched.
+ */
+export async function findBaselineWithFallback(params: BaselineQuery): Promise<{
+  baseline: MarketBaselineRow | null;
+  fallbackLevel: BaselineFallbackLevel;
+}> {
+  // A NULL district matches no district row, so only the city-wide levels remain.
+  const rows = await query<MarketBaselineDbRow>(
+    `SELECT * FROM market_baselines
+     WHERE city = $1
+       AND operation_type = $2
+       AND property_type = $3
+       AND source_scope = 'all_sources'
+       AND (district_no = $4 OR district_no IS NULL)
+       AND ((area_bucket = $5 AND room_bucket = $6) OR (area_bucket = $7 AND room_bucket = $7))
+     ORDER BY baseline_date DESC, district_no IS NULL, area_bucket = $7, id DESC
+     LIMIT 1`,
+    [
+      params.city ?? DEFAULT_CITY,
       params.operationType,
       params.propertyType,
+      params.districtNo,
       params.areaBucket,
       params.roomBucket,
-    );
-    if (exact) {
-      return { baseline: exact, fallbackLevel: 'district_bucket' };
-    }
-
-    // Level 2: District + type (ignore buckets -- take the one with largest sample)
-    const districtType = await query<MarketBaselineDbRow>(
-      `SELECT * FROM market_baselines
-       WHERE district_no = $1
-         AND operation_type = $2
-         AND property_type = $3
-         AND city = $4
-       ORDER BY sample_size DESC, baseline_date DESC
-       LIMIT 1`,
-      [params.districtNo, params.operationType, params.propertyType, city],
-    );
-    if (districtType[0]) {
-      return { baseline: toMarketBaselineRow(districtType[0]), fallbackLevel: 'district_type' };
-    }
-  }
-
-  // Level 3: City-wide + bucket match (district_no IS NULL)
-  const cityBucket = await findBaseline(
-    null,
-    params.operationType,
-    params.propertyType,
-    params.areaBucket,
-    params.roomBucket,
+      ALL_BUCKETS,
+    ],
   );
-  if (cityBucket) {
-    return { baseline: cityBucket, fallbackLevel: 'city_bucket' };
-  }
+  const row = rows[0];
+  if (!row) return { baseline: null, fallbackLevel: 'none' };
+  const baseline = toMarketBaselineRow(row);
+  return { baseline, fallbackLevel: fallbackLevelOf(baseline) };
+}
 
-  // Level 4: City-wide + type only (ignore buckets)
-  const cityType = await query<MarketBaselineDbRow>(
+/**
+ * The district's all-bucket row of the newest baseline date, or the city-wide one when the
+ * district has none on that date.
+ */
+async function findDistrictMedianBaseline(
+  params: BaselineQuery,
+): Promise<MarketBaselineRow | null> {
+  const rows = await query<MarketBaselineDbRow>(
     `SELECT * FROM market_baselines
-     WHERE district_no IS NULL
-       AND operation_type = $1
-       AND property_type = $2
-       AND city = $3
-     ORDER BY sample_size DESC, baseline_date DESC
+     WHERE city = $1
+       AND operation_type = $2
+       AND property_type = $3
+       AND source_scope = 'all_sources'
+       AND (district_no = $4 OR district_no IS NULL)
+       AND area_bucket = $5
+       AND room_bucket = $5
+     ORDER BY baseline_date DESC, district_no IS NULL, id DESC
      LIMIT 1`,
-    [params.operationType, params.propertyType, city],
+    [
+      params.city ?? DEFAULT_CITY,
+      params.operationType,
+      params.propertyType,
+      params.districtNo,
+      ALL_BUCKETS,
+    ],
   );
-  if (cityType[0]) {
-    return { baseline: toMarketBaselineRow(cityType[0]), fallbackLevel: 'city_type' };
-  }
+  const row = rows[0];
+  return row ? toMarketBaselineRow(row) : null;
+}
 
-  return { baseline: null, fallbackLevel: 'none' };
+/**
+ * The two medians a score compares a listing with. The district median comes from the
+ * district's all-bucket row and the bucket median from findBaselineWithFallback, so the
+ * district price score and the undervaluation score each measure their own discount. They
+ * share a row only when no bucket-specific row exists.
+ */
+export async function findScoringBaselines(params: BaselineQuery): Promise<BaselineLookup> {
+  const bucket = await findBaselineWithFallback(params);
+  const district = await findDistrictMedianBaseline(params);
+  return {
+    districtBaselinePpsqmEur: district?.medianPpsqmEur ?? null,
+    bucketBaselinePpsqmEur: bucket.baseline?.medianPpsqmEur ?? null,
+    bucketSampleSize: bucket.baseline?.sampleSize ?? 0,
+    fallbackLevel: bucket.fallbackLevel,
+  };
 }
 
 /** Find the most recent baseline_date across all baselines. */

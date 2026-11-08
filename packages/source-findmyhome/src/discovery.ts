@@ -251,7 +251,7 @@ function normalizeAustrianPrice(raw: string): string {
 /**
  * Decode common HTML entities found in German text.
  */
-function decodeHtmlEntities(text: string): string {
+export function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

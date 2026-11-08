@@ -5,7 +5,7 @@
 
 import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job } from 'bullmq';
-import type { DetailCapture, SourceRawListingBase } from '@immoradar/contracts';
+import type { DetailCapture, OperationType, SourceRawListingBase } from '@immoradar/contracts';
 import { createLogger } from '@immoradar/observability';
 import {
   QUEUE_NAMES,
@@ -29,13 +29,18 @@ type DetailOutcome = rawSightings.DetailOutcomeInput['outcome'];
  * `parsed` when it gave a listing, `inconclusive` when it loaded but gave neither. Null for a
  * page that answered with an error status, which says nothing about the listing. Gone comes
  * first, because a status-only update on a page that didn't parse still returns a listing ID.
+ * The operation type is the ingested listing's, so a sale listing that says "vermietet" counts
+ * as parsed, as it does in the pipeline.
  */
 export function detailOutcome(
   capture: Pick<DetailCapture<SourceRawListingBase>, 'responseStatus' | 'availabilityStatus'>,
   listingId: number,
+  operationType: OperationType | null | undefined,
 ): DetailOutcome | null {
   const status = capture.responseStatus;
-  if (resolveLifecycleStatus(capture.availabilityStatus, status) != null) return 'gone';
+  if (resolveLifecycleStatus(capture.availabilityStatus, status, operationType) != null) {
+    return 'gone';
+  }
   if (listingId > 0) return 'parsed';
   // Jobs queued before captures recorded a status have none, and they came from pages that loaded.
   if (status == null || (status >= 200 && status < 300)) return 'inconclusive';
@@ -97,7 +102,11 @@ export function createIngestionWorker(): Worker<ProcessingJobData> {
 
       // Jobs queued before sightings existed have no sighting to update.
       const outcome = sightingKey
-        ? detailOutcome(detailCapture, result.normalization.listingId)
+        ? detailOutcome(
+            detailCapture,
+            result.normalization.listingId,
+            result.normalization.listing?.operationType,
+          )
         : null;
       if (sightingKey && outcome) {
         // The fetch time, not the job's, so a retried job records the same outcome again.

@@ -1,4 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
+import { headlineNotices, headlineText, isChallengePage } from '@immoradar/scraper-core';
 import type { WohnnetDetailDTO, JsonLdProduct, WohnnetDataLayer } from './dto.js';
 import { extractIdFromUrl } from './discovery.js';
 
@@ -40,7 +41,7 @@ export function parseDetailPage(
     (jsonLd?.description ? stripHtml(jsonLd.description) : null) ?? extractHtmlDescription(html);
 
   // -- Price: JSON-LD offers > dataLayer dL-preis
-  const priceRaw = jsonLd?.offers?.price ?? dataLayer?.['dL-preis'] ?? null;
+  const priceRaw = extractOfferPrice(jsonLd?.offers) ?? dataLayer?.['dL-preis'] ?? null;
 
   // -- Area: dataLayer dL-flaeche (Austrian decimal)
   const livingAreaRaw =
@@ -199,28 +200,39 @@ function buildFailedCapture(
   };
 }
 
+/**
+ * A page that carries the listing as Product JSON-LD or in the dataLayer is live, whatever its
+ * text says: descriptions say "bereits vermietet" for a flat sold with a tenant in it. Without
+ * either, status words count only as notices in the title and h1.
+ */
 export function detectDetailAvailability(html: string): SourceAvailability {
-  // Check for explicit unavailability markers
-  if (/nicht\s+mehr\s+verf[uü]gbar/i.test(html)) return { status: 'removed' };
-  if (/Objekt\s+nicht\s+gefunden/i.test(html)) return { status: 'not_found' };
-  if (/bereits\s+verkauft/i.test(html)) return { status: 'sold' };
-  if (/bereits\s+vermietet/i.test(html)) return { status: 'rented' };
-  if (/reserviert/i.test(html)) return { status: 'reserved' };
-  if (/Inserat\s+wurde\s+deaktiviert/i.test(html)) return { status: 'removed' };
+  if (extractProductJsonLd(html)?.name) return { status: 'available' };
+  if (extractDataLayer(html)?.['dL-preis']) return { status: 'available' };
 
-  // Check for anti-bot indicators
-  if (/captcha|blocked|challenge/i.test(html)) return { status: 'blocked' };
+  const headline = headlineText(html);
+  if (/nicht\s+mehr\s+verf[uü]gbar/i.test(headline)) return { status: 'removed' };
+  if (/Objekt\s+nicht\s+gefunden/i.test(headline)) return { status: 'not_found' };
+  const notices = headlineNotices(headline);
+  if (notices.has('sold')) return { status: 'sold' };
+  if (notices.has('rented')) return { status: 'rented' };
+  if (notices.has('reserved')) return { status: 'reserved' };
+  if (/Inserat\s+wurde\s+deaktiviert/i.test(headline)) return { status: 'removed' };
 
-  // If JSON-LD Product present with name, it is available
-  const jsonLd = extractProductJsonLd(html);
-  if (jsonLd?.name) return { status: 'available' };
+  if (isChallengePage(html)) return { status: 'blocked' };
 
-  // If dataLayer present with price, it is available
-  const dataLayer = extractDataLayer(html);
-  if (dataLayer?.['dL-preis']) return { status: 'available' };
-
-  // No clear signal
   return { status: 'unknown' };
+}
+
+/** The first price among the offers. Live pages list offers in an array, priced as numbers. */
+function extractOfferPrice(offers: JsonLdProduct['offers']): string | null {
+  const list: unknown[] = Array.isArray(offers) ? offers : [offers];
+  for (const offer of list) {
+    if (!offer || typeof offer !== 'object') continue;
+    const price: unknown = (offer as Record<string, unknown>)['price'];
+    if (typeof price === 'number' && Number.isFinite(price)) return String(price);
+    if (typeof price === 'string' && price.trim() !== '') return price.trim();
+  }
+  return null;
 }
 
 // -- Primary: JSON-LD Product -------------------------------------------------

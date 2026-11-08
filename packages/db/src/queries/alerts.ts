@@ -389,8 +389,10 @@ export async function create(input: AlertCreate): Promise<AlertRow | null> {
 }
 
 /**
- * Check if a cluster-aware alert already exists for a given filter + cluster + type.
+ * Check if a cluster-aware alert exists for a given filter + cluster + type.
  * Used to suppress duplicate alerts for the same property across multiple sources.
+ * Only alerts matched in the last 30 days count, so one old alert can't silence
+ * a cluster forever.
  */
 export async function existsForCluster(
   userFilterId: number,
@@ -403,6 +405,7 @@ export async function existsForCluster(
        WHERE user_filter_id = $1
          AND cluster_fingerprint = $2
          AND alert_type = $3
+         AND matched_at >= NOW() - INTERVAL '30 days'
      ) AS exists`,
     [userFilterId, clusterFingerprint, alertType],
   );

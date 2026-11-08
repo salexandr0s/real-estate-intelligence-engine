@@ -290,7 +290,7 @@
 - [x] Implement outlier clipping (10% trimmed mean in baseline worker)
 - [x] Implement minimum sample thresholds (min 3 samples per bucket)
 - [x] Implement fallback hierarchy (`findBaselineWithFallback()` — 4-level cascade)
-- [x] Persist `market_baselines` (`upsertBaseline()` with ON CONFLICT)
+- [x] Persist `market_baselines` (`upsertBaselines()`, one ON CONFLICT statement per run)
 - [x] Add baseline regression tests (`tests/unit/scoring-baselines.test.ts`)
 
 ### Feature extraction

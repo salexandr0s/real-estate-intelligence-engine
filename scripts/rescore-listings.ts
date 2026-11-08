@@ -1,24 +1,15 @@
 #!/usr/bin/env npx tsx
 /**
- * Rescore all active listings against current baselines.
+ * Rescore active listings against current baselines, the same way the rescore worker does.
  * Usage: npx tsx scripts/rescore-listings.ts [--source <code>] [--limit N] [--dry-run]
  */
 
 import { loadConfig } from '@immoradar/config';
 import { createLogger } from '@immoradar/observability';
-import {
-  query,
-  sources,
-  listings,
-  listingScores,
-  listingVersions,
-  marketBaselines,
-  proximity,
-  closePool,
-} from '@immoradar/db';
-import { scoreListing, SCORE_VERSION } from '@immoradar/scoring';
-import { getAreaBucket, getRoomBucket } from '@immoradar/contracts';
-import type { ScoreInput, BaselineLookup } from '@immoradar/contracts';
+import { sources, closePool } from '@immoradar/db';
+import { SCORE_VERSION } from '@immoradar/scoring';
+import { rescoreListingsInBatches } from '@immoradar/ingestion';
+import { buildRescoreDeps } from '../apps/worker-processing/src/pipeline-factory.js';
 
 const log = createLogger('rescore');
 
@@ -40,7 +31,11 @@ function parseArgs(): CliArgs {
       i++;
     }
     if (args[i] === '--limit' && args[i + 1]) {
-      limit = parseInt(args[i + 1]!, 10);
+      const parsed = Number(args[i + 1]);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error(`--limit needs a positive whole number, got "${args[i + 1]}"`);
+      }
+      limit = parsed;
       i++;
     }
     if (args[i] === '--dry-run') {
@@ -49,26 +44,6 @@ function parseArgs(): CliArgs {
   }
 
   return { sourceCode, limit, dryRun };
-}
-
-interface ListingRow {
-  id: number;
-  title: string;
-  description: string | null;
-  operation_type: string;
-  property_type: string;
-  district_no: number | null;
-  city: string;
-  list_price_eur_cents: string | null;
-  living_area_sqm: string | null;
-  usable_area_sqm: string | null;
-  rooms: string | null;
-  completeness_score: string;
-  first_seen_at: Date;
-  last_price_change_at: Date | null;
-  current_score: string | null;
-  latitude: string | null;
-  longitude: string | null;
 }
 
 async function main(): Promise<void> {
@@ -94,140 +69,20 @@ async function main(): Promise<void> {
     sourceId = source.id;
   }
 
-  const conditions: string[] = ["listing_status = 'active'"];
-  const params: unknown[] = [];
-
-  if (sourceId != null) {
-    params.push(sourceId);
-    conditions.push(`source_id = $${params.length}`);
-  }
-
-  const whereClause = conditions.join(' AND ');
-  const limitClause = limit != null ? `LIMIT $${params.length + 1}` : '';
-  if (limit != null) params.push(limit);
-
-  const rows = await query<ListingRow>(
-    `SELECT id, title, description, operation_type, property_type,
-            district_no, city, list_price_eur_cents, living_area_sqm,
-            usable_area_sqm, rooms, completeness_score, first_seen_at,
-            last_price_change_at, current_score, latitude, longitude
-     FROM listings
-     WHERE ${whereClause}
-     ${limitClause}`,
-    params,
-  );
-
-  log.info(`Found ${rows.length} active listings to rescore`);
-
-  let rescored = 0;
-  let unchanged = 0;
-  let errors = 0;
-
-  for (const row of rows) {
-    try {
-      const priceCents = row.list_price_eur_cents != null ? Number(row.list_price_eur_cents) : null;
-      const livingArea = row.living_area_sqm != null ? Number(row.living_area_sqm) : null;
-      const usableArea = row.usable_area_sqm != null ? Number(row.usable_area_sqm) : null;
-      const effectiveArea = livingArea ?? usableArea;
-      const rooms = row.rooms != null ? Number(row.rooms) : null;
-
-      const pricePerSqmEur =
-        priceCents != null && effectiveArea != null && effectiveArea > 0
-          ? Math.round((priceCents / 100 / effectiveArea) * 100) / 100
-          : null;
-
-      const areaBucket = getAreaBucket(effectiveArea);
-      const roomBucket = getRoomBucket(rooms);
-
-      const baseline = await marketBaselines.findBaselineWithFallback({
-        districtNo: row.district_no,
-        operationType: row.operation_type,
-        propertyType: row.property_type,
-        areaBucket,
-        roomBucket,
-      });
-
-      const bl: BaselineLookup = {
-        districtBaselinePpsqmEur: baseline.baseline?.medianPpsqmEur ?? null,
-        bucketBaselinePpsqmEur: baseline.baseline?.medianPpsqmEur ?? null,
-        bucketSampleSize: baseline.baseline?.sampleSize ?? 0,
-        fallbackLevel: baseline.fallbackLevel,
-      };
-
-      // Compute proximity data for location score
-      const lat = row.latitude != null ? Number(row.latitude) : null;
-      const lon = row.longitude != null ? Number(row.longitude) : null;
-      let proximityData = null;
-      if (lat != null && lon != null) {
-        try {
-          proximityData = await proximity.computeProximity(lat, lon);
-        } catch {
-          // Proximity failure is non-fatal — location score will default to 50
-        }
-      }
-
-      const input: ScoreInput = {
-        listingId: row.id,
-        listingVersionId: 0,
-        pricePerSqmEur,
-        districtNo: row.district_no,
-        operationType: row.operation_type,
-        propertyType: row.property_type,
-        livingAreaSqm: livingArea,
-        rooms,
-        city: row.city,
-        title: row.title,
-        description: row.description,
-        firstSeenAt: row.first_seen_at,
-        lastPriceChangeAt: row.last_price_change_at,
-        recentPriceDropPct: 0,
-        relistDetected: false,
-        completenessScore: Number(row.completeness_score),
-        sourceHealthScore: 90,
-        locationConfidence: 75,
-        proximityData,
-      };
-
-      const score = scoreListing(input, bl);
-      const oldScore = row.current_score != null ? Number(row.current_score) : null;
-
-      if (oldScore != null && Math.abs(score.overallScore - oldScore) < 0.5) {
-        unchanged++;
-        continue;
-      }
-
-      if (!dryRun) {
-        // Get latest version ID for this listing
-        const versions = await listingVersions.findByListingId(row.id, 1);
-        const latestVersionId = versions[0]?.id ?? 0;
-        if (latestVersionId > 0) {
-          await listingScores.insertScore(row.id, latestVersionId, score);
-        }
-        await listings.updateScore(row.id, score.overallScore, new Date());
-      }
-
-      rescored++;
-      log.info(
-        `Rescored listing ${row.id}: ${oldScore?.toFixed(1) ?? 'null'} → ${score.overallScore.toFixed(1)}`,
-        {
-          title: row.title.slice(0, 50),
-        },
-      );
-    } catch (err) {
-      errors++;
-      log.error(`Failed to rescore listing ${row.id}`, {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  const totals = await rescoreListingsInBatches(buildRescoreDeps(), {
+    sourceId,
+    ...(limit != null ? { maxListings: limit } : {}),
+    dryRun,
+    onBatch: (running) => log.info(`Examined ${running.examined} listings so far`, running),
+  });
 
   console.log('\n=== Rescore Summary ===');
   console.log(`Source:         ${sourceCode ?? 'all'}`);
   console.log(`Score version:  ${SCORE_VERSION}`);
-  console.log(`Total active:   ${rows.length}`);
-  console.log(`Rescored:       ${rescored}`);
-  console.log(`Unchanged:      ${unchanged}`);
-  console.log(`Errors:         ${errors}`);
+  console.log(`Examined:       ${totals.examined}`);
+  console.log(`Rescored:       ${totals.rescored}`);
+  console.log(`Unchanged:      ${totals.unchanged}`);
+  console.log(`Errors:         ${totals.failed}`);
   console.log(`Dry run:        ${dryRun}`);
   console.log('======================\n');
 

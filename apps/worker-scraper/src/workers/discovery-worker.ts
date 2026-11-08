@@ -40,6 +40,7 @@ import type { DetailJobData, DiscoveryJobData } from '@immoradar/scraper-core';
 import { untilAborted } from '../abort.js';
 import { getAdapter } from '../adapter-registry.js';
 import { acquirePageSlot, createScrapeContext } from '../browser-pool.js';
+import { throwIfBlockedSearchPage } from '../page-errors.js';
 import { applyRunToSource, checkSourceRunnable } from '../source-guard.js';
 import type { ScraperWorkerDeps } from './worker-deps.js';
 
@@ -198,12 +199,15 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
         log.warn('Search page loaded without its selector', { sourceCode, url: plan.url });
       }
       const html = await page.content();
-      return await getAdapter(sourceCode).extractDiscoveryPage({
+      const result = await getAdapter(sourceCode).extractDiscoveryPage({
         page,
         requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
         profile,
         scrapeRunId,
       });
+      // Failing the page opens the breaker and records the block on the run.
+      throwIfBlockedSearchPage(result.items.length, html);
+      return result;
     } finally {
       releaseSlot();
     }

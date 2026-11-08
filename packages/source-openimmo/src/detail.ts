@@ -1,4 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
+import { isChallengePage } from '@immoradar/scraper-core';
 import type { OpenImmoDetailDTO, OpenImmoListingData } from './dto.js';
 
 const BASE_URL = 'https://www.openimmo.at';
@@ -166,7 +167,7 @@ export function detectDetailAvailability(html: string): SourceAvailability {
   if (/objekt\s+nicht\s+gefunden|nicht\s+mehr\s+verf[uü]gbar|not\s+found/i.test(html)) {
     return { status: 'not_found' };
   }
-  if (/captcha|blocked|challenge/i.test(html)) return { status: 'blocked' };
+  if (isChallengePage(html)) return { status: 'blocked' };
 
   return { status: 'unknown' };
 }

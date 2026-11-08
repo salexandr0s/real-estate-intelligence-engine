@@ -14,7 +14,8 @@ import { parseDiscoveryPage } from './discovery.js';
 import { parseDetailPage, detectDetailAvailability } from './detail.js';
 
 const BASE_URL = 'https://immobilien.derstandard.at';
-const SEARCH_PATH = '/immobiliensuche/i/kaufen/wohnung/wien';
+// Apartments for sale in Vienna. The old /immobiliensuche/i/kaufen/wohnung/wien path answers 404.
+const SEARCH_PATH = '/suche/wien/kaufen-wohnung';
 
 export class DerStandardAdapter implements SourceAdapter<
   DerStandardDiscoveryItem,
@@ -22,7 +23,7 @@ export class DerStandardAdapter implements SourceAdapter<
 > {
   readonly sourceCode = 'derstandard';
   readonly sourceName = 'derstandard.at Immobilien';
-  readonly parserVersion = 2;
+  readonly parserVersion = 3;
 
   async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);
@@ -32,7 +33,7 @@ export class DerStandardAdapter implements SourceAdapter<
     return [
       {
         url: url.toString(),
-        waitForSelector: '.resultitem a[href*="/detail/"]',
+        waitForSelector: 'a[href*="/detail/"]',
         waitForTimeout: 5000,
         metadata: { page: 1 },
       },
@@ -58,7 +59,7 @@ export class DerStandardAdapter implements SourceAdapter<
   ): Promise<RequestPlan | null> {
     return {
       url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
-      waitForSelector: '#listing-detail-data',
+      waitForSelector: 'h1',
       waitForTimeout: 5000,
     };
   }

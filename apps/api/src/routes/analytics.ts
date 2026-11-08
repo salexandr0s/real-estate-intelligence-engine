@@ -50,14 +50,19 @@ function toApiBaseline(row: BaselineDbRow) {
 
 export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/analytics/baselines', async (_request, reply) => {
+    // The newest run only: the app adds sample sizes and weights medians across these rows, so
+    // older dates would count the same listings again. The all-bucket rows repeat the bucket
+    // rows' listings, so they stay out for the same reason.
     const rows = await query<BaselineDbRow>(
       `SELECT city, district_no, operation_type, property_type,
               area_bucket, room_bucket, sample_size,
               median_ppsqm_eur, p25_ppsqm_eur, p75_ppsqm_eur,
               stddev_ppsqm_eur, baseline_date
        FROM market_baselines
+       WHERE baseline_date = (SELECT MAX(baseline_date) FROM market_baselines)
+         AND area_bucket <> 'all'
        ORDER BY city, district_no NULLS LAST, area_bucket
-       LIMIT 500`,
+       LIMIT 2000`,
       [],
     );
     return reply.send({
@@ -171,6 +176,9 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
           ROUND(AVG(p75_ppsqm_eur)::numeric, 2) AS avg_p75
         FROM market_baselines
         WHERE district_no IS NOT NULL
+          -- Dates before the all-bucket rows existed have only bucket rows. Averaging bucket
+          -- rows on every date keeps the trend comparable, and keeps samples counted once.
+          AND area_bucket <> 'all'
           AND ($1::smallint IS NULL OR district_no = $1)
           AND ($2::text IS NULL OR operation_type = $2)
           AND ($3::text IS NULL OR property_type = $3)

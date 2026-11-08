@@ -227,13 +227,24 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
 
 // ── Mutations ───────────────────────────────────────────────────────────────
 
+// The geocoder reads the structured address and also finds streets, stations and
+// districts in the title and description. A change to any of them may let a listing
+// that failed to geocode succeed, so the change clears the geocoding backoff.
+const GEOCODE_INPUTS_CHANGED = `(listings.street, listings.house_number, listings.postal_code,
+           listings.city, listings.district_no, listings.address_display, listings.title,
+           listings.description)
+         IS DISTINCT FROM (EXCLUDED.street, EXCLUDED.house_number, EXCLUDED.postal_code,
+           EXCLUDED.city, EXCLUDED.district_no, EXCLUDED.address_display, EXCLUDED.title,
+           EXCLUDED.description)`;
+
 /**
  * Idempotent upsert on (source_id, source_listing_key).
  *
  * On insert: sets first_seen_at and last_seen_at.
  * On update: updates last_seen_at, detects price/status/content changes
  * and sets the corresponding timestamps. Stored coordinates stay when the source
- * sends none, so a geocoded listing isn't geocoded again on every fetch.
+ * sends none, so a geocoded listing isn't geocoded again on every fetch. A new
+ * address restarts the geocoding attempts.
  */
 export async function upsertListing(input: CanonicalListingInput): Promise<ListingRow> {
   const rows = await query<ListingDbRow>(
@@ -291,6 +302,14 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
          WHEN EXCLUDED.latitude IS NOT NULL THEN EXCLUDED.geocode_precision
          ELSE listings.geocode_precision
        END,
+       geocode_attempts = CASE
+         WHEN ${GEOCODE_INPUTS_CHANGED} THEN 0
+         ELSE listings.geocode_attempts
+       END,
+       geocode_next_attempt_at = CASE
+         WHEN ${GEOCODE_INPUTS_CHANGED} THEN NULL
+         ELSE listings.geocode_next_attempt_at
+       END,
        list_price_eur_cents = EXCLUDED.list_price_eur_cents,
        monthly_operating_cost_eur_cents = EXCLUDED.monthly_operating_cost_eur_cents,
        reserve_fund_eur_cents = EXCLUDED.reserve_fund_eur_cents,
@@ -320,11 +339,16 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        normalized_payload = EXCLUDED.normalized_payload,
        completeness_score = EXCLUDED.completeness_score,
        content_fingerprint = EXCLUDED.content_fingerprint,
-       cross_source_fingerprint = COALESCE(EXCLUDED.cross_source_fingerprint, listings.cross_source_fingerprint),
+       -- The mapper computes the fingerprint from this row's own address, so a listing
+       -- that loses its street loses its fingerprint too, and leaves its cluster.
+       cross_source_fingerprint = EXCLUDED.cross_source_fingerprint,
        normalization_version = EXCLUDED.normalization_version,
        last_seen_at = NOW(),
+       -- A price that appears, disappears or changes with our normalization version is no
+       -- repricing by the source.
        last_price_change_at = CASE
-         WHEN listings.list_price_eur_cents IS DISTINCT FROM EXCLUDED.list_price_eur_cents
+         WHEN listings.list_price_eur_cents <> EXCLUDED.list_price_eur_cents
+           AND listings.normalization_version = EXCLUDED.normalization_version
          THEN NOW()
          ELSE listings.last_price_change_at
        END,
@@ -768,16 +792,131 @@ export async function updateGeocodeSource(id: number, geocodeSource: string): Pr
   );
 }
 
+/** The listing fields a rescore reads. */
+export type RescoreCandidate = Pick<
+  ListingRow,
+  | 'id'
+  | 'sourceId'
+  | 'title'
+  | 'description'
+  | 'operationType'
+  | 'propertyType'
+  | 'districtNo'
+  | 'city'
+  | 'listPriceEurCents'
+  | 'livingAreaSqm'
+  | 'usableAreaSqm'
+  | 'rooms'
+  | 'completenessScore'
+  | 'firstSeenAt'
+  | 'lastPriceChangeAt'
+  | 'currentScore'
+>;
+
+type RescoreCandidateDbRow = Pick<
+  ListingDbRow,
+  | 'id'
+  | 'source_id'
+  | 'title'
+  | 'description'
+  | 'operation_type'
+  | 'property_type'
+  | 'district_no'
+  | 'city'
+  | 'list_price_eur_cents'
+  | 'living_area_sqm'
+  | 'usable_area_sqm'
+  | 'rooms'
+  | 'completeness_score'
+  | 'first_seen_at'
+  | 'last_price_change_at'
+  | 'current_score'
+>;
+
+function numberOrNull(value: string | null): number | null {
+  return value != null ? Number(value) : null;
+}
+
+/**
+ * One page of active listings in id order, starting after `afterListingId`. A null `sourceId`
+ * takes every source. Only the fields a rescore reads are loaded, so a page stays small.
+ */
+export async function findActiveForRescore(page: {
+  sourceId: number | null;
+  afterListingId: number;
+  limit: number;
+}): Promise<RescoreCandidate[]> {
+  const rows = await query<RescoreCandidateDbRow>(
+    `SELECT id, source_id, title, description, operation_type, property_type, district_no, city,
+            list_price_eur_cents, living_area_sqm, usable_area_sqm, rooms, completeness_score,
+            first_seen_at, last_price_change_at, current_score
+     FROM listings
+     WHERE listing_status = 'active'
+       AND id > $1
+       AND ($2::bigint IS NULL OR source_id = $2)
+     ORDER BY id
+     LIMIT $3`,
+    [page.afterListingId, page.sourceId, page.limit],
+  );
+  return rows.map((row) => ({
+    id: Number(row.id),
+    sourceId: Number(row.source_id),
+    title: row.title,
+    description: row.description,
+    operationType: row.operation_type,
+    propertyType: row.property_type,
+    districtNo: row.district_no,
+    city: row.city,
+    listPriceEurCents: numberOrNull(row.list_price_eur_cents),
+    livingAreaSqm: numberOrNull(row.living_area_sqm),
+    usableAreaSqm: numberOrNull(row.usable_area_sqm),
+    rooms: numberOrNull(row.rooms),
+    completenessScore: Number(row.completeness_score),
+    firstSeenAt: row.first_seen_at,
+    lastPriceChangeAt: row.last_price_change_at,
+    currentScore: numberOrNull(row.current_score),
+  }));
+}
+
+/** After this many geocoding jobs a listing waits for a new address. */
+const MAX_GEOCODE_ATTEMPTS = 5;
+
+/** Active listings without coordinates whose next geocoding attempt is due. */
+const GEOCODE_DUE = `latitude IS NULL
+       AND listing_status = 'active'
+       AND geocode_attempts < ${MAX_GEOCODE_ATTEMPTS}
+       AND (geocode_next_attempt_at IS NULL OR geocode_next_attempt_at <= NOW())`;
+
 export async function findListingsNeedingGeocoding(limit = 100): Promise<ListingRow[]> {
   const rows = await query<ListingDbRow>(
     `SELECT * FROM listings
-     WHERE latitude IS NULL
-     AND listing_status = 'active'
+     WHERE ${GEOCODE_DUE}
      ORDER BY first_seen_at DESC
      LIMIT $1`,
     [limit],
   );
   return rows.map(toListingRow);
+}
+
+/**
+ * Counts a geocoding attempt for each listing that is still due, and holds its next
+ * attempt back 1, 2, 4 and then 8 days, so a listing that never geocodes stops
+ * getting a job every hour. Returns the ids it counted. A listing that an
+ * overlapping run counted first is left out, so only one run enqueues it.
+ */
+export async function markGeocodeAttempts(listingIds: number[]): Promise<number[]> {
+  if (listingIds.length === 0) return [];
+  // SET reads the old geocode_attempts, so the first attempt waits 2^0 = 1 day.
+  const rows = await query<{ id: string }>(
+    `UPDATE listings
+     SET geocode_attempts = geocode_attempts + 1,
+         geocode_next_attempt_at = NOW() + make_interval(days => power(2, geocode_attempts)::int)
+     WHERE id = ANY($1::bigint[])
+       AND ${GEOCODE_DUE}
+     RETURNING id`,
+    [listingIds],
+  );
+  return rows.map((row) => Number(row.id));
 }
 
 // ── CSV Export ─────────────────────────────────────────────────────────────

@@ -1,5 +1,4 @@
 import type { SourceRawListingBase } from '@immoradar/contracts';
-import type { FactExtraction } from '@immoradar/documents';
 
 /**
  * Item extracted from the Domino search results table.
@@ -24,7 +23,7 @@ export interface EdikteDiscoveryItem {
 }
 
 /**
- * Structured data extracted from an edict detail page + attached PDFs.
+ * Structured data extracted from an edict detail page.
  */
 export interface EdikteDetailDTO extends SourceRawListingBase {
   /** Domino document ID */
@@ -49,8 +48,4 @@ export interface EdikteDetailDTO extends SourceRawListingBase {
   publicationDate: string | null;
   /** Domino property category label */
   sourcePropertyCategory: string | null;
-  /** Facts extracted from PDF text or AI */
-  pdfExtractedFacts: FactExtraction[];
-  /** How the PDF was processed */
-  pdfExtractionMethod: 'text' | 'ai' | 'none';
 }

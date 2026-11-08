@@ -10,7 +10,7 @@ export const SEARCH_FORM_URL = `${BASE_URL}${EX_DB_PATH}/suche?OpenForm`;
 /** Source identifier */
 export const SOURCE_CODE = 'edikte';
 export const SOURCE_NAME = 'Ediktsdatei Justiz (Zwangsversteigerungen)';
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 
 /**
  * Map Domino VKat category codes to canonical property types.
