@@ -787,6 +787,92 @@ export async function updateGeocodeSource(id: number, geocodeSource: string): Pr
   );
 }
 
+/** The listing fields a rescore reads. */
+export type RescoreCandidate = Pick<
+  ListingRow,
+  | 'id'
+  | 'sourceId'
+  | 'title'
+  | 'description'
+  | 'operationType'
+  | 'propertyType'
+  | 'districtNo'
+  | 'city'
+  | 'listPriceEurCents'
+  | 'livingAreaSqm'
+  | 'usableAreaSqm'
+  | 'rooms'
+  | 'completenessScore'
+  | 'firstSeenAt'
+  | 'lastPriceChangeAt'
+  | 'currentScore'
+>;
+
+type RescoreCandidateDbRow = Pick<
+  ListingDbRow,
+  | 'id'
+  | 'source_id'
+  | 'title'
+  | 'description'
+  | 'operation_type'
+  | 'property_type'
+  | 'district_no'
+  | 'city'
+  | 'list_price_eur_cents'
+  | 'living_area_sqm'
+  | 'usable_area_sqm'
+  | 'rooms'
+  | 'completeness_score'
+  | 'first_seen_at'
+  | 'last_price_change_at'
+  | 'current_score'
+>;
+
+function numberOrNull(value: string | null): number | null {
+  return value != null ? Number(value) : null;
+}
+
+/**
+ * One page of active listings in id order, starting after `afterListingId`. A null `sourceId`
+ * takes every source. Only the fields a rescore reads are loaded, so a page stays small.
+ */
+export async function findActiveForRescore(page: {
+  sourceId: number | null;
+  afterListingId: number;
+  limit: number;
+}): Promise<RescoreCandidate[]> {
+  const rows = await query<RescoreCandidateDbRow>(
+    `SELECT id, source_id, title, description, operation_type, property_type, district_no, city,
+            list_price_eur_cents, living_area_sqm, usable_area_sqm, rooms, completeness_score,
+            first_seen_at, last_price_change_at, current_score
+     FROM listings
+     WHERE listing_status = 'active'
+       AND id > $1
+       AND ($2::bigint IS NULL OR source_id = $2)
+     ORDER BY id
+     LIMIT $3`,
+    [page.afterListingId, page.sourceId, page.limit],
+  );
+  return rows.map((row) => ({
+    id: Number(row.id),
+    sourceId: Number(row.source_id),
+    title: row.title,
+    description: row.description,
+    operationType: row.operation_type,
+    propertyType: row.property_type,
+    districtNo: row.district_no,
+    city: row.city,
+    listPriceEurCents: numberOrNull(row.list_price_eur_cents),
+    livingAreaSqm: numberOrNull(row.living_area_sqm),
+    usableAreaSqm: numberOrNull(row.usable_area_sqm),
+    rooms: numberOrNull(row.rooms),
+    completenessScore: Number(row.completeness_score),
+    firstSeenAt: row.first_seen_at,
+    lastPriceChangeAt: row.last_price_change_at,
+    currentScore: numberOrNull(row.current_score),
+  }));
+}
+
 /** After this many geocoding jobs a listing waits for a new address. */
 const MAX_GEOCODE_ATTEMPTS = 5;
 

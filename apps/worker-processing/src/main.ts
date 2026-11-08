@@ -9,11 +9,12 @@ import {
   removeSchedulersExcept,
   shouldRegisterAutomatedSchedules,
 } from '@immoradar/scraper-core';
-import type { MailboxSyncJobData } from '@immoradar/scraper-core';
-import { closePool, mailboxes } from '@immoradar/db';
+import type { BaselineJobData, MailboxSyncJobData } from '@immoradar/scraper-core';
+import { closePool, mailboxes, marketBaselines } from '@immoradar/db';
 import { createIngestionWorker } from './workers/ingestion-worker.js';
 import { createBaselineWorker } from './workers/baseline-worker.js';
 import { createClusterWorker } from './workers/cluster-worker.js';
+import { createRescoreWorker } from './workers/rescore-worker.js';
 import { createStaleCheckWorker } from './workers/stale-check-worker.js';
 
 const logger = createLogger('worker-processing');
@@ -86,6 +87,48 @@ async function syncMailboxSchedule(config: AppConfig): Promise<void> {
   }
 }
 
+const VIENNA_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Vienna',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** node-postgres parses a DATE column as local midnight, so the local getters give back the stored day. */
+function storedDay(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The scheduler runs baselines every 6 hours, but only while the app is open, so a day with the app
+ * closed leaves no baseline for today. This queues one run when the newest baseline is from before
+ * today in Vienna. It is part of the automated schedule, so it stays off when that is off.
+ */
+async function queueBaselineIfStale(config: AppConfig): Promise<void> {
+  if (!shouldRegisterAutomatedSchedules(config)) return;
+
+  const today = VIENNA_DATE.format(new Date());
+  const latest = await marketBaselines.findLatestBaselineDate();
+  if (latest && storedDay(latest) >= today) return;
+
+  const queue = createQueue<BaselineJobData>(QUEUE_NAMES.BASELINE);
+  try {
+    // One id per day, so a restart while the run still waits doesn't queue a second one.
+    await queue.add(
+      'baseline:recompute',
+      { triggeredBy: 'scheduler' },
+      { jobId: `baseline-boot-${today}` },
+    );
+    logger.info('Queued a baseline run because the newest baseline is from before today', {
+      latestBaselineDate: latest ? storedDay(latest) : null,
+    });
+  } finally {
+    await queue.close();
+  }
+}
+
 runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   const config = loadConfig();
   setLogLevel(config.logLevel as LogLevel);
@@ -125,6 +168,7 @@ runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   workers.set('ingestion', createIngestionWorker());
   workers.set('baseline', createBaselineWorker());
   workers.set('cluster', createClusterWorker());
+  workers.set('rescore', createRescoreWorker());
   workers.set('stale-check', createStaleCheckWorker());
 
   // Optional workers load on demand, so a feature that is off costs no memory. Canary pulls in
@@ -189,6 +233,16 @@ runMain('worker-processing', HARD_TIMEOUT_MS, async (lifecycle) => {
   } catch (err) {
     // The workers keep running, and the next start syncs the schedule again.
     logger.error('Could not sync the mailbox schedule', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (lifecycle.shutdownSignal.aborted) return;
+  try {
+    await queueBaselineIfStale(config);
+  } catch (err) {
+    // Scoring keeps the older baselines, and the 6-hourly schedule computes new ones.
+    logger.error('Could not queue the boot baseline run', {
       error: err instanceof Error ? err.message : String(err),
     });
   }

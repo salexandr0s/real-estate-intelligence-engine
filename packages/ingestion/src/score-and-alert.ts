@@ -24,7 +24,6 @@ const log = createLogger('ingestion:score-alert');
  */
 
 export interface ScoreAndAlertResult {
-  scored: boolean;
   overallScore: number | null;
   alertsCreated: number;
 }
@@ -106,6 +105,168 @@ export interface ScoreAndAlertDeps {
   enqueueDelivery?: (alertId: number, channel: AlertChannel, userId: number) => Promise<void>;
 }
 
+/** The deps a score reads. Ingestion and the rescore loop both score through computeListingScore. */
+export type ListingScoringDeps = Pick<
+  ScoreAndAlertDeps,
+  | 'findBaseline'
+  | 'scoreListing'
+  | 'findPreviousPrice'
+  | 'computeProximity'
+  | 'getListingCoordinates'
+  | 'cacheNearestPois'
+  | 'findLatestBaselineDate'
+>;
+
+/** The listing fields a score reads. */
+export interface ScoredListing {
+  title: string;
+  description: string | null;
+  operationType: string;
+  propertyType: string;
+  districtNo: number | null;
+  city: string;
+  listPriceEurCents: number | null;
+  livingAreaSqm: number | null;
+  usableAreaSqm: number | null;
+  rooms: number | null;
+  completenessScore: number;
+  firstSeenAt: Date;
+  lastPriceChangeAt: Date | null;
+}
+
+export interface ListingScoreParams {
+  listingId: number;
+  listingVersionId: number;
+  /** Null for a listing without versions, which counts as no relist. */
+  versionReason: VersionReason | null;
+  listing: ScoredListing;
+  sourceHealthScore: number;
+  locationConfidence: number;
+}
+
+/**
+ * Baselines older than this lower a score's confidence. They run every 6 hours while the app is
+ * open and once at processing boot when the newest is from before today, so only a missed day or
+ * more counts as stale.
+ */
+const BASELINE_STALE_HOURS = 48;
+
+/** The newest baseline date the stale warning last named, so a rescore logs it once, not per listing. */
+let staleWarningLoggedFor: number | null = null;
+
+/**
+ * Scores one listing and writes nothing, apart from the nearest-POI cache when the deps include
+ * it. Returns the score with its baseline provenance, and the previous price for alert matching.
+ */
+export async function computeListingScore(
+  deps: ListingScoringDeps,
+  params: ListingScoreParams,
+): Promise<{ score: ScoreResult; previousPrice: number | null }> {
+  const { listingId, listingVersionId, versionReason, listing } = params;
+
+  const effectiveArea = listing.livingAreaSqm ?? listing.usableAreaSqm ?? null;
+  const pricePerSqmEur =
+    listing.listPriceEurCents != null && effectiveArea != null && effectiveArea > 0
+      ? Math.round((listing.listPriceEurCents / 100 / effectiveArea) * 100) / 100
+      : null;
+
+  // 1. Look up baselines
+  const areaBucket = getAreaBucket(effectiveArea);
+  const roomBucket = getRoomBucket(listing.rooms);
+
+  const baseline = await deps.findBaseline(
+    listing.districtNo,
+    listing.operationType,
+    listing.propertyType,
+    areaBucket,
+    roomBucket,
+  );
+
+  // 1b. Check baseline staleness. Outdated baselines reduce confidence.
+  let baselineStale = false;
+  let baselineFreshnessHours: number | undefined;
+  if (deps.findLatestBaselineDate) {
+    const latestDate = await deps.findLatestBaselineDate();
+    if (latestDate) {
+      const ageHours = (Date.now() - latestDate.getTime()) / 3_600_000;
+      baselineFreshnessHours = Math.round(ageHours * 100) / 100;
+      if (ageHours > BASELINE_STALE_HOURS) {
+        baselineStale = true;
+        if (staleWarningLoggedFor !== latestDate.getTime()) {
+          staleWarningLoggedFor = latestDate.getTime();
+          log.warn('Market baselines are stale', {
+            latestBaselineDate: latestDate.toISOString(),
+            ageHours: Math.round(ageHours),
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Compute price history signals
+  let recentPriceDropPct = 0;
+  const previousPrice = await deps.findPreviousPrice(listingId);
+  if (previousPrice != null && listing.listPriceEurCents != null && previousPrice > 0) {
+    const priceDiff = previousPrice - listing.listPriceEurCents;
+    if (priceDiff > 0) {
+      recentPriceDropPct = priceDiff / previousPrice;
+    }
+  }
+
+  const relistDetected = versionReason === 'relist_detected';
+
+  // 2b. Compute proximity data for location score
+  let proximityData: ProximityInput | null = null;
+  const coords = await deps.getListingCoordinates(listingId);
+  if (coords) {
+    try {
+      proximityData = await deps.computeProximity(coords.latitude, coords.longitude);
+      // NOTE: Known perf opportunity: computeProximity and cacheNearestPois both
+      // call findNearby internally. Could share the result to avoid duplicate Haversine query.
+      await deps.cacheNearestPois?.(listingId, coords.latitude, coords.longitude);
+    } catch (err) {
+      log.warn('Proximity computation failed, using default', {
+        listingId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // 3. Score
+  const scoreInput: ScoreInput = {
+    listingId,
+    listingVersionId,
+    pricePerSqmEur,
+    districtNo: listing.districtNo,
+    operationType: listing.operationType,
+    propertyType: listing.propertyType,
+    livingAreaSqm: listing.livingAreaSqm,
+    rooms: listing.rooms,
+    city: listing.city,
+    title: listing.title,
+    description: listing.description,
+    firstSeenAt: listing.firstSeenAt,
+    lastPriceChangeAt: listing.lastPriceChangeAt,
+    completenessScore: listing.completenessScore,
+    sourceHealthScore: baselineStale
+      ? Math.round(params.sourceHealthScore * 0.7) // Penalize confidence when baselines are stale
+      : params.sourceHealthScore,
+    locationConfidence: params.locationConfidence,
+    recentPriceDropPct,
+    relistDetected,
+    proximityData,
+  };
+
+  const score = deps.scoreListing(scoreInput, baseline);
+
+  // 3a. Attach baseline provenance to score for persistence
+  score.baselineFallbackLevel = baseline.fallbackLevel;
+  score.baselineSampleSize = baseline.bucketSampleSize;
+  score.baselineFreshnessHours = baselineFreshnessHours;
+
+  return { score, previousPrice };
+}
+
 export class ScoreAndAlert {
   constructor(private readonly deps: ScoreAndAlertDeps) {}
 
@@ -135,103 +296,8 @@ export class ScoreAndAlert {
   }): Promise<ScoreAndAlertResult> {
     const { listingId, listingVersionId, versionReason, listing } = params;
 
-    const effectiveArea = listing.livingAreaSqm ?? listing.usableAreaSqm ?? null;
-    const pricePerSqmEur =
-      listing.listPriceEurCents != null && effectiveArea != null && effectiveArea > 0
-        ? Math.round((listing.listPriceEurCents / 100 / effectiveArea) * 100) / 100
-        : null;
-
-    // 1. Look up baselines
-    const areaBucket = getAreaBucket(effectiveArea);
-    const roomBucket = getRoomBucket(listing.rooms);
-
-    const baseline = await this.deps.findBaseline(
-      listing.districtNo,
-      listing.operationType,
-      listing.propertyType,
-      areaBucket,
-      roomBucket,
-    );
-
-    // 1b. Check baseline staleness — if baselines are outdated, reduce confidence
-    const BASELINE_STALE_HOURS = 4;
-    let baselineStale = false;
-    let baselineFreshnessHours: number | undefined;
-    if (this.deps.findLatestBaselineDate) {
-      const latestDate = await this.deps.findLatestBaselineDate();
-      if (latestDate) {
-        const ageHours = (Date.now() - latestDate.getTime()) / 3_600_000;
-        baselineFreshnessHours = Math.round(ageHours * 100) / 100;
-        if (ageHours > BASELINE_STALE_HOURS) {
-          baselineStale = true;
-          log.warn('Market baselines are stale', {
-            latestBaselineDate: latestDate.toISOString(),
-            ageHours: Math.round(ageHours),
-          });
-        }
-      }
-    }
-
-    // 2. Compute price history signals
-    let recentPriceDropPct = 0;
-    const previousPrice = await this.deps.findPreviousPrice(listingId);
-    if (previousPrice != null && listing.listPriceEurCents != null && previousPrice > 0) {
-      const priceDiff = previousPrice - listing.listPriceEurCents;
-      if (priceDiff > 0) {
-        recentPriceDropPct = priceDiff / previousPrice;
-      }
-    }
-
-    const relistDetected = versionReason === 'relist_detected';
-
-    // 2b. Compute proximity data for location score
-    let proximityData: ProximityInput | null = null;
-    const coords = await this.deps.getListingCoordinates(listingId);
-    if (coords) {
-      try {
-        proximityData = await this.deps.computeProximity(coords.latitude, coords.longitude);
-        // NOTE: Known perf opportunity — computeProximity and cacheNearestPois both
-        // call findNearby internally. Could share the result to avoid duplicate Haversine query.
-        await this.deps.cacheNearestPois?.(listingId, coords.latitude, coords.longitude);
-      } catch (err) {
-        log.warn('Proximity computation failed, using default', {
-          listingId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    // 3. Score
-    const scoreInput: ScoreInput = {
-      listingId,
-      listingVersionId,
-      pricePerSqmEur,
-      districtNo: listing.districtNo,
-      operationType: listing.operationType,
-      propertyType: listing.propertyType,
-      livingAreaSqm: listing.livingAreaSqm,
-      rooms: listing.rooms,
-      city: listing.city,
-      title: listing.title,
-      description: listing.description,
-      firstSeenAt: listing.firstSeenAt,
-      lastPriceChangeAt: listing.lastPriceChangeAt,
-      completenessScore: listing.completenessScore,
-      sourceHealthScore: baselineStale
-        ? Math.round(params.sourceHealthScore * 0.7) // Penalize confidence when baselines are stale
-        : params.sourceHealthScore,
-      locationConfidence: params.locationConfidence,
-      recentPriceDropPct,
-      relistDetected,
-      proximityData,
-    };
-
-    const score = this.deps.scoreListing(scoreInput, baseline);
-
-    // 3a. Attach baseline provenance to score for persistence
-    score.baselineFallbackLevel = baseline.fallbackLevel;
-    score.baselineSampleSize = baseline.bucketSampleSize;
-    score.baselineFreshnessHours = baselineFreshnessHours;
+    // 1 to 3. Look up baselines and score
+    const { score, previousPrice } = await computeListingScore(this.deps, params);
 
     // 4. Find matching filters
     const matchingFilters = await this.deps.findMatchingFilters({
@@ -408,7 +474,6 @@ export class ScoreAndAlert {
     });
 
     return {
-      scored: true,
       overallScore: score.overallScore,
       alertsCreated,
     };

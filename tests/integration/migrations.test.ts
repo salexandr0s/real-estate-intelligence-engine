@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { runMigrations, query } from '@immoradar/db';
+import { runMigrations, query, marketBaselines } from '@immoradar/db';
 import { DEFAULT_SOURCE_SEEDS, seed } from '../../packages/db/seeds/seed.js';
 import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
 
@@ -94,6 +94,32 @@ describe('migration quality', () => {
 
       const sources = await query<{ count: string }>('SELECT count(*)::text AS count FROM sources');
       expect(Number(sources[0]?.count)).toBe(DEFAULT_SOURCE_SEEDS.length);
+    });
+  });
+
+  describe('market baselines on migrated database', () => {
+    // A city-wide row has a NULL district_no. While the unique key treated NULLs as distinct,
+    // every baseline run inserted another copy of it instead of updating it.
+    it('keeps one city-wide row when the same baseline is upserted twice', async () => {
+      const baseline = {
+        baselineDate: new Date(2000, 0, 1),
+        city: 'Wien',
+        districtNo: null,
+        operationType: 'sale',
+        propertyType: 'apartment',
+        areaBucket: 'all',
+        roomBucket: 'all',
+        sampleSize: 10,
+        medianPpsqmEur: 5000,
+      };
+      await marketBaselines.upsertBaseline(baseline);
+      await marketBaselines.upsertBaseline({ ...baseline, sampleSize: 12, medianPpsqmEur: 5100 });
+
+      const rows = await query<{ sample_size: number; median_ppsqm_eur: string }>(
+        `SELECT sample_size, median_ppsqm_eur FROM market_baselines
+         WHERE baseline_date = DATE '2000-01-01' AND district_no IS NULL`,
+      );
+      expect(rows).toEqual([{ sample_size: 12, median_ppsqm_eur: '5100.00' }]);
     });
   });
 });
