@@ -1,7 +1,7 @@
 /**
  * BullMQ worker: fetches a listing's own page and hands the capture to processing. A page that is
- * gone (404 or 410) still goes to processing, so the listing gets retired. A blocked page fails the
- * job instead, because a challenge page holds no listing data.
+ * gone (404 or 410) still goes to processing, so the listing gets retired. A blocked or blank page
+ * fails the job instead, because neither holds listing data.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -24,6 +24,7 @@ import {
   createQueue,
   getQueuePrefix,
   getRedisConnection,
+  isEmptyDocument,
   navigateForCapture,
   pageNavigationDelay,
   setupRequestInterception,
@@ -46,6 +47,16 @@ export class BlockedPageError extends Error {
     // The classifier reads "challenge" as soft_anti_bot.
     super('Blocked by a challenge page');
     this.name = 'BlockedPageError';
+  }
+}
+
+/** The page loaded with nothing in it, so it says nothing about the listing. */
+export class EmptyPageError extends Error {
+  constructor() {
+    // The classifier reads "network error" as transient_network: the job retries, and the failure
+    // never counts toward switching the source off.
+    super('Empty document, retried as a network error');
+    this.name = 'EmptyPageError';
   }
 }
 
@@ -210,6 +221,10 @@ export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobDat
         navigationTimeoutMs: config.playwright.navigationTimeoutMs,
       });
       const html = await page.content();
+      // The status is the site's own answer that the listing is gone, whatever the page says.
+      const gone = navigation.status === 404 || navigation.status === 410;
+      // Sent on to processing, a blank page would count as a fetch that found no listing.
+      if (!gone && isEmptyDocument(html)) throw new EmptyPageError();
       const detailContext: DetailContext = {
         page,
         requestPlan: { ...plan, metadata: { ...plan.metadata, html } },
@@ -217,8 +232,6 @@ export function createDetailWorker(deps: ScraperWorkerDeps): Worker<DetailJobDat
         scrapeRunId,
       };
       const capture = await adapter.extractDetailPage(detailContext);
-      // The status is the site's own answer that the listing is gone, whatever the page says.
-      const gone = navigation.status === 404 || navigation.status === 410;
       const availability = gone ? 'not_found' : adapter.detectAvailability(detailContext).status;
       if (availability === 'blocked' || capture.extractionStatus === 'blocked') {
         throw new BlockedPageError();

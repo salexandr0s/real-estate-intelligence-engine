@@ -29,6 +29,7 @@ export {
 export { computeContentHash } from './capture/content-hash.js';
 export { headlineText } from './capture/headline-text.js';
 export { isChallengePage } from './capture/challenge-page.js';
+export { isEmptyDocument } from './capture/empty-document.js';
 
 // ── Health ───────────────────────────────────────────────────────────────────
 export { SourceCircuitBreaker, type CircuitState } from './health/circuit-breaker.js';
