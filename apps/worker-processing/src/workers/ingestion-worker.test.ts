@@ -67,29 +67,50 @@ describe('ingestion worker detail outcomes', () => {
     createIngestionWorker();
   });
 
-  it('marks the sighting ok when the listing was stored', async () => {
+  it('records a stored listing as parsed, at the time the page was fetched', async () => {
     hoisted.ingestDetailCapture.mockResolvedValue(ingestedListing(22));
 
-    await processJob(job());
+    await processJob(job({ extractedAt: '2026-11-01T10:00:00.000Z' }));
 
     expect(hoisted.recordDetailOutcome).toHaveBeenCalledWith({
       sourceId: 7,
       sourceListingKey: 'willhaben:1',
       detailUrl: 'https://example.test/listing/1',
-      outcome: 'ok',
+      outcome: 'parsed',
+      fetchedAt: new Date('2026-11-01T10:00:00.000Z'),
     });
   });
 
-  it('counts a loaded page without a listing as inconclusive unless it says the listing is gone', async () => {
+  // Only a parsed page shows the parser still works, and the stale check relies on that.
+  it.each<[string, string, Record<string, unknown>, number]>([
+    ['a loaded page with no listing', 'inconclusive', {}, 0],
+    ['a page saying the listing sold', 'gone', { availabilityStatus: 'sold' }, 0],
+    [
+      'a 404 that updated the stored listing',
+      'gone',
+      { availabilityStatus: 'not_found', responseStatus: 404 },
+      22,
+    ],
+    [
+      'a live page the parser called not found',
+      'inconclusive',
+      { availabilityStatus: 'not_found', responseStatus: 200 },
+      0,
+    ],
+  ])('records %s as %s', async (_, outcome, capture, listingId) => {
+    hoisted.ingestDetailCapture.mockResolvedValue(ingestedListing(listingId));
+
+    await processJob(job(capture));
+
+    expect(hoisted.recordDetailOutcome).toHaveBeenCalledWith(expect.objectContaining({ outcome }));
+  });
+
+  it('records nothing for an error page, which says nothing about the listing', async () => {
     hoisted.ingestDetailCapture.mockResolvedValue(ingestedListing(0));
 
-    await processJob(job());
-    await processJob(job({ availabilityStatus: 'sold' }));
-    // An error page says nothing about the listing.
-    await processJob(job({ responseStatus: 404 }));
+    await processJob(job({ responseStatus: 500 }));
 
-    const outcomes = hoisted.recordDetailOutcome.mock.calls.map(([input]) => input.outcome);
-    expect(outcomes).toEqual(['inconclusive', 'ok']);
+    expect(hoisted.recordDetailOutcome).not.toHaveBeenCalled();
   });
 
   it('skips jobs queued before sightings and never fails the ingest over the outcome', async () => {

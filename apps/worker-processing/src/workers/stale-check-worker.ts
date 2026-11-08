@@ -22,7 +22,7 @@ import {
   pruneFailureArtifacts,
 } from '@immoradar/scraper-core';
 import type { StaleCheckJobData } from '@immoradar/scraper-core';
-import { listings, listingVersions } from '@immoradar/db';
+import { listings } from '@immoradar/db';
 import { computeContentFingerprint } from '@immoradar/normalization';
 
 const log = createLogger('worker:stale-check');
@@ -86,30 +86,27 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
             listingStatus: 'expired',
           });
 
-          const updated = await listings.markExpiredStale(
-            listing.id,
-            expiredFingerprint,
-            EXPIRED_STATUS_RAW,
-          );
-          if (!updated) continue; // Another process changed it first
-
-          expired++;
-
-          await listingVersions.appendVersion({
-            listingId: listing.id,
-            rawListingId: listing.currentRawListingId,
-            versionReason: 'status_change',
-            contentFingerprint: expiredFingerprint,
-            listingStatus: 'expired',
-            listPriceEurCents: listing.listPriceEurCents,
-            livingAreaSqm: listing.livingAreaSqm,
-            pricePerSqmEur: listing.pricePerSqmEur,
-            normalizedSnapshot: {
-              ...listing.normalizedPayload,
+          const expiredNow = await listings.expireStale({
+            thresholdDays,
+            sourceStatusRaw: EXPIRED_STATUS_RAW,
+            version: {
+              listingId: listing.id,
+              rawListingId: listing.currentRawListingId,
+              versionReason: 'status_change',
+              contentFingerprint: expiredFingerprint,
               listingStatus: 'expired',
-              sourceStatusRaw: EXPIRED_STATUS_RAW,
+              listPriceEurCents: listing.listPriceEurCents,
+              livingAreaSqm: listing.livingAreaSqm,
+              pricePerSqmEur: listing.pricePerSqmEur,
+              normalizedSnapshot: {
+                ...listing.normalizedPayload,
+                listingStatus: 'expired',
+                sourceStatusRaw: EXPIRED_STATUS_RAW,
+              },
             },
           });
+          // False when a page parsed or the listing changed after the candidates were read.
+          if (expiredNow) expired++;
         } catch (err) {
           log.error('Failed to expire listing', {
             listingId: listing.id,

@@ -5,8 +5,7 @@ const hoisted = vi.hoisted(() => ({
   on: vi.fn(),
   reconcileLastSeen: vi.fn(),
   findExpiryCandidates: vi.fn(),
-  markExpiredStale: vi.fn(),
-  appendVersion: vi.fn(),
+  expireStale: vi.fn(),
   computeContentFingerprint: vi.fn(() => 'expired-fingerprint'),
   pruneFailureArtifacts: vi.fn(),
 }));
@@ -54,11 +53,7 @@ vi.mock('@immoradar/db', async () => {
       ...actual.listings,
       reconcileLastSeen: hoisted.reconcileLastSeen,
       findExpiryCandidates: hoisted.findExpiryCandidates,
-      markExpiredStale: hoisted.markExpiredStale,
-    },
-    listingVersions: {
-      ...actual.listingVersions,
-      appendVersion: hoisted.appendVersion,
+      expireStale: hoisted.expireStale,
     },
   };
 });
@@ -101,8 +96,7 @@ describe('createStaleCheckWorker', () => {
     hoisted.on.mockReset();
     hoisted.reconcileLastSeen.mockReset().mockResolvedValue(0);
     hoisted.findExpiryCandidates.mockReset();
-    hoisted.markExpiredStale.mockReset();
-    hoisted.appendVersion.mockReset();
+    hoisted.expireStale.mockReset();
     hoisted.computeContentFingerprint.mockClear();
     hoisted.pruneFailureArtifacts
       .mockReset()
@@ -121,19 +115,17 @@ describe('createStaleCheckWorker', () => {
   it('still runs the stale check when pruning fails', async () => {
     hoisted.pruneFailureArtifacts.mockRejectedValueOnce(new Error('EACCES: permission denied'));
     hoisted.findExpiryCandidates.mockResolvedValueOnce([candidate]);
-    hoisted.markExpiredStale.mockResolvedValue({ id: 123 });
-    hoisted.appendVersion.mockResolvedValue({ id: 999, versionNo: 4 });
+    hoisted.expireStale.mockResolvedValue(true);
 
     createStaleCheckWorker();
     await expect(hoisted.processor?.({ data: {} })).resolves.toBeUndefined();
 
-    expect(hoisted.markExpiredStale).toHaveBeenCalledTimes(1);
+    expect(hoisted.expireStale).toHaveBeenCalledTimes(1);
   });
 
   it('applies sightings first, then expires a candidate on the raw row it already has', async () => {
     hoisted.findExpiryCandidates.mockResolvedValueOnce([candidate]);
-    hoisted.markExpiredStale.mockResolvedValue({ id: 123 });
-    hoisted.appendVersion.mockResolvedValue({ id: 999, versionNo: 4 });
+    hoisted.expireStale.mockResolvedValue(true);
 
     createStaleCheckWorker();
     await hoisted.processor?.({ data: { thresholdDays: 7 } });
@@ -142,13 +134,10 @@ describe('createStaleCheckWorker', () => {
       hoisted.findExpiryCandidates.mock.invocationCallOrder[0]!,
     );
     expect(hoisted.findExpiryCandidates).toHaveBeenCalledWith(7);
-    expect(hoisted.markExpiredStale).toHaveBeenCalledWith(
-      123,
-      'expired-fingerprint',
-      'expired_revalidation_failed',
-    );
-    expect(hoisted.appendVersion).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(hoisted.expireStale).toHaveBeenCalledWith({
+      thresholdDays: 7,
+      sourceStatusRaw: 'expired_revalidation_failed',
+      version: expect.objectContaining({
         listingId: 123,
         rawListingId: 500,
         versionReason: 'status_change',
@@ -160,18 +149,17 @@ describe('createStaleCheckWorker', () => {
           sourceStatusRaw: 'expired_revalidation_failed',
         },
       }),
-    );
+    });
   });
 
   it('makes one pass, so a listing that keeps failing cannot spin the job', async () => {
     hoisted.findExpiryCandidates.mockResolvedValue([candidate, { ...candidate, id: 124 }]);
-    hoisted.markExpiredStale.mockRejectedValue(new Error('update failed'));
+    hoisted.expireStale.mockRejectedValue(new Error('update failed'));
 
     createStaleCheckWorker();
     await hoisted.processor?.({ data: {} });
 
     expect(hoisted.findExpiryCandidates).toHaveBeenCalledTimes(1);
-    expect(hoisted.markExpiredStale).toHaveBeenCalledTimes(2);
-    expect(hoisted.appendVersion).not.toHaveBeenCalled();
+    expect(hoisted.expireStale).toHaveBeenCalledTimes(2);
   });
 });

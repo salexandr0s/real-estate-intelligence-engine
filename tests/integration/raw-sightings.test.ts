@@ -180,14 +180,16 @@ describe('expiry candidates', () => {
     await giveThreeStrikes('gone');
   });
 
-  async function markOtherPageParsed() {
+  async function markOtherPage(outcome: 'parsed' | 'gone') {
     await rawSightings.recordDetailOutcome({
       sourceId,
       sourceListingKey: 'other-page',
       detailUrl: 'https://example.com/other-page',
-      outcome: 'ok',
+      outcome,
+      fetchedAt: new Date(),
     });
   }
+  const markOtherPageParsed = () => markOtherPage('parsed');
 
   it('needs another page on the source to have parsed after the last strike', async () => {
     // The strike is newer than every good page, as during a site redesign.
@@ -197,6 +199,11 @@ describe('expiry candidates', () => {
 
     const candidates = await listings.findExpiryCandidates(7);
     expect(candidates.map((c) => c.sourceListingKey)).toEqual(['gone']);
+  });
+
+  it('does not take a page that said its listing is gone as proof the parser works', async () => {
+    await markOtherPage('gone');
+    expect(await listings.findExpiryCandidates(7)).toEqual([]);
   });
 
   it('skips a source that is not healthy', async () => {
@@ -224,56 +231,105 @@ describe('expiry candidates', () => {
     expect(await listings.findExpiryCandidates(7)).toEqual([]);
   });
 
-  it('expires on the existing raw row and leaves last_seen_at alone', async () => {
-    const [before] = await query<{
-      id: string;
-      current_raw_listing_id: string;
-      last_seen_at: Date;
-    }>(
+  async function goneListing() {
+    const [row] = await query<{ id: string; current_raw_listing_id: string; last_seen_at: Date }>(
       `SELECT id, current_raw_listing_id, last_seen_at FROM listings WHERE source_listing_key = 'gone'`,
     );
-    const id = Number(before!.id);
-    const rawListingId = Number(before!.current_raw_listing_id);
-    const first = { listingId: id, rawListingId, listingStatus: 'active' as const };
+    const id = Number(row!.id);
+    const rawListingId = Number(row!.current_raw_listing_id);
+    const expiry = (version: Partial<listingVersions.AppendVersionInput> = {}) =>
+      listings.expireStale({
+        thresholdDays: 7,
+        sourceStatusRaw: 'expired_revalidation_failed',
+        version: {
+          listingId: id,
+          rawListingId,
+          listingStatus: 'expired',
+          versionReason: 'status_change',
+          contentFingerprint: 'd'.repeat(64),
+          normalizedSnapshot: {},
+          ...version,
+        },
+      });
+    const state = async () => {
+      const [listing] = await query<{
+        listing_status: string;
+        current_raw_listing_id: string;
+        last_seen_at: Date;
+      }>(
+        `SELECT listing_status, current_raw_listing_id, last_seen_at FROM listings WHERE id = $1`,
+        [id],
+      );
+      const versions = await query<{ version_no: number; raw_listing_id: string }>(
+        `SELECT version_no, raw_listing_id FROM listing_versions WHERE listing_id = $1 ORDER BY version_no`,
+        [id],
+      );
+      return { listing: listing!, versions };
+    };
+    return { id, rawListingId, lastSeenAt: row!.last_seen_at, expiry, state };
+  }
 
+  it('expires on the existing raw row with its version, and leaves last_seen_at alone', async () => {
+    await markOtherPageParsed();
+    const gone = await goneListing();
     await listingVersions.appendVersion({
-      ...first,
+      listingId: gone.id,
+      rawListingId: gone.rawListingId,
+      listingStatus: 'active',
       versionReason: 'first_seen',
       contentFingerprint: 'b'.repeat(64),
       normalizedSnapshot: {},
     });
 
-    const expired = await listings.markExpiredStale(
-      id,
-      'd'.repeat(64),
-      'expired_revalidation_failed',
-    );
-    expect(expired?.listingStatus).toBe('expired');
-    expect(expired?.currentRawListingId).toBe(rawListingId);
-    expect(expired?.lastSeenAt).toEqual(before!.last_seen_at);
+    expect(await gone.expiry()).toBe(true);
 
+    const { listing, versions } = await gone.state();
+    expect(listing.listing_status).toBe('expired');
+    expect(Number(listing.current_raw_listing_id)).toBe(gone.rawListingId);
+    expect(listing.last_seen_at).toEqual(gone.lastSeenAt);
     // The same raw row backs a second version once migration 023 has dropped the unique index.
-    const version = await listingVersions.appendVersion({
-      ...first,
-      listingStatus: 'expired',
-      versionReason: 'status_change',
-      contentFingerprint: 'd'.repeat(64),
-      normalizedSnapshot: {},
-    });
-    expect(version.versionNo).toBe(2);
+    expect(versions.map((v) => [v.version_no, Number(v.raw_listing_id)])).toEqual([
+      [1, gone.rawListingId],
+      [2, gone.rawListingId],
+    ]);
 
-    expect(await listings.markExpiredStale(id, 'e'.repeat(64), 'again')).toBeNull();
+    expect(await gone.expiry()).toBe(false);
+  });
+
+  it('checks the evidence again and keeps the status when the version fails', async () => {
+    await markOtherPageParsed();
+    const gone = await goneListing();
+
+    // A version that can't be written takes the status change with it.
+    await expect(gone.expiry({ rawListingId: 999_999_999 })).rejects.toThrow();
+    expect((await gone.state()).listing.listing_status).toBe('active');
+
+    // The listing's own page parsed after the candidates were read.
+    await rawSightings.recordDetailOutcome({
+      sourceId,
+      sourceListingKey: 'gone',
+      detailUrl: 'https://example.com/gone',
+      outcome: 'parsed',
+      fetchedAt: new Date(),
+    });
+    expect(await gone.expiry()).toBe(false);
+    expect(await gone.state()).toMatchObject({
+      listing: { listing_status: 'active' },
+      versions: [],
+    });
   });
 });
 
 describe('detail outcomes', () => {
   const key = 'flaky';
-  const outcome = (o: 'ok' | 'inconclusive') =>
+  let fetchNo = 0;
+  const outcome = (o: 'parsed' | 'inconclusive', fetchedAt = new Date(Date.now() + ++fetchNo)) =>
     rawSightings.recordDetailOutcome({
       sourceId,
       sourceListingKey: key,
       detailUrl: `https://example.com/${key}`,
       outcome: o,
+      fetchedAt,
     });
 
   it('spaces inconclusive fetches so three strikes span at least 6 days', async () => {
@@ -290,10 +346,22 @@ describe('detail outcomes', () => {
 
   it('clears the strikes on a good page', async () => {
     await outcome('inconclusive');
-    await outcome('ok');
+    await outcome('parsed');
     const row = await sighting(key);
     expect(row.inconclusive_count).toBe(0);
     expect(row.last_detail_ok_at).not.toBeNull();
+  });
+
+  // BullMQ can run a job twice, and jobs for one key can finish out of order.
+  it('counts each fetch once, and a strike older than the last good page not at all', async () => {
+    const strike = new Date(Date.now() - 60_000);
+    await outcome('inconclusive', strike);
+    await outcome('inconclusive', strike);
+    expect((await sighting(key)).inconclusive_count).toBe(1);
+
+    await outcome('parsed');
+    await outcome('inconclusive', new Date(Date.now() - 30_000));
+    expect((await sighting(key)).inconclusive_count).toBe(0);
   });
 });
 

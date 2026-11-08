@@ -25,17 +25,19 @@ const log = createLogger('worker:ingestion');
 type DetailOutcome = rawSightings.DetailOutcomeInput['outcome'];
 
 /**
- * What the detail page said about its sighting: `ok` when it gave a listing or said
- * the listing is gone, `inconclusive` when it loaded but gave neither. Null for a page
- * that answered with an error status, which says nothing about the listing.
+ * What the detail page said about its sighting: `gone` when it said the listing is gone,
+ * `parsed` when it gave a listing, `inconclusive` when it loaded but gave neither. Null for a
+ * page that answered with an error status, which says nothing about the listing. Gone comes
+ * first, because a status-only update on a page that didn't parse still returns a listing ID.
  */
 export function detailOutcome(
   capture: Pick<DetailCapture<SourceRawListingBase>, 'responseStatus' | 'availabilityStatus'>,
   listingId: number,
 ): DetailOutcome | null {
-  if (listingId > 0 || resolveLifecycleStatus(capture.availabilityStatus) != null) return 'ok';
-  // Jobs queued before captures recorded a status have none, and they came from pages that loaded.
   const status = capture.responseStatus;
+  if (resolveLifecycleStatus(capture.availabilityStatus, status) != null) return 'gone';
+  if (listingId > 0) return 'parsed';
+  // Jobs queued before captures recorded a status have none, and they came from pages that loaded.
   if (status == null || (status >= 200 && status < 300)) return 'inconclusive';
   return null;
 }
@@ -44,6 +46,7 @@ async function recordDetailOutcome(
   data: ProcessingJobData,
   sightingKey: string,
   outcome: DetailOutcome,
+  fetchedAt: Date,
 ): Promise<void> {
   try {
     await rawSightings.recordDetailOutcome({
@@ -51,6 +54,7 @@ async function recordDetailOutcome(
       sourceListingKey: sightingKey,
       detailUrl: data.detailUrl,
       outcome,
+      fetchedAt,
     });
   } catch (err) {
     // The capture is ingested; a lost outcome only changes when the page is fetched next.
@@ -96,7 +100,13 @@ export function createIngestionWorker(): Worker<ProcessingJobData> {
         ? detailOutcome(detailCapture, result.normalization.listingId)
         : null;
       if (sightingKey && outcome) {
-        await recordDetailOutcome(job.data, sightingKey, outcome);
+        // The fetch time, not the job's, so a retried job records the same outcome again.
+        const fetchedAt =
+          detailCapture.extractedAt instanceof Date &&
+          !Number.isNaN(detailCapture.extractedAt.getTime())
+            ? detailCapture.extractedAt
+            : new Date();
+        await recordDetailOutcome(job.data, sightingKey, outcome, fetchedAt);
       }
     },
     {

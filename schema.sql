@@ -240,6 +240,7 @@ CREATE TABLE IF NOT EXISTS raw_listing_sightings (
   last_detail_enqueued_at  TIMESTAMPTZ,
   next_detail_at           TIMESTAMPTZ,
   last_detail_ok_at        TIMESTAMPTZ,
+  last_detail_parsed_at    TIMESTAMPTZ,
   inconclusive_count       SMALLINT NOT NULL DEFAULT 0,
   last_inconclusive_at     TIMESTAMPTZ,
   PRIMARY KEY (source_id, source_listing_key)
@@ -247,6 +248,9 @@ CREATE TABLE IF NOT EXISTS raw_listing_sightings (
 
 CREATE INDEX IF NOT EXISTS idx_raw_listing_sightings_next_detail
   ON raw_listing_sightings (source_id, next_detail_at);
+
+CREATE INDEX IF NOT EXISTS idx_raw_listing_sightings_run
+  ON raw_listing_sightings (source_id, last_sighted_run_id);
 
 -- ---------------------------------------------------------------------------
 -- listings

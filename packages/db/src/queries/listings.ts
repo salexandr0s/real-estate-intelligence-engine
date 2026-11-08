@@ -1,4 +1,6 @@
-import { execute, query } from '../client.js';
+import { execute, query, queryWithClient, transaction } from '../client.js';
+import { appendVersion } from './listing-versions.js';
+import type { AppendVersionInput } from './listing-versions.js';
 import type {
   ListingRow,
   OperationType,
@@ -911,7 +913,11 @@ function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorRe
 
 // ── Expiry ──────────────────────────────────────────────────────────────────
 
-/** Move discovery sightings into the canonical last_seen_at. Returns the rows it moved. */
+/**
+ * Move discovery sightings into the canonical last_seen_at. Returns the rows it moved.
+ * A sighting moves once it is a day newer, because every sweep sights every listing again,
+ * and expiry reads the sighting itself.
+ */
 export async function reconcileLastSeen(): Promise<number> {
   const result = await execute(
     `UPDATE listings l
@@ -919,17 +925,30 @@ export async function reconcileLastSeen(): Promise<number> {
      FROM raw_listing_sightings s
      WHERE s.source_id = l.source_id
        AND s.source_listing_key = l.source_listing_key
-       AND s.last_sighted_at > l.last_seen_at`,
+       AND s.last_sighted_at > l.last_seen_at + INTERVAL '1 day'`,
   );
   return result.rowCount ?? 0;
 }
 
 /**
- * Active listings whose own detail page stopped giving a listing. Silence never
- * qualifies: a candidate needs three spaced live fetches with no listing, while
- * the same source is healthy and parsed another page after the last of them. That
- * last condition keeps a site redesign from expiring a whole source.
+ * What an active listing needs before it expires, over `l`, its source `src` and its sighting
+ * `s`, with the threshold in days as $1. Silence never qualifies: it takes three spaced live
+ * fetches with no listing, while the same source is healthy and parsed another page after the
+ * last of them. That last condition keeps a site redesign from expiring a whole source.
  */
+const EXPIRY_EVIDENCE = `
+  l.listing_status = 'active'
+  AND src.is_active
+  AND src.health_status = 'healthy'
+  AND s.inconclusive_count >= 3
+  AND l.last_seen_at < NOW() - make_interval(days => $1)
+  AND (s.last_sighted_at IS NULL OR s.last_sighted_at < NOW() - make_interval(days => $1))
+  AND EXISTS (
+    SELECT 1 FROM raw_listing_sightings ok
+    WHERE ok.source_id = s.source_id AND ok.last_detail_parsed_at > s.last_inconclusive_at
+  )`;
+
+/** Active listings whose own detail page stopped giving a listing, oldest first. */
 export async function findExpiryCandidates(
   thresholdDays: number,
   limit = 100,
@@ -940,16 +959,7 @@ export async function findExpiryCandidates(
      JOIN sources src ON src.id = l.source_id
      JOIN raw_listing_sightings s
        ON s.source_id = l.source_id AND s.source_listing_key = l.source_listing_key
-     WHERE l.listing_status = 'active'
-       AND src.is_active
-       AND src.health_status = 'healthy'
-       AND s.inconclusive_count >= 3
-       AND l.last_seen_at < NOW() - make_interval(days => $1)
-       AND (s.last_sighted_at IS NULL OR s.last_sighted_at < NOW() - make_interval(days => $1))
-       AND EXISTS (
-         SELECT 1 FROM raw_listing_sightings ok
-         WHERE ok.source_id = s.source_id AND ok.last_detail_ok_at > s.last_inconclusive_at
-       )
+     WHERE ${EXPIRY_EVIDENCE}
      ORDER BY l.last_seen_at
      LIMIT $2`,
     [thresholdDays, limit],
@@ -957,25 +967,44 @@ export async function findExpiryCandidates(
   return rows.map(toListingRow);
 }
 
+export interface ExpireStaleInput {
+  thresholdDays: number;
+  sourceStatusRaw: string;
+  /** The status change to record. Its listing ID and fingerprint also go on the listing. */
+  version: AppendVersionInput;
+}
+
 /**
- * Expire a listing that failed revalidation. last_seen_at and current_raw_listing_id
- * stay as they are, because this is a decision and not an observation.
+ * Expire a listing that failed revalidation and append its version, in one transaction. The
+ * evidence is checked again here, because a detail page may have parsed since the candidates
+ * were read. last_seen_at and current_raw_listing_id stay as they are, because this is a decision
+ * and not an observation. Returns false when the listing no longer qualifies.
  */
-export async function markExpiredStale(
-  id: number,
-  contentFingerprint: string,
-  sourceStatusRaw: string,
-): Promise<ListingRow | null> {
-  const rows = await query<ListingDbRow>(
-    `UPDATE listings
-     SET listing_status = 'expired',
-         source_status_raw = $3,
-         content_fingerprint = $2,
-         last_status_change_at = NOW()
-     WHERE id = $1 AND listing_status = 'active'
-     RETURNING *`,
-    [id, contentFingerprint, sourceStatusRaw],
-  );
-  const row = rows[0];
-  return row ? toListingRow(row) : null;
+export async function expireStale(input: ExpireStaleInput): Promise<boolean> {
+  return transaction(async (client) => {
+    const rows = await queryWithClient<{ id: string }>(
+      client,
+      `UPDATE listings l
+       SET listing_status = 'expired',
+           source_status_raw = $3,
+           content_fingerprint = $4,
+           last_status_change_at = NOW()
+       FROM sources src, raw_listing_sightings s
+       WHERE l.id = $2
+         AND src.id = l.source_id
+         AND s.source_id = l.source_id
+         AND s.source_listing_key = l.source_listing_key
+         AND ${EXPIRY_EVIDENCE}
+       RETURNING l.id`,
+      [
+        input.thresholdDays,
+        input.version.listingId,
+        input.sourceStatusRaw,
+        input.version.contentFingerprint,
+      ],
+    );
+    if (rows.length === 0) return false;
+    await appendVersion(input.version, client);
+    return true;
+  });
 }

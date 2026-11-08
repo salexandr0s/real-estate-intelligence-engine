@@ -1,4 +1,5 @@
-import { query } from '../client.js';
+import type { PoolClient } from 'pg';
+import { query, queryWithClient } from '../client.js';
 import type { VersionReason, ListingStatus } from '@immoradar/contracts';
 
 // ── Row types ───────────────────────────────────────────────────────────────
@@ -71,10 +72,13 @@ export interface AppendVersionInput {
 /**
  * Append a new version to a listing's history.
  * version_no is auto-incremented per listing_id using a subquery.
+ * Pass a client to append inside that client's transaction.
  */
-export async function appendVersion(input: AppendVersionInput): Promise<ListingVersionRow> {
-  const rows = await query<ListingVersionDbRow>(
-    `INSERT INTO listing_versions (
+export async function appendVersion(
+  input: AppendVersionInput,
+  client?: PoolClient,
+): Promise<ListingVersionRow> {
+  const sql = `INSERT INTO listing_versions (
        listing_id, raw_listing_id, version_no, version_reason,
        content_fingerprint, listing_status,
        list_price_eur_cents, living_area_sqm, price_per_sqm_eur,
@@ -87,20 +91,22 @@ export async function appendVersion(input: AppendVersionInput): Promise<ListingV
        ),
        $3, $4, $5, $6, $7, $8, $9, COALESCE($10, NOW())
      )
-     RETURNING *`,
-    [
-      input.listingId,
-      input.rawListingId,
-      input.versionReason,
-      input.contentFingerprint,
-      input.listingStatus,
-      input.listPriceEurCents ?? null,
-      input.livingAreaSqm ?? null,
-      input.pricePerSqmEur ?? null,
-      JSON.stringify(input.normalizedSnapshot),
-      input.observedAt ?? null,
-    ],
-  );
+     RETURNING *`;
+  const params = [
+    input.listingId,
+    input.rawListingId,
+    input.versionReason,
+    input.contentFingerprint,
+    input.listingStatus,
+    input.listPriceEurCents ?? null,
+    input.livingAreaSqm ?? null,
+    input.pricePerSqmEur ?? null,
+    JSON.stringify(input.normalizedSnapshot),
+    input.observedAt ?? null,
+  ];
+  const rows = client
+    ? await queryWithClient<ListingVersionDbRow>(client, sql, params)
+    : await query<ListingVersionDbRow>(sql, params);
   return toListingVersionRow(rows[0]!);
 }
 

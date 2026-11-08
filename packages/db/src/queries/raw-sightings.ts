@@ -157,23 +157,47 @@ export interface DetailOutcomeInput {
   sourceListingKey: string;
   detailUrl: string;
   /**
-   * `ok`: the page gave a listing or an explicit removed, sold or rented signal.
-   * `inconclusive`: the page loaded but gave no listing. Blocked pages and network
-   * errors aren't outcomes, because they say nothing about the listing.
+   * `parsed`: the page gave a listing. `gone`: it said the listing was removed, sold or
+   * rented. `inconclusive`: it loaded but gave neither. Blocked pages and network errors
+   * aren't outcomes, because they say nothing about the listing.
    */
-  outcome: 'ok' | 'inconclusive';
+  outcome: 'parsed' | 'gone' | 'inconclusive';
+  /** When the page was fetched. */
+  fetchedAt: Date;
 }
 
-/** Inconclusive fetches back off for 2, 4, 8, 16, then 30 days, so three strikes span 6 days. */
+/**
+ * Inconclusive fetches back off for 2, 4, 8, 16, then 30 days, so three strikes span 6 days.
+ * Outcomes are dated by their fetch, so a job that runs twice counts once, and a fetch older
+ * than the latest outcome on the row changes nothing.
+ */
 export async function recordDetailOutcome(input: DetailOutcomeInput): Promise<void> {
-  if (input.outcome === 'ok') {
+  if (input.outcome !== 'inconclusive') {
     await query(
-      `INSERT INTO raw_listing_sightings (source_id, source_listing_key, detail_url, last_detail_ok_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO raw_listing_sightings (
+         source_id, source_listing_key, detail_url, last_detail_ok_at, last_detail_parsed_at
+       )
+       VALUES ($1, $2, $3, $4::timestamptz, CASE WHEN $5::boolean THEN $4::timestamptz END)
        ON CONFLICT (source_id, source_listing_key) DO UPDATE SET
-         last_detail_ok_at = NOW(),
-         inconclusive_count = 0`,
-      [input.sourceId, input.sourceListingKey, input.detailUrl],
+         last_detail_ok_at = GREATEST(
+           raw_listing_sightings.last_detail_ok_at, EXCLUDED.last_detail_ok_at
+         ),
+         last_detail_parsed_at = GREATEST(
+           raw_listing_sightings.last_detail_parsed_at, EXCLUDED.last_detail_parsed_at
+         ),
+         inconclusive_count = CASE
+           WHEN raw_listing_sightings.last_inconclusive_at IS NULL
+             OR raw_listing_sightings.last_inconclusive_at < EXCLUDED.last_detail_ok_at
+           THEN 0
+           ELSE raw_listing_sightings.inconclusive_count
+         END`,
+      [
+        input.sourceId,
+        input.sourceListingKey,
+        input.detailUrl,
+        input.fetchedAt,
+        input.outcome === 'parsed',
+      ],
     );
     return;
   }
@@ -183,13 +207,17 @@ export async function recordDetailOutcome(input: DetailOutcomeInput): Promise<vo
        source_id, source_listing_key, detail_url,
        inconclusive_count, last_inconclusive_at, next_detail_at
      )
-     VALUES ($1, $2, $3, 1, NOW(), NOW() + INTERVAL '2 days')
+     VALUES ($1, $2, $3, 1, $4::timestamptz, $4::timestamptz + INTERVAL '2 days')
      ON CONFLICT (source_id, source_listing_key) DO UPDATE SET
        inconclusive_count = raw_listing_sightings.inconclusive_count + 1,
-       last_inconclusive_at = NOW(),
-       next_detail_at = NOW() + make_interval(
+       last_inconclusive_at = EXCLUDED.last_inconclusive_at,
+       next_detail_at = EXCLUDED.last_inconclusive_at + make_interval(
          days => LEAST(30, power(2, LEAST(raw_listing_sightings.inconclusive_count + 1, 5)))::int
-       )`,
-    [input.sourceId, input.sourceListingKey, input.detailUrl],
+       )
+     WHERE (raw_listing_sightings.last_inconclusive_at IS NULL
+         OR raw_listing_sightings.last_inconclusive_at < EXCLUDED.last_inconclusive_at)
+       AND (raw_listing_sightings.last_detail_ok_at IS NULL
+         OR raw_listing_sightings.last_detail_ok_at < EXCLUDED.last_inconclusive_at)`,
+    [input.sourceId, input.sourceListingKey, input.detailUrl, input.fetchedAt],
   );
 }
