@@ -16,7 +16,7 @@ Recommended baseline:
 
 - PostgreSQL
 - Redis
-- object storage (S3-compatible)
+- a local artifacts folder (`ARTIFACTS_DIR`)
 - API service
 - scraper worker service
 - normalization/scoring/alert worker service
@@ -39,7 +39,7 @@ Use Docker Compose for:
 
 - PostgreSQL
 - Redis
-- MinIO
+- MinIO, which the compose file starts but nothing uses, since artifacts go to `ARTIFACTS_DIR`
 - optional Prometheus/Grafana
 - optional mail sandbox
 
@@ -62,7 +62,6 @@ Recommended production services:
 
 - `postgres`
 - `redis`
-- `minio` or external S3
 - `api`
 - `worker-scraper`
 - `worker-processing`
@@ -203,11 +202,13 @@ Stores:
 - WAL archiving or equivalent point-in-time strategy if available
 - restore test on a schedule
 
-## 5.2 Object storage
-Bucket structure example:
+## 5.2 Artifacts
+Scraper artifacts go to the folder in `ARTIFACTS_DIR`. It defaults to `$IMMORADAR_RUNTIME_HOME/artifacts` when the app runs the engine, and to `~/Library/Application Support/ImmoRadar/runtime/artifacts` otherwise. A relative path is refused.
+
+Layout:
 
 ```text
-immoradar/
+$ARTIFACTS_DIR/
   failures/raw-html/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.html.gz
   failures/screenshots/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.png
   failures/har/{sourceCode}/{yyyy}/{mm}/{dd}/{uuid}.har
@@ -236,7 +237,7 @@ Keep all runtime configuration externalized.
 ### Examples
 - database URL
 - Redis URL
-- object storage bucket
+- artifacts folder
 - API base URL
 - source-specific rate limit overrides
 - browser mode
@@ -249,7 +250,7 @@ Configuration changes should not require code changes for basic operations like:
 - pausing a source
 - reducing crawl rate
 - changing alert sender
-- switching object storage bucket
+- moving the artifacts folder
 
 ---
 
@@ -268,7 +269,6 @@ Place the API behind Caddy or Nginx for:
 Allow outbound access only where needed:
 
 - listing source domains
-- object storage
 - mail provider or webhook targets
 - auth provider if used
 
@@ -338,10 +338,9 @@ flowchart LR
   APP[Swift macOS App] --> API[API + Reverse Proxy]
   API --> PG[(PostgreSQL)]
   API --> REDIS[(Redis)]
-  API --> MINIO[(Object Storage)]
   SCRAPER[Scraper Worker] --> REDIS
   SCRAPER --> PG
-  SCRAPER --> MINIO
+  SCRAPER --> ART[(Artifacts folder)]
   PROCESS[Processing Worker] --> REDIS
   PROCESS --> PG
   OBS[Prometheus/Grafana/Loki] --> API
@@ -410,11 +409,9 @@ Use one of:
 ## 12.2 Data at rest
 - disk encryption where possible
 - database backup encryption
-- object storage server-side encryption
 - Keychain for desktop tokens
 
 ## 12.3 Access control
-- least privilege for buckets
 - app/API tokens scoped to read/write needs
 - no public raw artifact URLs
 - audit manual run triggers if remote
@@ -429,10 +426,9 @@ Use one of:
 - retention window documented
 - restore test scheduled
 
-## 13.2 Object storage
-- bucket versioning if available
-- lifecycle policy with non-immediate deletion
-- critical parser-debug artifacts retained long enough
+## 13.2 Artifacts
+- failure artifacts are deleted after `SCRAPER_ARTIFACT_RETENTION_DAYS` days, so copy out any you need for a parser fix before then
+- the folder needs no backup, because nothing in it is needed to rebuild the database
 
 ## 13.3 Recovery objectives
 Define realistic goals:
@@ -482,7 +478,7 @@ Adjust to real traffic, but expect:
 
 - scraper workers need materially more RAM than API
 - PostgreSQL needs enough disk IOPS and RAM for active indexes
-- object storage grows faster than DB for verbose artifact capture
+- a run of failed pages can make the artifacts folder larger than the database until the next prune
 
 ## 15.3 Scale-out order
 Scale in this order:
@@ -490,7 +486,7 @@ Scale in this order:
 1. more scraper workers
 2. more processing workers
 3. stronger PostgreSQL instance / storage
-4. separate object storage if local disk is tight
+4. a larger disk, or a shorter `SCRAPER_ARTIFACT_RETENTION_DAYS`, if local disk is tight
 5. only later consider more complex orchestration
 
 ---
@@ -511,7 +507,7 @@ Do not make operational staff change code just to slow down one source.
 
 ## 17. Final recommendation
 
-Deploy the system as a **small service bundle with clear separation between API, scraper workers, processing workers, PostgreSQL, Redis, and object storage**.
+Deploy the system as a **small service bundle with clear separation between API, scraper workers, processing workers, PostgreSQL, and Redis**, with artifacts on local disk.
 
 That gives:
 
