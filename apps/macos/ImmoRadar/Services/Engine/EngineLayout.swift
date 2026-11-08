@@ -347,26 +347,122 @@ struct EngineLayout: Equatable, Sendable {
     }
 
     private static func parseEnvFile(at url: URL) -> [String: String] {
-        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
+        guard let data = try? Data(contentsOf: url) else { return [:] }
+        // Decoded as Node decodes it, so an invalid byte doesn't drop the whole file. Node also
+        // ignores a variable with an empty name.
+        return parseEnv(String(decoding: data, as: UTF8.self)).filter { !$0.key.isEmpty }
+    }
 
-        var parsed: [String: String] = [:]
-        for line in raw.split(whereSeparator: \.isNewline) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { continue }
-            guard let separatorIndex = trimmed.firstIndex(of: "=") else { continue }
+    /// Parses dotenv text as Node 22's `util.parseEnv` does. `@immoradar/config` reads `.env` files
+    /// with that parser for npm and tsx commands, so the app and those commands get the same values.
+    /// Node's quirks are kept on purpose. `#` starts a comment anywhere in an unquoted value, and a
+    /// quoted value can run over several lines. A line with only spaces after `=` takes the next line
+    /// as its value.
+    static func parseEnv(_ contents: String) -> [String: String] {
+        let bytes = contents.utf8.filter { $0 != UInt8(ascii: "\r") }
+        let newline = UInt8(ascii: "\n")
 
-            let key = String(trimmed[..<separatorIndex]).trimmingCharacters(in: .whitespaces)
-            var value = String(trimmed[trimmed.index(after: separatorIndex)...])
-                .trimmingCharacters(in: .whitespaces)
-
-            if (value.hasPrefix("\"") && value.hasSuffix("\"")) || (value.hasPrefix("'") && value.hasSuffix("'")) {
-                value.removeFirst()
-                value.removeLast()
+        func isBlank(_ byte: UInt8) -> Bool {
+            byte == UInt8(ascii: " ") || byte == UInt8(ascii: "\t") || byte == newline
+        }
+        func trimmed(_ range: Range<Int>) -> Range<Int> {
+            var lower = range.lowerBound
+            var upper = range.upperBound
+            while lower < upper, isBlank(bytes[lower]) { lower += 1 }
+            while upper > lower, isBlank(bytes[upper - 1]) { upper -= 1 }
+            return lower..<upper
+        }
+        func firstIndex(of byte: UInt8, in range: Range<Int>) -> Int? {
+            range.first { bytes[$0] == byte }
+        }
+        func text(_ range: Range<Int>) -> String {
+            String(decoding: bytes[range], as: UTF8.self)
+        }
+        // Inside double quotes, `\n` becomes a newline.
+        func expandingNewlines(_ range: Range<Int>) -> String {
+            var expanded: [UInt8] = []
+            var index = range.lowerBound
+            while index < range.upperBound {
+                if bytes[index] == UInt8(ascii: "\\"), index + 1 < range.upperBound,
+                   bytes[index + 1] == UInt8(ascii: "n") {
+                    expanded.append(newline)
+                    index += 2
+                } else {
+                    expanded.append(bytes[index])
+                    index += 1
+                }
             }
-
-            parsed[key] = value
+            return String(decoding: expanded, as: UTF8.self)
         }
 
+        let exportPrefix = Array("export ".utf8)
+        var parsed: [String: String] = [:]
+        var content = trimmed(0..<bytes.count)
+
+        while !content.isEmpty {
+            // Blank lines and comments.
+            if bytes[content.lowerBound] == newline || bytes[content.lowerBound] == UInt8(ascii: "#") {
+                let next = firstIndex(of: newline, in: content).map { $0 + 1 } ?? content.upperBound
+                content = next..<content.upperBound
+                continue
+            }
+
+            guard let separator = content.first(where: {
+                bytes[$0] == UInt8(ascii: "=") || bytes[$0] == newline
+            }) else { break }
+            // A line without "=" sets nothing.
+            if bytes[separator] == newline {
+                content = trimmed((separator + 1)..<content.upperBound)
+                continue
+            }
+
+            var key = trimmed(content.lowerBound..<separator)
+            content = (separator + 1)..<content.upperBound
+            if content.isEmpty || bytes[content.lowerBound] == newline {
+                parsed[text(key)] = ""
+                continue
+            }
+
+            content = trimmed(content)
+            if key.isEmpty { continue }
+            if key.count >= exportPrefix.count,
+               bytes[key.lowerBound..<(key.lowerBound + exportPrefix.count)].elementsEqual(exportPrefix) {
+                key = trimmed((key.lowerBound + exportPrefix.count)..<key.upperBound)
+            }
+            if content.isEmpty {
+                parsed[text(key)] = ""
+                break
+            }
+
+            let quote = bytes[content.lowerBound]
+            if quote == UInt8(ascii: "\"") || quote == UInt8(ascii: "'") || quote == UInt8(ascii: "`") {
+                if let closing = firstIndex(of: quote, in: (content.lowerBound + 1)..<content.upperBound) {
+                    let inside = (content.lowerBound + 1)..<closing
+                    parsed[text(key)] = quote == UInt8(ascii: "\"") ? expandingNewlines(inside) : text(inside)
+                    // The rest of the closing quote's line is ignored.
+                    let next = firstIndex(of: newline, in: (closing + 1)..<content.upperBound)
+                        .map { $0 + 1 } ?? content.upperBound
+                    content = next..<content.upperBound
+                    continue
+                }
+                // Without a closing quote, the value is the rest of the line, quote included.
+                guard let lineEnd = firstIndex(of: newline, in: content) else {
+                    parsed[text(key)] = text(content)
+                    break
+                }
+                parsed[text(key)] = text(content.lowerBound..<lineEnd)
+                content = (lineEnd + 1)..<content.upperBound
+            } else {
+                let lineEnd = firstIndex(of: newline, in: content)
+                var value = content.lowerBound..<(lineEnd ?? content.upperBound)
+                if let hash = firstIndex(of: UInt8(ascii: "#"), in: value) {
+                    value = value.lowerBound..<hash
+                }
+                parsed[text(key)] = text(trimmed(value))
+                content = (lineEnd.map { $0 + 1 } ?? content.upperBound)..<content.upperBound
+            }
+            content = trimmed(content)
+        }
         return parsed
     }
 
