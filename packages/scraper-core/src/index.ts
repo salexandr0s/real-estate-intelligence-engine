@@ -28,6 +28,7 @@ export {
 } from './capture/artifact-writer.js';
 export { computeContentHash } from './capture/content-hash.js';
 export { headlineText } from './capture/headline-text.js';
+export { isChallengePage } from './capture/challenge-page.js';
 
 // ── Health ───────────────────────────────────────────────────────────────────
 export { SourceCircuitBreaker, type CircuitState } from './health/circuit-breaker.js';
