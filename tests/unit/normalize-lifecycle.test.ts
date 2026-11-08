@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+// The code under test reads the version through the package, so the tests do too.
+import { CURRENT_NORMALIZATION_VERSION } from '@immoradar/contracts';
 import { NormalizeAndUpsert } from '../../packages/ingestion/src/normalize-and-upsert.ts';
 import { computeContentFingerprint } from '../../packages/normalization/src/canonical/fingerprint.ts';
 import type {
@@ -65,7 +67,7 @@ function makeListing(overrides: Partial<CanonicalListingInput> = {}): CanonicalL
     normalizedPayload: { provenance: { title: 'payload.titleRaw' } },
     completenessScore: 85,
     contentFingerprint: '',
-    normalizationVersion: 2,
+    normalizationVersion: CURRENT_NORMALIZATION_VERSION,
     ...overrides,
   };
   base.contentFingerprint = computeContentFingerprint(base);
@@ -129,7 +131,7 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     const normalizedListing = makeListing({ listingStatus: 'active', sourceStatusRaw: 'active' });
     const normalizer: SourceNormalizer = {
       sourceCode: 'immoscout24',
-      normalizationVersion: 2,
+      normalizationVersion: CURRENT_NORMALIZATION_VERSION,
       normalize: vi.fn(
         (): NormalizationResult => ({
           success: true,
@@ -185,7 +187,7 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     const existing = makeExistingListing();
     const normalizer: SourceNormalizer = {
       sourceCode: 'immoscout24',
-      normalizationVersion: 2,
+      normalizationVersion: CURRENT_NORMALIZATION_VERSION,
       normalize: vi.fn(
         (): NormalizationResult => ({
           success: false,
@@ -222,7 +224,7 @@ describe('NormalizeAndUpsert lifecycle handling', () => {
     const existing = makeExistingListing();
     const normalizer: SourceNormalizer = {
       sourceCode: 'immoscout24',
-      normalizationVersion: 2,
+      normalizationVersion: CURRENT_NORMALIZATION_VERSION,
       normalize: vi.fn(
         (): NormalizationResult => ({
           success: false,

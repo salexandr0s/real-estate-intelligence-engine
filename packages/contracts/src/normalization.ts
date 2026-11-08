@@ -9,8 +9,9 @@ import type {
 /**
  * Bump this when normalization logic changes in a way that alters content fingerprints.
  * The pipeline uses this to distinguish "source content changed" from "our parsing improved".
+ * Version 3 covers the rewritten source parsers and the area and room parsing in coerce.ts.
  */
-export const CURRENT_NORMALIZATION_VERSION = 2;
+export const CURRENT_NORMALIZATION_VERSION = 3;
 
 // ── Canonical Listing Input ─────────────────────────────────────────────────
 

@@ -312,8 +312,10 @@ export class ScoreAndAlert {
       description: listing.description,
     });
 
-    // 4b. Update reverse-match metadata timestamps
-    const { evaluatedIds, matched } = matchingFilters;
+    // 4b. Update reverse-match metadata timestamps. A backfill version records how we now parse
+    // a listing the source did not change, so no filter counts it as a match or gets an alert.
+    const { evaluatedIds } = matchingFilters;
+    const matched = versionReason === 'backfill' ? [] : matchingFilters.matched;
     await this.deps.updateEvaluatedAt(evaluatedIds);
     if (matched.length > 0) {
       await this.deps.updateMatchedAt(matched.map((m) => m.filterId));

@@ -43,8 +43,6 @@ const viennaOffset = new Intl.DateTimeFormat('en-US', {
  * Enriches base normalization with auction-specific metadata.
  */
 export class EdikteMapper extends BaseSourceMapper {
-  override readonly normalizationVersion = 2;
-
   constructor() {
     super('edikte');
   }

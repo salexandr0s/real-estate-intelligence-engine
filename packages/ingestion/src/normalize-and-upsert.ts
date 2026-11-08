@@ -199,15 +199,15 @@ export class NormalizeAndUpsert {
       const isNormalizationUpgrade = existing.normalizationVersion < CURRENT_NORMALIZATION_VERSION;
 
       if (isNormalizationUpgrade) {
-        // Fingerprint changed because our normalization logic improved, not because
-        // the source content changed. Update the listing but skip version creation
-        // to avoid spurious alerts.
-        log.info('Normalization upgrade detected, skipping version', {
+        // The fingerprint changed because our normalization logic changed, not because the
+        // source content did. A backfill version keeps the corrected values in price history
+        // and gets the listing scored, but it creates no alerts.
+        log.info('Normalization upgrade detected, appending backfill version', {
           sourceCode,
           oldVersion: existing.normalizationVersion,
           newVersion: CURRENT_NORMALIZATION_VERSION,
         });
-        // versionReason stays null — listing will be upserted but no version/alert created
+        versionReason = 'backfill';
       } else if (existing.listPriceEurCents !== listing.listPriceEurCents) {
         versionReason = 'price_change';
       } else if (existing.listingStatus !== listing.listingStatus) {
