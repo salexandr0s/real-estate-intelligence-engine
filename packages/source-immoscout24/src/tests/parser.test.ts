@@ -16,7 +16,7 @@ describe('Immoscout24Adapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('immoscout24');
     expect(adapter.sourceName).toBe('ImmobilienScout24.at');
-    expect(adapter.parserVersion).toBe(2);
+    expect(adapter.parserVersion).toBe(3);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -477,9 +477,81 @@ describe('Availability detection (JSON-LD based)', () => {
     expect(status.status).toBe('unknown');
   });
 
-  it('detects blocked page from captcha markers', () => {
-    const html = '<html><body><div class="captcha">Please verify</div></body></html>';
+  it('detects blocked page from a challenge title', () => {
+    const html = '<html><head><title>Just a moment...</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('blocked');
+  });
+
+  it('does not read a page that loads reCAPTCHA as blocked', () => {
+    // Blocked fails the detail job, so loading reCAPTCHA alone must not count.
+    const html = `<html><head><title>3-Zimmer-Wohnung - ImmobilienScout24.at</title>
+      <script src="https://www.google.com/recaptcha/api.js?render=explicit"></script></head>
+      <body><h1>3-Zimmer-Wohnung</h1><div class="g-recaptcha"></div></body></html>`;
+    expect(detectDetailAvailability(html).status).toBe('unknown');
+  });
+
+  it('keeps a live @graph listing available when only a teaser says verkauft', () => {
+    const status = detectDetailAvailability(loadFixture('detail-graph.html'));
+    expect(status.status).toBe('available');
+  });
+
+  it('ignores verkauft outside the title and h1 when the page has no JSON-LD', () => {
+    const html = `<html><head><title>3-Zimmer-Wohnung - ImmobilienScout24.at</title></head><body>
+      <h1>3-Zimmer-Wohnung</h1>
+      <section><p>Bereits verkauft</p></section>
+    </body></html>`;
+    expect(detectDetailAvailability(html).status).toBe('unknown');
+  });
+});
+
+describe('Detail page parsing (@graph JSON-LD)', () => {
+  it('reads the Product inside @graph and the visible price when the Offer says 0', () => {
+    const result = parseDetailPage(
+      loadFixture('detail-graph.html'),
+      'https://www.immobilienscout24.at/expose/0a1b2c3d4e5f60718293a4b5',
+      'immoscout24',
+      2,
+    );
+
+    expect(result.extractionStatus).toBe('captured');
+    expect(result.payload.titleRaw).toBe('Altbauwohnung mit Balkon nahe Musterpark');
+    expect(result.payload.priceRaw).toBe('389000');
+    expect(result.payload.images).toHaveLength(2);
+    // The ItemList holds other listings, so their provider is not this listing's agent.
+    expect(result.payload.contactName).toBeNull();
+  });
+
+  it('keeps the separators of a string Offer price for normalization', () => {
+    // Number("455.000") would read 455.
+    const html = loadFixture('detail-graph.html').replace('"price": 0,', '"price": "455.000",');
+    expect(html).toContain('"455.000"');
+    const result = parseDetailPage(
+      html,
+      'https://www.immobilienscout24.at/expose/0a1b2c3d4e5f60718293a4b5',
+      'immoscout24',
+      2,
+    );
+    expect(result.payload.priceRaw).toBe('455.000');
+  });
+});
+
+describe('Listing key', () => {
+  it('derives the same key from the detail page as discovery gives the listing', () => {
+    const item = parseDiscoveryPage(loadFixture('discovery-page.html'), 'immoscout24', {
+      url: 'https://www.immobilienscout24.at/regional/wien/wien/immobilien',
+      metadata: { page: 1 },
+    }).items[0]!;
+    const detail = parseDetailPage(
+      loadFixture('detail-page.html'),
+      item.detailUrl,
+      'immoscout24',
+      2,
+    );
+
+    // The discovery worker keys sightings as `${sourceCode}:${externalId}`.
+    expect(new Immoscout24Adapter().deriveSourceListingKey(detail)).toBe(
+      `${item.sourceCode}:${item.externalId}`,
+    );
   });
 });

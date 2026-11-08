@@ -1,14 +1,19 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
-import type { Immoscout24DetailDTO, IS24Product, IS24RealEstateAgent } from './dto.js';
+import { headlineText, isChallengePage } from '@immoradar/scraper-core';
+import type {
+  Immoscout24DetailDTO,
+  IS24Product,
+  IS24ProductOffer,
+  IS24RealEstateAgent,
+} from './dto.js';
 
 const BASE_URL = 'https://www.immobilienscout24.at';
 
 /**
- * IS24 detail pages embed data as multiple JSON-LD blocks:
- *   Block 0: Product — name, description (HTML), image[], offers (price)
- *   Block 1: RealEstateAgent — agent name
- *   Block 2: WebPage — page metadata
- *   Block 3: ItemList — breadcrumbs
+ * IS24 detail pages describe the page (WebPage), the listing (Product with an Offer) and an
+ * ItemList in JSON-LD. Live pages put all three in one `@graph` script; one script per node is
+ * read the same way. The ItemList entries are RealEstateListing nodes for other listings, so
+ * only top-level nodes count.
  *
  * Property data (rooms, area, address) is embedded in the description text
  * and in specific HTML elements with data-testid attributes.
@@ -16,6 +21,10 @@ const BASE_URL = 'https://www.immobilienscout24.at';
 
 const JSON_LD_RE = /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
 const PRICE_TESTID_RE = /data-testid="primary-price"[^>]*>[\s\S]*?(\d[\d.,]*)/;
+const SOLD_MARKER_RE = /\b(?:verkauft|sold)\b/i;
+const NOT_FOUND_MARKER_RE = /nicht\s+gefunden|nicht\s+mehr\s+verf[u\u00fc]gbar|not\s+found/i;
+
+type JsonLdNode = Record<string, unknown>;
 
 export function parseDetailPage(
   html: string,
@@ -23,33 +32,31 @@ export function parseDetailPage(
   sourceCode: string,
   parserVersion: number,
 ): DetailCapture<Immoscout24DetailDTO> {
-  const jsonLdBlocks = extractJsonLdBlocks(html);
-
-  const product = jsonLdBlocks.find(
-    (b): b is IS24Product =>
-      typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
-  ) as IS24Product | undefined;
-
-  const agent = jsonLdBlocks.find(
-    (b): b is IS24RealEstateAgent =>
-      typeof b === 'object' &&
-      b !== null &&
-      (b as Record<string, unknown>)['@type'] === 'RealEstateAgent',
-  ) as IS24RealEstateAgent | undefined;
+  const nodes = extractJsonLdNodes(html);
+  const product = findListingNode(nodes);
+  const agent = findNode<IS24RealEstateAgent>(nodes, 'RealEstateAgent');
 
   if (!product) {
     return buildFailedCapture(url, sourceCode, parserVersion);
   }
 
   const immoscout24Id = extractIdFromUrl(url) ?? '';
-  const images = product.image ?? [];
+  const images = toStringList(product.image);
   const rawDescription = product.description ?? '';
   const descriptionText = stripHtml(rawDescription);
 
-  // Extract price: prefer Product offers.price, fall back to data-testid
+  // Prefer the Offer price. Live pages send 0 there, so the visible price is the usual source.
+  // A string price keeps its separators for normalization, which reads "455.000" as 455,000.
   let priceRaw: string | null = null;
-  if (product.offers?.price != null && product.offers.price > 0) {
-    priceRaw = String(product.offers.price);
+  const offerPrice = firstOffer(product)?.price;
+  const offerText =
+    typeof offerPrice === 'number' && Number.isFinite(offerPrice)
+      ? String(offerPrice)
+      : typeof offerPrice === 'string'
+        ? offerPrice.trim()
+        : '';
+  if (/[1-9]/.test(offerText)) {
+    priceRaw = offerText;
   } else {
     // Fallback: extract from data-testid="primary-price"
     const priceMatch = html.match(PRICE_TESTID_RE);
@@ -159,33 +166,27 @@ function buildFailedCapture(
 }
 
 export function detectDetailAvailability(html: string): SourceAvailability {
-  const jsonLdBlocks = extractJsonLdBlocks(html);
+  const listing = findListingNode(extractJsonLdNodes(html));
 
-  const product = jsonLdBlocks.find(
-    (b) =>
-      typeof b === 'object' && b !== null && (b as Record<string, unknown>)['@type'] === 'Product',
-  ) as IS24Product | undefined;
-
-  if (product) {
-    const availability = product.offers?.availability ?? '';
-    if (availability.includes('SoldOut') || availability.includes('Discontinued')) {
-      return { status: 'sold' };
-    }
-    if (availability.includes('InStock') || availability.includes('OnlineOnly')) {
-      return { status: 'available' };
-    }
-    // Product exists but no recognizable availability -> still available
+  const offer = listing ? firstOffer(listing) : undefined;
+  const availability = typeof offer?.availability === 'string' ? offer.availability : '';
+  if (availability.includes('SoldOut') || availability.includes('Discontinued')) {
+    return { status: 'sold' };
+  }
+  if (availability.includes('InStock') || availability.includes('OnlineOnly')) {
     return { status: 'available' };
   }
 
-  // No Product JSON-LD found — check text markers
-  if (/verkauft|sold/i.test(html)) return { status: 'sold' };
-  if (/nicht\s+gefunden|nicht\s+mehr\s+verf[u\u00fc]gbar|not\s+found/i.test(html)) {
-    return { status: 'not_found' };
-  }
-  if (/captcha|blocked|challenge/i.test(html)) return { status: 'blocked' };
+  // Similar-listing teasers, scripts and footers on live pages also say "verkauft", so text
+  // markers count only in the title and h1.
+  const headline = headlineText(html);
+  if (SOLD_MARKER_RE.test(headline)) return { status: 'sold' };
+  if (NOT_FOUND_MARKER_RE.test(headline)) return { status: 'not_found' };
+  // A challenge page carries no listing data, so only a page without any is checked.
+  if (!listing && isChallengePage(html)) return { status: 'blocked' };
 
-  return { status: 'unknown' };
+  // A listing node without a recognizable availability is still a live listing.
+  return { status: listing ? 'available' : 'unknown' };
 }
 
 /**
@@ -201,21 +202,63 @@ export function extractIdFromUrl(url: string): string | null {
 
 // -- Internal helpers ---------------------------------------------------------
 
-function extractJsonLdBlocks(html: string): unknown[] {
-  const blocks: unknown[] = [];
-  let match: RegExpExecArray | null;
-  // Reset regex state
-  const re = new RegExp(JSON_LD_RE.source, JSON_LD_RE.flags);
-  while ((match = re.exec(html)) !== null) {
-    if (match[1]) {
-      try {
-        blocks.push(JSON.parse(match[1]));
-      } catch {
-        // skip invalid JSON
+/**
+ * Top-level JSON-LD nodes. A script holds one node, an array of nodes or a `@graph` wrapper.
+ * Nodes nested in other nodes (ItemList entries, providers) describe other things.
+ */
+function extractJsonLdNodes(html: string): JsonLdNode[] {
+  const nodes: JsonLdNode[] = [];
+  for (const match of html.matchAll(JSON_LD_RE)) {
+    if (!match[1]) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(match[1]);
+    } catch {
+      continue; // skip invalid JSON
+    }
+    const roots: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    for (const root of roots) {
+      if (!isJsonLdNode(root)) continue;
+      const graph = root['@graph'];
+      if (Array.isArray(graph)) {
+        nodes.push(...graph.filter(isJsonLdNode));
+      } else {
+        nodes.push(root);
       }
     }
   }
-  return blocks;
+  return nodes;
+}
+
+function isJsonLdNode(value: unknown): value is JsonLdNode {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** First node of the given type. `@type` is a string or a list of types. */
+function findNode<T>(nodes: JsonLdNode[], type: string): T | undefined {
+  const node: unknown = nodes.find((candidate) => {
+    const value = candidate['@type'];
+    return value === type || (Array.isArray(value) && value.includes(type));
+  });
+  return node as T | undefined;
+}
+
+/** The listing itself: a Product, or a RealEstateListing on pages that type it that way. */
+function findListingNode(nodes: JsonLdNode[]): IS24Product | undefined {
+  return (
+    findNode<IS24Product>(nodes, 'Product') ?? findNode<IS24Product>(nodes, 'RealEstateListing')
+  );
+}
+
+/** `offers` is one Offer or a list of them. */
+function firstOffer(listing: IS24Product): IS24ProductOffer | undefined {
+  return Array.isArray(listing.offers) ? listing.offers[0] : listing.offers;
+}
+
+/** `image` is one URL or a list of them. */
+function toStringList(value: unknown): string[] {
+  const list: unknown[] = Array.isArray(value) ? value : [value];
+  return list.filter((item): item is string => typeof item === 'string');
 }
 
 function stripHtml(html: string): string {

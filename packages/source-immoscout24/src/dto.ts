@@ -38,18 +38,19 @@ export interface IS24CollectionPage {
 }
 
 export interface IS24ProductOffer {
-  '@type': string;
-  price: number;
-  priceCurrency: string;
+  '@type'?: string;
+  price?: number | string;
+  priceCurrency?: string;
   availability?: string;
 }
 
+/** The listing node: a Product, or a RealEstateListing on pages that type it that way. */
 export interface IS24Product {
-  '@type': string;
-  name: string;
-  description: string;
-  image: string[];
-  offers?: IS24ProductOffer;
+  '@type': string | string[];
+  name?: string;
+  description?: string;
+  image?: string | string[];
+  offers?: IS24ProductOffer | IS24ProductOffer[];
 }
 
 export interface IS24RealEstateAgent {
