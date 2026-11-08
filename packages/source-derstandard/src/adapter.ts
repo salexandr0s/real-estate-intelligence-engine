@@ -32,7 +32,7 @@ export class DerStandardAdapter implements SourceAdapter<
     return [
       {
         url: url.toString(),
-        waitForSelector: '.resultitem a[href*="/detail/"]',
+        waitForSelector: 'a[href*="/detail/"]',
         waitForTimeout: 5000,
         metadata: { page: 1 },
       },
@@ -58,7 +58,7 @@ export class DerStandardAdapter implements SourceAdapter<
   ): Promise<RequestPlan | null> {
     return {
       url: item.detailUrl.startsWith('http') ? item.detailUrl : `${BASE_URL}${item.detailUrl}`,
-      waitForSelector: '#listing-detail-data',
+      waitForSelector: 'h1',
       waitForTimeout: 5000,
     };
   }

@@ -61,7 +61,7 @@ describe('DerStandardAdapter', () => {
       sourceCode: 'derstandard',
       maxPages: 1,
     });
-    expect(plans[0]!.waitForSelector).toBe('.resultitem a[href*="/detail/"]');
+    expect(plans[0]!.waitForSelector).toBe('a[href*="/detail/"]');
   });
 
   it('builds detail request from discovery item', async () => {
@@ -81,7 +81,7 @@ describe('DerStandardAdapter', () => {
     });
     expect(plan).not.toBeNull();
     expect(plan!.url).toBe('https://immobilien.derstandard.at/detail/15086452/slug');
-    expect(plan!.waitForSelector).toBe('#listing-detail-data');
+    expect(plan!.waitForSelector).toBe('h1');
   });
 
   it('builds detail request for absolute URLs', async () => {
@@ -152,6 +152,57 @@ describe('Discovery page parsing', () => {
     expect(third.summaryPayload.priceRaw).toBe('520000');
     expect(third.summaryPayload.roomsRaw).toBe('4');
     expect(third.summaryPayload.areaRaw).toBe('112');
+  });
+
+  it('takes every detail link once, relative or absolute, in a list item or not', () => {
+    const result = parseDiscoveryPage(loadFixture('discovery-links.html'), 'derstandard', {
+      url: 'https://immobilien.derstandard.at/immobiliensuche/i/kaufen/wohnung/wien?page=1',
+      metadata: { page: 1 },
+    });
+
+    // The example.com link is not a derstandard listing.
+    expect(result.items.map((item) => item.externalId)).toEqual([
+      '15086452',
+      '15086500',
+      '15086600',
+    ]);
+    const [first, second, third] = result.items;
+    // 15086452 is linked first from outside the list; its card still supplies the fields.
+    expect(first!.detailUrl).toBe(
+      '/detail/15086452/innenhof-idylle-nur-wenige-schritte-zur-neubaugasse-a-',
+    );
+    expect(first!.summaryPayload).toMatchObject({
+      titleRaw: 'Innenhof-Idylle nur wenige Schritte zur Neubaugasse - A',
+      locationRaw: '1070 Wien',
+      areaRaw: '87',
+      roomsRaw: '3',
+      priceRaw: '460000',
+    });
+    // The tag list nested in the card doesn't cut the card short.
+    expect(second!.summaryPayload).toMatchObject({ areaRaw: '52.3', priceRaw: '219000' });
+    expect(third!.summaryPayload).toMatchObject({
+      titleRaw: 'Penthouse mit Dachterrasse, 1090 Wien',
+      priceRaw: null,
+    });
+  });
+
+  it('keys a discovered listing the way its detail page is keyed', async () => {
+    const adapter = new DerStandardAdapter();
+    const item = parseDiscoveryPage(loadFixture('discovery-links.html'), 'derstandard', {
+      url: 'https://immobilien.derstandard.at/immobiliensuche/i/kaufen/wohnung/wien?page=1',
+      metadata: { page: 1 },
+    }).items[0]!;
+
+    const plan = await adapter.buildDetailRequest(item);
+    const detail = parseDetailPage(
+      loadFixture('detail-page.html'),
+      plan!.url,
+      'derstandard',
+      adapter.parserVersion,
+    );
+
+    // The discovery worker keys a sighting as `${sourceCode}:${externalId}`.
+    expect(adapter.deriveSourceListingKey(detail)).toBe(`derstandard:${item.externalId}`);
   });
 
   it('detects pagination from next page link', () => {
@@ -506,9 +557,17 @@ describe('Availability detection', () => {
   });
 
   it('detects blocked page', () => {
-    const html = '<html><body><div class="captcha">Please verify you are human</div></body></html>';
+    const html = '<html><head><title>Just a moment...</title></head><body></body></html>';
     const status = detectDetailAvailability(html);
     expect(status.status).toBe('blocked');
+  });
+
+  it('does not report a page that loads reCAPTCHA as blocked', () => {
+    const html =
+      '<html><head><title>Wohnung kaufen in Wien</title>' +
+      '<script src="https://www.google.com/recaptcha/api.js" async></script></head>' +
+      '<body><p>Kontaktformular</p></body></html>';
+    expect(detectDetailAvailability(html).status).toBe('unknown');
   });
 
   it('returns unknown for unrecognizable page', () => {

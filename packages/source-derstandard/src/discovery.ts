@@ -4,11 +4,11 @@ import type { DerStandardDiscoveryItem } from './dto.js';
 const BASE_URL = 'https://immobilien.derstandard.at';
 
 /**
- * derstandard.at renders listing cards as plain HTML <a> elements.
- * Each card links to /detail/{ID}/{slug} and contains:
+ * derstandard.at links each listing as /detail/{ID}/{slug}, relative or as a full
+ * immobilien.derstandard.at URL. A result card is usually an <li> holding:
  *   <h2> title
- *   <p>  location + type info (e.g. "1070 Wien Wohnung, Kauf, Sonstige Wohnungen")
- *   <span> with area ("Wohnfläche 87 m²"), rooms ("Zimmer 3"), price ("Kaufpreis € 460.000")
+ *   <span class="adress"> location (e.g. "1070 Wien")
+ *   area ("Wohnfläche 87 m²"), rooms ("Zimmer 3"), price ("Kaufpreis € 460.000")
  */
 
 export function parseDiscoveryPage(
@@ -18,21 +18,8 @@ export function parseDiscoveryPage(
 ): DiscoveryPageResult<DerStandardDiscoveryItem> {
   const items: DiscoveryItem<DerStandardDiscoveryItem>[] = [];
 
-  // Match full <li class="box resultitem ...">...</li> card blocks
-  const cardPattern = /<li\s[^>]*class="[^"]*resultitem[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
-  let cardMatch: RegExpExecArray | null;
-
-  while ((cardMatch = cardPattern.exec(html)) !== null) {
-    const cardBody = cardMatch[1]!;
-
-    // Extract the detail URL from any <a> linking to /detail/{id}/{slug}
-    const linkMatch = cardBody.match(/href="(\/detail\/(\d+)\/[^"]*)"/i);
-    if (!linkMatch) continue;
-
-    const href = linkMatch[1]!;
-    const id = linkMatch[2]!;
-
-    const item = parseCardBody(id, href, cardBody, sourceCode);
+  for (const link of findDetailLinks(html)) {
+    const item = parseCardBody(link.id, link.path, link.scope, sourceCode);
     if (item) {
       items.push(item);
     }
@@ -72,16 +59,99 @@ export function parseDiscoveryPage(
   };
 }
 
+interface DetailLink {
+  id: string;
+  /** Path without query, e.g. /detail/15086452/innenhof-idylle */
+  path: string;
+  /** Markup the fields are read from: the enclosing <li>, else the link's own content. */
+  scope: string;
+  inListItem: boolean;
+}
+
+interface Span {
+  start: number;
+  end: number;
+}
+
+/**
+ * Each listing linked from the page once, in page order. When a listing is linked
+ * both inside and outside a list item, the list item supplies its fields.
+ */
+function findDetailLinks(html: string): DetailLink[] {
+  const listItems = listItemSpans(html);
+  const links = new Map<string, DetailLink>();
+  // Relative, protocol-relative or absolute on immobilien.derstandard.at; other hosts don't count.
+  const linkPattern =
+    /<a\s(?:[^>]*?\s)?href=(["'])((?:https?:)?(?:\/\/immobilien\.derstandard\.at)?\/detail\/(\d+)(?:[/?#][^"']*)?)\1[^>]*>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = linkPattern.exec(html)) !== null) {
+    const href = m[2];
+    const id = m[3];
+    if (!href || !id || links.get(id)?.inListItem) continue;
+
+    const listItem = innermostSpan(listItems, m.index);
+    if (!listItem && links.has(id)) continue;
+
+    links.set(id, {
+      id,
+      path: new URL(href, BASE_URL).pathname,
+      scope: listItem
+        ? html.slice(listItem.start, listItem.end)
+        : linkContent(html, m.index + m[0].length),
+      inListItem: listItem !== null,
+    });
+  }
+
+  return [...links.values()];
+}
+
+/** Every <li> on the page, nested ones included, from its open tag to its close tag. */
+function listItemSpans(html: string): Span[] {
+  const spans: Span[] = [];
+  const open: number[] = [];
+  const tag = /<(\/?)li\b[^>]*>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = tag.exec(html)) !== null) {
+    if (!m[1]) {
+      open.push(m.index);
+      continue;
+    }
+    const start = open.pop();
+    if (start !== undefined) spans.push({ start, end: m.index });
+  }
+  // An item that is never closed runs to the end of the page.
+  for (const start of open) spans.push({ start, end: html.length });
+
+  return spans;
+}
+
+function innermostSpan(spans: Span[], at: number): Span | null {
+  let innermost: Span | null = null;
+  for (const span of spans) {
+    if (span.start < at && at < span.end && (innermost === null || span.start > innermost.start)) {
+      innermost = span;
+    }
+  }
+  return innermost;
+}
+
+/** The markup between a link's opening tag and its </a>. */
+function linkContent(html: string, from: number): string {
+  const close = /<\/a\s*>/gi;
+  close.lastIndex = from;
+  const end = close.exec(html)?.index ?? html.length;
+  return html.slice(from, end);
+}
+
 function parseCardBody(
   id: string,
-  href: string,
+  detailUrl: string,
   cardBody: string,
   sourceCode: string,
 ): DiscoveryItem<DerStandardDiscoveryItem> | null {
   if (!id) return null;
-
-  // Strip query params from href for the clean detail URL
-  const detailUrl = href.split('?')[0] ?? href;
 
   // Extract title from <h2>
   const titleMatch = cardBody.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);

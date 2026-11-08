@@ -1,4 +1,5 @@
 import type { DetailCapture, SourceAvailability } from '@immoradar/contracts';
+import { isChallengePage } from '@immoradar/scraper-core';
 import type { DerStandardDetailDTO, DerStandardDetailData } from './dto.js';
 
 /**
@@ -511,8 +512,7 @@ export function detectDetailAvailability(html: string): SourceAvailability {
     return { status: 'not_found' };
   }
 
-  // Check for captcha/block indicators
-  if (/captcha|blocked|challenge/i.test(html)) {
+  if (isChallengePage(html)) {
     return { status: 'blocked' };
   }
 
