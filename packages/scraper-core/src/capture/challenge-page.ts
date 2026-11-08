@@ -25,6 +25,7 @@ const CHALLENGE_HEADLINE = new RegExp(
     'unusual traffic',
     'pardon our interruption',
     'security check',
+    'security verification',
     'zugriff verweigert',
     'sicherheits(über)?prüfung',
     '(bist du|sind sie) ein mensch',

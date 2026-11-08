@@ -33,6 +33,7 @@ import type { DetailJobData, ProcessingJobData } from '@immoradar/scraper-core';
 import { untilAborted } from '../abort.js';
 import { getAdapter } from '../adapter-registry.js';
 import { acquirePageSlot, createScrapeContext } from '../browser-pool.js';
+import { BlockedPageError, EmptyPageError } from '../page-errors.js';
 import { checkSourceRunnable } from '../source-guard.js';
 import type { ScraperWorkerDeps } from './worker-deps.js';
 
@@ -40,25 +41,6 @@ const log = createLogger('worker:detail');
 
 /** Spreads jobs held back by an open breaker, so they don't all return at the same moment. */
 const BREAKER_DELAY_JITTER_MS = 30_000;
-
-/** The site answered with a challenge page instead of the listing. */
-export class BlockedPageError extends Error {
-  constructor() {
-    // The classifier reads "challenge" as soft_anti_bot.
-    super('Blocked by a challenge page');
-    this.name = 'BlockedPageError';
-  }
-}
-
-/** The page loaded with nothing in it, so it says nothing about the listing. */
-export class EmptyPageError extends Error {
-  constructor() {
-    // The classifier reads "network error" as transient_network: the job retries, and the failure
-    // never counts toward switching the source off.
-    super('Empty document, retried as a network error');
-    this.name = 'EmptyPageError';
-  }
-}
 
 /**
  * The key processing files the capture under. A captured page's own ID wins over the one

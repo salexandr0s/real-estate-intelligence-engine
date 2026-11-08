@@ -31,6 +31,7 @@ import {
   discoverySchedulerId,
   getQueuePrefix,
   getRedisConnection,
+  isChallengePage,
   maxPagesForSource,
   navigateForCapture,
   pageNavigationDelay,
@@ -40,6 +41,7 @@ import type { DetailJobData, DiscoveryJobData } from '@immoradar/scraper-core';
 import { untilAborted } from '../abort.js';
 import { getAdapter } from '../adapter-registry.js';
 import { acquirePageSlot, createScrapeContext } from '../browser-pool.js';
+import { BlockedPageError } from '../page-errors.js';
 import { applyRunToSource, checkSourceRunnable } from '../source-guard.js';
 import type { ScraperWorkerDeps } from './worker-deps.js';
 
@@ -198,6 +200,9 @@ export function createDiscoveryWorker(deps: ScraperWorkerDeps): Worker<Discovery
         log.warn('Search page loaded without its selector', { sourceCode, url: plan.url });
       }
       const html = await page.content();
+      // A challenge page lists nothing, and an empty page would end the sweep as if the source
+      // had no listings. Failing the page opens the breaker and records the block on the run.
+      if (isChallengePage(html)) throw new BlockedPageError();
       return await getAdapter(sourceCode).extractDiscoveryPage({
         page,
         requestPlan: { ...plan, metadata: { ...plan.metadata, html } },

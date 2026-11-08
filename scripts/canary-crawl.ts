@@ -25,6 +25,7 @@ import {
   PerDomainRateLimiter,
   pageNavigationDelay,
   classifyScraperError,
+  isChallengePage,
   navigateForCapture,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   pickRandomViewport,
@@ -34,6 +35,7 @@ import {
 } from '@immoradar/scraper-core';
 import type { CrawlProfile, DiscoveryItem, RequestPlan, SourceAdapter } from '@immoradar/contracts';
 import { getAdapter } from '../apps/worker-scraper/src/adapter-registry.js';
+import { BlockedPageError } from '../apps/worker-scraper/src/page-errors.js';
 
 const SUCCESS_THRESHOLD = 0.8;
 const MAX_DETAIL_SAMPLES = 3;
@@ -126,6 +128,8 @@ async function crawl(
     try {
       const nav = await navigateForCapture(page, plan, { sourceCode });
       const html = await page.content();
+      // As in the discovery worker, a challenge page fails instead of reading as an empty search.
+      if (isChallengePage(html)) throw new BlockedPageError();
       const result = await adapter.extractDiscoveryPage({
         page,
         requestPlan: { ...plan, metadata: { ...plan.metadata, html } },

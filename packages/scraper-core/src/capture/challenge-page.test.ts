@@ -18,6 +18,10 @@ describe('isChallengePage', () => {
     expect(isChallengePage('<title>Just a moment...</title><body></body>')).toBe(true);
     expect(isChallengePage('<title>Attention Required! | Cloudflare</title>')).toBe(true);
     expect(isChallengePage('<h1>Zugriff verweigert</h1>')).toBe(true);
+    // remax's Turnstile page answers with HTTP 298 and this heading.
+    expect(isChallengePage('<title>Security Verification</title><body><form></form></body>')).toBe(
+      true,
+    );
   });
 
   it('recognises an interstitial by markup only challenge pages carry', () => {
