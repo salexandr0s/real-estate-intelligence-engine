@@ -20,6 +20,11 @@ final class InMemorySecretStore: SecretStore {
     var items: [String: String] { state.withLock { $0.items } }
     var deleteCount: Int { state.withLock { $0.deleteCount } }
 
+    /// Makes later reads fail with `status`, or succeed again when it is nil.
+    func failReads(with status: OSStatus?) {
+        state.withLock { $0.readFailure = status }
+    }
+
     func read(key: String, allowUserInteraction: Bool) -> KeychainReadResult {
         state.withLock { state in
             if let failure = state.readFailure { return .failed(failure) }
@@ -46,13 +51,15 @@ final class InMemorySecretStore: SecretStore {
 final class KeychainStoreTests: XCTestCase {
     /// A denied or interrupted read on an unsigned build used to erase the stored token.
     func testFailedReadLeavesTheTokenAndTheValueInMemory() {
-        let store = InMemorySecretStore(items: ["apiToken": "stored"], readFailure: errSecInteractionNotAllowed)
+        let store = InMemorySecretStore(items: ["apiToken": "stored"])
         let state = ConnectionState(secretStore: store)
-        state.updateAPIToken("in-memory")
+        state.loadConnectionSecretsIfNeeded(allowUserInteraction: false)
+        store.failReads(with: errSecInteractionNotAllowed)
 
         state.loadConnectionSecretsIfNeeded(allowUserInteraction: true)
 
-        XCTAssertEqual(state.apiToken, "in-memory")
+        XCTAssertEqual(state.apiToken, "stored")
+        XCTAssertFalse(state.isAPITokenUnreadable)
         XCTAssertEqual(store.items["apiToken"], "stored")
         XCTAssertEqual(store.deleteCount, 0)
     }
@@ -66,6 +73,32 @@ final class KeychainStoreTests: XCTestCase {
         XCTAssertEqual(store.items["anthropicApiKey"], "key")
         XCTAssertEqual(store.deleteCount, 0)
         XCTAssertNil(state.hasAPIKeyForActiveProvider)
+        XCTAssertTrue(state.isKeyUnreadable(for: .anthropic))
+    }
+
+    /// After a failed read the fields are empty. Saving them as they were used to delete the
+    /// stored token and key, so Apply now sends only the secrets the user edited.
+    func testApplySendsOnlyTheSecretsTheUserEdited() {
+        var draft = SettingsDraft(
+            apiBaseURL: "http://127.0.0.1:58080",
+            apiToken: "",
+            copilotProvider: .openai,
+            anthropicApiKey: "",
+            openaiKey: "sk-stored",
+            copilotModel: ""
+        )
+        draft.apiBaseURL = "https://immoradar.example"
+        draft.copilotModel = "gpt-x"
+
+        XCTAssertNil(draft.editedAPIToken)
+        XCTAssertNil(draft.editedAnthropicKey)
+        XCTAssertNil(draft.editedOpenAIKey)
+
+        draft.apiToken = "typed"
+        draft.openaiKey = ""
+
+        XCTAssertEqual(draft.editedAPIToken, "typed")
+        XCTAssertEqual(draft.editedOpenAIKey, "", "A key cleared on purpose is saved empty, which deletes it.")
     }
 
     func testEmptyStoredTokenIsDeleted() {
@@ -82,9 +115,10 @@ final class KeychainStoreTests: XCTestCase {
         let store = InMemorySecretStore(items: ["apiToken": "old"])
         let state = ConnectionState(secretStore: store)
 
-        XCTAssertTrue(state.persistAPIToken("new"))
+        XCTAssertTrue(state.saveAPIToken("new"))
 
         XCTAssertEqual(store.items["apiToken"], "new")
+        XCTAssertEqual(state.apiToken, "new")
         XCTAssertEqual(store.deleteCount, 0)
     }
 

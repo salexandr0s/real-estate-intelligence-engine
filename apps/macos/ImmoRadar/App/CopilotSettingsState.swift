@@ -2,15 +2,29 @@ import Foundation
 
 @MainActor @Observable
 final class CopilotSettingsState {
-    private enum SecretKey {
-        static let anthropic = "anthropicApiKey"
-        static let openAI = "openaiApiKey"
+    private enum SecretKey: String, CaseIterable {
+        case anthropic = "anthropicApiKey"
+        case openAI = "openaiApiKey"
+
+        init(_ provider: CopilotProvider) {
+            switch provider {
+            case .anthropic: self = .anthropic
+            case .openai: self = .openAI
+            }
+        }
+    }
+
+    /// `known` after a read or a save, so the key in memory matches the stored one. `unreadable`
+    /// after the Keychain refused a read of a key not known yet. No entry means not read yet.
+    private enum KeyState {
+        case known
+        case unreadable
     }
 
     private let secretStore: any SecretStore
 
     /// Observed, so the Copilot view can tell "no key stored" from "not read yet".
-    private var didLoadCopilotSecrets = false
+    private var keyStates: [SecretKey: KeyState] = [:]
 
     @ObservationIgnored
     private var didLoadCopilotSecretsWithInteraction = false
@@ -21,20 +35,23 @@ final class CopilotSettingsState {
         didSet { UserDefaults.standard.set(copilotProvider.rawValue, forKey: "copilotProvider") }
     }
 
-    var anthropicApiKey: String = ""
-    var openaiApiKey: String = ""
+    /// Change these through `applySettings`, which saves them.
+    private(set) var anthropicApiKey: String = ""
+    private(set) var openaiApiKey: String = ""
 
     var copilotModel: String {
         didSet { UserDefaults.standard.set(copilotModel, forKey: "copilotModel") }
     }
 
-    /// Whether a key is stored for the selected provider, or nil until the Keychain has been read.
+    /// Whether a key is stored for the selected provider, or nil until that key has been read.
     var hasAPIKeyForActiveProvider: Bool? {
-        guard didLoadCopilotSecrets else { return nil }
-        switch copilotProvider {
-        case .anthropic: return !anthropicApiKey.isEmpty
-        case .openai: return !openaiApiKey.isEmpty
-        }
+        let key = SecretKey(copilotProvider)
+        guard keyStates[key] == .known else { return nil }
+        return !value(of: key).isEmpty
+    }
+
+    private var didLoadCopilotSecrets: Bool {
+        SecretKey.allCases.allSatisfy { keyStates[$0] == .known }
     }
 
     init(secretStore: any SecretStore = KeychainStore.api) {
@@ -43,6 +60,11 @@ final class CopilotSettingsState {
         let rawProvider = UserDefaults.standard.string(forKey: "copilotProvider") ?? ""
         self.copilotProvider = CopilotProvider(rawValue: rawProvider) ?? .anthropic
         self.copilotModel = UserDefaults.standard.string(forKey: "copilotModel") ?? ""
+    }
+
+    /// True when the Keychain refused to read this provider's stored key.
+    func isKeyUnreadable(for provider: CopilotProvider) -> Bool {
+        keyStates[SecretKey(provider)] == .unreadable
     }
 
     func clearSettingsError() {
@@ -54,92 +76,91 @@ final class CopilotSettingsState {
             return
         }
 
-        let anthropic = secretStore.load(key: SecretKey.anthropic, allowUserInteraction: allowUserInteraction)
-        let openAI = secretStore.load(key: SecretKey.openAI, allowUserInteraction: allowUserInteraction)
-        if case .value(let key) = anthropic {
-            anthropicApiKey = key
+        for key in SecretKey.allCases {
+            switch secretStore.load(key: key.rawValue, allowUserInteraction: allowUserInteraction) {
+            case .value(let stored):
+                setValue(stored, of: key)
+                keyStates[key] = .known
+            case .unreadable:
+                // The key in memory stays, and a later call reads it again. A key read before
+                // still matches the stored one.
+                if keyStates[key] != .known {
+                    keyStates[key] = .unreadable
+                }
+            }
         }
-        if case .value(let key) = openAI {
-            openaiApiKey = key
+        if didLoadCopilotSecrets {
+            didLoadCopilotSecretsWithInteraction = allowUserInteraction
         }
-
-        // After a failed read the keys in memory stay, and the secrets stay unloaded so a later call reads again.
-        guard case .value = anthropic, case .value = openAI else { return }
-        didLoadCopilotSecrets = true
-        didLoadCopilotSecretsWithInteraction = allowUserInteraction
     }
 
+    /// Saves the Copilot settings. A nil key leaves the stored key as it is, and an empty one
+    /// deletes it.
     @discardableResult
     func applySettings(
         provider: CopilotProvider,
-        anthropicKey: String,
-        openAIKey: String,
+        anthropicKey: String?,
+        openAIKey: String?,
         model: String
     ) async -> Bool {
         clearSettingsError()
 
-        let normalizedAnthropicKey = anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedOpenAIKey = openAIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        switch provider {
-        case .anthropic:
-            guard persistSecret(
-                value: normalizedAnthropicKey,
-                key: SecretKey.anthropic,
-                label: "Anthropic API key"
-            ) else {
-                return false
-            }
-            anthropicApiKey = normalizedAnthropicKey
-        case .openai:
-            guard persistSecret(
-                value: normalizedOpenAIKey,
-                key: SecretKey.openAI,
-                label: "OpenAI API key"
-            ) else {
-                return false
-            }
-            openaiApiKey = normalizedOpenAIKey
+        if let anthropicKey {
+            guard save(anthropicKey, as: .anthropic, label: "Anthropic API key") else { return false }
         }
-        didLoadCopilotSecrets = true
-        didLoadCopilotSecretsWithInteraction = true
+        if let openAIKey {
+            guard save(openAIKey, as: .openAI, label: "OpenAI API key") else { return false }
+        }
 
         copilotProvider = provider
-        copilotModel = normalizedModel
+        copilotModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         return true
     }
 
     /// The key Copilot sends as `X-Copilot-Api-Key` for the selected provider.
     func activeAPIKey() -> String {
         loadCopilotSecretsIfNeeded(allowUserInteraction: true)
-        switch copilotProvider {
-        case .anthropic: return anthropicApiKey
-        case .openai: return openaiApiKey
-        }
+        return value(of: SecretKey(copilotProvider))
     }
 
     func cleanupStoredSecrets() {
-        secretStore.deleteIfEmpty(key: SecretKey.anthropic, allowUserInteraction: true)
-        secretStore.deleteIfEmpty(key: SecretKey.openAI, allowUserInteraction: true)
+        for key in SecretKey.allCases {
+            secretStore.deleteIfEmpty(key: key.rawValue, allowUserInteraction: true)
+        }
     }
 
     func runSilentStaleSecretsCleanupIfNeeded(versionKey: String) {
         guard !UserDefaults.standard.bool(forKey: versionKey) else { return }
-        secretStore.deleteIfEmpty(key: SecretKey.anthropic, allowUserInteraction: false)
-        secretStore.deleteIfEmpty(key: SecretKey.openAI, allowUserInteraction: false)
+        for key in SecretKey.allCases {
+            secretStore.deleteIfEmpty(key: key.rawValue, allowUserInteraction: false)
+        }
         UserDefaults.standard.set(true, forKey: versionKey)
     }
 
-    @discardableResult
-    private func persistSecret(value: String, key: String, label: String) -> Bool {
+    private func save(_ rawValue: String, as key: SecretKey, label: String) -> Bool {
+        let newValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try secretStore.save(key: key, value: value)
-            settingsErrorMessage = nil
-            return true
+            try secretStore.save(key: key.rawValue, value: newValue)
         } catch {
             settingsErrorMessage = "Couldn’t save the \(label). \(error.localizedDescription)"
             return false
+        }
+        setValue(newValue, of: key)
+        keyStates[key] = .known
+        return true
+    }
+
+    private func value(of key: SecretKey) -> String {
+        switch key {
+        case .anthropic: anthropicApiKey
+        case .openAI: openaiApiKey
+        }
+    }
+
+    private func setValue(_ newValue: String, of key: SecretKey) {
+        switch key {
+        case .anthropic: anthropicApiKey = newValue
+        case .openAI: openaiApiKey = newValue
         }
     }
 }

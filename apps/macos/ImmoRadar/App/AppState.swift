@@ -98,10 +98,10 @@ final class AppState {
         set { connectionState.updateAPIBaseURL(newValue) }
     }
 
-    var apiToken: String {
-        get { connectionState.apiToken }
-        set { connectionState.updateAPIToken(newValue) }
-    }
+    var apiToken: String { connectionState.apiToken }
+
+    /// True when the Keychain refused to read the stored API token.
+    var isAPITokenUnreadable: Bool { connectionState.isAPITokenUnreadable }
 
     var refreshIntervalSeconds: Int {
         get { connectionState.refreshIntervalSeconds }
@@ -136,14 +136,13 @@ final class AppState {
         set { copilotSettingsState.copilotProvider = newValue }
     }
 
-    var anthropicApiKey: String {
-        get { copilotSettingsState.anthropicApiKey }
-        set { copilotSettingsState.anthropicApiKey = newValue }
-    }
+    var anthropicApiKey: String { copilotSettingsState.anthropicApiKey }
 
-    var openaiApiKey: String {
-        get { copilotSettingsState.openaiApiKey }
-        set { copilotSettingsState.openaiApiKey = newValue }
+    var openaiApiKey: String { copilotSettingsState.openaiApiKey }
+
+    /// True when the Keychain refused to read this provider's stored key.
+    func isCopilotKeyUnreadable(for provider: CopilotProvider) -> Bool {
+        copilotSettingsState.isKeyUnreadable(for: provider)
     }
 
     var copilotModel: String {
@@ -319,11 +318,12 @@ final class AppState {
         await connectionState.testConnection(baseURL: baseURL, token: token)
     }
 
-    func applyConnectionSettings(baseURL: String, token: String) async {
+    /// Saves the connection settings. A nil token leaves the stored token as it is, and an empty
+    /// one deletes it.
+    func applyConnectionSettings(baseURL: String, token: String?) async {
         guard launchPolicy.allowsStoredCredentials else { return }
         let previousBaseURL = connectionState.apiBaseURL
         let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !normalizedBaseURL.isEmpty else {
             connectionState.settingsErrorMessage = "Base URL is required."
@@ -332,16 +332,16 @@ final class AppState {
 
         clearSettingsError()
 
-        guard connectionState.persistAPIToken(normalizedToken) else { return }
-
-        connectionState.updateAPIToken(normalizedToken)
-        connectionState.markSecretsLoaded(withUserInteraction: true)
+        if let token {
+            let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard connectionState.saveAPIToken(normalizedToken) else { return }
+        }
         connectionState.updateAPIBaseURL(normalizedBaseURL)
 
         let appliedBaseURL = connectionState.apiBaseURL
         let appliedAuthToken = connectionState.resolvedConnectionAuthToken(
             for: appliedBaseURL,
-            userToken: normalizedToken,
+            userToken: connectionState.apiToken,
             allowUserInteraction: true
         )
 
@@ -367,10 +367,11 @@ final class AppState {
         startBackgroundRefreshTasksIfNeeded()
     }
 
+    /// A nil key leaves the stored key as it is, and an empty one deletes it.
     func applyCopilotSettings(
         provider: CopilotProvider,
-        anthropicKey: String,
-        openAIKey: String,
+        anthropicKey: String?,
+        openAIKey: String?,
         model: String
     ) async {
         guard launchPolicy.allowsStoredCredentials else { return }

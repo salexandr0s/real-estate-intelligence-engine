@@ -26,7 +26,11 @@ final class ConnectionState {
     var connectionIssue: String?
     var settingsErrorMessage: String?
     private(set) var apiBaseURL: String
+    /// Change it through `saveAPIToken`, which saves it.
     private(set) var apiToken: String = ""
+    /// True after the Keychain refused to read a token not known yet, until a read or a save
+    /// succeeds. Settings says so, and leaves that token alone unless the user types a new one.
+    private(set) var isAPITokenUnreadable = false
 
     /// Stored rather than computed, so views that show it redraw when it changes. Each change is
     /// written to UserDefaults.
@@ -58,15 +62,6 @@ final class ConnectionState {
         UserDefaults.standard.set(newValue, forKey: "apiBaseURL")
     }
 
-    func updateAPIToken(_ newValue: String) {
-        apiToken = newValue
-    }
-
-    func markSecretsLoaded(withUserInteraction allowUserInteraction: Bool) {
-        didLoadConnectionSecrets = true
-        didLoadConnectionSecretsWithInteraction = allowUserInteraction
-    }
-
     func clearSettingsError() {
         settingsErrorMessage = nil
     }
@@ -79,11 +74,16 @@ final class ConnectionState {
         switch secretStore.load(key: Self.apiTokenKey, allowUserInteraction: allowUserInteraction) {
         case .value(let token):
             apiToken = token
+            isAPITokenUnreadable = false
             didLoadConnectionSecrets = true
             didLoadConnectionSecretsWithInteraction = allowUserInteraction
         case .unreadable(let status):
-            // The token in memory stays, and the secrets stay unloaded so a later call reads again.
+            // The token in memory stays, and a later call reads again. A token read before still
+            // matches the stored one.
             Log.ui.error("Couldn't read the API token from the Keychain (status \(status, privacy: .public))")
+            if !didLoadConnectionSecrets {
+                isAPITokenUnreadable = true
+            }
         }
     }
 
@@ -141,16 +141,21 @@ final class ConnectionState {
         }
     }
 
+    /// Saves the token and makes it the one in memory. An empty token deletes the stored one.
     @discardableResult
-    func persistAPIToken(_ token: String) -> Bool {
+    func saveAPIToken(_ token: String) -> Bool {
         do {
             try secretStore.save(key: Self.apiTokenKey, value: token)
-            settingsErrorMessage = nil
-            return true
         } catch {
             settingsErrorMessage = "Couldn’t save the API token. \(error.localizedDescription)"
             return false
         }
+        settingsErrorMessage = nil
+        apiToken = token
+        isAPITokenUnreadable = false
+        didLoadConnectionSecrets = true
+        didLoadConnectionSecretsWithInteraction = true
+        return true
     }
 
     func cleanupStoredSecrets() {
