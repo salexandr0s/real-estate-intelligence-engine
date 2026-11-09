@@ -40,8 +40,11 @@ struct ListingsView: View {
             ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
-                        if let data = await viewModel.exportCSV(using: appState.apiClient) {
+                        do {
+                            let data = try await viewModel.exportCSV(using: appState.apiClient)
                             exportToFile(data)
+                        } catch {
+                            exportError = AppErrorPresentation.message(for: error)
                         }
                     }
                 } label: {
@@ -52,7 +55,7 @@ struct ListingsView: View {
             }
             ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
-                    Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                    Task { await reload() }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -73,6 +76,9 @@ struct ListingsView: View {
             await viewModel.refresh(using: appState.apiClient, cache: appState.localCache)
             consumePendingDeepLinkIfNeeded()
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await reload() }
+        }
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {
                 showInspector = true
@@ -91,6 +97,11 @@ struct ListingsView: View {
         } message: {
             if let msg = exportError { Text(msg) }
         }
+    }
+
+    /// An explicit refresh: it skips the cached listings.
+    private func reload() async {
+        await viewModel.refresh(using: appState.apiClient, cache: appState.localCache, bypassingCache: true)
     }
 
     private func exportToFile(_ data: Data) {
@@ -125,7 +136,10 @@ private struct ListingsPrimaryPane: View {
             ListingsFilterBar(viewModel: viewModel)
             Divider()
 
+            // While the global banner explains a connection problem, a failed load keeps the
+            // last listings without a banner of its own.
             if let error = viewModel.errorMessage,
+               appState.globalConnectionWarningMessage == nil,
                !AppErrorPresentation.isConnectionIssue(message: error) {
                 InlineWarningBanner(
                     title: "Couldn’t load listings.",
@@ -135,7 +149,8 @@ private struct ListingsPrimaryPane: View {
                             Task {
                                 await viewModel.refresh(
                                     using: appState.apiClient,
-                                    cache: appState.localCache
+                                    cache: appState.localCache,
+                                    bypassingCache: true
                                 )
                             }
                         },

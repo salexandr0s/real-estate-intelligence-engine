@@ -52,6 +52,7 @@ struct ForYouSection: View {
                             filter: filter,
                             listings: filterListings[filter.id] ?? [],
                             isLoading: filterLoadingStates[filter.id] ?? false,
+                            matchesUnavailable: filterListings[filter.id] == nil && filterLoadingStates[filter.id] != true,
                             onListingTap: onListingTap,
                             onShowAll: onNavigateToListings
                         )
@@ -69,6 +70,8 @@ struct ForYouFilterGroup: View {
     let filter: Filter
     let listings: [Listing]
     let isLoading: Bool
+    /// True when this filter's matches failed to load and none were loaded before.
+    var matchesUnavailable = false
     var onListingTap: ((Int) -> Void)?
     var onShowAll: (() -> Void)?
 
@@ -110,21 +113,23 @@ struct ForYouFilterGroup: View {
                             .controlSize(.mini)
                     }
 
-                    Text("\(listings.count) matches")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, Theme.Spacing.sm)
-                        .padding(.vertical, 5)
-                        .background(Color.secondary.opacity(0.08), in: Capsule())
+                    if !matchesUnavailable {
+                        Text("\(listings.count) matches")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, Theme.Spacing.sm)
+                            .padding(.vertical, 5)
+                            .background(Color.secondary.opacity(0.08), in: Capsule())
+                    }
                 }
             }
 
             if displayedListings.isEmpty && !isLoading {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text("No current matches")
+                    Text(matchesUnavailable ? "Couldn’t load matches" : "No current matches")
                         .font(.subheadline)
                         .adaptiveFontWeight(.medium)
-                    Text("This filter is active, but nothing currently qualifies.")
+                    Text(matchesUnavailable ? "Refresh the dashboard to try again." : "This filter is active, but nothing currently qualifies.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

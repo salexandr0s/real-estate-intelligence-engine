@@ -27,11 +27,22 @@ final class OutreachViewModel {
     var isLoadingList = false
     var isLoadingThread = false
     var isSyncingMailbox = false
-    var actionInFlight: String?
+    /// The pause, resume, close, retry or follow-up being sent. One goes out at a time.
+    var actionInFlight: OutreachThreadRequest?
+    /// The mailbox or the thread list didn't load.
     var pageErrorMessage: String?
+    /// The selected thread didn't load.
     var detailErrorMessage: String?
+    /// The mailbox sync the user asked for failed.
+    var syncErrorMessage: String?
+    /// The last thread request the user sent failed. The next request or another thread clears it.
+    var actionFailure: OutreachRequestFailure?
     var hasLoaded = false
     private var nextCursor: String?
+    /// Goes up with every thread load, so an earlier, slower load can't replace the thread shown now.
+    @ObservationIgnored private var threadLoadID = 0
+    /// The thread a load is fetching, so selecting it again doesn't fetch it twice.
+    @ObservationIgnored private var threadIDInFlight: Int?
 
     var selectedMailbox: MailboxAccount? { mailboxes.first }
 
@@ -64,7 +75,10 @@ final class OutreachViewModel {
                 detailErrorMessage = nil
             }
         } catch {
-            pageErrorMessage = mailboxErrorMessage(for: error)
+            pageErrorMessage = Self.message(
+                for: error,
+                fallback: "Outreach is currently unavailable. Check mailbox configuration and try again."
+            )
             hasLoaded = true
         }
 
@@ -77,14 +91,20 @@ final class OutreachViewModel {
         await refresh(using: client)
     }
 
+    /// Loads a thread picked in the list. The list's selection binding has already set
+    /// `selectedThreadID`, so this compares against the thread on screen.
     func selectThread(id: Int, using client: any OutreachAPIClient) async {
-        guard selectedThreadID != id || selectedThread == nil else { return }
+        guard selectedThread?.id != id, threadIDInFlight != id else { return }
         selectedThreadID = id
+        actionFailure = nil
         await loadThread(id: id, using: client)
     }
 
     func openThread(id: Int, using client: any OutreachAPIClient) async {
         selectedScope = .all
+        if selectedThread?.id != id {
+            actionFailure = nil
+        }
 
         if mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
             isLoadingList = true
@@ -104,7 +124,10 @@ final class OutreachViewModel {
                 nextCursor = loadedThreadsResult.nextCursor
                 hasLoaded = true
             } catch {
-                pageErrorMessage = mailboxErrorMessage(for: error)
+                pageErrorMessage = Self.message(
+                    for: error,
+                    fallback: "Outreach is currently unavailable. Check mailbox configuration and try again."
+                )
             }
 
             isLoadingList = false
@@ -117,13 +140,13 @@ final class OutreachViewModel {
     func syncPrimaryMailbox(using client: any OutreachAPIClient) async {
         guard let mailbox = selectedMailbox else { return }
         isSyncingMailbox = true
-        pageErrorMessage = nil
+        syncErrorMessage = nil
 
         do {
             try await client.syncMailbox(id: mailbox.id)
             await refresh(using: client)
         } catch {
-            pageErrorMessage = "Mailbox sync failed. Try again in a moment."
+            syncErrorMessage = Self.message(for: error, fallback: "Mailbox sync failed. Try again in a moment.")
         }
 
         isSyncingMailbox = false
@@ -138,54 +161,96 @@ final class OutreachViewModel {
     }
 
     func performThreadAction(_ action: OutreachAction, using client: any OutreachAPIClient) async {
-        guard let thread = selectedThread else { return }
-        actionInFlight = action.rawValue
-        detailErrorMessage = nil
-
-        do {
-            try await client.updateOutreachThread(id: thread.id, action: action)
-            await refresh(using: client)
-        } catch {
-            detailErrorMessage = actionErrorMessage(for: action)
+        await runThreadRequest(.action(action), using: client) { threadID in
+            try await client.updateOutreachThread(id: threadID, action: action)
         }
-
-        actionInFlight = nil
     }
 
     func sendFollowup(using client: any OutreachAPIClient) async {
-        guard let thread = selectedThread else { return }
-        actionInFlight = "followup"
-        detailErrorMessage = nil
+        await runThreadRequest(.followup, using: client) { threadID in
+            try await client.sendOutreachFollowup(id: threadID, subject: nil, bodyText: nil)
+        }
+    }
+
+    /// Sends the failed request again after the server couldn't queue its email.
+    func tryFailedRequestAgain(using client: any OutreachAPIClient) async {
+        guard let failure = actionFailure, failure.canTryAgain else { return }
+        switch failure.request {
+        case .action(let action):
+            await performThreadAction(action, using: client)
+        case .followup:
+            await sendFollowup(using: client)
+        case .start:
+            break
+        }
+    }
+
+    func dismissActionFailure() {
+        actionFailure = nil
+    }
+
+    /// Sends one request for the thread on screen. A success or a 409 reloads the list and the
+    /// thread, so the buttons offer what the server accepts now. The failure keeps the server's
+    /// message either way.
+    private func runThreadRequest(
+        _ request: OutreachThreadRequest,
+        using client: any OutreachAPIClient,
+        _ operation: (Int) async throws -> Void
+    ) async {
+        guard let thread = selectedThread, actionInFlight == nil else { return }
+        actionInFlight = request
+        actionFailure = nil
 
         do {
-            try await client.sendOutreachFollowup(id: thread.id, subject: nil, bodyText: nil)
+            try await operation(thread.id)
             await refresh(using: client)
         } catch {
-            detailErrorMessage = "Couldn’t queue the follow-up. Check the thread state and try again."
+            let failure = OutreachRequestFailure(request: request, error: error)
+            actionFailure = failure
+            if failure.isConflict {
+                await refresh(using: client)
+            }
         }
 
         actionInFlight = nil
     }
 
     private func loadThread(id: Int, using client: any OutreachAPIClient) async {
+        threadLoadID += 1
+        let loadID = threadLoadID
+        threadIDInFlight = id
         isLoadingThread = true
         detailErrorMessage = nil
+        defer {
+            if loadID == threadLoadID {
+                isLoadingThread = false
+                threadIDInFlight = nil
+            }
+        }
 
         do {
             let loadedThread = try await client.fetchOutreachThread(id: id)
-            selectedThread = loadedThread
-            do {
-                selectedListing = try await client.fetchListing(id: loadedThread.listingId)
-            } catch {
+            guard loadID == threadLoadID else { return }
+            if selectedListing?.id != loadedThread.listingId {
                 selectedListing = nil
             }
+            selectedThread = loadedThread
+            // The thread works without its listing, so a failed listing load only hides the
+            // linked listing card.
+            let listing = try? await client.fetchListing(id: loadedThread.listingId)
+            guard loadID == threadLoadID else { return }
+            if let listing {
+                selectedListing = listing
+            }
         } catch {
-            selectedThread = nil
-            selectedListing = nil
-            detailErrorMessage = "Couldn’t load this thread. Refresh and try again."
+            guard loadID == threadLoadID else { return }
+            // A failed reload keeps the thread on screen. A thread that never loaded shows the error.
+            if selectedThread?.id != id {
+                selectedThread = nil
+                selectedListing = nil
+            }
+            detailErrorMessage = Self.message(for: error, fallback: "Couldn’t load this thread. Refresh and try again.")
         }
-
-        isLoadingThread = false
     }
 
     private func resolvedSelectionID(from threads: [OutreachThreadSummary]) -> Int? {
@@ -195,20 +260,8 @@ final class OutreachViewModel {
         return threads.first?.id
     }
 
-    private func mailboxErrorMessage(for error: Error) -> String {
-        "Outreach is currently unavailable. Check mailbox configuration and try again."
-    }
-
-    private func actionErrorMessage(for action: OutreachAction) -> String {
-        switch action {
-        case .pause:
-            return "Couldn’t pause this thread. Try again in a moment."
-        case .resume:
-            return "Couldn’t resume this thread. Try again in a moment."
-        case .close:
-            return "Couldn’t close this thread. Try again in a moment."
-        case .retry:
-            return "Couldn’t retry this thread. Try again in a moment."
-        }
+    /// The server's message for an API failure, and `fallback` for an error that carries none.
+    private static func message(for error: Error, fallback: String) -> String {
+        error is APIError ? AppErrorPresentation.message(for: error) : fallback
     }
 }

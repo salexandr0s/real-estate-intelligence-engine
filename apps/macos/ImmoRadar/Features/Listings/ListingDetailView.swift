@@ -76,6 +76,11 @@ struct ListingDetailView: View {
                     Text("Score Breakdown")
                         .font(.headline)
                     ScoreBreakdownView(explanation: explanation)
+                } else if viewModel.explanationLoadFailed,
+                          appState.globalConnectionWarningMessage == nil {
+                    ScoreBreakdownUnavailableRow(isRetrying: viewModel.isLoadingExplanation) {
+                        Task { await viewModel.retryExplanation(using: appState.apiClient) }
+                    }
                 }
 
                 // Confidence
@@ -92,7 +97,9 @@ struct ListingDetailView: View {
                     listing: viewModel.displayedListing,
                     thread: viewModel.outreachThread,
                     isLoading: viewModel.isLoadingOutreach,
-                    errorMessage: viewModel.outreachErrorMessage,
+                    isBusy: viewModel.outreachRequestInFlight != nil,
+                    errorMessage: visibleOutreachLoadError,
+                    failure: viewModel.outreachFailure,
                     onStart: {
                         Task {
                             if let threadID = await viewModel.startOutreach(using: appState.apiClient) {
@@ -108,7 +115,11 @@ struct ListingDetailView: View {
                     },
                     onSendFollowup: {
                         Task { await viewModel.sendFollowup(using: appState.apiClient) }
-                    }
+                    },
+                    onTryAgain: {
+                        Task { await viewModel.tryOutreachRequestAgain(using: appState.apiClient) }
+                    },
+                    onDismissFailure: { viewModel.dismissOutreachFailure() }
                 )
 
                 // Building context
@@ -141,8 +152,47 @@ struct ListingDetailView: View {
             .padding(Theme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .task(id: listing.id) {
+        // One task for both triggers: selecting another listing or Refresh Data cancels the
+        // load in flight and starts a new one, and the first appearance loads once.
+        .task(id: LoadKey(listingID: listing.id, refreshGeneration: appState.navigationState.refreshGeneration)) {
             await viewModel.load(using: appState.apiClient, listing: listing)
+        }
+    }
+
+    /// The outreach thread's load error, hidden while the app's connection warning explains it.
+    private var visibleOutreachLoadError: String? {
+        guard let message = viewModel.outreachErrorMessage, !message.isEmpty,
+              appState.globalConnectionWarningMessage == nil,
+              !AppErrorPresentation.isConnectionIssue(message: message) else { return nil }
+        return message
+    }
+
+    private struct LoadKey: Equatable {
+        let listingID: Int
+        let refreshGeneration: Int
+    }
+}
+
+private struct ScoreBreakdownUnavailableRow: View {
+    let isRetrying: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Text("Score breakdown unavailable")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: Theme.Spacing.sm)
+
+            if isRetrying {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Button("Try Again", action: onRetry)
+                .controlSize(.small)
+                .disabled(isRetrying)
         }
     }
 }
@@ -151,11 +201,15 @@ private struct OutreachDetailSection: View {
     let listing: Listing
     let thread: OutreachThread?
     let isLoading: Bool
+    let isBusy: Bool
     let errorMessage: String?
+    let failure: OutreachRequestFailure?
     let onStart: () -> Void
     let onReload: () -> Void
     let onAction: (OutreachAction) -> Void
     let onSendFollowup: () -> Void
+    let onTryAgain: () -> Void
+    let onDismissFailure: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -188,16 +242,22 @@ private struct OutreachDetailSection: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    HStack {
-                        Button("Reload", action: onReload)
-                        Button("Pause") { onAction(.pause) }
-                            .disabled(thread.workflowState == "paused" || thread.workflowState == "closed")
-                        Button("Resume") { onAction(.resume) }
-                            .disabled(thread.workflowState != "paused")
-                        Button("Close") { onAction(.close) }
-                            .disabled(thread.workflowState == "closed")
-                        Button("Follow-up", action: onSendFollowup)
-                            .disabled(thread.lastInboundAt != nil || thread.workflowState == "closed")
+                    // Each button is enabled only when the server accepts its request now.
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            Button("Reload", action: onReload)
+                            stateButtons(for: thread)
+                            followupButton(for: thread)
+                        }
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            HStack {
+                                stateButtons(for: thread)
+                            }
+                            HStack {
+                                Button("Reload", action: onReload)
+                                followupButton(for: thread)
+                            }
+                        }
                     }
 
                     if !thread.messages.isEmpty {
@@ -225,15 +285,34 @@ private struct OutreachDetailSection: View {
                         }
                     }
                 }
+            } else if listing.outreachSummary != nil {
+                // A thread exists, so the server would refuse a new start. Offer a reload instead.
+                HStack {
+                    Text(isLoading ? "Loading the thread…" : "The thread didn’t load.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reload", action: onReload)
+                        .disabled(isLoading)
+                }
             } else if let contactEmail = listing.contactEmail {
                 Text(contactEmail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Button("Start outreach", action: onStart)
+                Button("Start Outreach", action: onStart)
+                    .disabled(isLoading)
             } else {
                 Text("No contact email available for this listing.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+
+            if let failure {
+                InlineWarningBanner(
+                    title: failure.request.failureTitle,
+                    message: failure.message,
+                    actions: failureActions(for: failure)
+                )
             }
 
             if let errorMessage, !errorMessage.isEmpty {
@@ -244,6 +323,34 @@ private struct OutreachDetailSection: View {
         }
         .padding()
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func stateButtons(for thread: OutreachThread) -> some View {
+        Button("Pause") { onAction(.pause) }
+            .disabled(isBusy || !thread.canPause)
+        Button("Resume") { onAction(.resume) }
+            .disabled(isBusy || !thread.canResume)
+        Button("Retry") { onAction(.retry) }
+            .disabled(isBusy || !thread.canRetry)
+            .help("Queue the unsent email again")
+        Button("Close") { onAction(.close) }
+            .disabled(isBusy || !thread.canClose)
+    }
+
+    private func followupButton(for thread: OutreachThread) -> some View {
+        Button("Follow Up", action: onSendFollowup)
+            .disabled(isBusy || !thread.canSendFollowup)
+    }
+
+    /// Try Again shows only when the server couldn't queue the email and kept the thread as it was.
+    private func failureActions(for failure: OutreachRequestFailure) -> [InlineWarningBanner.Action] {
+        var actions: [InlineWarningBanner.Action] = []
+        if failure.canTryAgain {
+            actions.append(.init("Try Again", isProminent: true, handler: onTryAgain))
+        }
+        actions.append(.init("Dismiss", handler: onDismissFailure))
+        return actions
     }
 }
 

@@ -16,7 +16,10 @@ struct WatchlistView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // While the global banner explains a connection problem, a failed load keeps the
+            // rows already shown without a banner of its own.
             if let error = viewModel.errorMessage,
+               appState.globalConnectionWarningMessage == nil,
                !AppErrorPresentation.isConnectionIssue(message: error) {
                 InlineWarningBanner(
                     title: "Couldn’t load the watchlist.",
@@ -29,6 +32,16 @@ struct WatchlistView: View {
                 )
             }
 
+            if let actionError = viewModel.actionErrorMessage {
+                InlineWarningBanner(
+                    title: "Couldn’t update the watchlist.",
+                    message: actionError,
+                    actions: [
+                        .init("Dismiss") { viewModel.actionErrorMessage = nil },
+                    ]
+                )
+            }
+
             if viewModel.savedListings.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView {
                     Label("No Saved Listings", systemImage: "bookmark")
@@ -36,22 +49,28 @@ struct WatchlistView: View {
                     Text("Save listings from the detail view to track them here.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !viewModel.savedListings.isEmpty && filteredItems.isEmpty && !searchText.isEmpty {
+            } else if !viewModel.savedListings.isEmpty && filteredItems.isEmpty && !searchText.isEmpty && !viewModel.hasMorePages {
                 ContentUnavailableView.search
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(filteredItems, selection: $selectedItemID) { item in
-                    WatchlistRow(
-                        item: item,
-                        isSavingNotes: viewModel.savingNotesListingId == item.listingId,
-                        onSaveNotes: { notes in
-                            Task { await viewModel.saveNotes(for: item.listingId, notes: notes, using: appState.apiClient) }
-                        },
-                        onUnsave: {
-                            Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
-                        }
-                    )
-                    .tag(item.listingId)
+                List(selection: $selectedItemID) {
+                    ForEach(filteredItems) { item in
+                        WatchlistRow(
+                            item: item,
+                            isSavingNotes: viewModel.savingNotesListingId == item.listingId,
+                            onSaveNotes: { notes in
+                                Task { await viewModel.saveNotes(for: item.listingId, notes: notes, using: appState.apiClient) }
+                            },
+                            onUnsave: {
+                                Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
+                            }
+                        )
+                        .tag(item.listingId)
+                    }
+
+                    if viewModel.hasMorePages {
+                        nextPageRow
+                    }
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
                 .onDeleteCommand {
@@ -78,8 +97,11 @@ struct WatchlistView: View {
             ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
-                        if let data = await viewModel.exportCSV(using: appState.apiClient) {
+                        do {
+                            let data = try await viewModel.exportCSV(using: appState.apiClient)
                             exportToFile(data)
+                        } catch {
+                            exportError = AppErrorPresentation.message(for: error)
                         }
                     }
                 } label: {
@@ -99,6 +121,9 @@ struct WatchlistView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
         .onChange(of: exportError) { _, newValue in
             showExportError = newValue != nil
         }
@@ -106,6 +131,28 @@ struct WatchlistView: View {
             Button("OK", role: .cancel) { exportError = nil }
         } message: {
             if let msg = exportError { Text(msg) }
+        }
+    }
+
+    /// The last row while the server has more saved listings. Reaching it loads the next page.
+    private var nextPageRow: some View {
+        HStack {
+            Spacer()
+            if viewModel.nextPageFailed && !viewModel.isLoadingNextPage {
+                Button("Load More") {
+                    Task { await viewModel.loadNextPage(using: appState.apiClient) }
+                }
+                .controlSize(.small)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Spacer()
+        }
+        .padding(.vertical, Theme.Spacing.xs)
+        .task(id: viewModel.nextCursor) {
+            guard !viewModel.nextPageFailed else { return }
+            await viewModel.loadNextPage(using: appState.apiClient)
         }
     }
 

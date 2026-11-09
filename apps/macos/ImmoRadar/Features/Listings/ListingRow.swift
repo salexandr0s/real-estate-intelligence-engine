@@ -18,6 +18,10 @@ struct ListingRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    ListingLastSeenLabel(lastSeenAt: listing.lastSeenAt)
+                        .font(.caption)
+                        .lineLimit(1)
+
                     Spacer()
 
                     Text(PriceFormatter.format(eur: listing.listPriceEur))

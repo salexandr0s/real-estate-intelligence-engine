@@ -325,6 +325,63 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.hasLoaded)
         XCTAssertFalse(viewModel.isLoadingList)
     }
+
+    /// A 409 means the thread moved on: show the server's reason and reload the thread, so its
+    /// buttons match what the server accepts now.
+    func testConflictShowsServerMessageAndReloadsThread() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary()],
+            thread: makeThread(),
+            listing: makeListing(),
+            updateError: makeAPIError(
+                status: 409,
+                code: "conflict",
+                message: "The thread changed in the meantime. Reload it and try again"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.performThreadAction(.pause, using: client)
+        let fetchCount = await client.threadFetchCount()
+
+        XCTAssertEqual(viewModel.actionFailure?.message, "The thread changed in the meantime. Reload it and try again")
+        XCTAssertEqual(viewModel.actionFailure?.canTryAgain, false)
+        XCTAssertEqual(fetchCount, 2, "The 409 should reload the thread")
+        XCTAssertNil(viewModel.actionInFlight)
+    }
+
+    /// A 503 `outreach_enqueue_failed` leaves the thread as it was, so Try Again sends the same request.
+    func testEnqueueFailureOffersTryAgainThatResendsFollowup() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary()],
+            thread: makeThread(),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+
+        XCTAssertEqual(viewModel.actionFailure?.message, "Could not queue the follow-up. Try again in a moment")
+        XCTAssertEqual(viewModel.actionFailure?.canTryAgain, true)
+
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(snapshot.followupCalls, [21, 21])
+    }
+}
+
+private func makeAPIError(status: Int, code: String, message: String) -> APIError {
+    .httpError(statusCode: status, detail: APIErrorDetail(code: code, message: message, details: nil))
 }
 
 private enum MockOutreachError: Error {
@@ -359,6 +416,7 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     private var syncMailboxCallsStorage: [Int] = []
     private var updateCallsStorage: [(id: Int, action: OutreachAction)] = []
     private var followupCallsStorage: [Int] = []
+    private var threadFetchCountStorage = 0
 
     init(
         mailboxes: [MailboxAccount] = [],
@@ -405,8 +463,13 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {
         _ = id
+        threadFetchCountStorage += 1
         if let threadError { throw threadError }
         return thread
+    }
+
+    func threadFetchCount() -> Int {
+        threadFetchCountStorage
     }
 
     func fetchListing(id: Int) async throws -> Listing {

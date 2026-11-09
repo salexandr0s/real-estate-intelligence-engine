@@ -13,7 +13,8 @@ struct OutreachView: View {
                 OutreachMailboxHeader(
                     mailboxes: viewModel.mailboxes,
                     isSyncing: viewModel.isSyncingMailbox,
-                    errorMessage: viewModel.pageErrorMessage,
+                    errorMessage: viewModel.syncErrorMessage
+                        ?? visibleLoadError(viewModel.pageErrorMessage, appState: appState),
                     onSync: { Task { await viewModel.syncPrimaryMailbox(using: appState.apiClient) } }
                 )
 
@@ -95,6 +96,9 @@ struct OutreachView: View {
             guard newValue != nil else { return }
             Task { await consumePendingDeepLinkIfNeeded() }
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
     }
 
     private func consumePendingDeepLinkIfNeeded() async {
@@ -102,6 +106,15 @@ struct OutreachView: View {
         await viewModel.openThread(id: threadID, using: appState.apiClient)
         appState.deepLinkOutreachThreadId = nil
     }
+}
+
+/// A load error to show, or nil while the app's connection warning already explains it.
+@MainActor
+private func visibleLoadError(_ message: String?, appState: AppState) -> String? {
+    guard let message, !message.isEmpty,
+          appState.globalConnectionWarningMessage == nil,
+          !AppErrorPresentation.isConnectionIssue(message: message) else { return nil }
+    return message
 }
 
 private struct OutreachInboxPlaceholder<Content: View>: View {
@@ -352,19 +365,30 @@ private struct OutreachDetailPane: View {
 
                         OutreachActionRow(
                             thread: thread,
-                            actionInFlight: viewModel.actionInFlight,
+                            isBusy: viewModel.actionInFlight != nil,
                             onReload: { Task { await viewModel.reloadSelectedThread(using: appState.apiClient) } },
                             onAction: { action in Task { await viewModel.performThreadAction(action, using: appState.apiClient) } },
                             onSendFollowup: { Task { await viewModel.sendFollowup(using: appState.apiClient) } }
                         )
 
-                        if let detailErrorMessage = viewModel.detailErrorMessage, !detailErrorMessage.isEmpty {
-                            Label(detailErrorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, Theme.Spacing.md)
-                                .padding(.vertical, Theme.Spacing.sm)
-                                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                        if let failure = viewModel.actionFailure {
+                            InlineWarningBanner(
+                                title: failure.request.failureTitle,
+                                message: failure.message,
+                                actions: failureActions(for: failure)
+                            )
+                        }
+
+                        if let detailError = visibleLoadError(viewModel.detailErrorMessage, appState: appState) {
+                            InlineWarningBanner(
+                                title: "Couldn’t reload the thread",
+                                message: detailError,
+                                actions: [
+                                    .init("Try Again") {
+                                        Task { await viewModel.reloadSelectedThread(using: appState.apiClient) }
+                                    }
+                                ]
+                            )
                         }
 
                         OutreachMessageTimeline(messages: thread.messages)
@@ -373,14 +397,34 @@ private struct OutreachDetailPane: View {
                     .padding(Theme.Spacing.xl)
                 }
             } else if let detailErrorMessage = viewModel.detailErrorMessage {
-                ContentUnavailableView("Thread unavailable", systemImage: "exclamationmark.triangle", description: Text(detailErrorMessage))
-            } else if let pageErrorMessage = viewModel.pageErrorMessage, viewModel.threads.isEmpty {
+                ContentUnavailableView(
+                    "Thread unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(
+                        visibleLoadError(detailErrorMessage, appState: appState)
+                            ?? "The thread shows here once the server responds."
+                    )
+                )
+            } else if let pageErrorMessage = visibleLoadError(viewModel.pageErrorMessage, appState: appState),
+                      viewModel.threads.isEmpty {
                 ContentUnavailableView("Outreach unavailable", systemImage: "exclamationmark.triangle", description: Text(pageErrorMessage))
             } else {
                 ContentUnavailableView("Select a thread", systemImage: "envelope.open", description: Text("Choose a thread to inspect replies, timeline events, and next actions."))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Try Again shows only when the server couldn't queue the email and kept the thread as it was.
+    private func failureActions(for failure: OutreachRequestFailure) -> [InlineWarningBanner.Action] {
+        var actions: [InlineWarningBanner.Action] = []
+        if failure.canTryAgain {
+            actions.append(.init("Try Again", isProminent: true) {
+                Task { await viewModel.tryFailedRequestAgain(using: appState.apiClient) }
+            })
+        }
+        actions.append(.init("Dismiss") { viewModel.dismissActionFailure() })
+        return actions
     }
 }
 
@@ -470,34 +514,58 @@ private struct OutreachThreadHeader: View {
 
 private struct OutreachActionRow: View {
     let thread: OutreachThread
-    let actionInFlight: String?
+    let isBusy: Bool
     let onReload: () -> Void
     let onAction: (OutreachAction) -> Void
     let onSendFollowup: () -> Void
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Button("Reload", action: onReload)
-                .buttonStyle(.bordered)
-
-            Button("Pause") { onAction(.pause) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState == "paused" || thread.workflowState == "closed" || actionInFlight != nil)
-
-            Button("Resume") { onAction(.resume) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState != "paused" || actionInFlight != nil)
-
-            Button("Close") { onAction(.close) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState == "closed" || actionInFlight != nil)
-
-            Button("Send Follow-up", action: onSendFollowup)
-                .buttonStyle(.borderedProminent)
-                .disabled(thread.lastInboundAt != nil || thread.workflowState == "closed" || actionInFlight != nil)
-
-            Spacer()
+        // Each button is enabled only when the server accepts its request in the thread's state.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.Spacing.sm) {
+                reloadButton
+                stateButtons
+                followupButton
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.sm) {
+                    stateButtons
+                }
+                HStack(spacing: Theme.Spacing.sm) {
+                    reloadButton
+                    followupButton
+                }
+            }
         }
+    }
+
+    private var reloadButton: some View {
+        Button("Reload", action: onReload)
+            .buttonStyle(.bordered)
+    }
+
+    @ViewBuilder
+    private var stateButtons: some View {
+        Button("Pause") { onAction(.pause) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canPause)
+        Button("Resume") { onAction(.resume) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canResume)
+        Button("Retry") { onAction(.retry) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canRetry)
+            .help("Queue the unsent email again")
+        Button("Close") { onAction(.close) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canClose)
+    }
+
+    private var followupButton: some View {
+        Button("Send Follow-Up", action: onSendFollowup)
+            .buttonStyle(.borderedProminent)
+            .disabled(isBusy || !thread.canSendFollowup)
     }
 }
 

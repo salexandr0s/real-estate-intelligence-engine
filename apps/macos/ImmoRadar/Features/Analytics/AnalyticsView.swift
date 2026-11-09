@@ -75,6 +75,9 @@ struct AnalyticsView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
     }
 
     private var overviewContent: some View {
@@ -128,6 +131,7 @@ struct AnalyticsView: View {
     @ViewBuilder
     private var errorBanner: some View {
         if let error = viewModel.errorMessage,
+           appState.globalConnectionWarningMessage == nil,
            !AppErrorPresentation.isConnectionIssue(message: error) {
             InlineWarningBanner(
                 title: "Couldn’t load analytics.",
