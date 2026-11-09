@@ -8,6 +8,8 @@ struct APISourceResponse: Codable {
     let name: String
     let isActive: Bool
     let healthStatus: String
+    let legalStatus: String?
+    let disabledReason: String?
     let lastSuccessfulRun: String?
     let lastSuccessfulRunAt: String?
     let crawlIntervalMinutes: Int

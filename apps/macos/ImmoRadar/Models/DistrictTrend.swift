@@ -12,22 +12,14 @@ struct DistrictTrendPoint: Identifiable, Codable, Sendable {
 
     var id: String { "\(districtNo)-\(date)" }
 
-    /// Parse the date string ("2026-03-01") into a Date.
-    /// Uses a dedicated formatter without fractional seconds.
+    /// The Vienna calendar day the server sends ("2026-03-01"), as the start of that day here.
     var parsedDate: Date? {
-        DistrictTrendPoint.dateFormatter.date(from: date)
+        Date.fromCalendarDay(date)
     }
 
     var districtLabel: String {
         ViennaDistricts.label(for: districtNo)
     }
-
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "UTC")
-        return f
-    }()
 }
 
 /// Market temperature for a single district based on listing velocity.

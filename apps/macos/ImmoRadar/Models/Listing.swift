@@ -27,6 +27,8 @@ struct Listing: Identifiable, Codable, Hashable {
     let lastPriceChangePct: Double?
     let lastPriceChangeAt: Date?
     let firstSeenAt: Date?
+    /// When a scrape last saw the listing on its source.
+    let lastSeenAt: Date?
     let listingStatus: ListingStatus
     let contactName: String?
     let contactCompany: String?
@@ -130,7 +132,8 @@ struct Listing: Identifiable, Codable, Hashable {
         contactEmail: String? = nil,
         contactPhone: String? = nil,
         outreachSummary: OutreachSummary? = nil,
-        hasAlertMatch: Bool = false
+        hasAlertMatch: Bool = false,
+        lastSeenAt: Date? = nil
     ) {
         self.id = id
         self.listingUid = listingUid
@@ -155,6 +158,7 @@ struct Listing: Identifiable, Codable, Hashable {
         self.lastPriceChangePct = lastPriceChangePct
         self.lastPriceChangeAt = lastPriceChangeAt
         self.firstSeenAt = firstSeenAt
+        self.lastSeenAt = lastSeenAt
         self.listingStatus = listingStatus
         self.contactName = contactName
         self.contactCompany = contactCompany

@@ -27,6 +27,7 @@ struct APIListingResponse: Codable {
     let lastPriceChangePct: Double?
     let lastPriceChangeAt: String?
     let firstSeenAt: String
+    let lastSeenAt: String?
     let listingStatus: String?
     let contactName: String?
     let contactCompany: String?
@@ -35,10 +36,11 @@ struct APIListingResponse: Codable {
     let outreachSummary: APIOutreachSummaryResponse?
 
     func toDomain(decoder: JSONDecoder) -> Listing? {
-        guard let opType = OperationType(rawValue: operationType),
-              let propType = PropertyType(rawValue: propertyType) else {
+        guard let opType = OperationType(rawValue: operationType) else {
             return nil
         }
+        // A property type the app doesn't know shows as Other instead of hiding the listing.
+        let propType = PropertyType(rawValue: propertyType) ?? .other
 
         let date = Date.fromISO(firstSeenAt)
         let priceChangeDate = lastPriceChangeAt.flatMap(Date.fromISO)
@@ -80,7 +82,8 @@ struct APIListingResponse: Codable {
             contactCompany: contactCompany,
             contactEmail: contactEmail,
             contactPhone: contactPhone,
-            outreachSummary: outreachSummary?.toDomain()
+            outreachSummary: outreachSummary?.toDomain(),
+            lastSeenAt: lastSeenAt.flatMap(Date.fromISO)
         )
     }
 }

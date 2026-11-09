@@ -33,9 +33,22 @@ enum AlertSortDirection: String, Codable, CaseIterable, Hashable {
     }
 }
 
+/// An alert status as the server stores it. The app's `AlertStatus.unread` covers `queued` and `sent`.
+enum AlertServerStatus: String, CaseIterable, Hashable, Sendable {
+    case queued
+    case sent
+    case failed
+    case dismissed
+    case opened
+    case suppressed
+}
+
+/// The query of GET /v1/alerts (`alertListQuerySchema` in apps/api/src/schemas.ts).
 struct AlertQuery {
-    var status: String?
+    var status: AlertServerStatus?
+    /// Only alerts raised by this filter.
     var userFilterId: Int?
+    /// 1 to 200.
     var limit: Int?
     var cursor: String?
     var sortBy: AlertSortBy = .age
@@ -43,7 +56,7 @@ struct AlertQuery {
 
     func toQueryItems() -> [URLQueryItem] {
         var items: [URLQueryItem] = []
-        if let v = status { items.append(.init(name: "status", value: v)) }
+        if let v = status { items.append(.init(name: "status", value: v.rawValue)) }
         if let v = userFilterId { items.append(.init(name: "userFilterId", value: String(v))) }
         if let v = limit { items.append(.init(name: "limit", value: String(v))) }
         if let v = cursor { items.append(.init(name: "cursor", value: v)) }

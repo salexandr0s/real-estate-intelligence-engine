@@ -33,12 +33,14 @@ final class AlertsState {
         switch alert.alertType {
         case .newMatch:
             shouldNotify = notifyOnNewMatch
-        case .priceDrop:
+        case .priceDrop, .priceChange:
             shouldNotify = notifyOnPriceDrop
-        case .scoreUpgrade, .scoreDowngrade:
+        case .scoreUpgrade:
             shouldNotify = notifyOnScoreChange
-        case .statusChange:
+        case .statusChange, .digest:
             shouldNotify = notifyOnNewMatch
+        case .sourceDegraded, .unknown:
+            shouldNotify = false
         }
 
         if shouldNotify {

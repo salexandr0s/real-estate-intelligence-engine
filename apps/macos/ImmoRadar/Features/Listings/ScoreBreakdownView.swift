@@ -39,7 +39,7 @@ struct ScoreBreakdownView: View {
                         Text("Discount to district")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPercent(explanation.discountToDistrictPct))
+                        Text(explanation.discountToDistrictPct.map(PriceFormatter.formatPercent) ?? "—")
                             .font(.caption.monospacedDigit().bold())
                             .foregroundStyle(.green)
                     }
@@ -56,7 +56,7 @@ struct ScoreBreakdownView: View {
                         Text("Discount to bucket")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPercent(explanation.discountToBucketPct))
+                        Text(explanation.discountToBucketPct.map(PriceFormatter.formatPercent) ?? "—")
                             .font(.caption.monospacedDigit().bold())
                             .foregroundStyle(.green)
                     }

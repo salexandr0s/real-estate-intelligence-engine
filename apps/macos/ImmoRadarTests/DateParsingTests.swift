@@ -38,6 +38,7 @@ final class DateParsingTests: XCTestCase {
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
             firstSeenAt: "invalid-date",
+            lastSeenAt: nil,
             listingStatus: ListingStatus.active.rawValue,
             contactName: nil,
             contactCompany: nil,
@@ -55,13 +56,14 @@ final class DateParsingTests: XCTestCase {
     func testAlertMappingPreservesInvalidMatchedDateAsNil() {
         let dto = APIAlertResponse(
             id: 1,
+            userFilterId: nil,
+            listingId: 123,
             alertType: AlertType.newMatch.rawValue,
-            status: AlertStatus.unread.rawValue,
+            status: "sent",
             title: "Alert",
             body: "Body",
             matchedAt: "bad-date",
             filterName: "Value Filter",
-            listingId: 123,
             matchReasons: nil,
             listing: nil
         )
@@ -82,6 +84,24 @@ final class DateParsingTests: XCTestCase {
         )
 
         XCTAssertNil(point.parsedDate)
+    }
+
+    /// The server sends trend and velocity days as Vienna calendar days. West of UTC, a UTC
+    /// midnight falls on the previous local day, so the day must parse as local midnight.
+    func testCalendarDayParsesAsLocalMidnight() throws {
+        let losAngeles = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let date = try XCTUnwrap(Date.fromCalendarDay("2026-03-01", timeZone: losAngeles))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = losAngeles
+        let parts = calendar.dateComponents([.year, .month, .day, .hour], from: date)
+        XCTAssertEqual(parts.year, 2026)
+        XCTAssertEqual(parts.month, 3)
+        XCTAssertEqual(parts.day, 1)
+        XCTAssertEqual(parts.hour, 0)
+
+        XCTAssertNil(Date.fromCalendarDay("2026-02-30", timeZone: losAngeles))
+        XCTAssertNil(Date.fromCalendarDay("2026-03-01T00:00:00Z", timeZone: losAngeles))
     }
 
     func testMailboxResponseDecodesAndMapsLastSuccessfulSyncAt() throws {

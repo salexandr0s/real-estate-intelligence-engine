@@ -9,10 +9,11 @@ struct ScoreExplanation: Codable, Hashable {
     let timeOnMarketScore: Double
     let confidenceScore: Double
     let locationScore: Double?
-    let districtBaselinePpsqmEur: Double
-    let bucketBaselinePpsqmEur: Double
-    let discountToDistrictPct: Double
-    let discountToBucketPct: Double
+    /// Nil when no baseline covers the listing.
+    let districtBaselinePpsqmEur: Double?
+    let bucketBaselinePpsqmEur: Double?
+    let discountToDistrictPct: Double?
+    let discountToBucketPct: Double?
     let matchedPositiveKeywords: [String]
     let matchedNegativeKeywords: [String]
 }

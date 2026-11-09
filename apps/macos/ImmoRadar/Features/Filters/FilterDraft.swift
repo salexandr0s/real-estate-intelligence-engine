@@ -13,8 +13,8 @@ final class FilterDraft {
     var maxPriceEur: Int? = nil
     var minAreaSqm: Double? = nil
     var maxAreaSqm: Double? = nil
-    var minRooms: Int? = nil
-    var maxRooms: Int? = nil
+    var minRooms: Double? = nil
+    var maxRooms: Double? = nil
     var keywords: String = ""
     var excludedKeywordsStr: String = ""
     var alertFrequency: AlertFrequency = .instant
@@ -89,7 +89,7 @@ final class FilterDraft {
         }
 
         if let minRooms {
-            parts.append("and \(minRooms)+ rooms")
+            parts.append("and \(minRooms.formatted())+ rooms")
         }
 
         let required = keywordsList
