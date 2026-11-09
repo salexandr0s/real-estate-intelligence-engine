@@ -40,6 +40,8 @@ const outreachMachine = createMachine({
           },
         ],
         SEND_FAILED: 'failed',
+        // A reply stops a queued follow-up: the worker sends only from queued_send.
+        REPLY_RECEIVED: 'reply_received',
         PAUSE: 'paused',
         CLOSE: 'closed',
       },

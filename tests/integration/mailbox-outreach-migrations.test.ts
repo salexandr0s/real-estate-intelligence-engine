@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { query, runMigrations } from '@immoradar/db';
+import { outreach, query, runMigrations } from '@immoradar/db';
 import { seed } from '../../packages/db/seeds/seed.js';
 import { createPostgresTestDatabase } from './helpers/postgres-test-db.js';
 
@@ -205,5 +205,157 @@ describe('mailbox/outreach migration smoke', () => {
         [threadId, mailboxId],
       ),
     ).rejects.toMatchObject({ code: '23505' });
+  });
+
+  async function insertThreadFixture(contactEmail: string, workflowState: string) {
+    const user = await query<{ id: string }>(`SELECT id FROM app_users ORDER BY id LIMIT 1`);
+    const userId = Number(user[0]!.id);
+    const listingId = await insertFixtureListing();
+    const mailbox = await query<{ id: string }>(
+      `INSERT INTO mailbox_accounts (user_id, email, display_name, secret_ref)
+       VALUES ($1, $2, 'Inbox', 'env:test')
+       RETURNING id`,
+      [userId, `mailbox-${contactEmail}`],
+    );
+    const mailboxId = Number(mailbox[0]!.id);
+    const thread = await query<{ id: string }>(
+      `INSERT INTO outreach_threads (
+         user_id, listing_id, mailbox_account_id, contact_email, workflow_state
+       ) VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [userId, listingId, mailboxId, contactEmail, workflowState],
+    );
+    return { userId, mailboxId, threadId: Number(thread[0]!.id) };
+  }
+
+  async function insertOutbound(
+    threadId: number,
+    mailboxId: number,
+    kind: 'initial' | 'followup',
+    status: 'queued' | 'sent',
+    providerMessageId: string | null,
+  ): Promise<number> {
+    const rows = await query<{ id: string }>(
+      `INSERT INTO outreach_messages (
+         thread_id, mailbox_account_id, direction, message_kind, delivery_status,
+         provider_message_id, subject, match_strategy
+       ) VALUES ($1, $2, 'outbound', $3, $4, $5, 'Test', 'manual')
+       RETURNING id`,
+      [threadId, mailboxId, kind, status, providerMessageId],
+    );
+    return Number(rows[0]!.id);
+  }
+
+  // Sent IDs were stored as nodemailer reports them, `<id@host>`, and replies are matched on
+  // bare IDs, so no reply ever matched through its headers.
+  it.skipIf(!hasDb)('matches a reply through our Message-ID and records it once', async () => {
+    const { userId, mailboxId, threadId } = await insertThreadFixture(
+      'broker3@example.com',
+      'sent_waiting_reply',
+    );
+    await insertOutbound(threadId, mailboxId, 'initial', 'sent', '<legacy-1@example.com>');
+    await insertOutbound(threadId, mailboxId, 'followup', 'sent', 'new-1@example.com');
+
+    const byLegacy = await outreach.findThreadByProviderMessageIds(userId, [
+      'unrelated@example.com',
+      'legacy-1@example.com',
+    ]);
+    expect(byLegacy?.id).toBe(threadId);
+    expect((await outreach.findThreadByProviderMessageIds(userId, ['new-1@example.com']))?.id).toBe(
+      threadId,
+    );
+    expect(
+      await outreach.findThreadByProviderMessageIds(userId + 1000, ['new-1@example.com']),
+    ).toBeNull();
+    expect(
+      await outreach.findMessageByProviderId(mailboxId, 'legacy-1@example.com'),
+    ).not.toBeNull();
+
+    const input = {
+      mailboxAccountId: mailboxId,
+      threadId,
+      providerMessageId: 'reply-9@example.com',
+      subject: 'Re: Test',
+      matchStrategy: 'headers' as const,
+      occurredAt: new Date('2026-03-27T10:00:00Z'),
+    };
+    const replyState = () => 'reply_received' as const;
+    const first = await outreach.recordInboundMessage(input, replyState);
+    const second = await outreach.recordInboundMessage(input, replyState);
+
+    expect(first.inserted).toBe(true);
+    expect(second).toMatchObject({ inserted: false, message: { id: first.message.id } });
+    const events = await query<{ event_type: string }>(
+      'SELECT event_type FROM outreach_events WHERE thread_id = $1',
+      [threadId],
+    );
+    expect(events.map((event) => event.event_type)).toEqual(['reply_received']);
+    const thread = await outreach.findThreadById(threadId);
+    expect(thread?.workflowState).toBe('reply_received');
+    expect(thread?.lastInboundAt?.toISOString()).toBe('2026-03-27T10:00:00.000Z');
+  });
+
+  it.skipIf(!hasDb)('queues a thread only from the expected states', async () => {
+    const { mailboxId, threadId } = await insertThreadFixture(
+      'broker4@example.com',
+      'sent_waiting_reply',
+    );
+    const messageId = await insertOutbound(threadId, mailboxId, 'followup', 'queued', null);
+    const move = () =>
+      outreach.transitionThreadState({
+        threadId,
+        from: ['sent_waiting_reply', 'followup_due'],
+        to: 'queued_send',
+        nextActionAt: null,
+        event: { messageId, eventType: 'followup_queued' },
+      });
+
+    expect((await move())?.workflowState).toBe('queued_send');
+    expect(await move()).toBeNull();
+
+    const failed = await outreach.failQueuedSend({ threadId, messageId, errorMessage: 'no job' });
+    expect(failed?.workflowState).toBe('failed');
+    expect((await outreach.findMessageById(messageId))?.deliveryStatus).toBe('failed');
+    const events = await query<{ event_type: string; from_state: string }>(
+      'SELECT event_type, from_state FROM outreach_events WHERE thread_id = $1 ORDER BY id',
+      [threadId],
+    );
+    expect(events).toEqual([
+      { event_type: 'followup_queued', from_state: 'sent_waiting_reply' },
+      { event_type: 'send_failed', from_state: 'queued_send' },
+    ]);
+  });
+
+  // The worker wrote the state it computed before the SMTP call, so a thread closed during the
+  // send was reopened, and its automatic follow-up later emailed the contact.
+  it.skipIf(!hasDb)('records a send without reopening a thread closed meanwhile', async () => {
+    const { mailboxId, threadId } = await insertThreadFixture('broker5@example.com', 'queued_send');
+    const messageId = await insertOutbound(threadId, mailboxId, 'initial', 'sent', 'sent-5');
+    const record = (sendKind: 'initial' | 'followup', sentAt: string) =>
+      outreach.recordSentEmail({
+        threadId,
+        sendKind,
+        to: sendKind === 'initial' ? 'sent_waiting_reply' : 'followup_sent',
+        sentAt: new Date(sentAt),
+        nextActionAt: new Date('2026-03-30T10:00:00Z'),
+        event: { messageId, eventType: `${sendKind}_sent` },
+      });
+
+    expect(await record('initial', '2026-03-27T10:00:00Z')).toBe(true);
+    await query(`UPDATE outreach_threads SET workflow_state = 'closed' WHERE id = $1`, [threadId]);
+    expect(await record('followup', '2026-03-28T10:00:00Z')).toBe(false);
+
+    const thread = await outreach.findThreadById(threadId);
+    expect(thread).toMatchObject({ workflowState: 'closed', autoFollowupCount: 1 });
+    expect(thread?.lastOutboundAt?.toISOString()).toBe('2026-03-28T10:00:00.000Z');
+    expect(thread?.nextActionAt?.toISOString()).toBe('2026-03-30T10:00:00.000Z');
+    const events = await query<{ event_type: string; from_state: string; to_state: string }>(
+      'SELECT event_type, from_state, to_state FROM outreach_events WHERE thread_id = $1 ORDER BY id',
+      [threadId],
+    );
+    expect(events).toEqual([
+      { event_type: 'initial_sent', from_state: 'queued_send', to_state: 'sent_waiting_reply' },
+      { event_type: 'followup_sent', from_state: 'closed', to_state: 'closed' },
+    ]);
   });
 });

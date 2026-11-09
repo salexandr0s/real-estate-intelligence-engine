@@ -3,8 +3,9 @@ import { Worker } from 'bullmq';
 import type { ConnectionOptions, Job, Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
 import { mailboxes, outreach } from '@immoradar/db';
+import type { OutreachMessageRow } from '@immoradar/contracts';
 import { createLogger } from '@immoradar/observability';
-import { applyOutreachTransition } from '@immoradar/outreach';
+import { applyOutreachTransition, normalizeMessageId } from '@immoradar/outreach';
 import {
   QUEUE_NAMES,
   WORKER_CONCURRENCY,
@@ -18,10 +19,14 @@ const log = createLogger('worker:outreach-send');
 
 type MailTransport = Pick<Transporter, 'sendMail'>;
 type SendQueue = Pick<Queue<OutreachSendJobData>, 'add'>;
+type SendKind = OutreachSendJobData['sendKind'];
 
 type OutreachSendProcessResult =
-  | { status: 'skipped'; reason: 'missing_thread' | 'thread_not_queued' | 'missing_mailbox' }
-  | { status: 'sent'; threadId: number; messageId: number; sendKind: 'initial' | 'followup' };
+  | {
+      status: 'skipped';
+      reason: 'missing_thread' | 'thread_not_queued' | 'missing_mailbox' | 'already_sent';
+    }
+  | { status: 'sent'; threadId: number; messageId: number; sendKind: SendKind };
 
 let cachedTransportKey: string | null = null;
 let cachedTransporter: MailTransport | null = null;
@@ -62,6 +67,76 @@ function getSendQueue(): SendQueue {
   return followupQueue;
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Bookkeeping after SMTP accepted an email. Failures are logged, never thrown: a thrown error
+ * would fail the job, and a retry would send the email again.
+ */
+async function finishSentEmail(input: {
+  threadId: number;
+  message: OutreachMessageRow;
+  sendKind: SendKind;
+  sentAt: Date;
+  providerMessageId: string | null;
+  config: ReturnType<typeof loadConfig>;
+  sendQueue?: SendQueue;
+}): Promise<void> {
+  const { threadId, message, sendKind, sentAt, config } = input;
+  const followupDelayMs = config.outreach.followupDelayHours * 60 * 60 * 1000;
+
+  let moved: boolean;
+  try {
+    moved = await outreach.recordSentEmail({
+      threadId,
+      sendKind,
+      to: applyOutreachTransition('queued_send', { type: 'SEND_SUCCEEDED', sendKind }),
+      sentAt,
+      nextActionAt: sendKind === 'initial' ? new Date(sentAt.getTime() + followupDelayMs) : null,
+      event: {
+        messageId: message.id,
+        eventType: sendKind === 'initial' ? 'initial_sent' : 'followup_sent',
+        payload: { providerMessageId: input.providerMessageId },
+      },
+    });
+  } catch (error) {
+    log.error('Outreach email sent, but recording it on the thread failed', {
+      threadId,
+      messageId: message.id,
+      error: errorText(error),
+    });
+    return;
+  }
+
+  if (!moved) {
+    // Paused, closed or answered while the email was in flight: that state stays, and no
+    // automatic follow-up is scheduled.
+    log.info('Outreach email sent after the thread left queued_send', {
+      threadId,
+      messageId: message.id,
+    });
+    return;
+  }
+  if (sendKind !== 'initial' || config.outreach.maxAutoFollowups <= 0) return;
+
+  try {
+    // One ID per thread, so finishing the same send twice schedules one follow-up.
+    await (input.sendQueue ?? getSendQueue()).add(
+      `outreach:followup:auto:${threadId}`,
+      { threadId, sendKind: 'followup', triggeredBy: 'scheduler' },
+      { delay: followupDelayMs, jobId: `outreach-followup-auto-${threadId}` },
+    );
+  } catch (error) {
+    log.error('Outreach email sent, but scheduling its follow-up failed', {
+      threadId,
+      messageId: message.id,
+      error: errorText(error),
+    });
+  }
+}
+
 export async function processOutreachSendJob(
   jobData: OutreachSendJobData,
   deps: {
@@ -79,30 +154,39 @@ export async function processOutreachSendJob(
   }
 
   let sendFromState = thread.workflowState;
-  if (
-    jobData.sendKind === 'followup' &&
-    jobData.triggeredBy === 'scheduler' &&
-    thread.workflowState === 'sent_waiting_reply' &&
-    thread.lastInboundAt == null &&
-    thread.autoFollowupCount < config.outreach.maxAutoFollowups
-  ) {
+  if (jobData.sendKind === 'followup' && jobData.triggeredBy === 'scheduler') {
+    // The automatic follow-up only runs from sent_waiting_reply. In any other state the
+    // thread got a reply, was paused or closed, or another send is already queued.
+    if (
+      thread.workflowState !== 'sent_waiting_reply' ||
+      thread.lastInboundAt != null ||
+      thread.autoFollowupCount >= config.outreach.maxAutoFollowups
+    ) {
+      log.debug('Automatic follow-up no longer due, skipping', {
+        threadId: thread.id,
+        workflowState: thread.workflowState,
+      });
+      return { status: 'skipped', reason: 'thread_not_queued' };
+    }
     const followupDueState = applyOutreachTransition(thread.workflowState, {
       type: 'FOLLOWUP_DUE',
     });
     const queuedState = applyOutreachTransition(followupDueState, { type: 'RETRY' });
-    await outreach.updateThreadState({
+    // Only from sent_waiting_reply, so a reply, pause or close since the read above wins.
+    const queued = await outreach.transitionThreadState({
       threadId: thread.id,
-      workflowState: queuedState,
+      from: ['sent_waiting_reply'],
+      to: queuedState,
       nextActionAt: null,
+      event: { eventType: 'followup_due', payload: { triggeredBy: 'scheduler' } },
     });
-    await outreach.appendEvent({
-      threadId: thread.id,
-      eventType: 'followup_due',
-      fromState: thread.workflowState,
-      toState: queuedState,
-      payload: { triggeredBy: 'scheduler' },
-    });
-    sendFromState = queuedState;
+    if (!queued) {
+      log.debug('Thread changed before the automatic follow-up, skipping', {
+        threadId: thread.id,
+      });
+      return { status: 'skipped', reason: 'thread_not_queued' };
+    }
+    sendFromState = queued.workflowState;
   }
 
   if (sendFromState !== 'queued_send') {
@@ -141,6 +225,32 @@ export async function processOutreachSendJob(
     });
   }
 
+  if (message.deliveryStatus === 'sent') {
+    // An earlier attempt sent this email. Never send it twice; finish the bookkeeping that
+    // attempt didn't get to, if any.
+    const bookkeepingDone =
+      thread.lastOutboundAt != null &&
+      thread.lastOutboundAt.getTime() >= message.occurredAt.getTime();
+    log.warn('Outreach email already sent, not sending again', {
+      threadId: thread.id,
+      messageId: message.id,
+      sendKind: jobData.sendKind,
+      bookkeepingDone,
+    });
+    if (!bookkeepingDone) {
+      await finishSentEmail({
+        threadId: thread.id,
+        message,
+        sendKind: jobData.sendKind,
+        sentAt: message.occurredAt,
+        providerMessageId: message.providerMessageId,
+        config,
+        sendQueue: deps.sendQueue,
+      });
+    }
+    return { status: 'skipped', reason: 'already_sent' };
+  }
+
   await outreach.updateMessageStatus({ id: message.id, deliveryStatus: 'queued' });
 
   const transporter = deps.transporter ?? getTransporter(config);
@@ -148,6 +258,7 @@ export async function processOutreachSendJob(
     ? `${config.outreach.fromName} <${mailbox.email}>`
     : mailbox.email;
 
+  let providerMessageId: string | null;
   try {
     const result = await transporter.sendMail({
       from: fromAddress,
@@ -158,86 +269,83 @@ export async function processOutreachSendJob(
       inReplyTo: message.inReplyTo ?? undefined,
       references: message.referencesHeader ?? undefined,
     });
+    // nodemailer reports `<id@host>`; replies are matched on the bare ID.
+    providerMessageId = result.messageId ? normalizeMessageId(result.messageId) : null;
+  } catch (error) {
+    await outreach.updateMessageStatus({
+      id: message.id,
+      deliveryStatus: 'failed',
+      errorMessage: errorText(error),
+    });
+    const failed = await outreach.transitionThreadState({
+      threadId: thread.id,
+      from: ['queued_send'],
+      to: applyOutreachTransition('queued_send', { type: 'SEND_FAILED' }),
+      nextActionAt: null,
+      event: {
+        messageId: message.id,
+        eventType: 'send_failed',
+        payload: { error: errorText(error) },
+      },
+    });
+    if (!failed) {
+      // Paused, closed or answered during the attempt; that state stays.
+      log.info('Outreach send failed after the thread left queued_send', {
+        threadId: thread.id,
+        messageId: message.id,
+      });
+    }
+    throw error;
+  }
 
-    const sentAt = deps.now?.() ?? new Date();
+  // SMTP accepted the email. From here on nothing throws, or the job would fail and a retry
+  // would send it again. Recording the send comes first: a retry checks it before sending.
+  const sentAt = deps.now?.() ?? new Date();
+  try {
     await outreach.updateMessageStatus({
       id: message.id,
       deliveryStatus: 'sent',
-      providerMessageId: result.messageId ?? null,
+      providerMessageId,
       occurredAt: sentAt,
     });
-
-    const nextState = applyOutreachTransition(sendFromState, {
-      type: 'SEND_SUCCEEDED',
-      sendKind: jobData.sendKind,
-    });
-    const autoFollowupCount =
-      jobData.sendKind === 'followup' ? thread.autoFollowupCount + 1 : thread.autoFollowupCount;
-    const nextActionAt =
-      jobData.sendKind === 'initial'
-        ? new Date(sentAt.getTime() + config.outreach.followupDelayHours * 60 * 60 * 1000)
-        : null;
-
-    await outreach.updateThreadState({
-      threadId: thread.id,
-      workflowState: nextState,
-      lastOutboundAt: sentAt,
-      nextActionAt,
-      autoFollowupCount,
-    });
-    await outreach.appendEvent({
+  } catch (error) {
+    log.error('Outreach email sent but not recorded; the thread stays queued', {
       threadId: thread.id,
       messageId: message.id,
-      eventType: jobData.sendKind === 'initial' ? 'initial_sent' : 'followup_sent',
-      fromState: sendFromState,
-      toState: nextState,
-      payload: { providerMessageId: result.messageId ?? null },
+      providerMessageId,
+      error: errorText(error),
     });
-
-    if (jobData.sendKind === 'initial' && config.outreach.maxAutoFollowups > 0) {
-      const sendQueue = deps.sendQueue ?? getSendQueue();
-      await sendQueue.add(
-        `outreach:followup:auto:${thread.id}:${Date.now()}`,
-        { threadId: thread.id, sendKind: 'followup', triggeredBy: 'scheduler' },
-        { delay: config.outreach.followupDelayHours * 60 * 60 * 1000 },
-      );
-    }
-
-    log.info('Outreach email sent', {
-      threadId: thread.id,
-      messageId: message.id,
-      sendKind: jobData.sendKind,
-      providerMessageId: result.messageId ?? null,
-    });
-
     return {
       status: 'sent',
       threadId: thread.id,
       messageId: message.id,
       sendKind: jobData.sendKind,
     };
-  } catch (error) {
-    const nextState = applyOutreachTransition(sendFromState, { type: 'SEND_FAILED' });
-    await outreach.updateMessageStatus({
-      id: message.id,
-      deliveryStatus: 'failed',
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    await outreach.updateThreadState({
-      threadId: thread.id,
-      workflowState: nextState,
-      nextActionAt: null,
-    });
-    await outreach.appendEvent({
-      threadId: thread.id,
-      messageId: message.id,
-      eventType: 'send_failed',
-      fromState: sendFromState,
-      toState: nextState,
-      payload: { error: error instanceof Error ? error.message : String(error) },
-    });
-    throw error;
   }
+
+  await finishSentEmail({
+    threadId: thread.id,
+    message,
+    sendKind: jobData.sendKind,
+    sentAt,
+    providerMessageId,
+    config,
+    sendQueue: deps.sendQueue,
+  });
+
+  log.info('Outreach email sent', {
+    threadId: thread.id,
+    messageId: message.id,
+    sendKind: jobData.sendKind,
+    providerMessageId,
+  });
+
+  return {
+    status: 'sent',
+    threadId: thread.id,
+    messageId: message.id,
+    sendKind: jobData.sendKind,
+  };
 }
 
 export function createOutreachSendWorker(): Worker<OutreachSendJobData> {
