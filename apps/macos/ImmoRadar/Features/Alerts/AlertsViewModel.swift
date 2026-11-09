@@ -169,15 +169,27 @@ final class AlertsViewModel {
         loadErrorMessage = nil
         alertsStreamedDuringLoad = []
 
+        // The query as it is now. Changing it starts a newer load, and this one stops paging.
+        let statuses = scope.serverStatuses
+        let filterID = userFilterId
+        let sortBy = self.sortBy
+        let sortDirection = self.sortDirection
+
         async let filterOptions = Self.fetchFilterOptions(using: client)
         do {
             var loaded: [Alert] = []
-            for status in scope.serverStatuses {
+            var isComplete = true
+            pages: for status in statuses {
                 var cursor: String? = nil
+                var requestedCursors = Set<String>()
                 repeat {
+                    guard generation == loadGeneration, !Task.isCancelled else {
+                        isComplete = false
+                        break pages
+                    }
                     var query = AlertQuery()
                     query.status = status
-                    query.userFilterId = userFilterId
+                    query.userFilterId = filterID
                     query.limit = 200
                     query.cursor = cursor
                     query.sortBy = sortBy
@@ -186,10 +198,20 @@ final class AlertsViewModel {
                     let response = try await client.fetchAlertsPaginated(query: query)
                     loaded.append(contentsOf: response.alerts)
                     cursor = response.nextCursor
+                    // A cursor the server hands back again would page forever.
+                    if let next = cursor, !requestedCursors.insert(next).inserted {
+                        Log.api.error("The alerts list repeated a cursor, so paging stopped")
+                        cursor = nil
+                    }
                 } while cursor != nil
             }
-            guard generation == loadGeneration else {
+            guard isComplete, generation == loadGeneration else {
+                // Superseded, or cancelled with the last loaded alerts still on screen.
                 _ = await filterOptions
+                if generation == loadGeneration {
+                    alertsStreamedDuringLoad = []
+                    isLoading = false
+                }
                 return
             }
 
@@ -197,7 +219,7 @@ final class AlertsViewModel {
             // load, and sort the union, since each request came sorted on its own.
             var seenIDs = Set<Int>()
             var merged = loaded.filter { seenIDs.insert($0.id).inserted }
-            if scope.serverStatuses.count > 1 {
+            if statuses.count > 1 {
                 merged = sortAlerts(merged)
             }
             for alert in alertsStreamedDuringLoad where matchesFilters(alert) {
@@ -208,7 +230,7 @@ final class AlertsViewModel {
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
             // The last loaded alerts stay.
-            if generation == loadGeneration {
+            if generation == loadGeneration, !Task.isCancelled {
                 loadErrorMessage = AppErrorPresentation.message(for: error)
             }
         }
@@ -260,8 +282,15 @@ final class AlertsViewModel {
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            await showBulkFailure(error, using: client)
         }
+    }
+
+    /// The client sends a long list in chunks, so the chunks before a failure may have changed.
+    /// A reload shows what the server holds now.
+    private func showBulkFailure(_ error: Error, using client: APIClient) async {
+        errorMessage = AppErrorPresentation.message(for: error)
+        await refresh(using: client)
     }
 
     func dismissVisible(using client: APIClient) async {
@@ -279,7 +308,7 @@ final class AlertsViewModel {
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            await showBulkFailure(error, using: client)
         }
     }
 
