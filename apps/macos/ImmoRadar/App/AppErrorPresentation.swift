@@ -25,7 +25,7 @@ enum AppErrorPresentation {
         return isConnectionIssue(message: trimmed) ? apiConnectionMessage : trimmed
     }
 
-    static func isConnectionIssue(message: String) -> Bool {
+    private static func isConnectionIssue(message: String) -> Bool {
         let normalizedMessage = normalized(message)
         return normalizedMessage == normalized(apiConnectionMessage)
             || normalizedMessage == "noconnection"

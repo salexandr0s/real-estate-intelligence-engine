@@ -6,6 +6,11 @@ struct FiltersView: View {
     @State private var viewModel = FiltersViewModel()
     @State private var showTestError: Bool = false
 
+    /// The last load failed and no filters are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.loadErrorMessage != nil && viewModel.filters.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let error = viewModel.errorMessage {
@@ -19,10 +24,8 @@ struct FiltersView: View {
                 .padding(Theme.Spacing.md)
             }
 
-            // While the global banner shows the connection problem, a failed load says nothing here.
-            if let error = viewModel.loadErrorMessage,
-               appState.globalConnectionWarningMessage == nil,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.loadErrorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load filters.",
                     message: error,
@@ -36,7 +39,13 @@ struct FiltersView: View {
                 .padding(Theme.Spacing.md)
             }
 
-            if viewModel.filters.isEmpty && !viewModel.isLoading {
+            if showsLoadFailure {
+                LoadFailedView(
+                    title: "Filters Didn’t Load",
+                    message: appState.screenLoadError(viewModel.loadErrorMessage),
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            } else if viewModel.filters.isEmpty && !viewModel.isLoading {
                 FiltersEmptyState {
                     viewModel.startNewFilter()
                 }

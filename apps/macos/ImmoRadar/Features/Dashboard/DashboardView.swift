@@ -72,12 +72,9 @@ struct DashboardView: View {
         }
     }
 
-    /// The load error to show, or nil while the global banner already explains a connection problem.
+    /// The load error to show, or nil while the global banner already explains it.
     private var visibleLoadError: String? {
-        guard let error = viewModel.errorMessage,
-              appState.globalConnectionWarningMessage == nil,
-              !AppErrorPresentation.isConnectionIssue(message: error) else { return nil }
-        return error
+        appState.screenLoadError(viewModel.errorMessage)
     }
 
     private func layoutMode(for width: CGFloat) -> DashboardLayoutMode {

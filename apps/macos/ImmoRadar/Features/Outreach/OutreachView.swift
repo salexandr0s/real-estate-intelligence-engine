@@ -10,11 +10,13 @@ struct OutreachView: View {
 
         HSplitView {
             VStack(spacing: 0) {
+                // With nothing loaded, the inbox column below says why instead.
                 OutreachMailboxHeader(
                     mailboxes: viewModel.mailboxes,
+                    mailboxesLoaded: viewModel.hasLoaded && viewModel.pageErrorMessage == nil,
                     isSyncing: viewModel.isSyncingMailbox,
                     errorMessage: viewModel.syncErrorMessage
-                        ?? visibleLoadError(viewModel.pageErrorMessage, appState: appState),
+                        ?? (listLoadFailed ? nil : appState.screenLoadError(viewModel.pageErrorMessage)),
                     onSync: { Task { await viewModel.syncPrimaryMailbox(using: appState.apiClient) } }
                 )
 
@@ -44,6 +46,12 @@ struct OutreachView: View {
                                 .offset(y: -54)
                         }
                     }
+                } else if listLoadFailed {
+                    LoadFailedView(
+                        title: "Outreach Didn’t Load",
+                        message: appState.screenLoadError(viewModel.pageErrorMessage),
+                        onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                    )
                 } else if viewModel.threads.isEmpty {
                     OutreachInboxPlaceholder(alignment: .top) {
                         OutreachEmptyListState(scope: viewModel.selectedScope, hasMailbox: !viewModel.mailboxes.isEmpty)
@@ -101,20 +109,16 @@ struct OutreachView: View {
         }
     }
 
+    /// The mailbox or thread list didn't load and no threads are loaded from before.
+    private var listLoadFailed: Bool {
+        viewModel.pageErrorMessage != nil && viewModel.threads.isEmpty && !viewModel.isLoadingList
+    }
+
     private func consumePendingDeepLinkIfNeeded() async {
         guard let threadID = appState.deepLinkOutreachThreadId else { return }
         await viewModel.openThread(id: threadID, using: appState.apiClient)
         appState.deepLinkOutreachThreadId = nil
     }
-}
-
-/// A load error to show, or nil while the app's connection warning already explains it.
-@MainActor
-private func visibleLoadError(_ message: String?, appState: AppState) -> String? {
-    guard let message, !message.isEmpty,
-          appState.globalConnectionWarningMessage == nil,
-          !AppErrorPresentation.isConnectionIssue(message: message) else { return nil }
-    return message
 }
 
 private struct OutreachInboxPlaceholder<Content: View>: View {
@@ -137,6 +141,8 @@ private struct OutreachInboxPlaceholder<Content: View>: View {
 
 private struct OutreachMailboxHeader: View {
     let mailboxes: [MailboxAccount]
+    /// False until the mailbox list loads, so an empty list doesn't read as no mailbox.
+    let mailboxesLoaded: Bool
     let isSyncing: Bool
     let errorMessage: String?
     let onSync: () -> Void
@@ -148,7 +154,7 @@ private struct OutreachMailboxHeader: View {
                     Text("Shared mailbox")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(mailboxes.first?.displayName ?? mailboxes.first?.email ?? "Mailbox not configured")
+                    Text(mailboxes.first?.displayName ?? mailboxes.first?.email ?? emptyTitle)
                         .font(.headline)
                 }
 
@@ -160,9 +166,11 @@ private struct OutreachMailboxHeader: View {
             }
 
             if mailboxes.isEmpty {
-                Text("Configure the shared mailbox to sync outreach replies and send follow-ups.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if mailboxesLoaded {
+                    Text("Configure the shared mailbox to sync outreach replies and send follow-ups.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     ForEach(mailboxes) { mailbox in
@@ -210,6 +218,10 @@ private struct OutreachMailboxHeader: View {
             }
         }
         .padding(Theme.Spacing.lg)
+    }
+
+    private var emptyTitle: String {
+        mailboxesLoaded ? "Mailbox not configured" : "Mailbox status unknown"
     }
 }
 
@@ -379,7 +391,7 @@ private struct OutreachDetailPane: View {
                             )
                         }
 
-                        if let detailError = visibleLoadError(viewModel.detailErrorMessage, appState: appState) {
+                        if let detailError = appState.screenLoadError(viewModel.detailErrorMessage) {
                             InlineWarningBanner(
                                 title: "Couldn’t reload the thread",
                                 message: detailError,
@@ -401,13 +413,13 @@ private struct OutreachDetailPane: View {
                     "Thread unavailable",
                     systemImage: "exclamationmark.triangle",
                     description: Text(
-                        visibleLoadError(detailErrorMessage, appState: appState)
+                        appState.screenLoadError(detailErrorMessage)
                             ?? "The thread shows here once the server responds."
                     )
                 )
-            } else if let pageErrorMessage = visibleLoadError(viewModel.pageErrorMessage, appState: appState),
-                      viewModel.threads.isEmpty {
-                ContentUnavailableView("Outreach unavailable", systemImage: "exclamationmark.triangle", description: Text(pageErrorMessage))
+            } else if viewModel.pageErrorMessage != nil, viewModel.threads.isEmpty {
+                // The inbox column says why the list didn't load.
+                ContentUnavailableView("Outreach unavailable", systemImage: "envelope.open", description: Text("Threads show here once the list loads."))
             } else {
                 ContentUnavailableView("Select a thread", systemImage: "envelope.open", description: Text("Choose a thread to inspect replies, timeline events, and next actions."))
             }

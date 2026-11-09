@@ -11,7 +11,25 @@ final class AnalyticsViewModel {
     var temperatureData: [MarketTemperaturePoint] = []
     var isLoading: Bool = false
     var hasCompletedInitialLoad: Bool = false
-    var errorMessage: String?
+    /// Why each data set's last fetch failed, so the screen doesn't call that data empty.
+    private(set) var loadErrors: [DataSet: String] = [:]
+
+    enum DataSet: Hashable {
+        case baselines, trends, temperature
+    }
+
+    /// The first load error, in the order the data sets load.
+    var errorMessage: String? {
+        loadErrors[.baselines] ?? loadErrors[.trends] ?? loadErrors[.temperature]
+    }
+
+    func hasData(for dataSet: DataSet) -> Bool {
+        switch dataSet {
+        case .baselines: !baselines.isEmpty
+        case .trends: !trendData.isEmpty
+        case .temperature: !temperatureData.isEmpty
+        }
+    }
 
     // MARK: - Computed
 
@@ -80,7 +98,7 @@ final class AnalyticsViewModel {
 
     func refresh(using client: APIClient) async {
         isLoading = true
-        errorMessage = nil
+        loadErrors = [:]
         defer {
             isLoading = false
             hasCompletedInitialLoad = true
@@ -89,27 +107,28 @@ final class AnalyticsViewModel {
         do {
             baselines = try await client.fetchBaselines()
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            loadErrors[.baselines] = AppErrorPresentation.message(for: error)
         }
 
         do {
             trendData = try await client.fetchDistrictTrends()
         } catch {
-            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
+            loadErrors[.trends] = AppErrorPresentation.message(for: error)
         }
 
         do {
             temperatureData = try await client.fetchMarketTemperature()
         } catch {
-            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
+            loadErrors[.temperature] = AppErrorPresentation.message(for: error)
         }
     }
 
     func refreshTrends(using client: APIClient, districtNo: Int? = nil, months: Int? = nil) async {
         do {
             trendData = try await client.fetchDistrictTrends(districtNo: districtNo, months: months)
+            loadErrors[.trends] = nil
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            loadErrors[.trends] = AppErrorPresentation.message(for: error)
         }
     }
 

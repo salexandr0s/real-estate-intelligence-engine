@@ -12,33 +12,57 @@ struct AnalyticsView: View {
         case overview = "Overview"
         case trends = "Trends"
         case temperature = "Temperature"
+
+        /// The data set the tab shows.
+        var dataSet: AnalyticsViewModel.DataSet {
+            switch self {
+            case .overview: .baselines
+            case .trends: .trends
+            case .temperature: .temperature
+            }
+        }
+    }
+
+    /// The current tab's data didn't load and nothing is loaded from before.
+    private var showsLoadFailure: Bool {
+        let dataSet = selectedTab.dataSet
+        return !viewModel.isLoading && viewModel.loadErrors[dataSet] != nil && !viewModel.hasData(for: dataSet)
     }
 
     var body: some View {
         Group {
-            switch selectedTab {
-            case .overview:
-                overviewContent
-            case .trends:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                        errorBanner
-                        DistrictTrendChartView(data: viewModel.trendData, selectedDistrictNo: $selectedDistrictNo) { months in
-                            Task { await viewModel.refreshTrends(using: appState.apiClient, districtNo: selectedDistrictNo, months: months) }
+            // In place of the tab, so its summary doesn't count data that didn't load as zero.
+            if showsLoadFailure {
+                LoadFailedView(
+                    title: "Analytics Didn’t Load",
+                    message: appState.screenLoadError(viewModel.loadErrors[selectedTab.dataSet]),
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            } else {
+                switch selectedTab {
+                case .overview:
+                    overviewContent
+                case .trends:
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                            errorBanner
+                            DistrictTrendChartView(data: viewModel.trendData, selectedDistrictNo: $selectedDistrictNo) { months in
+                                Task { await viewModel.refreshTrends(using: appState.apiClient, districtNo: selectedDistrictNo, months: months) }
+                            }
                         }
+                        .padding(Theme.Spacing.xl)
                     }
-                    .padding(Theme.Spacing.xl)
-                }
-            case .temperature:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                        errorBanner
-                        MarketTemperatureView(data: viewModel.temperatureData, selectedDistrictNo: $selectedDistrictNo) { districtNo in
-                            selectedDistrictNo = districtNo
-                            selectedTab = .trends
+                case .temperature:
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                            errorBanner
+                            MarketTemperatureView(data: viewModel.temperatureData, selectedDistrictNo: $selectedDistrictNo) { districtNo in
+                                selectedDistrictNo = districtNo
+                                selectedTab = .trends
+                            }
                         }
+                        .padding(Theme.Spacing.xl)
                     }
-                    .padding(Theme.Spacing.xl)
                 }
             }
         }
@@ -110,7 +134,8 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var overviewMainContent: some View {
-        if viewModel.isInitialLoading {
+        // A retry after a failed load shows the loading state, not the empty one.
+        if viewModel.isInitialLoading || (viewModel.isLoading && viewModel.baselines.isEmpty) {
             AnalyticsLoadingState()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.baselines.isEmpty {
@@ -130,9 +155,7 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var errorBanner: some View {
-        if let error = viewModel.errorMessage,
-           appState.globalConnectionWarningMessage == nil,
-           !AppErrorPresentation.isConnectionIssue(message: error) {
+        if let error = appState.screenLoadError(viewModel.errorMessage) {
             InlineWarningBanner(
                 title: "Couldn’t load analytics.",
                 message: error,

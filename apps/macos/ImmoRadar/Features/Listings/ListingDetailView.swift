@@ -161,10 +161,7 @@ struct ListingDetailView: View {
 
     /// The outreach thread's load error, hidden while the app's connection warning explains it.
     private var visibleOutreachLoadError: String? {
-        guard let message = viewModel.outreachErrorMessage, !message.isEmpty,
-              appState.globalConnectionWarningMessage == nil,
-              !AppErrorPresentation.isConnectionIssue(message: message) else { return nil }
-        return message
+        appState.screenLoadError(viewModel.outreachErrorMessage)
     }
 
     private struct LoadKey: Equatable {

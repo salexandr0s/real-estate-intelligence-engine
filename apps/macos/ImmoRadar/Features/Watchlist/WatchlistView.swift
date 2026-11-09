@@ -14,13 +14,15 @@ struct WatchlistView: View {
         viewModel.filteredSavedListings(matching: searchText)
     }
 
+    /// The last load failed and no saved listings are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.errorMessage != nil && viewModel.savedListings.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // While the global banner explains a connection problem, a failed load keeps the
-            // rows already shown without a banner of its own.
-            if let error = viewModel.errorMessage,
-               appState.globalConnectionWarningMessage == nil,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.errorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load the watchlist.",
                     message: error,
@@ -42,7 +44,13 @@ struct WatchlistView: View {
                 )
             }
 
-            if viewModel.savedListings.isEmpty && !viewModel.isLoading {
+            if showsLoadFailure {
+                LoadFailedView(
+                    title: "Watchlist Didn’t Load",
+                    message: appState.screenLoadError(viewModel.errorMessage),
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            } else if viewModel.savedListings.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView {
                     Label("No Saved Listings", systemImage: "bookmark")
                 } description: {

@@ -197,10 +197,8 @@ private struct AlertsPrimaryPane: View {
                 Divider()
             }
 
-            // While the global banner shows the connection problem, a failed load says nothing here.
-            if let error = viewModel.loadErrorMessage,
-               appState.globalConnectionWarningMessage == nil,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.loadErrorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load alerts.",
                     message: error,
@@ -220,9 +218,20 @@ private struct AlertsPrimaryPane: View {
         }
     }
 
+    /// The last load failed and nothing in the current scope is loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.loadErrorMessage != nil && viewModel.scopedAlerts.isEmpty && !viewModel.isLoading
+    }
+
     @ViewBuilder
     private var content: some View {
-        if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
+        if showsLoadFailure {
+            LoadFailedView(
+                title: "Alerts Didn’t Load",
+                message: appState.screenLoadError(viewModel.loadErrorMessage),
+                onRetry: { Task { await onReload() } }
+            )
+        } else if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
             AlertsEmptyState(
                 scope: viewModel.scope,
                 hasSearch: !viewModel.searchText.isEmpty,

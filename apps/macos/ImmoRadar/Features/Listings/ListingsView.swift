@@ -136,30 +136,30 @@ private struct ListingsPrimaryPane: View {
             ListingsFilterBar(viewModel: viewModel)
             Divider()
 
-            // While the global banner explains a connection problem, a failed load keeps the
-            // last listings without a banner of its own.
-            if let error = viewModel.errorMessage,
-               appState.globalConnectionWarningMessage == nil,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.errorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load listings.",
                     message: error,
                     actions: [
-                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
-                            Task {
-                                await viewModel.refresh(
-                                    using: appState.apiClient,
-                                    cache: appState.localCache,
-                                    bypassingCache: true
-                                )
-                            }
-                        },
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) { retry() },
                     ]
                 )
                 Divider()
             }
 
             content
+        }
+    }
+
+    /// The last load failed and no listings are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.errorMessage != nil && viewModel.listings.isEmpty && !viewModel.isLoading
+    }
+
+    private func retry() {
+        Task {
+            await viewModel.refresh(using: appState.apiClient, cache: appState.localCache, bypassingCache: true)
         }
     }
 
@@ -177,6 +177,12 @@ private struct ListingsPrimaryPane: View {
                     .controlSize(.large)
                     .offset(y: -60)
             }
+        } else if showsLoadFailure {
+            LoadFailedView(
+                title: "Listings Didn’t Load",
+                message: appState.screenLoadError(viewModel.errorMessage),
+                onRetry: retry
+            )
         } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
             ContentUnavailableView {
                 Label(

@@ -6,6 +6,11 @@ struct SourcesView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = SourcesViewModel()
 
+    /// The last load failed and no sources are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.loadErrorMessage != nil && viewModel.sources.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
@@ -21,10 +26,8 @@ struct SourcesView: View {
                     )
                 }
 
-                // While the global banner shows the connection problem, a failed load says nothing here.
-                if let error = viewModel.loadErrorMessage,
-                   appState.globalConnectionWarningMessage == nil,
-                   !AppErrorPresentation.isConnectionIssue(message: error) {
+                // With nothing loaded, the placeholder below says it instead.
+                if let error = appState.screenLoadError(viewModel.loadErrorMessage), !showsLoadFailure {
                     InlineWarningBanner(
                         title: "Couldn’t load sources.",
                         message: error,
@@ -41,14 +44,25 @@ struct SourcesView: View {
 
                 SourcesRuntimeCard(viewModel: viewModel)
 
-                SourcesSummaryBar(viewModel: viewModel)
-
-                SourcesLifecycleOpsCard(viewModel: viewModel)
-
-                if viewModel.sources.isEmpty && !viewModel.isLoading {
-                    SourcesEmptyState()
+                // The summary and lifecycle cards would count sources that didn't load as zero.
+                if showsLoadFailure {
+                    LoadFailedView(
+                        title: "Sources Didn’t Load",
+                        message: appState.screenLoadError(viewModel.loadErrorMessage),
+                        onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                    )
+                    .frame(minHeight: 220)
+                    .cardStyle(.subtle, padding: Theme.Spacing.xl, cornerRadius: Theme.Radius.lg)
                 } else {
-                    SourcesListContent(viewModel: viewModel)
+                    SourcesSummaryBar(viewModel: viewModel)
+
+                    SourcesLifecycleOpsCard(viewModel: viewModel)
+
+                    if viewModel.sources.isEmpty && !viewModel.isLoading {
+                        SourcesEmptyState()
+                    } else {
+                        SourcesListContent(viewModel: viewModel)
+                    }
                 }
             }
             .padding(Theme.Spacing.xl)

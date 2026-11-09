@@ -226,6 +226,13 @@ final class AppState {
             : "The server rejected this app’s API token, so new alerts can’t arrive. Check the API token in Settings."
     }
 
+    /// A screen's own load error, or nil while the global banner is up and already says what's
+    /// wrong. A connection error shows too, because the global banner waits for the next check.
+    func screenLoadError(_ message: String?) -> String? {
+        guard let message, !message.isEmpty, globalConnectionWarningMessage == nil else { return nil }
+        return message
+    }
+
     /// The API key stored for the selected Copilot provider.
     var activeCopilotApiKey: String {
         guard launchPolicy.allowsStoredCredentials else { return "" }
