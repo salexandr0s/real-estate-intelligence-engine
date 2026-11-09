@@ -762,6 +762,7 @@ private struct SourceDetailCard: View {
                     .pickerStyle(.menu)
                     .controlSize(.small)
                     .frame(width: 72)
+                    .disabled(viewModel.updatingIntervalSourceIDs.contains(source.id))
                     .onChange(of: selectedInterval) { _, newValue in
                         guard newValue != source.crawlIntervalMinutes else { return }
                         Task { await viewModel.updateInterval(source, minutes: newValue, using: appState.apiClient) }

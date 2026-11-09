@@ -27,6 +27,8 @@ final class SourcesViewModel {
     var runningSourceIDs: Set<Int> = []
     /// Sources whose switch-on or switch-off request is in flight.
     var togglingSourceIDs: Set<Int> = []
+    /// Sources whose interval change is in flight.
+    var updatingIntervalSourceIDs: Set<Int> = []
     /// True while Pause All or Resume All is in flight.
     var isUpdatingAll = false
 
@@ -237,10 +239,16 @@ final class SourcesViewModel {
         sources = reloaded.sorted(by: sourceSort)
     }
 
+    /// Changes how often a source runs. One change per source goes out at a time, so a late
+    /// failure can't put back an interval that a newer change replaced.
     func updateInterval(_ source: Source, minutes: Int, using client: APIClient) async {
-        guard let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
+        guard !updatingIntervalSourceIDs.contains(source.id),
+              let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
         let previous = sources[index].crawlIntervalMinutes
         sources[index].crawlIntervalMinutes = minutes
+        updatingIntervalSourceIDs.insert(source.id)
+        defer { updatingIntervalSourceIDs.remove(source.id) }
+
         do {
             try await client.updateSource(id: source.id, crawlIntervalMinutes: minutes)
         } catch {
