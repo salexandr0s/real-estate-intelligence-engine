@@ -188,12 +188,15 @@ interface ListingSearchDbRow {
   price_per_sqm_eur: string | null;
   current_score: string | null;
   first_seen_at: Date;
+  last_seen_at: Date;
   listing_status: string;
   latitude: string | null;
   longitude: string | null;
   geocode_precision: string | null;
   last_price_change_pct: string | null;
   last_price_change_at: Date | null;
+  /** The sort column as Postgres prints it, so a cursor keeps its full precision. */
+  sort_key: string | null;
 }
 
 function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
@@ -215,6 +218,7 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
     pricePerSqmEur: row.price_per_sqm_eur != null ? Number(row.price_per_sqm_eur) : null,
     currentScore: row.current_score != null ? Number(row.current_score) : null,
     firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
     listingStatus: row.listing_status,
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
@@ -459,6 +463,8 @@ export async function findBySourceKey(
 // ── Search ──────────────────────────────────────────────────────────────────
 
 export interface ListingSearchFilter {
+  /** Defaults to 'active'. */
+  listingStatus?: ListingStatus | null;
   operationType?: OperationType | null;
   propertyTypes?: PropertyType[];
   districts?: number[];
@@ -477,7 +483,8 @@ export interface ListingSearchFilter {
 }
 
 /**
- * Search active listings with parameterized, SARGable filters.
+ * Search listings (active ones unless the filter names a status) with parameterized,
+ * SARGable filters.
  *
  * Uses cursor-based pagination with encoded cursor of (sort_value, id).
  * Each filter parameter is passed as a nullable typed parameter so
@@ -489,7 +496,10 @@ export async function searchListings(
   limit = 25,
 ): Promise<PaginatedResult<ListingSearchResult>> {
   const sortBy = filter.sortBy ?? 'score_desc';
-  const { orderClause, cursorClause, cursorParams } = buildSortAndCursor(sortBy, cursor);
+  const { orderClause, cursorClause, cursorParams, sortKeySql } = buildSortAndCursor(
+    sortBy,
+    cursor,
+  );
 
   // Location score join is only included when the filter is active to avoid
   // a correlated subquery on every row for the common case.
@@ -504,8 +514,8 @@ export async function searchListings(
       ) lscore ON true`
     : '';
 
-  // Track dynamic parameter index after the 12 base filter params
-  let nextParamIndex = 13;
+  // Track dynamic parameter index after the 13 base filter params
+  let nextParamIndex = 14;
 
   const locationScoreParamIndex = needsLocationJoin ? nextParamIndex++ : -1;
   const locationFilter = needsLocationJoin
@@ -548,10 +558,11 @@ export async function searchListings(
       l.city, l.postal_code, l.district_no, l.district_name,
       l.list_price_eur_cents, l.living_area_sqm, l.rooms,
       l.price_per_sqm_eur, l.current_score,
-      l.first_seen_at, l.listing_status,
+      l.first_seen_at, l.last_seen_at, l.listing_status,
       l.latitude, l.longitude, l.geocode_precision,
       pc.price_change_pct AS last_price_change_pct,
-      pc.observed_at AS last_price_change_at
+      pc.observed_at AS last_price_change_at,
+      ${sortKeySql}::text AS sort_key
     FROM listings l
     JOIN sources s ON s.id = l.source_id
     LEFT JOIN LATERAL (
@@ -581,7 +592,7 @@ export async function searchListings(
       LIMIT 1
     ) pc ON true
     ${locationJoin}
-    WHERE l.listing_status = 'active'
+    WHERE l.listing_status = $13
       AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)
       AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR l.property_type = ANY($2))
@@ -626,6 +637,7 @@ export async function searchListings(
     filter.minScore ?? null,
     filter.requiredKeywords && filter.requiredKeywords.length > 0 ? filter.requiredKeywords : null,
     filter.excludedKeywords && filter.excludedKeywords.length > 0 ? filter.excludedKeywords : null,
+    filter.listingStatus ?? 'active',
     ...(needsLocationJoin ? [filter.minLocationScore ?? null] : []),
     ...(needsPoiFilter ? [poiEntries.map(([cat]) => cat), poiEntries.map(([, dist]) => dist)] : []),
   ];
@@ -641,7 +653,7 @@ export async function searchListings(
     SELECT COUNT(*) AS total
     FROM listings l
     ${locationJoin}
-    WHERE l.listing_status = 'active'
+    WHERE l.listing_status = $13
       AND l.district_no IS NOT NULL
       AND ($1::text IS NULL OR l.operation_type = $1)
       AND (COALESCE(array_length($2::text[], 1), 0) = 0 OR l.property_type = ANY($2))
@@ -683,7 +695,7 @@ export async function searchListings(
   let nextCursor: string | null = null;
   if (hasMore && resultRows.length > 0) {
     const lastRow = resultRows[resultRows.length - 1]!;
-    nextCursor = encodeCursor(sortBy, lastRow);
+    nextCursor = encodeCursor(lastRow);
   }
 
   return {
@@ -954,28 +966,13 @@ export async function exportListingsCsv(
 // ── Cursor helpers ──────────────────────────────────────────────────────────
 
 interface CursorData {
-  sortValue: string;
+  /** The last row's sort value, or null when that row sits in the trailing NULL segment. */
+  sortValue: string | null;
   id: string;
 }
 
-function encodeCursor(sortBy: SortBy, row: ListingSearchDbRow): string {
-  let sortValue: string;
-  switch (sortBy) {
-    case 'score_desc':
-      sortValue = row.current_score ?? '0';
-      break;
-    case 'newest':
-      sortValue = row.first_seen_at.toISOString();
-      break;
-    case 'price_asc':
-    case 'price_desc':
-      sortValue = row.list_price_eur_cents ?? '0';
-      break;
-    case 'sqm_desc':
-      sortValue = row.living_area_sqm ?? '0';
-      break;
-  }
-  const data: CursorData = { sortValue, id: row.id };
+function encodeCursor(row: ListingSearchDbRow): string {
+  const data: CursorData = { sortValue: row.sort_key, id: row.id };
   return Buffer.from(JSON.stringify(data)).toString('base64url');
 }
 
@@ -991,63 +988,73 @@ function decodeCursor(cursor: string): CursorData | null {
       return null;
     }
     const obj = parsed as Record<string, unknown>;
-    return { sortValue: String(obj.sortValue), id: String(obj.id) };
+    return {
+      sortValue: obj.sortValue === null ? null : String(obj.sortValue),
+      id: String(obj.id),
+    };
   } catch {
     return null;
   }
 }
 
+interface SortColumn {
+  column: string;
+  type: 'numeric' | 'bigint' | 'timestamptz';
+  direction: 'ASC' | 'DESC';
+  nullable: boolean;
+}
+
+const SORT_COLUMNS: Record<SortBy, SortColumn> = {
+  score_desc: { column: 'l.current_score', type: 'numeric', direction: 'DESC', nullable: true },
+  newest: { column: 'l.first_seen_at', type: 'timestamptz', direction: 'DESC', nullable: false },
+  price_asc: { column: 'l.list_price_eur_cents', type: 'bigint', direction: 'ASC', nullable: true },
+  price_desc: {
+    column: 'l.list_price_eur_cents',
+    type: 'bigint',
+    direction: 'DESC',
+    nullable: true,
+  },
+  sqm_desc: { column: 'l.living_area_sqm', type: 'numeric', direction: 'DESC', nullable: true },
+};
+
 interface SortCursorResult {
   orderClause: string;
   cursorClause: string | null;
   cursorParams: unknown[];
+  /** The sort column, selected as text so the next cursor carries it exactly. */
+  sortKeySql: string;
 }
 
+/**
+ * Keyset paging over (sort column, id), with rows whose sort column is NULL last. A cursor from
+ * a row with a value continues through the rest of the values and then the NULL segment. A
+ * cursor from a NULL row continues inside the NULL segment by id.
+ */
 function buildSortAndCursor(sortBy: SortBy, cursor: string | null): SortCursorResult {
+  const { column, type, direction, nullable } = SORT_COLUMNS[sortBy];
   const parsed = cursor ? decodeCursor(cursor) : null;
+  const orderClause = `${column} ${direction}${nullable ? ' NULLS LAST' : ''}, l.id DESC`;
 
-  switch (sortBy) {
-    case 'score_desc':
-      return {
-        orderClause: 'l.current_score DESC NULLS LAST, l.id DESC',
-        cursorClause: parsed
-          ? '(l.current_score < $1::numeric OR (l.current_score = $1::numeric AND l.id < $2::bigint))'
-          : null,
-        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
-      };
-    case 'newest':
-      return {
-        orderClause: 'l.first_seen_at DESC, l.id DESC',
-        cursorClause: parsed
-          ? '(l.first_seen_at < $1::timestamptz OR (l.first_seen_at = $1::timestamptz AND l.id < $2::bigint))'
-          : null,
-        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
-      };
-    case 'price_asc':
-      return {
-        orderClause: 'l.list_price_eur_cents ASC NULLS LAST, l.id DESC',
-        cursorClause: parsed
-          ? '(l.list_price_eur_cents > $1::bigint OR (l.list_price_eur_cents = $1::bigint AND l.id < $2::bigint))'
-          : null,
-        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
-      };
-    case 'price_desc':
-      return {
-        orderClause: 'l.list_price_eur_cents DESC NULLS LAST, l.id DESC',
-        cursorClause: parsed
-          ? '(l.list_price_eur_cents < $1::bigint OR (l.list_price_eur_cents = $1::bigint AND l.id < $2::bigint))'
-          : null,
-        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
-      };
-    case 'sqm_desc':
-      return {
-        orderClause: 'l.living_area_sqm DESC NULLS LAST, l.id DESC',
-        cursorClause: parsed
-          ? '(l.living_area_sqm < $1::numeric OR (l.living_area_sqm = $1::numeric AND l.id < $2::bigint))'
-          : null,
-        cursorParams: parsed ? [parsed.sortValue, parsed.id] : [],
-      };
+  if (!parsed) {
+    return { orderClause, cursorClause: null, cursorParams: [], sortKeySql: column };
   }
+  if (parsed.sortValue === null) {
+    return {
+      orderClause,
+      cursorClause: `(${column} IS NULL AND l.id < $1::bigint)`,
+      cursorParams: [parsed.id],
+      sortKeySql: column,
+    };
+  }
+
+  const after = direction === 'DESC' ? '<' : '>';
+  const nullSegment = nullable ? ` OR ${column} IS NULL` : '';
+  return {
+    orderClause,
+    cursorClause: `(${column} ${after} $1::${type} OR (${column} = $1::${type} AND l.id < $2::bigint)${nullSegment})`,
+    cursorParams: [parsed.sortValue, parsed.id],
+    sortKeySql: column,
+  };
 }
 
 // ── Expiry ──────────────────────────────────────────────────────────────────

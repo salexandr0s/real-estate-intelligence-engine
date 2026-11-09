@@ -22,6 +22,15 @@ export function parseOrThrow<T>(schema: ZodSchema<T>, data: unknown): T {
 
 const OPERATION_TYPES = ['sale', 'rent'] as const;
 const PROPERTY_TYPES = ['apartment', 'house', 'land', 'commercial', 'parking', 'other'] as const;
+const LISTING_STATUSES = [
+  'active',
+  'inactive',
+  'sold',
+  'rented',
+  'withdrawn',
+  'expired',
+  'unknown',
+] as const;
 const SORT_BY_VALUES = ['score_desc', 'newest', 'price_asc', 'price_desc', 'sqm_desc'] as const;
 const FILTER_KINDS = ['listing_search', 'alert'] as const;
 const ALERT_FREQUENCIES = ['instant', 'hourly_digest', 'daily_digest', 'manual'] as const;
@@ -92,6 +101,7 @@ export const alertListQuerySchema = z.object({
 
 export const listingSearchQuerySchema = z
   .object({
+    status: z.enum(LISTING_STATUSES).optional(),
     operationType: z.enum(OPERATION_TYPES).optional(),
     propertyTypes: z
       .string()

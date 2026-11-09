@@ -106,6 +106,7 @@ export interface ListingSearchResult {
   pricePerSqmEur: number | null;
   currentScore: number | null;
   firstSeenAt: Date;
+  lastSeenAt: Date;
   listingStatus: string;
   latitude: number | null;
   longitude: number | null;

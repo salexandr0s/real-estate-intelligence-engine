@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@immoradar/observability';
+import type { ListingSearchResult } from '@immoradar/contracts';
 import type { ListingSearchFilter } from '@immoradar/db';
 import { listings, listingScores, listingVersions, clusters, outreach } from '@immoradar/db';
 import {
@@ -20,6 +21,43 @@ function centsToEur(cents: number | null): number | null {
   return cents / 100;
 }
 
+const LISTING_STATUS_QUERY_PARAM = {
+  type: 'string',
+  enum: ['active', 'inactive', 'sold', 'rented', 'withdrawn', 'expired', 'unknown'],
+  description: 'Listing status (default active)',
+} as const;
+
+/** One listing in a search result, as listing search, high-score and filter test return it. */
+export function mapListingSearchResult(listing: ListingSearchResult) {
+  return {
+    id: listing.id,
+    listingUid: listing.listingUid,
+    sourceCode: listing.sourceCode,
+    title: listing.title,
+    canonicalUrl: listing.canonicalUrl,
+    operationType: listing.operationType,
+    propertyType: listing.propertyType,
+    city: listing.city,
+    postalCode: listing.postalCode,
+    districtNo: listing.districtNo,
+    districtName: listing.districtName,
+    listPriceEur: centsToEur(listing.listPriceEurCents),
+    listPriceEurCents: listing.listPriceEurCents,
+    livingAreaSqm: listing.livingAreaSqm,
+    rooms: listing.rooms,
+    pricePerSqmEur: listing.pricePerSqmEur,
+    currentScore: listing.currentScore,
+    firstSeenAt: listing.firstSeenAt.toISOString(),
+    lastSeenAt: listing.lastSeenAt.toISOString(),
+    listingStatus: listing.listingStatus,
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    geocodePrecision: listing.geocodePrecision,
+    lastPriceChangePct: listing.lastPriceChangePct,
+    lastPriceChangeAt: listing.lastPriceChangeAt?.toISOString() ?? null,
+  };
+}
+
 export async function listingRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/listings - Search listings with filter params
   app.get(
@@ -31,6 +69,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         querystring: {
           type: 'object',
           properties: {
+            status: LISTING_STATUS_QUERY_PARAM,
             operationType: { type: 'string', description: 'sale or rent' },
             propertyTypes: {
               type: 'string',
@@ -60,6 +99,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
 
       const result = await listings.searchListings(
         {
+          listingStatus: parsed.status,
           operationType: parsed.operationType as ListingSearchFilter['operationType'],
           propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
           districts: parsed.districts,
@@ -76,36 +116,8 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         parsed.limit ?? undefined,
       );
 
-      // Map cents to EUR for the API response
-      const mappedData = result.data.map((listing) => ({
-        id: listing.id,
-        listingUid: listing.listingUid,
-        sourceCode: listing.sourceCode,
-        title: listing.title,
-        canonicalUrl: listing.canonicalUrl,
-        operationType: listing.operationType,
-        propertyType: listing.propertyType,
-        city: listing.city,
-        postalCode: listing.postalCode,
-        districtNo: listing.districtNo,
-        districtName: listing.districtName,
-        listPriceEur: centsToEur(listing.listPriceEurCents),
-        listPriceEurCents: listing.listPriceEurCents,
-        livingAreaSqm: listing.livingAreaSqm,
-        rooms: listing.rooms,
-        pricePerSqmEur: listing.pricePerSqmEur,
-        currentScore: listing.currentScore,
-        firstSeenAt: listing.firstSeenAt.toISOString(),
-        listingStatus: listing.listingStatus,
-        latitude: listing.latitude,
-        longitude: listing.longitude,
-        geocodePrecision: listing.geocodePrecision,
-        lastPriceChangePct: listing.lastPriceChangePct,
-        lastPriceChangeAt: listing.lastPriceChangeAt?.toISOString() ?? null,
-      }));
-
       return reply.send({
-        data: mappedData,
+        data: result.data.map(mapListingSearchResult),
         meta: result.meta,
       });
     },
@@ -121,6 +133,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         querystring: {
           type: 'object',
           properties: {
+            status: LISTING_STATUS_QUERY_PARAM,
             operationType: { type: 'string' },
             propertyTypes: { type: 'string' },
             districts: { type: 'string' },
@@ -141,6 +154,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
       const parsed = parseOrThrow(listingSearchQuerySchema, request.query);
 
       const { csv, truncated } = await listings.exportListingsCsv({
+        listingStatus: parsed.status,
         operationType: parsed.operationType as ListingSearchFilter['operationType'],
         propertyTypes: parsed.propertyTypes as ListingSearchFilter['propertyTypes'],
         districts: parsed.districts,
@@ -196,35 +210,8 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         limit,
       );
 
-      const mappedData = result.data.map((listing) => ({
-        id: listing.id,
-        listingUid: listing.listingUid,
-        sourceCode: listing.sourceCode,
-        title: listing.title,
-        canonicalUrl: listing.canonicalUrl,
-        operationType: listing.operationType,
-        propertyType: listing.propertyType,
-        city: listing.city,
-        postalCode: listing.postalCode,
-        districtNo: listing.districtNo,
-        districtName: listing.districtName,
-        listPriceEur: centsToEur(listing.listPriceEurCents),
-        listPriceEurCents: listing.listPriceEurCents,
-        livingAreaSqm: listing.livingAreaSqm,
-        rooms: listing.rooms,
-        pricePerSqmEur: listing.pricePerSqmEur,
-        currentScore: listing.currentScore,
-        firstSeenAt: listing.firstSeenAt.toISOString(),
-        listingStatus: listing.listingStatus,
-        latitude: listing.latitude,
-        longitude: listing.longitude,
-        geocodePrecision: listing.geocodePrecision,
-        lastPriceChangePct: listing.lastPriceChangePct,
-        lastPriceChangeAt: listing.lastPriceChangeAt?.toISOString() ?? null,
-      }));
-
       return reply.send({
-        data: mappedData,
+        data: result.data.map(mapListingSearchResult),
         meta: result.meta,
       });
     },
