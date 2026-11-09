@@ -14,11 +14,23 @@ const copilotMessageSchema = z.object({
   content: z.union([z.string(), z.array(z.record(z.string(), z.unknown()))]),
 });
 
+// Counts the messages forwarded to the model. The tool loop in
+// @immoradar/copilot adds at most two per tool round and caps the rounds.
+const COPILOT_MAX_MESSAGES = 50;
+
 const copilotChatBodySchema = z.object({
   messages: z
     .array(copilotMessageSchema)
     .min(1, 'At least one message is required')
-    .max(50, 'Maximum 50 messages allowed'),
+    .max(
+      COPILOT_MAX_MESSAGES,
+      `This chat has reached the ${COPILOT_MAX_MESSAGES}-message limit. Start a new chat to continue.`,
+    )
+    // A chat that ends on an assistant turn is a prefill, which the model rejects.
+    .refine(
+      (messages) => messages.at(-1)?.role === 'user',
+      'The last message must come from the user.',
+    ),
   context: z
     .object({
       currentListingId: z.number().int().optional(),
@@ -137,7 +149,8 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
       // Design decision: The client sends their own LLM provider API key via
       // X-Copilot-Api-Key. The key is never stored server-side — only forwarded
       // to the LLM provider within this request's lifetime. Requires TLS in production.
-      const clientKey = request.headers['x-copilot-api-key'] as string | undefined;
+      const headerKey = request.headers['x-copilot-api-key'];
+      const clientKey = typeof headerKey === 'string' && headerKey !== '' ? headerKey : undefined;
       const apiKey =
         clientKey ??
         (provider === 'anthropic' ? config.copilot.anthropicApiKey : config.copilot.openaiApiKey) ??
@@ -161,20 +174,13 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
           writeSSE(res, event.type, eventPayload(event));
         }
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        // streamCopilotChat reports provider errors as events, so anything
+        // caught here is a bug. The details stay in the server log.
         logger.error('Copilot route error', {
           errorClass: err instanceof Error ? err.name : 'Unknown',
-          message: errMsg,
+          message: err instanceof Error ? err.message : 'Unknown error',
         });
-        // Sanitize error before sending to client
-        const isAuthError =
-          errMsg.toLowerCase().includes('api key') ||
-          errMsg.toLowerCase().includes('auth') ||
-          errMsg.toLowerCase().includes('401');
-        const clientMessage = isAuthError
-          ? 'Authentication failed with the AI provider. Please check your API key in Settings.'
-          : 'An error occurred. Please try again.';
-        writeSSE(res, 'error', { message: clientMessage });
+        writeSSE(res, 'error', { message: 'Copilot hit an unexpected error. Try again.' });
       } finally {
         if (!res.destroyed) {
           res.end();

@@ -3,18 +3,24 @@
 
 import OpenAI from 'openai';
 import type {
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
   ChatCompletionChunk,
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionTool,
 } from 'openai/resources/chat/completions';
 import type {
+  ConversationParams,
   LLMProvider,
+  ProviderConversation,
+  ProviderErrorKind,
   ProviderEvent,
-  StreamParams,
   ProviderMessage,
-  ProviderContentBlock,
+  ProviderStopReason,
+  ProviderToolResult,
   ToolDefinition,
 } from './types.js';
+
+type FinishReason = ChatCompletionChunk.Choice['finish_reason'];
 
 // ── Format converters ─────────────────────────────────────────────────────
 
@@ -34,220 +40,153 @@ function toOpenAIMessages(
   messages: ProviderMessage[],
 ): ChatCompletionMessageParam[] {
   const result: ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
-
   for (const msg of messages) {
-    if (typeof msg.content === 'string') {
-      if (msg.role === 'user') {
-        result.push({ role: 'user', content: msg.content });
-      } else {
-        result.push({ role: 'assistant', content: msg.content });
-      }
-      continue;
+    if (msg.role === 'user') {
+      result.push({ role: 'user', content: msg.content });
+    } else {
+      result.push({ role: 'assistant', content: msg.content });
     }
-
-    // ProviderContentBlock[] — need to decompose into OpenAI message types
-    const blocks = msg.content;
-    convertBlocksToOpenAIMessages(msg.role, blocks, result);
   }
-
   return result;
 }
 
-function convertBlocksToOpenAIMessages(
-  role: 'user' | 'assistant',
-  blocks: ProviderContentBlock[],
-  result: ChatCompletionMessageParam[],
-): void {
-  // Group blocks by type for correct OpenAI message construction.
-  // Assistant messages with tool_use blocks become assistant messages with tool_calls.
-  // Tool_result blocks become separate "tool" role messages.
-  // Text blocks are straightforward.
-
-  if (role === 'assistant') {
-    const textBlocks = blocks.filter(
-      (b): b is ProviderContentBlock & { type: 'text' } => b.type === 'text',
-    );
-    const toolUseBlocks = blocks.filter(
-      (b): b is ProviderContentBlock & { type: 'tool_use' } => b.type === 'tool_use',
-    );
-
-    if (toolUseBlocks.length > 0) {
-      result.push({
-        role: 'assistant',
-        content: textBlocks.length > 0 ? textBlocks.map((b) => b.text).join('\n') : null,
-        tool_calls: toolUseBlocks.map((b) => ({
-          id: b.id,
-          type: 'function' as const,
-          function: {
-            name: b.name,
-            arguments: JSON.stringify(b.input),
-          },
-        })),
-      });
-    } else if (textBlocks.length > 0) {
-      result.push({
-        role: 'assistant',
-        content: textBlocks.map((b) => b.text).join('\n'),
-      });
-    }
-  } else {
-    // User role — text blocks go as user messages, tool_result blocks as tool messages
-    const textBlocks = blocks.filter(
-      (b): b is ProviderContentBlock & { type: 'text' } => b.type === 'text',
-    );
-    const toolResultBlocks = blocks.filter(
-      (b): b is ProviderContentBlock & { type: 'tool_result' } => b.type === 'tool_result',
-    );
-
-    if (textBlocks.length > 0) {
-      result.push({
-        role: 'user',
-        content: textBlocks.map((b) => b.text).join('\n'),
-      });
-    }
-
-    for (const tr of toolResultBlocks) {
-      result.push({
-        role: 'tool',
-        tool_call_id: tr.toolUseId,
-        content: tr.content,
-      });
-    }
+function toStopReason(finishReason: FinishReason, hasToolCalls: boolean): ProviderStopReason {
+  switch (finishReason) {
+    case 'tool_calls':
+    case 'function_call':
+      return 'tool_use';
+    case 'length':
+      return 'max_tokens';
+    case 'content_filter':
+      return 'refusal';
+    case 'stop':
+      return 'end_turn';
+    default:
+      // The stream ended without a finish reason.
+      return hasToolCalls ? 'tool_use' : 'end_turn';
   }
 }
 
-// ── Streaming implementation ─────────────────────────────────────────────
+// ── Error classification ─────────────────────────────────────────────────
+
+function classifyOpenAIError(err: unknown): ProviderErrorKind | undefined {
+  if (!(err instanceof OpenAI.APIError)) return undefined;
+  if (err.code === 'insufficient_quota') return 'billing';
+  if (err instanceof OpenAI.AuthenticationError || err instanceof OpenAI.PermissionDeniedError) {
+    return 'auth';
+  }
+  if (err instanceof OpenAI.RateLimitError) return 'rate_limit';
+  if (err instanceof OpenAI.NotFoundError) return 'model_not_found';
+  if (err instanceof OpenAI.BadRequestError) return 'invalid_request';
+  // The timeout error extends the connection error, so test it first.
+  if (err instanceof OpenAI.APIConnectionTimeoutError) return 'timeout';
+  if (err instanceof OpenAI.APIConnectionError) return 'connection';
+  return err.status === 503 ? 'overloaded' : 'server';
+}
+
+// ── Conversation ─────────────────────────────────────────────────────────
 
 interface PendingToolCall {
-  index: number;
   id: string;
   name: string;
   argumentChunks: string[];
 }
 
-function completePendingToolCall(pending: PendingToolCall): ProviderEvent {
+function parseArguments(pending: PendingToolCall): unknown {
   const fullJson = pending.argumentChunks.join('');
-  let parsedInput: unknown = {};
   try {
-    parsedInput = fullJson ? (JSON.parse(fullJson) as unknown) : {};
+    return fullJson ? (JSON.parse(fullJson) as unknown) : {};
   } catch {
-    parsedInput = { _parseError: true, _rawJson: fullJson };
+    return { _parseError: true, _rawJson: fullJson };
   }
-  return {
-    type: 'tool_call_complete',
-    id: pending.id,
-    name: pending.name,
-    input: parsedInput,
-  };
 }
 
-async function* streamOpenAI(
+function startConversation(
   client: OpenAI,
   model: string,
-  params: StreamParams,
-): AsyncGenerator<ProviderEvent> {
-  const stream = await client.chat.completions.create({
-    model,
-    max_tokens: params.maxTokens,
-    messages: toOpenAIMessages(params.systemPrompt, params.messages),
-    tools: toOpenAITools(params.tools),
-    stream: true,
-  });
+  params: ConversationParams,
+): ProviderConversation {
+  const transcript = toOpenAIMessages(params.systemPrompt, params.messages);
+  const tools = toOpenAITools(params.tools);
 
-  // Track in-progress tool calls by index
-  const pendingToolCalls = new Map<number, PendingToolCall>();
+  return {
+    async *streamTurn(): AsyncGenerator<ProviderEvent> {
+      const stream = await client.chat.completions.create({
+        model,
+        max_tokens: params.maxTokens,
+        messages: [...transcript],
+        tools,
+        stream: true,
+      });
 
-  for await (const chunk of stream as AsyncIterable<ChatCompletionChunk>) {
-    const choice = chunk.choices[0];
-    if (!choice) continue;
+      // Tool calls stream as deltas keyed by index.
+      const pending = new Map<number, PendingToolCall>();
+      let text = '';
+      let finishReason: FinishReason = null;
 
-    const delta = choice.delta;
+      for await (const chunk of stream as AsyncIterable<ChatCompletionChunk>) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
 
-    // Text content
-    if (delta.content) {
-      yield { type: 'text_delta', delta: delta.content };
-    }
+        if (choice.delta.content) {
+          text += choice.delta.content;
+          yield { type: 'text_delta', delta: choice.delta.content };
+        }
 
-    // Tool calls — OpenAI streams them with index-based deltas
-    if (delta.tool_calls) {
-      for (const tc of delta.tool_calls) {
-        const existing = pendingToolCalls.get(tc.index);
-
-        if (!existing) {
-          // New tool call starting
-          const id = tc.id ?? `tool_${tc.index}`;
-          const name = tc.function?.name ?? '';
-          const pending: PendingToolCall = {
-            index: tc.index,
-            id,
-            name,
-            argumentChunks: [],
+        for (const tc of choice.delta.tool_calls ?? []) {
+          const existing = pending.get(tc.index);
+          if (existing) {
+            if (tc.function?.arguments) existing.argumentChunks.push(tc.function.arguments);
+            continue;
+          }
+          const call: PendingToolCall = {
+            id: tc.id ?? `tool_${tc.index}`,
+            name: tc.function?.name ?? '',
+            argumentChunks: tc.function?.arguments ? [tc.function.arguments] : [],
           };
-          if (tc.function?.arguments) {
-            pending.argumentChunks.push(tc.function.arguments);
-          }
-          pendingToolCalls.set(tc.index, pending);
-          yield { type: 'tool_call_start', id, name };
+          pending.set(tc.index, call);
+          yield { type: 'tool_call_start', id: call.id, name: call.name };
+        }
 
-          if (tc.function?.arguments) {
-            yield {
-              type: 'tool_call_delta',
-              id,
-              jsonChunk: tc.function.arguments,
-            };
-          }
-        } else {
-          // Delta for existing tool call
-          if (tc.function?.arguments) {
-            existing.argumentChunks.push(tc.function.arguments);
-            yield {
-              type: 'tool_call_delta',
-              id: existing.id,
-              jsonChunk: tc.function.arguments,
-            };
-          }
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason;
+          break;
         }
       }
-    }
 
-    // Check finish reason
-    if (choice.finish_reason === 'tool_calls') {
-      // Complete all pending tool calls
-      for (const pending of pendingToolCalls.values()) {
-        yield completePendingToolCall(pending);
+      const calls = [...pending.values()];
+      if (calls.length > 0) {
+        const toolCalls: ChatCompletionMessageToolCall[] = calls.map((c) => ({
+          id: c.id,
+          type: 'function',
+          function: { name: c.name, arguments: c.argumentChunks.join('') },
+        }));
+        transcript.push({ role: 'assistant', content: text || null, tool_calls: toolCalls });
+      } else if (text) {
+        transcript.push({ role: 'assistant', content: text });
       }
-      yield { type: 'needs_tool_results' };
-      return;
-    }
 
-    if (choice.finish_reason === 'stop') {
-      yield { type: 'end_turn' };
-      return;
-    }
-  }
+      yield {
+        type: 'turn_end',
+        stopReason: toStopReason(finishReason, calls.length > 0),
+        toolCalls: calls.map((c) => ({ id: c.id, name: c.name, input: parseArguments(c) })),
+      };
+    },
 
-  // Stream ended without explicit finish_reason — complete any pending tool calls
-  if (pendingToolCalls.size > 0) {
-    for (const pending of pendingToolCalls.values()) {
-      yield completePendingToolCall(pending);
-    }
-    yield { type: 'needs_tool_results' };
-  } else {
-    yield { type: 'end_turn' };
-  }
+    addToolResults(results: ProviderToolResult[]): void {
+      for (const r of results) {
+        transcript.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.content });
+      }
+    },
+  };
 }
 
 // ── Factory ──────────────────────────────────────────────────────────────
 
 export function createOpenAIProvider(apiKey: string, model: string): LLMProvider {
   const client = new OpenAI({ apiKey });
-
   return {
-    streamChat(params: StreamParams): AsyncGenerator<ProviderEvent> {
-      return streamOpenAI(client, model, params);
-    },
-    continueWithToolResults(params: StreamParams): AsyncGenerator<ProviderEvent> {
-      return streamOpenAI(client, model, params);
-    },
+    startConversation: (params) => startConversation(client, model, params),
+    classifyError: classifyOpenAIError,
   };
 }

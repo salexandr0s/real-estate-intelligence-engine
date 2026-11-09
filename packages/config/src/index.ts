@@ -445,7 +445,8 @@ export function loadConfig(): AppConfig {
         return 'anthropic';
       })(),
       model: envStr('COPILOT_MODEL', ''),
-      maxTokens: envInt('COPILOT_MAX_TOKENS', 4096),
+      // Thinking counts toward this limit as well as the answer.
+      maxTokens: envInt('COPILOT_MAX_TOKENS', 16000),
     },
   };
 
