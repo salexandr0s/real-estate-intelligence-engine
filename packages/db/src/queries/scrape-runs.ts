@@ -199,6 +199,20 @@ export async function findRecent(sourceId: number, limit = 10): Promise<ScrapeRu
   return rows.map(toScrapeRunRow);
 }
 
+/**
+ * Each source's most recent run that has ended, one row per source. Queued and running runs are
+ * left out: they have no outcome yet, and counting them would hide the last error during a run.
+ */
+export async function findLatestFinishedPerSource(): Promise<ScrapeRunRow[]> {
+  const rows = await query<ScrapeRunDbRow>(
+    `SELECT DISTINCT ON (source_id) *
+     FROM scrape_runs
+     WHERE status NOT IN ('queued', 'running')
+     ORDER BY source_id, scheduled_at DESC, id DESC`,
+  );
+  return rows.map(toScrapeRunRow);
+}
+
 export async function findRecentAll(
   sourceId: number | null,
   limit = 10,

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Queue } from 'bullmq';
 import { loadConfig } from '@immoradar/config';
-import type { ScraperRunMetrics } from '@immoradar/contracts';
+import type { ScraperRunMetrics, SourceRow } from '@immoradar/contracts';
 import {
   ConflictError,
   NotFoundError,
@@ -15,7 +15,7 @@ import {
   maxPagesForSource,
   syncDiscoverySchedule,
 } from '@immoradar/scraper-core';
-import type { DiscoveryJobData } from '@immoradar/scraper-core';
+import type { DiscoveryJobData, QueueName } from '@immoradar/scraper-core';
 import {
   parseOrThrow,
   idParamSchema,
@@ -72,20 +72,39 @@ async function syncAllDiscoverySchedules(): Promise<void> {
   await Promise.all(allSources.map((source) => syncDiscoverySchedule(queue, source, config)));
 }
 
+/** Why the scraper would refuse to run this source, or null when it may run. */
+function runRefusal(source: SourceRow): string | null {
+  const reason = sources.disabledReasonOf(source);
+  const detail = reason ? ` (${reason})` : '';
+  if (source.legalStatus === 'disabled') {
+    return `Source ${source.code} is legally disabled, so it can't run.`;
+  }
+  if (source.healthStatus === 'disabled') {
+    return `Source ${source.code} was switched off after repeated failed runs${detail}. Switch it on to run it again.`;
+  }
+  if (!source.isActive) {
+    return `Source ${source.code} is switched off${detail}. Switch it on to run it.`;
+  }
+  return null;
+}
+
 export async function sourceRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/sources - List all sources with health status and health summary
   app.get('/v1/sources', async (_request, reply) => {
-    const [allSources, latestCanaries, listingCounts, lifecycleSummaries] = await Promise.all([
-      sources.findAll(),
-      canaryResults.findLatestPerSource(),
-      sources.findListingCounts(),
-      sources.findLifecycleSummaries(),
-    ]);
+    const [allSources, latestCanaries, listingCounts, lifecycleSummaries, latestRuns] =
+      await Promise.all([
+        sources.findAll(),
+        canaryResults.findLatestPerSource(),
+        sources.findListingCounts(),
+        sources.findLifecycleSummaries(),
+        scrapeRuns.findLatestFinishedPerSource(),
+      ]);
 
     // Index latest canary results by source code for O(1) lookup
     const canaryBySource = new Map(latestCanaries.map((c) => [c.sourceCode, c]));
     const listingCountBySource = new Map(listingCounts.map((row) => [row.sourceId, row]));
     const lifecycleSummaryBySource = new Map(lifecycleSummaries.map((row) => [row.sourceId, row]));
+    const latestRunBySource = new Map(latestRuns.map((run) => [run.sourceId, run]));
 
     const mappedData = await Promise.all(
       allSources.map(async (source) => {
@@ -93,6 +112,7 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         const { successRate } = await scrapeRuns.getRecentSuccessRate(source.id);
         const listingCount = listingCountBySource.get(source.id)?.totalListingsIngested ?? 0;
         const lifecycleSummary = lifecycleSummaryBySource.get(source.id);
+        const latestRun = latestRunBySource.get(source.id);
 
         return {
           id: source.id,
@@ -109,9 +129,12 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
           concurrencyLimit: source.concurrencyLimit,
           parserVersion: source.parserVersion,
           legalStatus: source.legalStatus,
+          disabledReason: sources.disabledReasonOf(source),
           lastSuccessfulRun: source.lastSuccessfulRunAt?.toISOString() ?? null,
           lastSuccessfulRunAt: source.lastSuccessfulRunAt?.toISOString() ?? null,
-          lastErrorSummary: lastCanary?.errorMessage ?? null,
+          // The latest finished run's error: the canary is off by default, so its result is stale.
+          lastErrorSummary:
+            latestRun && latestRun.status !== 'succeeded' ? latestRun.errorMessage : null,
           totalListingsIngested: listingCount,
           successRatePct: Math.round(successRate * 1000) / 10,
           lifecycleSummary: {
@@ -329,13 +352,14 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
 
     const terminalStatuses = ['succeeded', 'failed', 'cancelled', 'partial', 'rate_limited'];
     if (terminalStatuses.includes(run.status)) {
-      return reply.status(409).send({
-        error: 'Conflict',
-        message: `Scrape run ${id} is already in terminal status '${run.status}'`,
-      });
+      throw new ConflictError(`Scrape run ${id} is already in terminal status '${run.status}'`);
     }
 
-    await scrapeRuns.cancel(id);
+    // The run can end between the read above and this update, which then changes nothing.
+    const cancelled = await scrapeRuns.cancel(id);
+    if (!cancelled) {
+      throw new ConflictError(`Scrape run ${id} ended before it could be cancelled.`);
+    }
     return reply.send({ data: { id, status: 'cancelled' }, meta: {} });
   });
 
@@ -347,6 +371,11 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     const source = await sources.findByCode(sourceCode);
     if (!source) {
       throw new NotFoundError('Source', sourceCode);
+    }
+    // The scraper's source guard would drop the run, so refuse it before creating one.
+    const refusal = runRefusal(source);
+    if (refusal) {
+      throw new ConflictError(refusal);
     }
 
     const queue = getDiscoveryQueue();
@@ -416,6 +445,30 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // The dead-letter view reads these queues. They share the process's Redis connection, so they're
+  // created on first use and kept until the app closes, instead of six new ones per request that
+  // stayed open whenever a read failed.
+  const failedJobQueueNames: QueueName[] = [
+    QUEUE_NAMES.SCRAPE_DISCOVERY,
+    QUEUE_NAMES.SCRAPE_DETAIL,
+    QUEUE_NAMES.PROCESSING,
+    QUEUE_NAMES.BASELINE,
+    QUEUE_NAMES.GEOCODING,
+    QUEUE_NAMES.RESCORE,
+  ];
+  let failedJobQueues: Map<QueueName, Queue<unknown>> | null = null;
+  const getFailedJobQueues = (): Map<QueueName, Queue<unknown>> => {
+    failedJobQueues ??= new Map(
+      failedJobQueueNames.map((name) => [name, createQueue<unknown>(name)]),
+    );
+    return failedJobQueues;
+  };
+  app.addHook('onClose', async () => {
+    const queues = failedJobQueues;
+    failedJobQueues = null;
+    if (queues) await Promise.all([...queues.values()].map((queue) => queue.close()));
+  });
+
   // GET /v1/dead-letter-queue — List failed jobs across all queues
   app.get(
     '/v1/dead-letter-queue',
@@ -436,15 +489,6 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
       const { limit: queryLimit } = parseOrThrow(paginationQuerySchema, request.query);
       const limit = queryLimit ?? 20;
 
-      const queueNames = [
-        QUEUE_NAMES.SCRAPE_DISCOVERY,
-        QUEUE_NAMES.SCRAPE_DETAIL,
-        QUEUE_NAMES.PROCESSING,
-        QUEUE_NAMES.BASELINE,
-        QUEUE_NAMES.GEOCODING,
-        QUEUE_NAMES.RESCORE,
-      ];
-
       const allFailed: Array<{
         jobId: string;
         queue: string;
@@ -454,9 +498,9 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
         attempts: number;
       }> = [];
 
-      for (const queueName of queueNames) {
-        const q = createQueue(queueName);
-        const failed = await q.getFailed(0, limit);
+      for (const [queueName, q] of getFailedJobQueues()) {
+        // The end index is inclusive.
+        const failed = await q.getFailed(0, limit - 1);
         for (const job of failed) {
           allFailed.push({
             jobId: job.id ?? 'unknown',
@@ -467,7 +511,6 @@ export async function sourceRoutes(app: FastifyInstance): Promise<void> {
             attempts: job.attemptsMade,
           });
         }
-        await q.close();
       }
 
       // Sort by most recent failure first
