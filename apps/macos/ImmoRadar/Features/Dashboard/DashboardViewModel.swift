@@ -63,6 +63,10 @@ final class DashboardViewModel {
             }
             guard refreshID == latestRefreshID else { return }
             hasLoaded = true
+        } else {
+            // This refresh loads no matches, and an earlier refresh's loads are dropped on
+            // arrival, so no row waits on them.
+            filterLoadingStates = [:]
         }
 
         if let failure {
