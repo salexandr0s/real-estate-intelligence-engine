@@ -17,6 +17,9 @@ final class AlertStreamService {
     // MARK: - Private
 
     private var streamTask: Task<Void, Never>?
+    /// Whether the connection being read delivered an event, the server's `connected` included.
+    @ObservationIgnored
+    private var connectionDeliveredEvent = false
     /// One continuation per `alerts()` stream. Each buffers without limit, so alerts that arrive
     /// together all reach a consumer that is busy.
     @ObservationIgnored
@@ -63,6 +66,7 @@ final class AlertStreamService {
         var backoffSeconds = Self.initialBackoffSeconds
 
         while !Task.isCancelled {
+            connectionDeliveredEvent = false
             do {
                 try await Self.readStream(
                     request,
@@ -73,6 +77,7 @@ final class AlertStreamService {
                     },
                     onEvent: { [weak self] event in
                         guard !Task.isCancelled else { return }
+                        self?.connectionDeliveredEvent = true
                         self?.handle(event)
                     }
                 )
@@ -90,8 +95,9 @@ final class AlertStreamService {
                 Log.stream.error("The stream failed: \(error, privacy: .public)")
             }
 
-            // After a connection that worked, the next attempt starts at the shortest delay.
-            if isConnected {
+            // After a connection that delivered an event, the next attempt starts at the shortest
+            // delay. One the server accepted and closed before sending anything keeps backing off.
+            if connectionDeliveredEvent {
                 backoffSeconds = Self.initialBackoffSeconds
             }
             isConnected = false
