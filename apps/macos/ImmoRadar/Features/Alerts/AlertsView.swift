@@ -32,10 +32,7 @@ struct AlertsView: View {
                     },
                     onDismiss: {
                         guard let alert = viewModel.selectedAlert else { return }
-                        Task {
-                            await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
-                            await appState.refreshUnreadCount()
-                        }
+                        dismiss(alert)
                     },
                     onOpenListing: {
                         guard let listingId = viewModel.selectedAlert?.listingId else { return }
@@ -59,11 +56,12 @@ struct AlertsView: View {
                 }
             }
             ToolbarItem(placement: .automatic) {
-                if viewModel.unreadCount > 0 {
-                    Text("\(viewModel.unreadCount) unread")
+                let unreadTotal = appState.alertsState.unreadAlertCount
+                if unreadTotal > 0 {
+                    Text("\(unreadTotal) unread")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("\(viewModel.unreadCount) unread alerts")
+                        .accessibilityLabel("\(unreadTotal) unread alerts")
                 }
             }
         }
@@ -118,18 +116,28 @@ struct AlertsView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await reloadAlerts()
         }
+        .task {
+            // Each streamed alert arrives here once, however many come in one main-actor turn.
+            for await alert in appState.alertStream.alerts() {
+                viewModel.insertStreamAlert(alert)
+            }
+        }
         .onChange(of: viewModel.selectedAlertID) { _, newValue in
             if newValue != nil {
                 showInspector = true
             }
         }
-        .onChange(of: appState.alertStream.lastEvent?.id) { _, _ in
-            if let alert = appState.alertStream.lastEvent {
-                viewModel.insertStreamAlert(alert)
-            }
+        .onChange(of: appState.navigationState.refreshGeneration) { _, _ in
+            Task { await reloadAlerts() }
         }
         .onChange(of: searchText) { _, newValue in
             viewModel.searchText = newValue
+        }
+        .onChange(of: viewModel.scope) { _, _ in
+            Task { await reloadAlerts() }
+        }
+        .onChange(of: viewModel.userFilterId) { _, _ in
+            Task { await reloadAlerts() }
         }
         .onChange(of: viewModel.sortBy) { _, _ in
             Task { await reloadAlerts() }
@@ -140,10 +148,7 @@ struct AlertsView: View {
         .onDeleteCommand {
             if let id = viewModel.selectedAlertID,
                let alert = viewModel.alerts.first(where: { $0.id == id }) {
-                Task {
-                    await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
-                    await appState.refreshUnreadCount()
-                }
+                dismiss(alert)
             }
         }
     }
@@ -151,6 +156,19 @@ struct AlertsView: View {
     private func reloadAlerts() async {
         await viewModel.refresh(using: appState.apiClient)
         await appState.refreshUnreadCount()
+    }
+
+    private func dismiss(_ alert: Alert) {
+        let appState = appState
+        Task {
+            await viewModel.dismiss(
+                alert,
+                using: appState.apiClient,
+                undoManager: undoManager,
+                afterUndo: { await appState.refreshUnreadCount() }
+            )
+            await appState.refreshUnreadCount()
+        }
     }
 }
 
@@ -163,17 +181,32 @@ private struct AlertsPrimaryPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AlertsFilterBar(viewModel: viewModel)
+            AlertsFilterBar(viewModel: viewModel, unreadTotal: appState.alertsState.unreadAlertCount)
             Divider()
 
-            if let error = viewModel.errorMessage,
+            if let error = viewModel.errorMessage {
+                InlineWarningBanner(
+                    title: "Couldn’t complete the last alert action.",
+                    message: error,
+                    actions: [
+                        .init("Dismiss") {
+                            viewModel.clearError()
+                        },
+                    ]
+                )
+                Divider()
+            }
+
+            // While the global banner shows the connection problem, a failed load says nothing here.
+            if let error = viewModel.loadErrorMessage,
+               appState.globalConnectionWarningMessage == nil,
                !AppErrorPresentation.isConnectionIssue(message: error) {
                 InlineWarningBanner(
                     title: "Couldn’t load alerts.",
                     message: error,
                     actions: [
                         .init("Dismiss") {
-                            viewModel.clearError()
+                            viewModel.clearLoadError()
                         },
                         .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
                             Task { await onReload() }
@@ -192,10 +225,11 @@ private struct AlertsPrimaryPane: View {
         if viewModel.visibleAlerts.isEmpty && !viewModel.isLoading {
             AlertsEmptyState(
                 scope: viewModel.scope,
-                hasAnyAlerts: viewModel.hasAnyAlerts,
                 hasSearch: !viewModel.searchText.isEmpty,
+                hasFilterSelection: viewModel.userFilterId != nil,
                 onClearSearch: { searchText = "" },
                 onSwitchToAll: { viewModel.scope = .all },
+                onShowAllFilters: { viewModel.userFilterId = nil },
                 onOpenFilters: { appState.navigateTo(.filters) },
                 onRefresh: {
                     Task { await onReload() }

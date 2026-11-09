@@ -502,8 +502,8 @@ actor APIClient {
                 operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
                 propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
                 districts: dto.districts ?? [],
-                minPriceEur: dto.minPriceEur,
-                maxPriceEur: dto.maxPriceEur,
+                minPriceEur: dto.wholeEuroMinPrice,
+                maxPriceEur: dto.wholeEuroMaxPrice,
                 minAreaSqm: dto.minAreaSqm,
                 maxAreaSqm: dto.maxAreaSqm,
                 minRooms: dto.minRooms,
@@ -514,6 +514,7 @@ actor APIClient {
                 sortBy: dto.sortBy
             ),
             alertFrequency: dto.alertFrequency.flatMap(AlertFrequency.init(rawValue:)) ?? .off,
+            alertChannels: dto.alertChannels,
             createdAt: Date.fromISO(dto.createdAt),
             updatedAt: Date.fromISO(dto.updatedAt),
             matchCount: dto.matchCount

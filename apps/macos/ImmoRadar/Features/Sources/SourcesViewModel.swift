@@ -18,10 +18,17 @@ final class SourcesViewModel {
 
     var sources: [Source] = []
     var isLoading: Bool = false
+    /// Why the last load failed. The view hides it while the global connection banner shows.
+    var loadErrorMessage: String?
+    /// Why the user's last action (switch, interval, run) failed.
     var errorMessage: String?
 
     /// Tracks which source IDs currently have a manual scrape in progress.
     var runningSourceIDs: Set<Int> = []
+    /// Sources whose switch-on or switch-off request is in flight.
+    var togglingSourceIDs: Set<Int> = []
+    /// True while Pause All or Resume All is in flight.
+    var isUpdatingAll = false
 
     // MARK: - Computed
 
@@ -53,28 +60,64 @@ final class SourcesViewModel {
         !sources.isEmpty && sources.allSatisfy { !$0.isActive }
     }
 
+    // Every source lands in exactly one section, so none drops out of the list.
+
     var needsAttentionSources: [Source] {
         sources
-            .filter { $0.isActive && ($0.healthStatus == .blocked || $0.healthStatus == .degraded) }
+            .filter { $0.isActive && !Self.isDisabled($0) && ($0.healthStatus == .blocked || $0.healthStatus == .degraded) }
             .sorted(by: sourceSort)
     }
 
     var unknownSources: [Source] {
         sources
-            .filter { $0.isActive && $0.healthStatus == .unknown }
+            .filter { $0.isActive && !Self.isDisabled($0) && $0.healthStatus == .unknown }
             .sorted(by: sourceSort)
     }
 
     var healthySources: [Source] {
         sources
-            .filter { $0.isActive && $0.healthStatus == .healthy }
+            .filter { $0.isActive && !Self.isDisabled($0) && $0.healthStatus == .healthy }
             .sorted(by: sourceSort)
     }
 
     var pausedSources: [Source] {
         sources
-            .filter { !$0.isActive }
+            .filter { !$0.isActive && !Self.isDisabled($0) }
             .sorted(by: sourceSort)
+    }
+
+    /// Sources that failed runs or the legal status switched off, whatever `isActive` says.
+    var disabledSources: [Source] {
+        sources
+            .filter(Self.isDisabled)
+            .sorted(by: sourceSort)
+    }
+
+    // MARK: - Source Rules
+
+    static func isDisabled(_ source: Source) -> Bool {
+        source.legalStatus == .disabled || source.healthStatus == .disabled
+    }
+
+    /// Why the source can't run, with the cause first, or nil when nothing about the source
+    /// stops it. The server's `runRefusal` in apps/api/src/routes/sources.ts checks the same.
+    static func disabledExplanation(for source: Source) -> String? {
+        if source.legalStatus == .disabled {
+            return "Legally disabled. This source can’t run or be switched on."
+        }
+        if source.healthStatus == .disabled {
+            let cause = source.disabledReason.map { " (\($0))" } ?? ""
+            return source.isActive
+                ? "Stopped after repeated failed runs\(cause). Switch it off and on again to run it."
+                : "Switched off after repeated failed runs\(cause). Switch it on to run it again."
+        }
+        if !source.isActive {
+            if let reason = source.disabledReason {
+                return "Switched off: \(reason)."
+            }
+            return "Switched off. Switch it on to run it."
+        }
+        return nil
     }
 
     var lifecycleOpsRows: [LifecycleOpsRow] {
@@ -113,13 +156,14 @@ final class SourcesViewModel {
 
     func refresh(using client: APIClient) async {
         isLoading = true
-        errorMessage = nil
+        loadErrorMessage = nil
 
         do {
             sources = try await client.fetchSources()
             sources.sort(by: sourceSort)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            // The last loaded sources stay.
+            loadErrorMessage = AppErrorPresentation.message(for: error)
         }
 
         isLoading = false
@@ -129,13 +173,24 @@ final class SourcesViewModel {
         errorMessage = nil
     }
 
+    func clearLoadError() {
+        loadErrorMessage = nil
+    }
+
+    /// Switches one source on or off. On any error, a 409 for a legally disabled source among
+    /// them, the switch goes back and the server's message shows.
     func toggleActive(_ source: Source, using client: APIClient) async {
-        guard let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
+        guard !togglingSourceIDs.contains(source.id),
+              let index = sources.firstIndex(where: { $0.id == source.id }) else { return }
         let newActive = !sources[index].isActive
         sources[index].isActive = newActive
+        togglingSourceIDs.insert(source.id)
+        defer { togglingSourceIDs.remove(source.id) }
+
         do {
             try await client.updateSource(id: source.id, isActive: newActive)
-            sources.sort(by: sourceSort)
+            // Switching on also clears a failed-runs disable on the server, so reload what it says.
+            await reloadQuietly(using: client)
         } catch {
             if let idx = sources.firstIndex(where: { $0.id == source.id }) {
                 sources[idx].isActive = !newActive
@@ -144,23 +199,42 @@ final class SourcesViewModel {
         }
     }
 
+    /// Pause All or Resume All. Resuming skips legally disabled sources, as the server does.
+    /// On any error every switch goes back and the server's message shows.
     func togglePauseAll(using client: APIClient) async {
+        guard !isUpdatingAll else { return }
         let shouldPause = !allPaused
-        let backup = sources.map { $0.isActive }
-        for i in sources.indices { sources[i].isActive = !shouldPause }
+        let previousActive = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.isActive) })
+        for i in sources.indices where shouldPause || sources[i].legalStatus != .disabled {
+            sources[i].isActive = !shouldPause
+        }
+        isUpdatingAll = true
+        defer { isUpdatingAll = false }
+
         do {
             if shouldPause {
                 try await client.pauseAllSources()
             } else {
                 try await client.resumeAllSources()
             }
-            sources.sort(by: sourceSort)
+            await reloadQuietly(using: client)
         } catch {
-            for i in sources.indices where i < backup.count {
-                sources[i].isActive = backup[i]
+            for i in sources.indices {
+                if let wasActive = previousActive[sources[i].id] {
+                    sources[i].isActive = wasActive
+                }
             }
             errorMessage = AppErrorPresentation.message(for: error)
         }
+    }
+
+    /// The server's view of the sources after a change. A failed reload keeps the local state.
+    private func reloadQuietly(using client: APIClient) async {
+        guard let reloaded = try? await client.fetchSources() else {
+            sources.sort(by: sourceSort)
+            return
+        }
+        sources = reloaded.sorted(by: sourceSort)
     }
 
     func updateInterval(_ source: Source, minutes: Int, using client: APIClient) async {

@@ -28,11 +28,6 @@ struct ContentView: View {
         // The hidden content's toolbar would otherwise show above the launch screen.
         .toolbar(presentsLaunchExperience ? .hidden : .automatic, for: .windowToolbar)
         .frame(minWidth: 1100, minHeight: 600)
-        .onChange(of: appState.alertStream.lastEvent?.id) { _, _ in
-            if let alert = appState.alertStream.lastEvent {
-                appState.handleStreamAlert(alert)
-            }
-        }
         .alert("Reset the local engine?", isPresented: $appState.isEngineResetConfirmationPresented) {
             Button("Reset Local Engine", role: .destructive) {
                 Task { await appState.resetLocalEngine() }

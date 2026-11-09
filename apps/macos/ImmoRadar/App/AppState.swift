@@ -214,10 +214,17 @@ final class AppState {
         runtimeState.localRuntime
     }
 
-    /// Any failure of the live connection, or a dependency that is down, shows here.
+    /// Any failure of the live connection, a dependency that is down, or a rejected alert stream
+    /// shows here.
     var globalConnectionWarningMessage: String? {
         guard !shouldPresentBundledLaunchExperience else { return nil }
-        return connectionState.connectionIssue
+        if let connectionIssue = connectionState.connectionIssue {
+            return connectionIssue
+        }
+        guard alertStream.isUnauthorized else { return nil }
+        return usesManagedLocalRuntime
+            ? "The local engine rejected this app’s token, so new alerts can’t arrive. Click Retry to restart the engine."
+            : "The server rejected this app’s API token, so new alerts can’t arrive. Check the API token in Settings."
     }
 
     /// The API key stored for the selected Copilot provider.
@@ -268,10 +275,13 @@ final class AppState {
             self?.startBackgroundRefreshTasksIfNeeded()
         }
 
+        // Keeps the setting true to macOS. When notifications are on at launch, this asks the same
+        // way Settings does: macOS prompts only if it never asked, and a denial, including one
+        // made later in System Settings, turns the setting off with the same hint.
         if launchMode.shouldRequestNotificationPermission,
            smokeContext == nil,
            alertsState.notificationsEnabled {
-            NotificationManager.shared.requestPermission()
+            Task { [alertsState] in await alertsState.setNotificationsEnabled(true) }
         }
 
         if launchPolicy.allowsStoredCredentials {
@@ -628,10 +638,6 @@ final class AppState {
         } else {
             runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring
         }
-    }
-
-    func handleStreamAlert(_ alert: Alert) {
-        alertsState.handleStreamAlert(alert)
     }
 
     func refreshUnreadCount() async {

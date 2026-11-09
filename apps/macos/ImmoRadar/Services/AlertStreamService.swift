@@ -1,9 +1,9 @@
 import Foundation
 import os
 
-/// Keeps a connection to GET /v1/stream/alerts open and publishes each alert it delivers.
-/// A failed or closed connection reconnects with capped exponential backoff. A 401 stops the
-/// stream and sets `isUnauthorized` until the next `connect`.
+/// Keeps a connection to GET /v1/stream/alerts open and hands each alert it delivers to every
+/// consumer of `alerts()`. A failed or closed connection reconnects with capped exponential
+/// backoff. A 401 stops the stream and sets `isUnauthorized` until the next `connect`.
 @MainActor @Observable
 final class AlertStreamService {
 
@@ -13,12 +13,14 @@ final class AlertStreamService {
     private(set) var isConnected = false
     /// True once the server rejected the token. Nothing reconnects until `connect` runs again.
     private(set) var isUnauthorized = false
-    /// The latest alert the stream delivered.
-    private(set) var lastEvent: Alert?
 
     // MARK: - Private
 
     private var streamTask: Task<Void, Never>?
+    /// One continuation per `alerts()` stream. Each buffers without limit, so alerts that arrive
+    /// together all reach a consumer that is busy.
+    @ObservationIgnored
+    private var consumers: [UUID: AsyncStream<Alert>.Continuation] = [:]
     private static let initialBackoffSeconds: Double = 1
     private static let maxBackoffSeconds: Double = 60
     /// The server sends a keepalive every 30 seconds, so a connection silent for 90 is dead.
@@ -129,13 +131,37 @@ final class AlertStreamService {
         }
     }
 
+    // MARK: - Delivery
+
+    /// Every alert delivered from now on, once each and in order. Each call returns a stream of
+    /// its own, so one consumer can't take an alert from another. The stream ends when the task
+    /// iterating it is cancelled.
+    func alerts() -> AsyncStream<Alert> {
+        let (stream, continuation) = AsyncStream.makeStream(of: Alert.self)
+        let id = UUID()
+        consumers[id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor in
+                self?.consumers[id] = nil
+            }
+        }
+        return stream
+    }
+
+    /// Hands one alert to every consumer of `alerts()`.
+    func publish(_ alert: Alert) {
+        for continuation in consumers.values {
+            continuation.yield(alert)
+        }
+    }
+
     // MARK: - Event Handling
 
     private func handle(_ event: ServerSentEvent) {
         switch event.type {
         case "alert":
             if let alert = Self.alert(from: event) {
-                lastEvent = alert
+                publish(alert)
             }
         case "connected":
             Log.stream.info("The server confirmed the connection")

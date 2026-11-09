@@ -9,6 +9,10 @@ struct Filter: Identifiable, Codable, Hashable {
     var isActive: Bool
     var criteria: FilterCriteria
     var alertFrequency: AlertFrequency
+    /// Where the server delivers this filter's alerts (`in_app`, `email`, `push`, `webhook`). The
+    /// app doesn't edit them; it sends them back, so an edit or an undone delete keeps them. Nil
+    /// leaves them to the server: unchanged on an edit, `in_app` on a create.
+    var alertChannels: [String]? = nil
     let createdAt: Date?
     var updatedAt: Date?
     var matchCount: Int?

@@ -53,7 +53,20 @@ struct SettingsView: View {
             }
 
             Section("Notifications") {
-                Toggle("Enable Notifications", isOn: $alertsState.notificationsEnabled)
+                Toggle(
+                    "Enable Notifications",
+                    isOn: Binding(
+                        get: { alertsState.notificationsEnabled },
+                        set: { isEnabled in
+                            Task { await alertsState.setNotificationsEnabled(isEnabled) }
+                        }
+                    )
+                )
+                if let hint = alertsState.notificationPermissionHint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if alertsState.notificationsEnabled {
                     Toggle("New Matches", isOn: $alertsState.notifyOnNewMatch)
                     Toggle("Price Drops", isOn: $alertsState.notifyOnPriceDrop)

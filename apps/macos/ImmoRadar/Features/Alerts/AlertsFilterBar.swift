@@ -2,17 +2,31 @@ import SwiftUI
 
 struct AlertsFilterBar: View {
     @Bindable var viewModel: AlertsViewModel
+    /// The server's unread count across every status and filter.
+    let unreadTotal: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .center, spacing: Theme.Spacing.md) {
-                Picker("Scope", selection: $viewModel.scope) {
+                Picker("Status", selection: $viewModel.scope) {
                     ForEach(AlertsScope.allCases, id: \.self) { scope in
                         Text(scope.displayName).tag(scope)
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 420)
+                .pickerStyle(.menu)
+                .fixedSize()
+
+                Picker("Filter", selection: $viewModel.userFilterId) {
+                    Text("All Filters").tag(Int?.none)
+                    if !viewModel.availableFilters.isEmpty {
+                        Divider()
+                    }
+                    ForEach(viewModel.availableFilters) { filter in
+                        Text(filter.name).tag(Int?.some(filter.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .help("Show alerts from one saved filter")
 
                 Spacer(minLength: 0)
 
@@ -59,7 +73,7 @@ struct AlertsFilterBar: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
 
-                    Text("^[\(viewModel.unreadCount) unread total](inflect: true)")
+                    Text("^[\(unreadTotal) unread total](inflect: true)")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

@@ -33,7 +33,7 @@ struct AlertPresentation {
         case .dismissed:
             .init(title: "Dismissed", icon: "archivebox.fill", tint: .secondary, background: Color.secondary.opacity(0.10))
         case .failed:
-            .init(title: "Failed", icon: "exclamationmark.circle", tint: .secondary, background: Color.secondary.opacity(0.10))
+            .init(title: "Failed", icon: "exclamationmark.circle", tint: .sourceFailing, background: Color.sourceFailing.opacity(0.12))
         case .suppressed:
             .init(title: "Suppressed", icon: "eye.slash", tint: .secondary, background: Color.secondary.opacity(0.10))
         }
@@ -231,9 +231,14 @@ struct AlertRow: View {
             Spacer(minLength: Theme.Spacing.sm)
 
             if alert.status != .unread {
+                // A failed alert keeps its status color, so it stands out from reviewed ones.
                 Label(presentation.status.title, systemImage: presentation.status.icon)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(
+                        alert.status == .failed
+                            ? AnyShapeStyle(presentation.status.tint)
+                            : AnyShapeStyle(.tertiary)
+                    )
             }
         }
     }

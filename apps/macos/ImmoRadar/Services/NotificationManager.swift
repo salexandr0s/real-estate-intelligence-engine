@@ -9,12 +9,18 @@ final class NotificationManager: Sendable {
 
     private init() {}
 
-    /// Request notification authorization from the user.
-    func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(
-            options: [.alert, .badge, .sound]
-        ) { _, _ in
-            // Permission result stored by the system
+    /// Asks macOS for permission to post notifications and returns whether ImmoRadar may post
+    /// them. macOS shows its prompt only once; after that this returns the stored answer, so it
+    /// returns false when the user denied permission earlier. `AlertsState` calls this when
+    /// notifications are turned on, and at launch when they are already on.
+    func requestAuthorization() async -> Bool {
+        do {
+            return try await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .badge, .sound]
+            )
+        } catch {
+            Log.ui.error("Notification permission request failed: \(error, privacy: .public)")
+            return false
         }
     }
 

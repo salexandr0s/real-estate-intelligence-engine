@@ -2,10 +2,12 @@ import SwiftUI
 
 struct AlertsEmptyState: View {
     let scope: AlertsScope
-    let hasAnyAlerts: Bool
     let hasSearch: Bool
+    /// True while the list shows one saved filter's alerts.
+    let hasFilterSelection: Bool
     var onClearSearch: (() -> Void)?
     var onSwitchToAll: (() -> Void)?
+    var onShowAllFilters: (() -> Void)?
     var onOpenFilters: (() -> Void)?
     var onRefresh: (() -> Void)?
 
@@ -23,6 +25,10 @@ struct AlertsEmptyState: View {
                 Button("View All Alerts", action: onSwitchToAll)
             }
 
+            if hasFilterSelection, let onShowAllFilters {
+                Button("Show All Filters", action: onShowAllFilters)
+            }
+
             if let onOpenFilters {
                 Button("Review Filters", action: onOpenFilters)
             }
@@ -36,20 +42,20 @@ struct AlertsEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // The list holds one status from the server, so an empty list says nothing about the others.
+
     private var title: String {
         if hasSearch {
             return "No Matching Alerts"
         }
 
         switch scope {
-        case .unread:
-            return hasAnyAlerts ? "Inbox Clear" : "No Alerts Yet"
-        case .active:
-            return hasAnyAlerts ? "No Active Alerts" : "No Alerts Yet"
-        case .dismissed:
-            return hasAnyAlerts ? "No Dismissed Alerts" : "No Alerts Yet"
-        case .all:
-            return "No Alerts Yet"
+        case .unread: return "Inbox Clear"
+        case .active: return "No Active Alerts"
+        case .dismissed: return "No Dismissed Alerts"
+        case .failed: return "No Failed Alerts"
+        case .suppressed: return "No Suppressed Alerts"
+        case .all: return "No Alerts Yet"
         }
     }
 
@@ -64,17 +70,15 @@ struct AlertsEmptyState: View {
 
         switch scope {
         case .unread:
-            return hasAnyAlerts
-                ? "You’ve cleared the unread inbox. Switch scope to review older alerts or adjust your filters."
-                : "When listings match your filters, new alerts will appear here."
+            return "No unread alerts. New matches for your filters appear here."
         case .active:
-            return hasAnyAlerts
-                ? "There are no active alerts to triage right now."
-                : "When listings match your filters, alerts will appear here."
+            return "There are no active alerts to triage right now."
         case .dismissed:
-            return hasAnyAlerts
-                ? "Dismissed alerts will appear here once you archive them."
-                : "There are no alerts in history yet."
+            return "Dismissed alerts will appear here once you archive them."
+        case .failed:
+            return "Alerts the server couldn’t send appear here."
+        case .suppressed:
+            return "Suppressed alerts appear here."
         case .all:
             return "When listings match your filters, alerts will appear here."
         }
