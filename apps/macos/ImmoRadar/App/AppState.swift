@@ -151,15 +151,14 @@ final class AppState {
         set { copilotSettingsState.copilotModel = newValue }
     }
 
-    var claudeSubscriptionAvailable: Bool {
-        get { copilotSettingsState.claudeSubscriptionAvailable }
-        set { copilotSettingsState.claudeSubscriptionAvailable = newValue }
-    }
+    /// Reset Local Engine asks first. ContentView shows the confirmation, and confirming it runs
+    /// `resetLocalEngine()`.
+    var isEngineResetConfirmationPresented = false
 
-    var claudeSubscriptionType: String? {
-        get { copilotSettingsState.claudeSubscriptionType }
-        set { copilotSettingsState.claudeSubscriptionType = newValue }
-    }
+    /// Set when the connection fails or the engine restarts, so the next successful check asks the
+    /// feature views, which keep their state, to reload.
+    @ObservationIgnored
+    private var needsFeatureRefresh = false
 
     var hasActiveBackgroundRefreshTasks: Bool {
         connectionState.hasActiveRefreshTask
@@ -215,24 +214,22 @@ final class AppState {
         runtimeState.localRuntime
     }
 
+    /// Any failure of the live connection, or a dependency that is down, shows here.
     var globalConnectionWarningMessage: String? {
-        guard !shouldPresentBundledLaunchExperience,
-              let message = connectionState.connectionStatus.message else {
-            return nil
-        }
-
-        let standardized = AppErrorPresentation.standardized(message: message)
-        guard AppErrorPresentation.isConnectionIssue(message: standardized) else {
-            return nil
-        }
-
-        return standardized
+        guard !shouldPresentBundledLaunchExperience else { return nil }
+        return connectionState.connectionIssue
     }
 
-    /// The active API key for the current provider, resolving Claude subscription OAuth.
+    /// The API key stored for the selected Copilot provider.
     var activeCopilotApiKey: String {
         guard launchPolicy.allowsStoredCredentials else { return "" }
         return copilotSettingsState.activeAPIKey()
+    }
+
+    /// Whether a Copilot API key is stored, or nil while that isn't known.
+    var hasCopilotAPIKey: Bool? {
+        guard launchPolicy.allowsStoredCredentials else { return nil }
+        return copilotSettingsState.hasAPIKeyForActiveProvider
     }
 
     // MARK: - Init
@@ -295,14 +292,10 @@ final class AppState {
         connectionState.loadConnectionSecretForUserAction()
     }
 
-    func loadClaudeSubscriptionIfNeeded() {
+    /// Reads the Copilot keys without a Keychain prompt, so Copilot can say when none is stored.
+    func loadCopilotKeysQuietly() {
         guard launchPolicy.allowsStoredCredentials else { return }
-        copilotSettingsState.loadClaudeSubscriptionIfNeeded()
-    }
-
-    func refreshClaudeSubscription() {
-        guard launchPolicy.allowsStoredCredentials else { return }
-        copilotSettingsState.refreshClaudeSubscription()
+        copilotSettingsState.loadCopilotSecretsIfNeeded(allowUserInteraction: false)
     }
 
     func clearSettingsError() {
@@ -412,6 +405,12 @@ final class AppState {
         navigationState.navigateTo(item)
     }
 
+    /// Refresh Data: feature views reload, and the connection is checked again.
+    func requestRefresh() {
+        navigationState.requestRefresh()
+        Task { await refreshConnection(userInitiated: true) }
+    }
+
     func openListing(_ listingId: Int) {
         navigationState.openListing(listingId)
     }
@@ -517,6 +516,13 @@ final class AppState {
         runtimeState.openLocalEngineDataFolder()
     }
 
+    /// Every Reset Local Engine button calls this. Nothing is erased until the person confirms.
+    func requestEngineReset() {
+        guard usesManagedLocalRuntime, !isLocalEngineBusy else { return }
+        isEngineResetConfirmationPresented = true
+    }
+
+    /// Erases the local engine. Only the confirmation that `requestEngineReset()` shows calls this.
     func resetLocalEngine() async {
         // Cleared before any wait, so a monitoring choice made during the reset is the one the new
         // engine starts with.
@@ -565,12 +571,25 @@ final class AppState {
         }
         await apiClient.updateAuthToken(authToken)
 
-        connectionState.connectionStatus = .connecting
+        // A poll of a working connection stays Connected. Only the first connect and a reconnect
+        // after a failure show Connecting, and the banner keeps the last failure until it's fixed.
+        if connectionState.connectionStatus != .connected {
+            connectionState.connectionStatus = .connecting
+        }
+
+        // A smoke launch talks to its own API, so it doesn't probe the stored address.
+        async let healthReport = Self.probeHealth(baseURL: isIsolatedSmokeLaunch ? nil : connectionState.apiBaseURL)
         let connectionResult = await apiClient.testConnection()
+        let dependencyIssue = await healthReport?.issueMessage
 
         switch connectionResult {
         case .success:
             connectionState.connectionStatus = .connected
+            connectionState.connectionIssue = dependencyIssue
+            if needsFeatureRefresh {
+                needsFeatureRefresh = false
+                navigationState.requestRefresh()
+            }
             reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection()
             if !isIsolatedSmokeLaunch {
                 await alertsState.refreshUnreadCount(using: apiClient)
@@ -581,9 +600,19 @@ final class AppState {
                 )
             }
         case .failure(let error):
-            connectionState.connectionStatus = .error(AppErrorPresentation.message(for: error))
+            // A named dependency says more than the unread-count request's own error.
+            let message = dependencyIssue ?? AppErrorPresentation.message(for: error)
+            connectionState.connectionStatus = .error(message)
+            connectionState.connectionIssue = message
+            needsFeatureRefresh = true
             alertsState.disconnectStream(alertStream)
         }
+    }
+
+    /// Off the main actor. Returns nil without a base URL, or when `/health` can't be read.
+    private nonisolated static func probeHealth(baseURL: String?) async -> HealthProbe.Report? {
+        guard let baseURL else { return nil }
+        return await HealthProbe().check(baseURL: baseURL)
     }
 
     private func reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection() {
@@ -668,6 +697,8 @@ final class AppState {
         }
 
         runtimeState.bundledLaunchExperienceState = .starting
+        // The feature views stay up under the launch screen, so they reload once the engine answers.
+        needsFeatureRefresh = true
 
         let startPolicy: LocalRuntimeService.StartPolicy = restartExistingRuntime ? .forceRestart : .ifNeeded
         await runtimeState.localRuntime.start(

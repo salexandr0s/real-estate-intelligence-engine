@@ -26,6 +26,10 @@ final class CopilotViewModel {
     private var streamingTextBlockId: UUID?
     private var currentBlocks: [ContentBlock] = []
     private var streamTask: Task<Void, Never>?
+    /// Set for the send that owns the stream, so a stopped stream can't change a newer one.
+    private var activeStreamID: UUID?
+    /// Set while a send waits for saved conversations to load, before it starts streaming.
+    private var isPreparingSend = false
 
     // MARK: - Services
 
@@ -138,7 +142,11 @@ final class CopilotViewModel {
     // MARK: - Chat Actions
 
     func send(using appState: AppState) async {
+        // Claimed before the first suspension, so a second send can't start alongside this one.
+        guard !isPreparingSend, !isStreaming else { return }
+        isPreparingSend = true
         await loadSavedStateIfNeeded()
+        isPreparingSend = false
 
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isStreaming else { return }
@@ -157,10 +165,7 @@ final class CopilotViewModel {
             contentBlocks: [ContentBlock(.text(text))]
         )
         messages.append(userMessage)
-        await persistCurrentConversation()
-        if let id = activeConversationID {
-            await refreshConversationSummaries(selecting: id)
-        }
+        let history = CopilotChatRequest.history(from: messages)
 
         let assistantMessage = CopilotMessage(
             role: .assistant,
@@ -173,85 +178,76 @@ final class CopilotViewModel {
         streamingText = ""
         streamingTextBlockId = nil
         currentBlocks = []
-
-        let serializedMessages = messages.dropLast().map { msg -> [String: Any] in
-            let content: String
-            if let firstText = msg.contentBlocks.compactMap({ block -> String? in
-                if case .text(let t) = block.content { return t }
-                return nil
-            }).first {
-                content = firstText
-            } else {
-                content = ""
-            }
-            return ["role": msg.role.rawValue, "content": content]
-        }
-
-        var context: [String: Any]?
-        if currentListingId != nil || currentDistrictNo != nil {
-            var ctx: [String: Any] = [:]
-            if let lid = currentListingId { ctx["currentListingId"] = lid }
-            if let dno = currentDistrictNo { ctx["currentDistrictNo"] = dno }
-            context = ctx
-        }
+        let streamID = UUID()
+        activeStreamID = streamID
 
         guard let authToken = appState.resolvedConnectionAuthToken() else {
-            errorMessage = "API token required."
+            errorMessage = "There's no API token for this connection. Check the connection in Settings."
             finalizeStream()
             return
         }
+
+        var context: CopilotChatRequest.Context?
+        if currentListingId != nil || currentDistrictNo != nil {
+            context = CopilotChatRequest.Context(
+                currentListingId: currentListingId,
+                currentDistrictNo: currentDistrictNo
+            )
+        }
+        let request = CopilotChatRequest(
+            messages: history,
+            context: context,
+            provider: appState.copilotProvider.apiProvider,
+            model: appState.copilotModel.isEmpty ? nil : appState.copilotModel
+        )
+        let baseURL = appState.apiBaseURL
+        let copilotApiKey = appState.activeCopilotApiKey
+        let conversationID = activeConversationID
+
+        await persistCurrentConversation()
+        if let conversationID {
+            await refreshConversationSummaries(selecting: conversationID)
+        }
+        // Stop, a new session or another conversation while saving ends this send.
+        guard activeStreamID == streamID, activeConversationID == conversationID else { return }
 
         streamTask = Task {
             var didFinalize = false
 
             do {
                 let stream = streamService.stream(
-                    baseURL: appState.apiBaseURL,
+                    baseURL: baseURL,
                     token: authToken,
-                    messages: serializedMessages,
-                    context: context,
-                    provider: appState.copilotProvider.apiProvider,
-                    copilotApiKey: appState.activeCopilotApiKey,
-                    model: appState.copilotModel.isEmpty ? nil : appState.copilotModel
+                    request: request,
+                    copilotApiKey: copilotApiKey
                 )
 
                 for try await event in stream {
-                    if Task.isCancelled { break }
+                    // A stream that was stopped must not touch the one that replaced it.
+                    guard !Task.isCancelled, activeStreamID == streamID else { return }
 
-                    if case .done = event {
+                    switch event {
+                    case .done:
                         finalizeStream()
                         didFinalize = true
-                        break
-                    }
-                    if case .error(let message) = event {
-                        let lower = message.lowercased()
-                        if lower.contains("oauth token") || lower.contains("token rejected") {
-                            let refreshed = await Task.detached(priority: .userInitiated) {
-                                ClaudeAuthHelper.forceRefresh() != nil
-                            }.value
-                            if refreshed {
-                                Log.stream.info("OAuth token force-refreshed after rejection, user should retry")
-                                errorMessage = "OAuth token was stale — refreshed automatically. Please try again."
-                            } else {
-                                errorMessage = message
-                            }
-                        } else {
-                            errorMessage = message
-                        }
+                    case .error(let message):
+                        errorMessage = message
                         finalizeStream()
                         didFinalize = true
-                        break
+                    case .textDelta, .toolUse, .contentBlock:
+                        handleStreamEvent(event)
                     }
-                    handleStreamEvent(event)
+                    if didFinalize { break }
                 }
             } catch is CancellationError {
                 // Expected when user starts a new chat or switches conversations.
             } catch {
+                guard activeStreamID == streamID else { return }
                 errorMessage = error.localizedDescription
                 Log.stream.error("Copilot stream error: \(error, privacy: .public)")
             }
 
-            if !didFinalize {
+            if !didFinalize, activeStreamID == streamID {
                 finalizeStream()
             }
         }
@@ -342,6 +338,7 @@ final class CopilotViewModel {
         guard isStreaming else { return }
         isStreaming = false
         streamTask = nil
+        activeStreamID = nil
 
         guard !messages.isEmpty else { return }
         let lastIndex = messages.count - 1
@@ -435,6 +432,7 @@ final class CopilotViewModel {
     private func resetEphemeralState() {
         streamTask?.cancel()
         streamTask = nil
+        activeStreamID = nil
         inspectorTask?.cancel()
         inspectorTask = nil
         inspectedListing = nil

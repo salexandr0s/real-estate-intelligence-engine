@@ -39,7 +39,6 @@ struct SettingsView: View {
 
             SettingsAISection(
                 draft: $draft,
-                appState: appState,
                 hasChanges: draft.hasAIChanges(comparedTo: appState),
                 onApply: applyAISettings
             )
@@ -73,10 +72,6 @@ struct SettingsView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             loadDraftIfNeeded()
         }
-        .onChange(of: draft.copilotProvider) { _, newValue in
-            guard newValue == .claudeSubscription else { return }
-            appState.loadClaudeSubscriptionIfNeeded()
-        }
         .onChange(of: appState.settingsErrorMessage) { _, newValue in
             showSettingsError = newValue != nil
         }
@@ -95,9 +90,6 @@ struct SettingsView: View {
         guard !didLoadDraft else { return }
         appState.loadSettingsSecretsIfNeeded()
         syncDraftFromAppState()
-        if draft.copilotProvider == .claudeSubscription {
-            appState.loadClaudeSubscriptionIfNeeded()
-        }
         didLoadDraft = true
     }
 
@@ -178,17 +170,13 @@ private struct SettingsDraft: Equatable {
     }
 
     var defaultModelDescription: String {
-        switch copilotProvider {
-        case .openai:
-            "gpt-4o"
-        case .anthropic, .claudeSubscription:
-            "claude-sonnet-4"
-        }
+        copilotProvider.defaultModel
     }
 }
 
 private struct SettingsLocalEngineSection: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @Binding var showAdvancedConnectionSettings: Bool
 
     var body: some View {
@@ -252,8 +240,10 @@ private struct SettingsLocalEngineSection: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("Reset Local Engine", role: .destructive) {
-                    Task { await appState.resetLocalEngine() }
+                Button("Reset Local Engine…", role: .destructive) {
+                    appState.requestEngineReset()
+                    // The confirmation shows in the main window, which may be closed or behind this one.
+                    openWindow(id: ImmoRadarApp.mainWindowID)
                 }
                 .buttonStyle(.bordered)
                 .disabled(appState.isLocalEngineBusy)
@@ -376,7 +366,6 @@ private struct SettingsConnectionSection: View {
 
 private struct SettingsAISection: View {
     @Binding var draft: SettingsDraft
-    let appState: AppState
     let hasChanges: Bool
     let onApply: () -> Void
 
@@ -391,11 +380,14 @@ private struct SettingsAISection: View {
             .pickerStyle(.radioGroup)
 
             providerCredentials
-            providerStatus
 
-            TextField("Model override (optional)", text: $draft.copilotModel)
-                .textFieldStyle(.roundedBorder)
-            Text("Leave empty for default (\(draft.defaultModelDescription))")
+            TextField(
+                "Model override (optional)",
+                text: $draft.copilotModel,
+                prompt: Text(draft.defaultModelDescription)
+            )
+            .textFieldStyle(.roundedBorder)
+            Text("Leave empty to use the server's default, \(draft.defaultModelDescription).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -428,53 +420,6 @@ private struct SettingsAISection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var providerStatus: some View {
-        if draft.copilotProvider == .claudeSubscription {
-            if appState.claudeSubscriptionAvailable {
-                subscriptionStatusRow(
-                    title: "Claude subscription detected",
-                    subtitle: appState.claudeSubscriptionType.map { "Plan: \($0.capitalized)" },
-                    systemImage: "checkmark.circle.fill",
-                    tint: .green
-                )
-            } else {
-                subscriptionStatusRow(
-                    title: "No Claude subscription found",
-                    subtitle: "Run 'claude login' in Terminal to authenticate",
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: .yellow
-                )
-            }
-        }
-    }
-
-    private func subscriptionStatusRow(
-        title: String,
-        subtitle: String?,
-        systemImage: String,
-        tint: Color
-    ) -> some View {
-        HStack {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            Button("Refresh") {
-                appState.refreshClaudeSubscription()
-            }
-            .controlSize(.small)
         }
     }
 }

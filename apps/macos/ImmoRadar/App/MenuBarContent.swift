@@ -28,12 +28,10 @@ struct MenuBarContent: View {
 
         Divider()
 
+        // Command-R belongs to Refresh Data in the main menu.
         Button("Refresh") {
-            Task {
-                await appState.refreshConnection(userInitiated: true)
-            }
+            appState.requestRefresh()
         }
-        .keyboardShortcut("r", modifiers: .command)
 
         Divider()
 
@@ -45,6 +43,6 @@ struct MenuBarContent: View {
     private func showMainWindow(at item: NavigationItem) {
         appState.navigateTo(item)
         openWindow(id: ImmoRadarApp.mainWindowID)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 }

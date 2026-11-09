@@ -5,8 +5,8 @@ import Foundation
 
 /// Entity representing a navigable section in the app.
 struct NavigationSectionEntity: AppEntity {
-    nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "App Section")
-    nonisolated(unsafe) static var defaultQuery = NavigationSectionQuery()
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "App Section")
+    static let defaultQuery = NavigationSectionQuery()
 
     var id: String
     var name: String
@@ -41,9 +41,9 @@ struct NavigationSectionQuery: EntityQuery {
 
 /// Opens ImmoRadar to a specific section.
 struct OpenSectionIntent: AppIntent {
-    nonisolated(unsafe) static var title: LocalizedStringResource = "Open ImmoRadar Section"
-    nonisolated(unsafe) static var description = IntentDescription("Opens ImmoRadar and navigates to a specific section.")
-    nonisolated(unsafe) static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "Open ImmoRadar Section"
+    static let description = IntentDescription("Opens ImmoRadar and navigates to a specific section.")
+    static let openAppWhenRun = true
 
     @Parameter(title: "Section")
     var section: NavigationSectionEntity
@@ -61,14 +61,14 @@ struct OpenSectionIntent: AppIntent {
 
 /// Returns the current number of unread alerts.
 struct GetAlertCountIntent: AppIntent {
-    nonisolated(unsafe) static var title: LocalizedStringResource = "Get Unread Alert Count"
-    nonisolated(unsafe) static var description = IntentDescription("Returns the number of unread alerts in ImmoRadar.")
+    static let title: LocalizedStringResource = "Get Unread Alert Count"
+    static let description = IntentDescription("Returns the number of unread alerts in ImmoRadar.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? APIEndpoint.defaultBaseURL
         let token = LocalRuntimeAuth.preferredToken(
             for: baseURL,
-            userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
+            userToken: KeychainStore.api.read(key: "apiToken", allowUserInteraction: false).value,
             allowUserInteraction: false
         )
         let client = APIClient(baseURL: baseURL, authToken: token)
@@ -81,14 +81,14 @@ struct GetAlertCountIntent: AppIntent {
 
 /// Returns the number of active listings.
 struct GetListingCountIntent: AppIntent {
-    nonisolated(unsafe) static var title: LocalizedStringResource = "Get Listing Count"
-    nonisolated(unsafe) static var description = IntentDescription("Returns the number of active listings in ImmoRadar.")
+    static let title: LocalizedStringResource = "Get Listing Count"
+    static let description = IntentDescription("Returns the number of active listings in ImmoRadar.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? APIEndpoint.defaultBaseURL
         let token = LocalRuntimeAuth.preferredToken(
             for: baseURL,
-            userToken: KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
+            userToken: KeychainStore.api.read(key: "apiToken", allowUserInteraction: false).value,
             allowUserInteraction: false
         )
         let client = APIClient(baseURL: baseURL, authToken: token)

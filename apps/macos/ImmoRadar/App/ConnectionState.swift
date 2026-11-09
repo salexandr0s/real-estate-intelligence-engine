@@ -2,7 +2,11 @@ import Foundation
 
 @MainActor @Observable
 final class ConnectionState {
+    private static let apiTokenKey = "apiToken"
+    private static let refreshIntervalKey = "refreshInterval"
+
     private let apiBaseURLOverride: String?
+    private let secretStore: any SecretStore
 
     @ObservationIgnored
     var onRefreshIntervalChange: (@MainActor () -> Void)?
@@ -17,14 +21,18 @@ final class ConnectionState {
     private var refreshTask: Task<Void, Never>?
 
     var connectionStatus: ConnectionStatus = .disconnected
+    /// What the connection banner says: why the last check of the live connection failed, or which
+    /// dependency is down. It stays while a reconnect runs, and Test Connection in Settings leaves it alone.
+    var connectionIssue: String?
     var settingsErrorMessage: String?
     private(set) var apiBaseURL: String
     private(set) var apiToken: String = ""
 
+    /// Stored rather than computed, so views that show it redraw when it changes. Each change is
+    /// written to UserDefaults.
     var refreshIntervalSeconds: Int {
-        get { UserDefaults.standard.integer(forKey: "refreshInterval").clamped(to: 10...3600, default: 60) }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "refreshInterval")
+        didSet {
+            UserDefaults.standard.set(refreshIntervalSeconds, forKey: Self.refreshIntervalKey)
             onRefreshIntervalChange?()
         }
     }
@@ -33,12 +41,15 @@ final class ConnectionState {
         refreshTask != nil
     }
 
-    init() {
+    init(secretStore: any SecretStore = KeychainStore.api) {
+        self.secretStore = secretStore
         let override = Self.readAPIBaseURLOverride()
         self.apiBaseURLOverride = override
         self.apiBaseURL = override
             ?? UserDefaults.standard.string(forKey: "apiBaseURL")
             ?? APIEndpoint.defaultBaseURL
+        self.refreshIntervalSeconds = UserDefaults.standard.integer(forKey: Self.refreshIntervalKey)
+            .clamped(to: 10...3600, default: 60)
     }
 
     func updateAPIBaseURL(_ newValue: String) {
@@ -65,15 +76,15 @@ final class ConnectionState {
             return
         }
 
-        apiToken = KeychainHelper.get(
-            key: "apiToken",
-            allowUserInteraction: allowUserInteraction
-        ) ?? ""
-        if allowUserInteraction, apiToken.isEmpty {
-            _ = KeychainHelper.delete(key: "apiToken")
+        switch secretStore.load(key: Self.apiTokenKey, allowUserInteraction: allowUserInteraction) {
+        case .value(let token):
+            apiToken = token
+            didLoadConnectionSecrets = true
+            didLoadConnectionSecretsWithInteraction = allowUserInteraction
+        case .unreadable(let status):
+            // The token in memory stays, and the secrets stay unloaded so a later call reads again.
+            Log.ui.error("Couldn't read the API token from the Keychain (status \(status, privacy: .public))")
         }
-        didLoadConnectionSecrets = true
-        didLoadConnectionSecretsWithInteraction = allowUserInteraction
     }
 
     func loadConnectionSecretForUserAction() {
@@ -133,26 +144,22 @@ final class ConnectionState {
     @discardableResult
     func persistAPIToken(_ token: String) -> Bool {
         do {
-            if token.isEmpty {
-                _ = KeychainHelper.delete(key: "apiToken")
-            } else {
-                try KeychainHelper.set(key: "apiToken", value: token)
-            }
+            try secretStore.save(key: Self.apiTokenKey, value: token)
             settingsErrorMessage = nil
             return true
         } catch {
-            settingsErrorMessage = "Couldn’t save API token. \(error.localizedDescription)"
+            settingsErrorMessage = "Couldn't save the API token. \(error.localizedDescription)"
             return false
         }
     }
 
     func cleanupStoredSecrets() {
-        cleanupIfEmpty(key: "apiToken", allowUserInteraction: true)
+        secretStore.deleteIfEmpty(key: Self.apiTokenKey, allowUserInteraction: true)
     }
 
     func runSilentStaleSecretsCleanupIfNeeded(versionKey: String) {
         guard !UserDefaults.standard.bool(forKey: versionKey) else { return }
-        cleanupIfEmpty(key: "apiToken", allowUserInteraction: false)
+        secretStore.deleteIfEmpty(key: Self.apiTokenKey, allowUserInteraction: false)
         UserDefaults.standard.set(true, forKey: versionKey)
     }
 
@@ -181,7 +188,9 @@ final class ConnectionState {
     static func initialStoredAuthToken(isSmokeTest: Bool) -> String? {
         LocalRuntimeAuth.preferredToken(
             for: initialAPIBaseURL(),
-            userToken: isSmokeTest ? nil : KeychainHelper.get(key: "apiToken", allowUserInteraction: false),
+            userToken: isSmokeTest
+                ? nil
+                : KeychainStore.api.read(key: apiTokenKey, allowUserInteraction: false).value,
             allowUserInteraction: false
         )
     }
@@ -220,17 +229,5 @@ final class ConnectionState {
         }
 
         return raw
-    }
-
-    private func cleanupIfEmpty(key: String, allowUserInteraction: Bool) {
-        guard let value = KeychainHelper.get(
-            key: key,
-            allowUserInteraction: allowUserInteraction
-        ) else {
-            return
-        }
-
-        guard value.isEmpty else { return }
-        _ = KeychainHelper.delete(key: key)
     }
 }

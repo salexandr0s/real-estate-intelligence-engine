@@ -1,7 +1,6 @@
 import Foundation
 
 enum AppErrorPresentation {
-    static let apiConnectionTitle = "API unavailable"
     static let apiConnectionMessage =
         APIError.noConnection.errorDescription
         ?? "Cannot connect to the API server. Check that the backend is running."

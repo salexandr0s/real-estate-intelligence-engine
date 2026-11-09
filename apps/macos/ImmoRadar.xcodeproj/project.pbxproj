@@ -122,8 +122,8 @@
 		5DD83184AC993A4ADC1A1B32 /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 196B49096351BBA370869CE2 /* AnalyticsView.swift */; };
 		5DDD03A0EEC08ABE35759CDD /* OutreachEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2E582F2644EA6C139A5D3A /* OutreachEvent.swift */; };
 		5E8D48668896C546EE11AB4F /* CrossSourceComparisonData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38205A6D9E6C52BFCF652074 /* CrossSourceComparisonData.swift */; };
-		5F00088974978223EAE0547F /* ClaudeAuthHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */; };
 		5F9D81849CB6EFF9315BFD2D /* AnalysisBuildingContextCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE604F7EA233DB23168C597B /* AnalysisBuildingContextCard.swift */; };
+		62786EF78C65FDCC02192C8B /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29523A216239746E2248787 /* KeychainStoreTests.swift */; };
 		64BA4A0080ABB06787E85648 /* ListingComparisonValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2748A6BCB62A1F4AF257A8 /* ListingComparisonValue.swift */; };
 		64D6D43CC911434A9221799A /* RecentListingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899030D7853562BB050A769A /* RecentListingsSection.swift */; };
 		64D92E9022D9929BDD533CF7 /* AnalysisInvestorMetricsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D508D22F198E1D4F9D1DC322 /* AnalysisInvestorMetricsCard.swift */; };
@@ -275,6 +275,7 @@
 		EC3D8B6F1E8D1D5FC2228A4B /* MatchReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31AEF4CFCD9EECADB75664F9 /* MatchReasonsView.swift */; };
 		ED4B5AAECC490DA220AFFD0F /* CrossSourceBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CAB7988649A7762FD0BF9B /* CrossSourceBadge.swift */; };
 		EDB638E1B021D23A92D155FA /* ListingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57B6306BA305CEA301D68E46 /* ListingRow.swift */; };
+		EFCF4E0D354545A7E2D9C73C /* HealthProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A1D18235B4841C1EDB0C7E /* HealthProbe.swift */; };
 		F1AB7A6DC39523710B0D570B /* CopilotInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7859C1182BD3E60604BA16 /* CopilotInputBar.swift */; };
 		F1F7CC97E0C922BA03CAE8C2 /* EngineInstanceLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7DDA59AE096C15C3BD554C /* EngineInstanceLock.swift */; };
 		F2B6B2F4CB352BA73A048D9F /* ListingDetailsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB94263E58BA6258D733AA8 /* ListingDetailsSection.swift */; };
@@ -462,6 +463,7 @@
 		8DF152493FD57CCCE68F27D1 /* ComparisonTableBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparisonTableBlock.swift; sourceTree = "<group>"; };
 		8E269F8BCC5C1AA6691BA3A1 /* ScoreDistributionBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreDistributionBucket.swift; sourceTree = "<group>"; };
 		903C4634B492678F18E330B5 /* AnalysisMarketRentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisMarketRentCard.swift; sourceTree = "<group>"; };
+		90A1D18235B4841C1EDB0C7E /* HealthProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthProbe.swift; sourceTree = "<group>"; };
 		92CAEDB831FDD801328A3350 /* ListingsTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingsTable.swift; sourceTree = "<group>"; };
 		934C1FCB88DD1A1F5696981D /* ScrapeRunsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrapeRunsView.swift; sourceTree = "<group>"; };
 		93E2EC2DE8059E75A46FB749 /* LocalRuntimeEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuntimeEnvironmentTests.swift; sourceTree = "<group>"; };
@@ -547,7 +549,7 @@
 		D0D7B020F4E2121B85857826 /* CopilotStreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotStreamService.swift; sourceTree = "<group>"; };
 		D0ED49BAEFD90F726CB4DDF0 /* APIMailboxResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIMailboxResponse.swift; sourceTree = "<group>"; };
 		D1CA31A22BF1D49BD28FCEEE /* AlertStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertStatus.swift; sourceTree = "<group>"; };
-		D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAuthHelper.swift; sourceTree = "<group>"; };
+		D29523A216239746E2248787 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		D33E2A5BBB638D5E43A254A6 /* ProximitySummaryBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximitySummaryBlock.swift; sourceTree = "<group>"; };
 		D441B787954106ED54C49791 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		D508D22F198E1D4F9D1DC322 /* AnalysisInvestorMetricsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisInvestorMetricsCard.swift; sourceTree = "<group>"; };
@@ -755,6 +757,7 @@
 				B9C9B18B73B8E27783BEB1DE /* ConnectionStatePortMigrationTests.swift */,
 				41A6DE6BDC3AA17569BE9FFE /* DateParsingTests.swift */,
 				46ADEF2DF4569EB421026B99 /* EngineLeftoversTests.swift */,
+				D29523A216239746E2248787 /* KeychainStoreTests.swift */,
 				93E2EC2DE8059E75A46FB749 /* LocalRuntimeEnvironmentTests.swift */,
 				C74AAACF402D0F74EC047BCD /* WorkerHoldsTests.swift */,
 			);
@@ -925,6 +928,7 @@
 				F4023F1A7D9C797C12B20310 /* CopilotSettingsState.swift */,
 				8C795EA5243808C16B8C72FC /* DetailContentView.swift */,
 				EC7DDA59AE096C15C3BD554C /* EngineInstanceLock.swift */,
+				90A1D18235B4841C1EDB0C7E /* HealthProbe.swift */,
 				C4647B8EC98172778E6A7A62 /* ImmoRadarApp.swift */,
 				4D622964D11E802D9FDEBB93 /* Logging.swift */,
 				2DA8D1A87DA84720D4B01F9A /* MenuBarContent.swift */,
@@ -974,7 +978,6 @@
 				80A0FA34D98E7246FEC1DDA4 /* APIResponse.swift */,
 				981F70F490A7846B815F7A98 /* APISourceResponse.swift */,
 				9A5BE3827DF0A950C360F8D2 /* APIUnreadCountResponse.swift */,
-				D2EA87C81B40B42A74CECA23 /* ClaudeAuthHelper.swift */,
 				E873B0A342425CE22629C157 /* ISO8601.swift */,
 				A8F957EA87802B39B3A0744A /* KeychainError.swift */,
 				7B661280ACA3127AD153F24C /* KeychainHelper.swift */,
@@ -1312,7 +1315,6 @@
 				487AEBCC8329C2195B5E152C /* ChartBlockData.swift in Sources */,
 				9105C9D100B3631BCC1BC598 /* ChartDataPoint.swift in Sources */,
 				5C8E13EE26A5AB6094CC7DFE /* ChartSeries.swift in Sources */,
-				5F00088974978223EAE0547F /* ClaudeAuthHelper.swift in Sources */,
 				1C15E1CDB873C23DB5D2C0AB /* ComparisonCallout.swift in Sources */,
 				54E32E2C508C9820A52E8D9C /* ComparisonRow.swift in Sources */,
 				2F62E2F980239070E7502E9A /* ComparisonTableBlock.swift in Sources */,
@@ -1384,6 +1386,7 @@
 				4E98609A57ECD27306454F9D /* ForYouListingCard.swift in Sources */,
 				E25128786B8DCE214984C4E7 /* ForYouSection.swift in Sources */,
 				022E759D13D01B72CA5C84B4 /* GeocodeBadge.swift in Sources */,
+				EFCF4E0D354545A7E2D9C73C /* HealthProbe.swift in Sources */,
 				40B3888EC09F78D4D24EA267 /* ISO8601.swift in Sources */,
 				A72CE584C83A70E2060D0DB8 /* ImmoRadarApp.swift in Sources */,
 				6577C1D6D3F98B39184F55C4 /* InlineWarningBanner.swift in Sources */,
@@ -1534,6 +1537,7 @@
 				5AD169FF8C1DFCD83E39756B /* ConnectionStatePortMigrationTests.swift in Sources */,
 				D01E6EC41BC0F4A10AFA8057 /* DateParsingTests.swift in Sources */,
 				F61B2162B4083D02C44E72B7 /* EngineLeftoversTests.swift in Sources */,
+				62786EF78C65FDCC02192C8B /* KeychainStoreTests.swift in Sources */,
 				F9D0C74B6193D38F5D739670 /* LocalRuntimeEnvironmentTests.swift in Sources */,
 				E04E5258496BE1EDAAEEA487 /* WorkerHoldsTests.swift in Sources */,
 			);

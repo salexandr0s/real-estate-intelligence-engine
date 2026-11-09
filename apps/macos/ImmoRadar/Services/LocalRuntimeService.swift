@@ -17,19 +17,18 @@ enum LocalRuntimeAuth {
         return raw
     }
 
+    private static let store = KeychainStore(service: keychainService)
+
     static func loadToken(allowUserInteraction: Bool = true) -> String? {
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
         guard permitsStoredCredentials else { return nil }
 
-        let token = KeychainHelper.get(
-            key: keychainKey,
-            service: keychainService,
-            allowUserInteraction: allowUserInteraction
-        )?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let token, !token.isEmpty else { return nil }
+        guard let token = readToken(in: store, allowUserInteraction: allowUserInteraction).value,
+              !token.isEmpty else {
+            return nil
+        }
         return token
     }
 
@@ -39,20 +38,35 @@ enum LocalRuntimeAuth {
         }
         guard permitsStoredCredentials else { throw AuthError.isolatedSmokeBlocked }
 
-        if let existing = loadToken() {
-            return existing
-        }
+        return try ensureToken(in: store)
+    }
 
-        let bytes = (0..<32).map { _ in UInt8.random(in: .min ... .max) }
-        let token = bytes.map { String(format: "%02x", $0) }.joined()
-        try KeychainHelper.set(key: keychainKey, value: token, service: keychainService)
-        return token
+    /// Reuses the stored token, or stores a new one when there is none. A failed read throws
+    /// instead of writing, so a token that is there but can't be read right now is never replaced.
+    static func ensureToken(in store: some SecretStore) throws -> String {
+        switch readToken(in: store, allowUserInteraction: true) {
+        case .found(let token) where !token.isEmpty:
+            return token
+        case .found, .notFound:
+            let bytes = (0..<32).map { _ in UInt8.random(in: .min ... .max) }
+            let token = bytes.map { String(format: "%02x", $0) }.joined()
+            try store.write(key: keychainKey, value: token)
+            return token
+        case .failed(let status):
+            throw KeychainError.readFailed(status: status)
+        }
     }
 
     static func resetToken() {
         guard permitsStoredCredentials else { return }
         guard environmentOverrideToken == nil else { return }
-        _ = KeychainHelper.delete(key: keychainKey, service: keychainService)
+        store.delete(key: keychainKey)
+    }
+
+    private static func readToken(in store: some SecretStore, allowUserInteraction: Bool) -> KeychainReadResult {
+        let result = store.read(key: keychainKey, allowUserInteraction: allowUserInteraction)
+        guard case .found(let token) = result else { return result }
+        return .found(token.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     static func preferredToken(
@@ -678,8 +692,13 @@ final class LocalRuntimeService {
             await supervisor.stop()
             try await stopLeftovers(using: supervisor, apiBaseURL: apiBaseURL)
 
-            if FileManager.default.fileExists(atPath: Self.runtimeHomeURL.path) {
-                try FileManager.default.removeItem(at: Self.runtimeHomeURL)
+            // Deleting the database folder can take seconds, so it runs off the main actor.
+            let runtimeHome = Self.runtimeHomeURL
+            try await Self.offMainActor {
+                let fileManager = FileManager.default
+                if fileManager.fileExists(atPath: runtimeHome.path) {
+                    try fileManager.removeItem(at: runtimeHome)
+                }
             }
         } catch {
             lastStartupFailure = startupFailure(from: error)
@@ -703,11 +722,20 @@ final class LocalRuntimeService {
         } catch is EngineLayout.LayoutError {
             // With no layout there is no watchdog script to stop anything with, so only look.
             let home = Self.runtimeHomeURL
-            let leftovers = await Task.detached(priority: .utility) {
+            let leftovers = await Self.offMainActor {
                 EngineLeftovers.find(runtimeHome: home, recorded: [])
-            }.value
+            }
             guard leftovers.isEmpty else { throw ResetError.processesRunning(leftovers.count) }
         }
+    }
+
+    /// Runs blocking file and process work on the shared pool instead of the main actor. The
+    /// caller waits for it, so it ends with the reset and needs no cancelling of its own.
+    @concurrent
+    private nonisolated static func offMainActor<T: Sendable>(
+        _ work: @Sendable () throws -> T
+    ) async rethrows -> T {
+        try work()
     }
 
     // MARK: - Progress and diagnostics
