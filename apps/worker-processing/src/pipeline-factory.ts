@@ -70,6 +70,20 @@ const GEOCODE_PRECISION_SCORES: Record<GeocodePrecision, number> = {
   none: 10,
 };
 
+// A delivery worker runs only when one of these channels is switched on. A job for a channel
+// that is off would wait in Redis for good while its alert stays queued, so those channels are
+// dropped before matching. A filter left with none falls back to in_app.
+function deliverableAlertChannels(channels: readonly string[]): string[] {
+  const { pushEnabled, emailEnabled, webhookEnabled } = loadConfig().alerts;
+  return channels.filter(
+    (channel) =>
+      channel === 'in_app' ||
+      (channel === 'push' && pushEnabled) ||
+      (channel === 'email' && emailEnabled) ||
+      (channel === 'webhook' && webhookEnabled),
+  );
+}
+
 let _deliveryQueue: Queue<AlertDeliveryJobData> | null = null;
 let _documentQueue: Queue<DocumentProcessingJobData> | null = null;
 
@@ -199,7 +213,7 @@ function buildPipelineDeps(): FullIngestionPipelineDeps {
           matched: result.matched.map((f) => ({
             filterId: f.id,
             userId: f.userId,
-            alertChannels: f.alertChannels,
+            alertChannels: deliverableAlertChannels(f.alertChannels),
             filterName: f.name,
             requiredKeywords: f.requiredKeywords,
             excludedKeywords: f.excludedKeywords,
