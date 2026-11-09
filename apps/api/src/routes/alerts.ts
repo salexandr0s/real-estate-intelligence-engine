@@ -44,7 +44,8 @@ function mapListingSummary(listing: AlertListingSummary) {
   };
 }
 
-function mapAlertResponse(alert: AlertRow) {
+/** The alert DTO of GET /v1/alerts, PATCH /v1/alerts/:id and the alert stream. */
+export function mapAlertResponse(alert: AlertRow) {
   return {
     id: alert.id,
     userFilterId: alert.userFilterId,
@@ -80,6 +81,11 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
               enum: ['queued', 'sent', 'failed', 'dismissed', 'opened', 'suppressed'],
               description: 'Optional alert status filter',
             },
+            userFilterId: {
+              type: 'integer',
+              minimum: 1,
+              description: 'Only alerts of this filter',
+            },
             limit: { type: 'integer', minimum: 1, maximum: 200, description: 'Page size' },
             cursor: { type: 'string', description: 'Pagination cursor' },
             sortBy: {
@@ -99,7 +105,7 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const userId = request.userId;
-      const { status, limit, cursor, sortBy, sortDirection } = parseOrThrow(
+      const { status, userFilterId, limit, cursor, sortBy, sortDirection } = parseOrThrow(
         alertListQuerySchema,
         request.query,
       );
@@ -112,6 +118,7 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
         {
           sortBy,
           sortDirection,
+          userFilterId: userFilterId ?? null,
         },
       );
 

@@ -93,6 +93,7 @@ export const paginationQuerySchema = z.object({
 
 export const alertListQuerySchema = z.object({
   status: z.enum(ALERT_STATUSES).optional(),
+  userFilterId: z.preprocess(absentToUndefined, z.coerce.number().int().positive().optional()),
   limit: optionalQueryLimit,
   cursor: z.string().optional(),
   sortBy: z.enum(ALERT_SORT_BY_VALUES).default('age'),
