@@ -4,7 +4,7 @@ set -euo pipefail
 echo "=== ImmoRadar - Dev Setup ==="
 
 # Check prerequisites
-command -v node >/dev/null 2>&1 || { echo "Error: node >= 20 required"; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "Error: Node 22 or later is required" >&2; exit 1; }
 
 # Start infrastructure if docker available
 if command -v docker >/dev/null 2>&1; then
@@ -14,7 +14,10 @@ if command -v docker >/dev/null 2>&1; then
   echo "Waiting for PostgreSQL..."
   for i in $(seq 1 30); do
     pg_isready -h localhost -p 5432 -U postgres 2>/dev/null && break
-    [ "$i" -eq 30 ] && echo "Warning: PostgreSQL not ready after 30s"
+    if [ "$i" -eq 30 ]; then
+      echo "Error: PostgreSQL did not accept connections within 30 s" >&2
+      exit 1
+    fi
     sleep 1
   done
 else
@@ -28,14 +31,14 @@ echo "Installing dependencies..."
 npm install
 
 echo "Building packages..."
-npm run build 2>/dev/null || echo "Build completed with warnings"
+npm run build
 
 if command -v docker >/dev/null 2>&1; then
   echo "Running migrations..."
-  npm run db:migrate 2>/dev/null || echo "Migrations skipped"
+  npm run db:migrate
 
   echo "Seeding database..."
-  npm run db:seed 2>/dev/null || echo "Seed skipped"
+  npm run db:seed
 fi
 
 echo ""
