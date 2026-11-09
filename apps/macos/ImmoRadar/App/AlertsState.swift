@@ -13,6 +13,14 @@ final class AlertsState {
         "Allow notifications for ImmoRadar in System Settings > Notifications."
 
     var unreadAlertCount: Int = 0
+    /// False until the server reports the unread count once.
+    private(set) var hasLoadedUnreadCount = false
+
+    /// The unread count, or nil until the server reports it, so a screen can show it as unknown
+    /// rather than as zero.
+    var loadedUnreadAlertCount: Int? {
+        hasLoadedUnreadCount ? unreadAlertCount : nil
+    }
 
     // Stored, so SwiftUI sees each change. Each loads from UserDefaults at init and writes back.
     var notificationsEnabled: Bool {
@@ -107,6 +115,7 @@ final class AlertsState {
     func refreshUnreadCount(using client: APIClient) async {
         do {
             unreadAlertCount = try await client.fetchUnreadCount()
+            hasLoadedUnreadCount = true
         } catch {
             // keep last known count
         }

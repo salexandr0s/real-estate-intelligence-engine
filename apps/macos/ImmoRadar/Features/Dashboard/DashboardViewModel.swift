@@ -314,14 +314,15 @@ final class DashboardViewModel {
 
     // MARK: - Summary Cards
 
-    func summaryCards(unreadAlertCount: Int) -> [SummaryCard] {
+    /// The overview cards. `unreadAlertCount` is nil until the server reports it.
+    func summaryCards(unreadAlertCount: Int?) -> [SummaryCard] {
         let s = stats
 
         let weekDelta: Delta? = s?.newThisWeek.map {
             Delta(value: "+\($0) this week", isPositive: $0 > 0)
         }
 
-        // Without loaded stats a card shows a dash, never a zero that reads as a real count.
+        // Without a loaded count a card shows a dash, never a zero that reads as a real count.
         var cards: [SummaryCard] = [
             SummaryCard(
                 id: "active-listings",
@@ -357,9 +358,9 @@ final class DashboardViewModel {
         cards.append(SummaryCard(
             id: "unread-alerts",
             title: "Unread Alerts",
-            value: "\(unreadAlertCount)",
+            value: unreadAlertCount.map { "\($0)" } ?? "—",
             icon: "bell.badge.fill",
-            tone: unreadAlertCount > 0 ? .alert : .neutral,
+            tone: (unreadAlertCount ?? 0) > 0 ? .alert : .neutral,
             delta: nil
         ))
 

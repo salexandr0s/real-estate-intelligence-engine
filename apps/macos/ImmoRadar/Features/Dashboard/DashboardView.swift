@@ -12,7 +12,7 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
 
     private var summaryCards: [DashboardViewModel.SummaryCard] {
-        viewModel.summaryCards(unreadAlertCount: appState.unreadAlertCount)
+        viewModel.summaryCards(unreadAlertCount: appState.alertsState.loadedUnreadAlertCount)
     }
 
     var body: some View {
