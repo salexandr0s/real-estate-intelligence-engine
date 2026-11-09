@@ -95,8 +95,11 @@ final class WatchlistViewModel {
             guard generation == listGeneration else { return }
             // The same page may be asked for again after a failure.
             requestedCursors.remove(cursor)
-            nextPageFailed = true
-            errorMessage = AppErrorPresentation.message(for: error)
+            // A cancelled load isn't a failure: the row scrolled away, and it loads when it's back.
+            if !Task.isCancelled {
+                nextPageFailed = true
+                errorMessage = AppErrorPresentation.message(for: error)
+            }
         }
 
         loadingPageCursor = nil

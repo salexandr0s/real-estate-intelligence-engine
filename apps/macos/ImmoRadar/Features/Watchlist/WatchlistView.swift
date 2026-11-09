@@ -158,7 +158,8 @@ struct WatchlistView: View {
             Spacer()
         }
         .padding(.vertical, Theme.Spacing.xs)
-        .task(id: viewModel.nextCursor) {
+        // A refresh can hand back the cursor already shown, so its end starts the load too.
+        .task(id: NextPageTrigger(cursor: viewModel.nextCursor, isRefreshing: viewModel.isLoading)) {
             guard !viewModel.nextPageFailed else { return }
             await viewModel.loadNextPage(using: appState.apiClient)
         }
@@ -178,6 +179,12 @@ struct WatchlistView: View {
             }
         }
     }
+}
+
+/// What starts the next page's load when it changes.
+private struct NextPageTrigger: Equatable {
+    let cursor: String?
+    let isRefreshing: Bool
 }
 
 #Preview {
