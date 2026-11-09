@@ -8,6 +8,8 @@ OUTPUT_DIR="${1:-$REPO_ROOT/.build/immoradar-runtime}"
 STRICT_MODE="${IMMORADAR_RUNTIME_BUNDLE_STRICT:-0}"
 PLAYWRIGHT_CACHE_DIR="${PLAYWRIGHT_CACHE_DIR:-$HOME/Library/Caches/ms-playwright}"
 POSTGRES_VERSION="${IMMORADAR_POSTGRES_VERSION:-17}"
+# The engine runs on the Node major that .nvmrc names.
+REQUIRED_NODE_MAJOR="$(cut -d. -f1 "$REPO_ROOT/.nvmrc" | tr -d 'v')"
 
 warn() {
   echo "[runtime-bundle] warning: $*" >&2
@@ -28,6 +30,26 @@ require_or_warn() {
     warn "$label not found at $path; skipping runtime bundle"
     exit 0
   fi
+}
+
+# The first node on PATH can be a newer major than the engine runs on, so Homebrew's node@<major>
+# comes first.
+find_node_bin() {
+  if [[ -n "${IMMORADAR_NODE_BINARY:-}" ]]; then
+    echo "$IMMORADAR_NODE_BINARY"
+    return
+  fi
+
+  local candidate
+  for candidate in \
+    "/opt/homebrew/opt/node@${REQUIRED_NODE_MAJOR}/bin/node" \
+    "/usr/local/opt/node@${REQUIRED_NODE_MAJOR}/bin/node" \
+    "$(command -v node || true)"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      echo "$candidate"
+      return
+    fi
+  done
 }
 
 find_postgres_bin() {
@@ -275,10 +297,52 @@ prune_runtime_payload() {
     -name '*.tsbuildinfo' \
   \) -delete 2>/dev/null || true
 
+  # Compiled tests aren't runtime code, and they import test tools the bundle leaves out.
+  find "$OUTPUT_DIR/apps" "$OUTPUT_DIR/packages" -path '*/dist/*' -not -path '*/node_modules/*' -type f \( \
+    -name '*.test.*' -o \
+    -name '*.spec.*' \
+  \) -delete 2>/dev/null || true
+
   rm -f \
     "$OUTPUT_DIR/apps/api/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-processing/Dockerfile" \
     "$OUTPUT_DIR/apps/worker-scraper/Dockerfile"
+}
+
+# The bundle ships compiled output, so it compiles the current source first, into empty dist
+# folders. tsc never deletes the output of a removed source file, and turbo's cache can hold such
+# files too, so the build skips the cache.
+build_workspaces() {
+  local turbo="$REPO_ROOT/node_modules/turbo/bin/turbo"
+  [[ -f "$turbo" ]] || fail "turbo isn't installed in $REPO_ROOT; run npm ci"
+  (
+    cd "$REPO_ROOT" &&
+      PATH="$(dirname "$NODE_BIN"):$PATH" &&
+      "$NODE_BIN" "$turbo" run clean --output-logs=errors-only &&
+      "$NODE_BIN" "$turbo" run build --force --output-logs=errors-only
+  ) || fail "compiling the TypeScript workspaces failed"
+}
+
+# Leaves out the packages only devDependencies need, as `npm ci --omit=dev` would. The lockfile
+# marks them "dev". A package that production code needs too carries no mark and stays.
+prune_dev_dependencies() {
+  LOCKFILE="$REPO_ROOT/package-lock.json" BUNDLE_ROOT="$OUTPUT_DIR" "$NODE_BIN" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const root = path.resolve(process.env.BUNDLE_ROOT);
+    const { packages } = JSON.parse(fs.readFileSync(process.env.LOCKFILE, "utf8"));
+    let removed = 0;
+    for (const [key, entry] of Object.entries(packages)) {
+      if (!entry.dev || !key.includes("node_modules/")) continue;
+      const target = path.resolve(root, key);
+      if (!target.startsWith(root + path.sep) || !fs.existsSync(target)) continue;
+      fs.rmSync(target, { recursive: true, force: true });
+      removed += 1;
+    }
+    console.log(`[runtime-bundle] left out ${removed} packages that only devDependencies need`);
+  '
+  # Links in .bin folders that pointed into those packages.
+  find "$OUTPUT_DIR" -path '*/node_modules/.bin/*' -type l ! -exec test -e {} \; -delete
 }
 
 verify_postgres_uses_its_own_folders() {
@@ -296,6 +360,8 @@ verify_runtime_modules() {
     cd "$OUTPUT_DIR"
     ./bin/node -e "require('./node_modules/yaml/dist/index.js')"
   ) >/dev/null
+  "$OUTPUT_DIR/bin/node" "$SCRIPT_DIR/check-bundle-imports.mjs" "$OUTPUT_DIR" ||
+    fail "the bundle lacks packages its code imports"
 }
 
 # Only the headless shell this Playwright version launches. The whole cache holds every revision and
@@ -318,7 +384,7 @@ copy_playwright_browser() {
   rsync -a "$browser_dir" "$OUTPUT_DIR/playwright-browsers/"
 }
 
-NODE_BIN="${IMMORADAR_NODE_BINARY:-$(command -v node || true)}"
+NODE_BIN="$(find_node_bin)"
 REDIS_SERVER_BIN="${IMMORADAR_REDIS_SERVER_BINARY:-$(command -v redis-server || true)}"
 REDIS_CLI_BIN="${IMMORADAR_REDIS_CLI_BINARY:-$(command -v redis-cli || true)}"
 POSTGRES_BIN_DIR="$(find_postgres_bin)"
@@ -343,6 +409,16 @@ require_or_warn "$POSTGRES_BIN_DIR/postgres" "Postgres binary"
 require_or_warn "$POSTGRES_BIN_DIR/initdb" "initdb binary"
 require_or_warn "$POSTGRES_PKG_LIB_DIR" "Postgres extension library directory"
 require_or_warn "$POSTGRES_SHARE_DIR" "Postgres shared directory"
+
+NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]')"
+if [[ "$NODE_MAJOR" != "$REQUIRED_NODE_MAJOR" ]]; then
+  if [[ "$STRICT_MODE" == "1" ]]; then
+    fail "$NODE_BIN is Node $NODE_MAJOR, and the engine runs on Node $REQUIRED_NODE_MAJOR. Install node@$REQUIRED_NODE_MAJOR with Homebrew, or set IMMORADAR_NODE_BINARY."
+  fi
+  warn "bundling Node $NODE_MAJOR from $NODE_BIN, although the engine runs on Node $REQUIRED_NODE_MAJOR"
+fi
+
+build_workspaces
 
 mkdir -p "$OUTPUT_DIR"
 rm -rf "$OUTPUT_DIR"
@@ -389,6 +465,7 @@ cp "$REPO_ROOT/scripts/runtime/start-redis.sh" "$OUTPUT_DIR/scripts/start-redis.
 cp "$REPO_ROOT/scripts/runtime/run-migrations.sh" "$OUTPUT_DIR/scripts/run-migrations.sh"
 cp "$REPO_ROOT/scripts/runtime/engine-watchdog.sh" "$OUTPUT_DIR/scripts/engine-watchdog.sh"
 
+prune_dev_dependencies
 prune_runtime_payload
 
 chmod +x \
