@@ -177,16 +177,42 @@ actor APIClient {
         return response.data
     }
 
-    /// Saves a listing to the watchlist. Saving it again replaces the note, and a nil or blank
-    /// note clears the stored one.
-    func saveListing(listingId: Int, notes: String? = nil) async throws {
-        struct SaveListingBody: Codable {
-            let listingId: Int
-            let notes: String?
+    /// Saves a listing to the watchlist. A listing that is already saved keeps its note.
+    func saveListing(listingId: Int) async throws {
+        let body = try encoder.encode(SaveListingBody(listingId: listingId, note: .keep))
+        try await requestVoid(.saveListing(body: body))
+    }
+
+    /// Saves a listing to the watchlist with this note. A nil or blank note clears the stored one.
+    func saveListing(listingId: Int, notes: String?) async throws {
+        let note = SaveListingBody.Note.replace(Self.nonBlank(notes))
+        let body = try encoder.encode(SaveListingBody(listingId: listingId, note: note))
+        try await requestVoid(.saveListing(body: body))
+    }
+
+    /// The server keeps a saved listing's note when the body has no `notes`, and clears it on null.
+    private struct SaveListingBody: Encodable {
+        enum Note {
+            case keep
+            case replace(String?)
         }
 
-        let body = try encoder.encode(SaveListingBody(listingId: listingId, notes: Self.nonBlank(notes)))
-        try await requestVoid(.saveListing(body: body))
+        let listingId: Int
+        let note: Note
+
+        private enum CodingKeys: String, CodingKey {
+            case listingId
+            case notes
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(listingId, forKey: .listingId)
+            if case .replace(let notes) = note {
+                // A nil note encodes as null.
+                try container.encode(notes, forKey: .notes)
+            }
+        }
     }
 
     /// Remove a listing from the watchlist.

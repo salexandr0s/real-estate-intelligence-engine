@@ -34,17 +34,23 @@ function toSavedListingRow(row: SavedListingDbRow): SavedListingRow {
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
+/**
+ * Saves a listing to the user's watchlist. Saving a listing that is already saved keeps its note
+ * when `notes` is undefined, and `null` clears the note.
+ */
 export async function save(
   userId: number,
   listingId: number,
-  notes?: string,
+  notes?: string | null,
 ): Promise<SavedListingRow> {
   const rows = await query<SavedListingDbRow>(
     `INSERT INTO user_saved_listings (user_id, listing_id, notes)
      VALUES ($1, $2, $3)
-     ON CONFLICT (user_id, listing_id) DO UPDATE SET notes = EXCLUDED.notes, updated_at = NOW()
+     ON CONFLICT (user_id, listing_id) DO UPDATE
+       SET notes = CASE WHEN $4::boolean THEN EXCLUDED.notes ELSE user_saved_listings.notes END,
+           updated_at = NOW()
      RETURNING id, user_id, listing_id, notes, saved_at, created_at`,
-    [userId, listingId, notes ?? null],
+    [userId, listingId, notes ?? null, notes !== undefined],
   );
   return toSavedListingRow(rows[0]!);
 }

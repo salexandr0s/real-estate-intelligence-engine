@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 const savedListingCreateSchema = z.object({
   listingId: z.number().int(),
-  notes: z.string().optional(),
+  // On a listing already saved, leaving notes out keeps its note and null clears it.
+  notes: z.string().nullable().optional(),
 });
 
 const savedListingCheckSchema = z.object({
