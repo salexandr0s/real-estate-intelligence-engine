@@ -22,7 +22,9 @@ final class ListingDetailViewModel {
     var outreachFailure: OutreachRequestFailure?
     /// The thread action or follow-up being sent. One goes out at a time.
     var outreachRequestInFlight: OutreachThreadRequest?
-    var isSaved = false
+    /// Whether the listing is on the watchlist, or nil until the server says. Save stays off
+    /// while it's nil, because the button can't tell whether to save or remove.
+    var isSaved: Bool?
     var isSaving = false
     var actionErrorMessage: String?
 
@@ -104,12 +106,11 @@ final class ListingDetailViewModel {
     }
 
     func toggleSave(using apiClient: APIClient) async {
-        guard !isSaving else { return }
+        guard !isSaving, let wasSaved = isSaved else { return }
 
         let listingID = listing.id
-        let wasSaved = isSaved
         isSaving = true
-        isSaved.toggle()
+        isSaved = !wasSaved
         actionErrorMessage = nil
 
         do {
@@ -335,7 +336,7 @@ final class ListingDetailViewModel {
         outreachErrorMessage = nil
         outreachFailure = nil
         outreachRequestInFlight = nil
-        isSaved = false
+        isSaved = nil
         isSaving = false
         actionErrorMessage = nil
     }
@@ -464,8 +465,7 @@ final class ListingDetailViewModel {
             guard isCurrent(token) else { return }
             isSaved = savedIds.contains(token.listingID)
         } catch {
-            guard isCurrent(token) else { return }
-            isSaved = false
+            // The status stays unknown, so Save stays off.
             Log.ui.error("Failed to check saved status for listing \(token.listingID): \(error, privacy: .public)")
         }
     }

@@ -390,7 +390,8 @@ private struct ListingExternalActionsBar: View {
 }
 
 private struct ListingPrimaryActionsBar: View {
-    let isSaved: Bool
+    /// Nil until the watchlist status loads.
+    let isSaved: Bool?
     let isSaving: Bool
     let canContact: Bool
     let isLoadingOutreach: Bool
@@ -400,20 +401,28 @@ private struct ListingPrimaryActionsBar: View {
     let onToggleSave: () -> Void
     let onContact: () -> Void
 
+    private var saveHelp: String {
+        switch isSaved {
+        case .some(true): "Remove from watchlist"
+        case .some(false): "Save this listing to the watchlist"
+        case .none: "Watchlist status hasn’t loaded"
+        }
+    }
+
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
             Button(action: onToggleSave) {
                 Label(
-                    isSaved ? "Saved to Watchlist" : "Save to Watchlist",
-                    systemImage: isSaved ? "bookmark.fill" : "bookmark"
+                    isSaved == true ? "Saved to Watchlist" : "Save to Watchlist",
+                    systemImage: isSaved == true ? "bookmark.fill" : "bookmark"
                 )
                 .frame(maxWidth: .infinity)
             }
             .controlSize(.regular)
             .buttonStyle(.bordered)
-            .tint(isSaved ? .orange : .accentColor)
-            .disabled(isSaving)
-            .help(isSaved ? "Remove from watchlist" : "Save this listing to the watchlist")
+            .tint(isSaved == true ? .orange : .accentColor)
+            .disabled(isSaved == nil || isSaving)
+            .help(saveHelp)
 
             Button(action: onContact) {
                 Label(contactButtonTitle, systemImage: contactButtonSystemImage)
