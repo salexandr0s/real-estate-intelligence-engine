@@ -87,7 +87,13 @@ describe('POST /v1/filters/:id/test', () => {
           pricePerSqmEur: 5113.64,
           currentScore: 84,
           firstSeenAt: new Date('2026-04-08T09:00:00Z'),
+          lastSeenAt: new Date('2026-04-09T09:00:00Z'),
           listingStatus: 'active',
+          latitude: null,
+          longitude: null,
+          geocodePrecision: null,
+          lastPriceChangePct: -5,
+          lastPriceChangeAt: new Date('2026-04-08T12:00:00Z'),
         },
       ],
       meta: {
@@ -123,7 +129,15 @@ describe('POST /v1/filters/:id/test', () => {
       }),
       null,
     );
-    expect(res.json().data).toHaveLength(1);
+    // The dashboard counts price drops from these two fields.
+    expect(res.json().data).toEqual([
+      expect.objectContaining({
+        id: 101,
+        lastSeenAt: '2026-04-09T09:00:00.000Z',
+        lastPriceChangePct: -5,
+        lastPriceChangeAt: '2026-04-08T12:00:00.000Z',
+      }),
+    ]);
   });
 
   it('returns 404 for missing filters', async () => {

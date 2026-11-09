@@ -911,6 +911,7 @@ CREATE TABLE IF NOT EXISTS user_filters (
     last_match_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
     CONSTRAINT chk_user_filters_area_range CHECK (((min_area_sqm IS NULL) OR (max_area_sqm IS NULL) OR (max_area_sqm >= min_area_sqm))),
     CONSTRAINT chk_user_filters_price_range CHECK (((min_price_eur_cents IS NULL) OR (max_price_eur_cents IS NULL) OR (max_price_eur_cents >= min_price_eur_cents))),
     CONSTRAINT chk_user_filters_rooms_range CHECK (((min_rooms IS NULL) OR (max_rooms IS NULL) OR (max_rooms >= min_rooms))),

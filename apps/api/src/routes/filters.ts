@@ -1,45 +1,25 @@
 import type { FastifyInstance } from 'fastify';
 import { NotFoundError } from '@immoradar/observability';
-import type {
-  FilterKind,
-  AlertFrequency,
-  FilterCriteria,
-  FilterUpdateInput,
-} from '@immoradar/contracts';
+import type { FilterCriteria, FilterUpdateInput, UserFilterRow } from '@immoradar/contracts';
 import type { ListingSearchFilter } from '@immoradar/db';
 import { userFilters, listings } from '@immoradar/db';
 import { compileFilter } from '@immoradar/filtering';
-import { parseOrThrow, idParamSchema, filterCreateSchema, filterUpdateSchema } from '../schemas.js';
+import {
+  parseOrThrow,
+  idParamSchema,
+  filterCreateSchema,
+  filterUpdateSchema,
+  carriesFilterCriteria,
+  type FilterCriteriaFields,
+} from '../schemas.js';
+import { mapListingSearchResult } from './listings.js';
 
 function centsToEur(cents: number | null): number | null {
   if (cents == null) return null;
   return cents / 100;
 }
 
-function formatFilterResponse(filter: {
-  id: number;
-  userId: number;
-  name: string;
-  filterKind: string;
-  isActive: boolean;
-  operationType: string | null;
-  propertyTypes: string[];
-  districts: number[];
-  minPriceEurCents: number | null;
-  maxPriceEurCents: number | null;
-  minAreaSqm: number | null;
-  maxAreaSqm: number | null;
-  minRooms: number | null;
-  maxRooms: number | null;
-  minScore: number | null;
-  requiredKeywords: string[];
-  excludedKeywords: string[];
-  sortBy: string;
-  alertFrequency: string;
-  alertChannels: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function formatFilterResponse(filter: UserFilterRow) {
   return {
     id: filter.id,
     name: filter.name,
@@ -65,8 +45,36 @@ function formatFilterResponse(filter: {
   };
 }
 
+/** The criteria set of a validated create or update body. A field it lacks stays out. */
+function toCriteria(fields: FilterCriteriaFields): FilterCriteria {
+  return {
+    operationType: fields.operationType,
+    propertyTypes: fields.propertyTypes,
+    districts: fields.districts,
+    minPriceEur: fields.minPriceEur,
+    maxPriceEur: fields.maxPriceEur,
+    minAreaSqm: fields.minAreaSqm,
+    maxAreaSqm: fields.maxAreaSqm,
+    minRooms: fields.minRooms,
+    maxRooms: fields.maxRooms,
+    minScore: fields.minScore,
+    requiredKeywords: fields.requiredKeywords,
+    excludedKeywords: fields.excludedKeywords,
+    sortBy: fields.sortBy,
+  };
+}
+
+/** The caller's filter, or a 404 when it is missing, someone else's or deleted. */
+async function findOwnedFilter(id: number, userId: number): Promise<UserFilterRow> {
+  const filter = await userFilters.findById(id);
+  if (!filter || filter.userId !== userId || filter.deletedAt != null) {
+    throw new NotFoundError('Filter', id);
+  }
+  return filter;
+}
+
 export async function filterRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/filters - List user's filters
+  // GET /v1/filters - List user's filters, paused ones included
   app.get('/v1/filters', async (request, reply) => {
     const userId = request.userId;
 
@@ -125,29 +133,12 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       const userId = request.userId;
       const validated = parseOrThrow(filterCreateSchema, request.body);
 
-      const criteria: FilterCriteria = {};
-      if (validated.operationType != null) criteria.operationType = validated.operationType;
-      if (validated.propertyTypes != null) criteria.propertyTypes = validated.propertyTypes;
-      if (validated.districts != null) criteria.districts = validated.districts;
-      if (validated.minPriceEur != null) criteria.minPriceEur = validated.minPriceEur;
-      if (validated.maxPriceEur != null) criteria.maxPriceEur = validated.maxPriceEur;
-      if (validated.minAreaSqm != null) criteria.minAreaSqm = validated.minAreaSqm;
-      if (validated.maxAreaSqm != null) criteria.maxAreaSqm = validated.maxAreaSqm;
-      if (validated.minRooms != null) criteria.minRooms = validated.minRooms;
-      if (validated.maxRooms != null) criteria.maxRooms = validated.maxRooms;
-      if (validated.minScore != null) criteria.minScore = validated.minScore;
-      if (validated.requiredKeywords != null)
-        criteria.requiredKeywords = validated.requiredKeywords;
-      if (validated.excludedKeywords != null)
-        criteria.excludedKeywords = validated.excludedKeywords;
-      if (validated.sortBy != null) criteria.sortBy = validated.sortBy;
-
       const filter = await userFilters.create({
         userId,
         name: validated.name,
-        filterKind: validated.filterKind as FilterKind,
-        criteria,
-        alertFrequency: validated.alertFrequency as AlertFrequency,
+        filterKind: validated.filterKind,
+        criteria: toCriteria(validated),
+        alertFrequency: validated.alertFrequency,
         alertChannels: validated.alertChannels,
       });
 
@@ -161,11 +152,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/filters/:id - Get filter
   app.get<{ Params: { id: string } }>('/v1/filters/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
-
-    const filter = await userFilters.findById(id);
-    if (!filter || filter.userId !== request.userId) {
-      throw new NotFoundError('Filter', id);
-    }
+    const filter = await findOwnedFilter(id, request.userId);
 
     return reply.send({
       data: formatFilterResponse(filter),
@@ -173,23 +160,20 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PATCH /v1/filters/:id - Update filter
+  // PATCH /v1/filters/:id - Update filter. Any criteria field replaces the whole criteria set.
   app.patch<{ Params: { id: string } }>('/v1/filters/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
     const validated = parseOrThrow(filterUpdateSchema, request.body);
-
-    // Verify ownership
-    const existing = await userFilters.findById(id);
-    if (!existing || existing.userId !== request.userId) {
-      throw new NotFoundError('Filter', id);
-    }
+    await findOwnedFilter(id, request.userId);
 
     const updateInput: FilterUpdateInput = {};
     if (validated.name !== undefined) updateInput.name = validated.name;
     if (validated.isActive !== undefined) updateInput.isActive = validated.isActive;
-    if (validated.alertFrequency !== undefined)
-      updateInput.alertFrequency = validated.alertFrequency as AlertFrequency;
+    if (validated.alertFrequency !== undefined) {
+      updateInput.alertFrequency = validated.alertFrequency;
+    }
     if (validated.alertChannels !== undefined) updateInput.alertChannels = validated.alertChannels;
+    if (carriesFilterCriteria(request.body)) updateInput.criteria = toCriteria(validated);
 
     const filter = await userFilters.update(id, updateInput);
     if (!filter) {
@@ -205,11 +189,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/filters/:id/test - Test a filter by running it against active listings
   app.post<{ Params: { id: string } }>('/v1/filters/:id/test', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
-
-    const filter = await userFilters.findById(id);
-    if (!filter || filter.userId !== request.userId) {
-      throw new NotFoundError('Filter', id);
-    }
+    const filter = await findOwnedFilter(id, request.userId);
 
     // Reconstruct criteria from the stored filter columns
     const criteria: FilterCriteria = {};
@@ -250,45 +230,22 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
 
     const result = await listings.searchListings(searchFilter, null);
 
-    const mappedData = result.data.map((listing) => ({
-      id: listing.id,
-      listingUid: listing.listingUid,
-      sourceCode: listing.sourceCode,
-      title: listing.title,
-      canonicalUrl: listing.canonicalUrl,
-      operationType: listing.operationType,
-      propertyType: listing.propertyType,
-      city: listing.city,
-      postalCode: listing.postalCode,
-      districtNo: listing.districtNo,
-      districtName: listing.districtName,
-      listPriceEur: centsToEur(listing.listPriceEurCents),
-      listPriceEurCents: listing.listPriceEurCents,
-      livingAreaSqm: listing.livingAreaSqm,
-      rooms: listing.rooms,
-      pricePerSqmEur: listing.pricePerSqmEur,
-      currentScore: listing.currentScore,
-      firstSeenAt: listing.firstSeenAt.toISOString(),
-      listingStatus: listing.listingStatus,
-    }));
-
+    // The same DTO as listing search. The dashboard counts price drops among these matches
+    // from lastPriceChangePct and lastPriceChangeAt, which come from listing_versions.
     return reply.send({
-      data: mappedData,
+      data: result.data.map(mapListingSearchResult),
       meta: result.meta,
     });
   });
 
-  // DELETE /v1/filters/:id - Soft delete (set is_active=false)
+  // DELETE /v1/filters/:id - Soft delete: the filter leaves the list and stops alerting
   app.delete<{ Params: { id: string } }>('/v1/filters/:id', async (request, reply) => {
     const { id } = parseOrThrow(idParamSchema, request.params);
+    await findOwnedFilter(id, request.userId);
 
-    // Verify ownership
-    const existing = await userFilters.findById(id);
-    if (!existing || existing.userId !== request.userId) {
+    if (!(await userFilters.softDelete(id))) {
       throw new NotFoundError('Filter', id);
     }
-
-    await userFilters.update(id, { isActive: false });
 
     return reply.status(204).send();
   });

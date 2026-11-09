@@ -31,7 +31,8 @@ export interface FilterCreateInput {
 export interface FilterUpdateInput {
   name?: string;
   isActive?: boolean;
-  criteria?: Partial<FilterCriteria>;
+  /** Replaces the whole criteria set: a field left out is cleared, as on create. */
+  criteria?: FilterCriteria;
   alertFrequency?: AlertFrequency;
   alertChannels?: string[];
 }
@@ -82,6 +83,8 @@ export interface UserFilterRow {
   criteriaJson: Record<string, unknown>;
   lastEvaluatedAt: Date | null;
   lastMatchAt: Date | null;
+  /** Set when the owner deletes the filter. A paused filter only has isActive false. */
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

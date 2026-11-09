@@ -156,37 +156,84 @@ export const listingSearchQuerySchema = z
     path: ['maxRooms'],
   });
 
+// ── Filter bodies ────────────────────────────────────────────────────────────
+
+// The bounds mirror the user_filters CHECK constraints, so a bad value gets a 400, not a 500.
+const filterCriteriaShape = {
+  operationType: z.enum(OPERATION_TYPES).optional(),
+  propertyTypes: z.array(z.enum(PROPERTY_TYPES)).optional(),
+  districts: z.array(z.number().int()).optional(),
+  minPriceEur: z.number().min(0).optional(),
+  maxPriceEur: z.number().min(0).optional(),
+  minAreaSqm: z.number().min(0).optional(),
+  maxAreaSqm: z.number().min(0).optional(),
+  minRooms: z.number().min(0).optional(),
+  maxRooms: z.number().min(0).optional(),
+  minScore: z.number().min(0).max(100).optional(),
+  requiredKeywords: z.array(z.string()).optional(),
+  excludedKeywords: z.array(z.string()).optional(),
+  sortBy: z.enum(SORT_BY_VALUES).optional(),
+};
+
+/** The criteria fields of a filter create or update body, after validation. */
+export type FilterCriteriaFields = z.infer<z.ZodObject<typeof filterCriteriaShape>>;
+
+const FILTER_CRITERIA_KEYS = Object.keys(filterCriteriaShape);
+
+const CRITERIA_RANGES = [
+  ['minPriceEur', 'maxPriceEur'],
+  ['minAreaSqm', 'maxAreaSqm'],
+  ['minRooms', 'maxRooms'],
+] as const;
+
+function checkCriteriaRanges(criteria: FilterCriteriaFields, ctx: z.RefinementCtx): void {
+  for (const [minKey, maxKey] of CRITERIA_RANGES) {
+    const min = criteria[minKey];
+    const max = criteria[maxKey];
+    if (min != null && max != null && min > max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${maxKey} must be greater than or equal to ${minKey}`,
+        path: [maxKey],
+      });
+    }
+  }
+}
+
+/**
+ * True when a filter PATCH body has any criteria field, a null one included. Such a body
+ * replaces the whole criteria set, and the fields it leaves out are cleared.
+ */
+export function carriesFilterCriteria(body: unknown): boolean {
+  return (
+    typeof body === 'object' && body !== null && FILTER_CRITERIA_KEYS.some((key) => key in body)
+  );
+}
+
 export const filterCreateSchema = z.preprocess(
   stripNullValues,
-  z.object({
-    name: z.string().trim().min(1, 'name is required and must be a non-empty string'),
-    filterKind: z.enum(FILTER_KINDS),
-    alertFrequency: z.enum(ALERT_FREQUENCIES).default('manual'),
-    alertChannels: z.array(z.enum(ALERT_CHANNELS)).default(['in_app']),
-    operationType: z.enum(OPERATION_TYPES).optional(),
-    propertyTypes: z.array(z.enum(PROPERTY_TYPES)).optional(),
-    districts: z.array(z.number()).optional(),
-    minPriceEur: z.number().optional(),
-    maxPriceEur: z.number().optional(),
-    minAreaSqm: z.number().optional(),
-    maxAreaSqm: z.number().optional(),
-    minRooms: z.number().optional(),
-    maxRooms: z.number().optional(),
-    minScore: z.number().optional(),
-    requiredKeywords: z.array(z.string()).optional(),
-    excludedKeywords: z.array(z.string()).optional(),
-    sortBy: z.enum(SORT_BY_VALUES).optional(),
-  }),
+  z
+    .object({
+      name: z.string().trim().min(1, 'name is required and must be a non-empty string'),
+      filterKind: z.enum(FILTER_KINDS),
+      alertFrequency: z.enum(ALERT_FREQUENCIES).default('manual'),
+      alertChannels: z.array(z.enum(ALERT_CHANNELS)).default(['in_app']),
+      ...filterCriteriaShape,
+    })
+    .superRefine(checkCriteriaRanges),
 );
 
 export const filterUpdateSchema = z.preprocess(
   stripNullValues,
-  z.object({
-    name: z.string().trim().min(1, 'name must be a non-empty string').optional(),
-    isActive: z.coerce.boolean().optional(),
-    alertFrequency: z.enum(ALERT_FREQUENCIES).optional(),
-    alertChannels: z.array(z.enum(ALERT_CHANNELS)).optional(),
-  }),
+  z
+    .object({
+      name: z.string().trim().min(1, 'name must be a non-empty string').optional(),
+      isActive: z.boolean().optional(),
+      alertFrequency: z.enum(ALERT_FREQUENCIES).optional(),
+      alertChannels: z.array(z.enum(ALERT_CHANNELS)).optional(),
+      ...filterCriteriaShape,
+    })
+    .superRefine(checkCriteriaRanges),
 );
 
 export const alertUpdateSchema = z.object({

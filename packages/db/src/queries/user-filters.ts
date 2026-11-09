@@ -2,6 +2,7 @@ import { query } from '../client.js';
 import type {
   UserFilterRow,
   FilterCreateInput,
+  FilterCriteria,
   FilterUpdateInput,
   FilterKind,
   AlertFrequency,
@@ -37,6 +38,7 @@ interface UserFilterDbRow {
   criteria_json: Record<string, unknown>;
   last_evaluated_at: Date | null;
   last_match_at: Date | null;
+  deleted_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -67,192 +69,146 @@ function toUserFilterRow(row: UserFilterDbRow): UserFilterRow {
     criteriaJson: row.criteria_json,
     lastEvaluatedAt: row.last_evaluated_at,
     lastMatchAt: row.last_match_at,
+    deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+// ── Criteria columns ────────────────────────────────────────────────────────
+
+/** The columns one criteria set fills, in the order of `criteriaValues`. */
+const CRITERIA_COLUMNS = [
+  'operation_type',
+  'property_types',
+  'districts',
+  'postal_codes',
+  'min_price_eur_cents',
+  'max_price_eur_cents',
+  'min_area_sqm',
+  'max_area_sqm',
+  'min_rooms',
+  'max_rooms',
+  'required_keywords',
+  'excluded_keywords',
+  'min_score',
+  'sort_by',
+  'criteria_json',
+] as const;
+
+function eurToCents(eur: number | null | undefined): number | null {
+  return eur != null ? Math.round(eur * 100) : null;
+}
+
+/**
+ * Every criteria column from one criteria set, with the column default for a field the set
+ * leaves out. Create and update both write all of them, so an update can't leave a stale bound.
+ */
+function criteriaValues(criteria: FilterCriteria): unknown[] {
+  return [
+    criteria.operationType ?? null,
+    criteria.propertyTypes ?? [],
+    criteria.districts ?? [],
+    criteria.postalCodes ?? [],
+    eurToCents(criteria.minPriceEur),
+    eurToCents(criteria.maxPriceEur),
+    criteria.minAreaSqm ?? null,
+    criteria.maxAreaSqm ?? null,
+    criteria.minRooms ?? null,
+    criteria.maxRooms ?? null,
+    criteria.requiredKeywords ?? [],
+    criteria.excludedKeywords ?? [],
+    criteria.minScore ?? null,
+    criteria.sortBy ?? 'score_desc',
+    JSON.stringify(criteria),
+  ];
+}
+
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 export async function create(input: FilterCreateInput): Promise<UserFilterRow> {
-  const criteria = input.criteria;
-  const minPriceCents =
-    criteria.minPriceEur != null ? Math.round(criteria.minPriceEur * 100) : null;
-  const maxPriceCents =
-    criteria.maxPriceEur != null ? Math.round(criteria.maxPriceEur * 100) : null;
-
+  const columns = [
+    'user_id',
+    'name',
+    'filter_kind',
+    'alert_frequency',
+    'alert_channels',
+    ...CRITERIA_COLUMNS,
+  ];
+  const params = [
+    input.userId,
+    input.name,
+    input.filterKind,
+    input.alertFrequency,
+    input.alertChannels,
+    ...criteriaValues(input.criteria),
+  ];
   const rows = await query<UserFilterDbRow>(
-    `INSERT INTO user_filters (
-       user_id, name, filter_kind,
-       operation_type, property_types, districts, postal_codes,
-       min_price_eur_cents, max_price_eur_cents,
-       min_area_sqm, max_area_sqm,
-       min_rooms, max_rooms,
-       required_keywords, excluded_keywords, min_score,
-       sort_by, alert_frequency, alert_channels, criteria_json
-     ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-       $12, $13, $14, $15, $16, $17, $18, $19, $20
-     )
+    `INSERT INTO user_filters (${columns.join(', ')})
+     VALUES (${params.map((_, i) => `$${i + 1}`).join(', ')})
      RETURNING *`,
-    [
-      input.userId,
-      input.name,
-      input.filterKind,
-      criteria.operationType ?? null,
-      criteria.propertyTypes ?? [],
-      criteria.districts ?? [],
-      criteria.postalCodes ?? [],
-      minPriceCents,
-      maxPriceCents,
-      criteria.minAreaSqm ?? null,
-      criteria.maxAreaSqm ?? null,
-      criteria.minRooms ?? null,
-      criteria.maxRooms ?? null,
-      criteria.requiredKeywords ?? [],
-      criteria.excludedKeywords ?? [],
-      criteria.minScore ?? null,
-      criteria.sortBy ?? 'score_desc',
-      input.alertFrequency,
-      input.alertChannels,
-      JSON.stringify(criteria),
-    ],
+    params,
   );
   return toUserFilterRow(rows[0]!);
 }
 
+/** Updates a filter that isn't deleted. Returns null for a missing or deleted filter. */
 export async function update(id: number, input: FilterUpdateInput): Promise<UserFilterRow | null> {
-  // Build SET clauses dynamically based on provided fields
-  const setClauses: string[] = [];
-  const params: unknown[] = [id];
-  let paramIndex = 2;
-
-  if (input.name !== undefined) {
-    setClauses.push(`name = $${paramIndex}`);
-    params.push(input.name);
-    paramIndex++;
-  }
-
-  if (input.isActive !== undefined) {
-    setClauses.push(`is_active = $${paramIndex}`);
-    params.push(input.isActive);
-    paramIndex++;
-  }
-
+  const assignments: Array<[string, unknown]> = [];
+  if (input.name !== undefined) assignments.push(['name', input.name]);
+  if (input.isActive !== undefined) assignments.push(['is_active', input.isActive]);
   if (input.alertFrequency !== undefined) {
-    setClauses.push(`alert_frequency = $${paramIndex}`);
-    params.push(input.alertFrequency);
-    paramIndex++;
+    assignments.push(['alert_frequency', input.alertFrequency]);
   }
-
-  if (input.alertChannels !== undefined) {
-    setClauses.push(`alert_channels = $${paramIndex}`);
-    params.push(input.alertChannels);
-    paramIndex++;
-  }
-
+  if (input.alertChannels !== undefined) assignments.push(['alert_channels', input.alertChannels]);
   if (input.criteria !== undefined) {
-    const c = input.criteria;
-
-    if (c.operationType !== undefined) {
-      setClauses.push(`operation_type = $${paramIndex}`);
-      params.push(c.operationType ?? null);
-      paramIndex++;
-    }
-    if (c.propertyTypes !== undefined) {
-      setClauses.push(`property_types = $${paramIndex}`);
-      params.push(c.propertyTypes);
-      paramIndex++;
-    }
-    if (c.districts !== undefined) {
-      setClauses.push(`districts = $${paramIndex}`);
-      params.push(c.districts);
-      paramIndex++;
-    }
-    if (c.postalCodes !== undefined) {
-      setClauses.push(`postal_codes = $${paramIndex}`);
-      params.push(c.postalCodes);
-      paramIndex++;
-    }
-    if (c.minPriceEur !== undefined) {
-      setClauses.push(`min_price_eur_cents = $${paramIndex}`);
-      params.push(c.minPriceEur != null ? Math.round(c.minPriceEur * 100) : null);
-      paramIndex++;
-    }
-    if (c.maxPriceEur !== undefined) {
-      setClauses.push(`max_price_eur_cents = $${paramIndex}`);
-      params.push(c.maxPriceEur != null ? Math.round(c.maxPriceEur * 100) : null);
-      paramIndex++;
-    }
-    if (c.minAreaSqm !== undefined) {
-      setClauses.push(`min_area_sqm = $${paramIndex}`);
-      params.push(c.minAreaSqm ?? null);
-      paramIndex++;
-    }
-    if (c.maxAreaSqm !== undefined) {
-      setClauses.push(`max_area_sqm = $${paramIndex}`);
-      params.push(c.maxAreaSqm ?? null);
-      paramIndex++;
-    }
-    if (c.minRooms !== undefined) {
-      setClauses.push(`min_rooms = $${paramIndex}`);
-      params.push(c.minRooms ?? null);
-      paramIndex++;
-    }
-    if (c.maxRooms !== undefined) {
-      setClauses.push(`max_rooms = $${paramIndex}`);
-      params.push(c.maxRooms ?? null);
-      paramIndex++;
-    }
-    if (c.requiredKeywords !== undefined) {
-      setClauses.push(`required_keywords = $${paramIndex}`);
-      params.push(c.requiredKeywords);
-      paramIndex++;
-    }
-    if (c.excludedKeywords !== undefined) {
-      setClauses.push(`excluded_keywords = $${paramIndex}`);
-      params.push(c.excludedKeywords);
-      paramIndex++;
-    }
-    if (c.minScore !== undefined) {
-      setClauses.push(`min_score = $${paramIndex}`);
-      params.push(c.minScore ?? null);
-      paramIndex++;
-    }
-    if (c.sortBy !== undefined) {
-      setClauses.push(`sort_by = $${paramIndex}`);
-      params.push(c.sortBy);
-      paramIndex++;
-    }
-
-    // Always update criteria_json when criteria changes
-    setClauses.push(`criteria_json = $${paramIndex}`);
-    params.push(JSON.stringify(c));
-    paramIndex++;
+    const values = criteriaValues(input.criteria);
+    CRITERIA_COLUMNS.forEach((column, i) => assignments.push([column, values[i]]));
   }
 
-  if (setClauses.length === 0) {
-    return findById(id);
+  if (assignments.length === 0) {
+    const existing = await findById(id);
+    return existing && existing.deletedAt == null ? existing : null;
   }
 
   const rows = await query<UserFilterDbRow>(
-    `UPDATE user_filters SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
-    params,
+    `UPDATE user_filters
+     SET ${assignments.map(([column], i) => `${column} = $${i + 2}`).join(', ')}
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING *`,
+    [id, ...assignments.map(([, value]) => value)],
   );
   const row = rows[0];
   return row ? toUserFilterRow(row) : null;
 }
 
+/**
+ * Deletes a filter: it leaves the list and stops alerting, and its alerts stay. Returns false
+ * when the filter is missing or already deleted.
+ */
+export async function softDelete(id: number): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `UPDATE user_filters
+     SET deleted_at = NOW(), is_active = FALSE
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING id`,
+    [id],
+  );
+  return rows.length > 0;
+}
+
+/** Any filter by id, deleted ones included; callers check `deletedAt`. */
 export async function findById(id: number): Promise<UserFilterRow | null> {
   const rows = await query<UserFilterDbRow>('SELECT * FROM user_filters WHERE id = $1', [id]);
   const row = rows[0];
   return row ? toUserFilterRow(row) : null;
 }
 
+/** The owner's filters that aren't deleted, paused ones included. */
 export async function findByUserId(userId: number): Promise<UserFilterRow[]> {
   const rows = await query<UserFilterDbRow>(
     `SELECT * FROM user_filters
-     WHERE user_id = $1 AND is_active = TRUE
+     WHERE user_id = $1 AND deleted_at IS NULL
      ORDER BY updated_at DESC`,
     [userId],
   );
@@ -262,19 +218,12 @@ export async function findByUserId(userId: number): Promise<UserFilterRow[]> {
 export async function findActiveFilters(): Promise<UserFilterRow[]> {
   const rows = await query<UserFilterDbRow>(
     `SELECT * FROM user_filters
-     WHERE is_active = TRUE
+     WHERE is_active = TRUE AND deleted_at IS NULL
      ORDER BY user_id, updated_at DESC`,
   );
   return rows.map(toUserFilterRow);
 }
 
-/**
- * Reverse-match: given a listing's attributes, find all active filters
- * that would match it.
- *
- * Uses SQL predicates on the flattened filter columns to efficiently
- * determine which filters a listing satisfies.
- */
 /**
  * Pure keyword post-filter for reverse-match results.
  * Delegates to the shared keyword matching module in @immoradar/filtering
@@ -298,6 +247,13 @@ export interface ReverseMatchResult {
   matched: UserFilterRow[];
 }
 
+/**
+ * Reverse-match: given a listing's attributes, find the filters that alert on it.
+ *
+ * Only alert filters that are active, not deleted and not set to 'manual' take part. No digest
+ * runs yet, so 'hourly_digest' and 'daily_digest' alert like 'instant'. SQL predicates on the
+ * flattened filter columns do the matching.
+ */
 export async function findMatchingFilters(listing: {
   operationType: string;
   propertyType: string;
@@ -312,6 +268,9 @@ export async function findMatchingFilters(listing: {
   const rows = await query<UserFilterDbRow>(
     `SELECT * FROM user_filters
      WHERE is_active = TRUE
+       AND deleted_at IS NULL
+       AND filter_kind = 'alert'
+       AND alert_frequency <> 'manual'
        AND (operation_type IS NULL OR operation_type = $1)
        AND (COALESCE(array_length(property_types, 1), 0) = 0 OR $2 = ANY(property_types))
        AND (COALESCE(array_length(districts, 1), 0) = 0 OR $3::smallint = ANY(districts))
