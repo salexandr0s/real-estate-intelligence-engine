@@ -111,25 +111,36 @@ For the full project rules, see:
 - **PostgreSQL** as the system of record
 - **Playwright / Patchright** for browser automation
 - **XcodeGen** for macOS project generation
-- **Docker Compose** for local infrastructure
+- **Docker Compose** for the optional manual setup
 
 ## Requirements
 
-Minimum useful local setup:
+- macOS 14 or later, with **Xcode** and **XcodeGen**
+- **Node.js 22** and **npm 10+**
+- Homebrew `postgresql@17` and `redis`, which Debug builds of the app run their engine on. The release DMG bundles Node, PostgreSQL and Redis.
+- **Docker**, only if you run the backend by hand and have no PostgreSQL and Redis of your own
 
-- macOS
-- **Node.js 20+**
-- **npm 10+**
-- **Xcode**
-- **XcodeGen**
-- **Docker** (recommended)
+## Run the app
 
-If you do not use Docker locally, you will need your own working instances of:
+1. Install Homebrew `node@22`, `postgresql@17` and `redis`.
+2. Run `npm ci`.
+3. Generate the Xcode project, open it and run the ImmoRadar scheme:
 
-- PostgreSQL
-- Redis
+   ```bash
+   cd apps/macos
+   xcodegen generate
+   open ImmoRadar.xcodeproj
+   ```
 
-## Quick start
+The app runs its own engine: Postgres on port 55432, Redis on 56379, the API on 58080, and the scraper and processing workers. Debug builds compile the TypeScript workspaces each time the engine starts. Quitting the app, force quitting it or a crash stops every engine process. The data lives in `~/Library/Application Support/ImmoRadar/runtime`.
+
+Monitoring starts paused. Click **Start Monitoring** to begin crawling. Each source is checked at most every 3 hours, with at most 40 detail pages per run. Debug builds read `.env` and `.env.local`, so `SCRAPER_MIN_CRAWL_INTERVAL_MINUTES` and `SCRAPER_DETAIL_BUDGET_PER_RUN` there change these limits. The workers stop while the Mac sleeps, in Low Power Mode and when it runs hot, and start again afterwards.
+
+To build the release DMG, see [macOS packaging](#macos-packaging).
+
+## Run the backend by hand
+
+For backend work without the app. These services use their own ports (Postgres 5432, Redis 6379, API 8080) and their own database. The app doesn't connect to them: with a local API address it always runs its own engine.
 
 ### 1. Configure the environment
 
@@ -181,18 +192,6 @@ Default API base URL:
 http://localhost:8080
 ```
 
-### 5. Open the macOS app
-
-Generate the Xcode project if needed:
-
-```bash
-cd apps/macos
-xcodegen generate
-open ImmoRadar.xcodeproj
-```
-
-Then build and run from Xcode.
-
 ## Common commands
 
 ### Quality gates
@@ -225,7 +224,7 @@ npm run baselines
 
 ### macOS packaging
 
-Build a macOS DMG:
+Build the release DMG. It bundles the engine, and the build runs the smoke test on the finished DMG:
 
 ```bash
 npm run macos:dmg

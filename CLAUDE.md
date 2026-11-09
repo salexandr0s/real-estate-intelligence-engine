@@ -1,7 +1,7 @@
 # ImmoRadar
 
 ## Project Overview
-Always-on Austrian property intelligence platform. Backend-first TypeScript services with native macOS SwiftUI client.
+Austrian property intelligence platform. A native macOS SwiftUI app runs its own TypeScript engine (Postgres, Redis, Fastify API, BullMQ workers) while it is open and stops it when it quits.
 
 ## Stack
 - **Backend**: TypeScript (strict), Fastify, PostgreSQL, Redis + BullMQ
