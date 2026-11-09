@@ -254,12 +254,49 @@ private struct OutreachThreadList: View {
                     .tag(thread.id)
                     .contentShape(Rectangle())
             }
+
+            if viewModel.nextCursor != nil {
+                OutreachMoreThreadsRow(
+                    isLoading: viewModel.isLoadingMoreThreads,
+                    errorMessage: viewModel.moreThreadsErrorMessage,
+                    onLoadMore: { Task { await viewModel.loadMoreThreads(using: appState.apiClient) } }
+                )
+                .selectionDisabled()
+            }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
         .onChange(of: viewModel.selectedThreadID) { _, newValue in
             guard let newValue else { return }
             Task { await viewModel.selectThread(id: newValue, using: appState.apiClient) }
         }
+    }
+}
+
+/// The last row while the server has more threads than the list shows.
+private struct OutreachMoreThreadsRow: View {
+    let isLoading: Bool
+    let errorMessage: String?
+    let onLoadMore: () -> Void
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.xs) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("Load More Threads", action: onLoadMore)
+                    .controlSize(.small)
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Spacing.xs)
     }
 }
 
