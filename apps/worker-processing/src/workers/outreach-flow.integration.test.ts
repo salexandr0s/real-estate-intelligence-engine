@@ -236,66 +236,54 @@ vi.mock('@immoradar/db', async () => {
           return cloneMessage(message);
         },
       ),
-      updateThreadState: vi.fn(
+      recordSentEmail: vi.fn(
         async (input: {
           threadId: number;
-          workflowState: MockThread['workflowState'];
-          lastOutboundAt?: Date | null;
-          lastInboundAt?: Date | null;
-          nextActionAt?: Date | null;
-          autoFollowupCount?: number;
+          sendKind: 'initial' | 'followup';
+          to: MockThread['workflowState'];
+          sentAt: Date;
+          nextActionAt: Date | null;
+          event: {
+            messageId?: number | null;
+            eventType: string;
+            payload?: Record<string, unknown>;
+          };
         }) => {
           const state = testState.getState();
-          if (input.threadId !== state.thread.id) return null;
-          state.thread.workflowState = input.workflowState;
-          if (input.lastOutboundAt !== undefined && input.lastOutboundAt !== null) {
-            state.thread.lastOutboundAt = input.lastOutboundAt;
-          }
-          if (input.lastInboundAt !== undefined && input.lastInboundAt !== null) {
-            state.thread.lastInboundAt = input.lastInboundAt;
-          }
-          if (input.nextActionAt !== undefined) {
+          if (input.threadId !== state.thread.id) return false;
+          const fromState = state.thread.workflowState;
+          const moved = fromState === 'queued_send';
+          if (moved) {
+            state.thread.workflowState = input.to;
             state.thread.nextActionAt = input.nextActionAt;
           }
-          if (input.autoFollowupCount !== undefined) {
-            state.thread.autoFollowupCount = input.autoFollowupCount;
-          }
-          return cloneThread(state.thread);
-        },
-      ),
-      appendEvent: vi.fn(
-        async (input: {
-          threadId: number;
-          messageId?: number | null;
-          eventType: string;
-          fromState?: MockThread['workflowState'] | null;
-          toState?: MockThread['workflowState'] | null;
-          payload?: Record<string, unknown>;
-        }) => {
-          const state = testState.getState();
+          state.thread.lastOutboundAt = input.sentAt;
+          if (input.sendKind === 'followup') state.thread.autoFollowupCount += 1;
           const event: MockEvent = {
             id: state.nextEventId++,
             threadId: input.threadId,
-            messageId: input.messageId ?? null,
-            eventType: input.eventType,
-            fromState: input.fromState ?? null,
-            toState: input.toState ?? null,
-            payload: input.payload ?? {},
+            messageId: input.event.messageId ?? null,
+            eventType: input.event.eventType,
+            fromState,
+            toState: state.thread.workflowState,
+            payload: input.event.payload ?? {},
           };
           state.events.push(event);
-          return { ...event, occurredAt: new Date('2026-03-26T09:00:00Z') };
+          return moved;
         },
       ),
-      findThreadByProviderMessageIds: vi.fn(async (providerMessageIds: string[]) => {
-        const state = testState.getState();
-        const matched = state.messages.find(
-          (entry) =>
-            entry.threadId === state.thread.id &&
-            entry.providerMessageId != null &&
-            providerMessageIds.includes(entry.providerMessageId),
-        );
-        return matched ? cloneThread(state.thread) : null;
-      }),
+      findThreadByProviderMessageIds: vi.fn(
+        async (_userId: number, providerMessageIds: string[]) => {
+          const state = testState.getState();
+          const matched = state.messages.find(
+            (entry) =>
+              entry.threadId === state.thread.id &&
+              entry.providerMessageId != null &&
+              providerMessageIds.includes(entry.providerMessageId),
+          );
+          return matched ? cloneThread(state.thread) : null;
+        },
+      ),
       findOpenThreadCandidatesByContact: vi.fn(async (userId: number, contactEmail: string) => {
         const state = testState.getState();
         if (
@@ -312,22 +300,38 @@ vi.mock('@immoradar/db', async () => {
           )[0]?.subject;
         return [{ thread: cloneThread(state.thread), latestSubject: latestSubject ?? null }];
       }),
-      insertInboundMessage: vi.fn(
-        async (input: {
-          mailboxAccountId: number;
-          threadId?: number | null;
-          providerMessageId?: string | null;
-          subject: string;
-          bodyText?: string | null;
-          bodyHtml?: string | null;
-          fromEmail?: string | null;
-          toEmail?: string | null;
-          inReplyTo?: string | null;
-          referencesHeader?: string | null;
-          matchStrategy: MockMessage['matchStrategy'];
-          occurredAt?: Date;
-          errorMessage?: string | null;
-        }) => {
+      findMessageByProviderId: vi.fn(
+        async (mailboxAccountId: number, providerMessageId: string) => {
+          const state = testState.getState();
+          const found = state.messages.find(
+            (entry) =>
+              entry.mailboxAccountId === mailboxAccountId &&
+              entry.providerMessageId === providerMessageId,
+          );
+          return found ? cloneMessage(found) : null;
+        },
+      ),
+      recordInboundMessage: vi.fn(
+        async (
+          input: {
+            mailboxAccountId: number;
+            threadId?: number | null;
+            providerMessageId?: string | null;
+            subject: string;
+            bodyText?: string | null;
+            bodyHtml?: string | null;
+            fromEmail?: string | null;
+            toEmail?: string | null;
+            inReplyTo?: string | null;
+            referencesHeader?: string | null;
+            matchStrategy: MockMessage['matchStrategy'];
+            occurredAt?: Date;
+            errorMessage?: string | null;
+          },
+          nextThreadState:
+            | ((current: MockThread['workflowState']) => MockThread['workflowState'] | null)
+            | null,
+        ) => {
           const state = testState.getState();
           const message: MockMessage = {
             id: state.nextMessageId++,
@@ -349,7 +353,26 @@ vi.mock('@immoradar/db', async () => {
             errorMessage: input.errorMessage ?? null,
           };
           state.messages.push(message);
-          return cloneMessage(message);
+          const fromState = state.thread.workflowState;
+          const toState =
+            nextThreadState && message.threadId === state.thread.id
+              ? nextThreadState(fromState)
+              : null;
+          if (toState) {
+            state.thread.workflowState = toState;
+            state.thread.lastInboundAt = message.occurredAt;
+            state.thread.nextActionAt = null;
+            state.events.push({
+              id: state.nextEventId++,
+              threadId: state.thread.id,
+              messageId: message.id,
+              eventType: 'reply_received',
+              fromState,
+              toState,
+              payload: { matchStrategy: input.matchStrategy },
+            });
+          }
+          return { message: cloneMessage(message), inserted: true };
         },
       ),
       linkDocumentToMessage: vi.fn(async (messageId: number, documentId: number) => {
@@ -392,7 +415,7 @@ describe('outreach mailbox flow', () => {
       add: vi.fn().mockResolvedValue(undefined),
     };
     const transporter = {
-      sendMail: vi.fn().mockResolvedValue({ messageId: 'provider-initial-123' }),
+      sendMail: vi.fn().mockResolvedValue({ messageId: '<provider-initial-123>' }),
     };
 
     const sendResult = await processOutreachSendJob(

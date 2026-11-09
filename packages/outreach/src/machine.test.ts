@@ -74,6 +74,9 @@ describe('applyOutreachTransition', () => {
   });
 
   it('moves to reply_received from any open thread state when a reply lands', () => {
+    expect(applyOutreachTransition('queued_send', { type: 'REPLY_RECEIVED' })).toBe(
+      'reply_received',
+    );
     expect(applyOutreachTransition('sent_waiting_reply', { type: 'REPLY_RECEIVED' })).toBe(
       'reply_received',
     );

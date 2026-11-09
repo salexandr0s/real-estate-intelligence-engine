@@ -45,9 +45,13 @@ const DAY_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 24];
  * there: every 11 hours runs at 0, 11 and 22, two hours before the next 0. The step is rounded up
  * to the next divisor of 24 instead.
  */
+function dayDivisorStep(everyHours: number): number {
+  return DAY_DIVISORS.find((divisor) => divisor >= everyHours) ?? 24;
+}
+
 export function hourlyCron(schedulerId: string, everyHours: number): string {
   const minute = stableMinuteOffset(schedulerId);
-  const step = DAY_DIVISORS.find((divisor) => divisor >= everyHours) ?? 24;
+  const step = dayDivisorStep(everyHours);
   // Cron hours stop at 23, so a step of 24 would not parse.
   return step === 24 ? `${minute} 0 * * *` : `${minute} */${step} * * *`;
 }
@@ -56,14 +60,24 @@ export function discoverySchedulerId(sourceCode: string): string {
   return `discovery-${sourceCode}`;
 }
 
+/**
+ * Hours between discovery runs: the source's interval or the configured floor, whichever is
+ * longer, at least one hour, rounded up to a step that divides a day.
+ */
+export function discoveryIntervalHours(intervalMinutes: number, floorMinutes: number): number {
+  return dayDivisorStep(Math.max(1, Math.ceil(Math.max(intervalMinutes, floorMinutes) / 60)));
+}
+
 /** Discovery runs at most hourly, whatever the source's interval and the configured floor say. */
 export function discoveryCron(
   sourceCode: string,
   intervalMinutes: number,
   floorMinutes: number,
 ): string {
-  const everyHours = Math.max(1, Math.ceil(Math.max(intervalMinutes, floorMinutes) / 60));
-  return hourlyCron(discoverySchedulerId(sourceCode), everyHours);
+  return hourlyCron(
+    discoverySchedulerId(sourceCode),
+    discoveryIntervalHours(intervalMinutes, floorMinutes),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

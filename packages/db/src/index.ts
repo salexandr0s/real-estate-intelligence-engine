@@ -50,6 +50,7 @@ export type {
   SelectFreshInput,
 } from './queries/raw-sightings.js';
 export type { ListingSearchFilter } from './queries/listings.js';
+export type { AlertListOptions, AlertSortBy, AlertSortDirection } from './queries/alerts.js';
 export type { AppendVersionInput, ListingVersionRow } from './queries/listing-versions.js';
 export type { UpsertBaselineInput, MarketBaselineRow } from './queries/market-baselines.js';
 export type { UpsertPoiInput, PoiRow, PoiNearbyRow } from './queries/pois.js';

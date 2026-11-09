@@ -339,7 +339,9 @@ export function loadConfig(): AppConfig {
     nodeEnv,
     logLevel: envStr('LOG_LEVEL', 'info'),
     api: {
-      host: envStr('API_HOST', '0.0.0.0'),
+      // Loopback by default: outside production the bearer token falls back to the well-known
+      // dev-token. Containers set API_HOST=0.0.0.0 so their published port reaches the API.
+      host: envStr('API_HOST', '127.0.0.1'),
       port: envInt('API_PORT', 8080),
       baseUrl: envStr('API_BASE_URL', 'http://localhost:8080'),
       authMode: envStr('API_AUTH_MODE', 'single_user_token'),
@@ -443,7 +445,8 @@ export function loadConfig(): AppConfig {
         return 'anthropic';
       })(),
       model: envStr('COPILOT_MODEL', ''),
-      maxTokens: envInt('COPILOT_MAX_TOKENS', 4096),
+      // Thinking counts toward this limit as well as the answer.
+      maxTokens: envInt('COPILOT_MAX_TOKENS', 16000),
     },
   };
 

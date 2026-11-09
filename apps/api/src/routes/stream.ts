@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import type { AlertRow } from '@immoradar/contracts';
 import { alerts, subscribeToAlerts } from '@immoradar/db';
 import type { AlertNotification } from '@immoradar/db';
 import { createLogger } from '@immoradar/observability';
+import { mapAlertResponse } from './alerts.js';
 
 const logger = createLogger('api:stream');
 
@@ -30,11 +32,16 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
       const userId = request.userId;
       let lastChecked = new Date();
 
+      // Each event carries the same DTO as GET /v1/alerts.
+      const writeAlert = (alert: AlertRow) => {
+        res.write(`event: alert\ndata: ${JSON.stringify(mapAlertResponse(alert))}\n\n`);
+      };
+
       // Helper: send alert events to the SSE stream
-      const sendAlerts = async (newAlerts: Awaited<ReturnType<typeof alerts.findSince>>) => {
+      const sendAlerts = async (newAlerts: AlertRow[]) => {
         for (const alert of newAlerts) {
           if (res.destroyed) return;
-          res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
+          writeAlert(alert);
         }
         if (newAlerts.length > 0) {
           lastChecked = new Date(newAlerts[newAlerts.length - 1]!.matchedAt.getTime() + 1);
@@ -53,7 +60,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
             .findById(notification.alertId)
             .then((alert) => {
               if (alert && alert.channel === 'in_app' && !res.destroyed) {
-                res.write(`event: alert\ndata: ${JSON.stringify(alert)}\n\n`);
+                writeAlert(alert);
                 lastChecked = new Date(alert.matchedAt.getTime() + 1);
               }
             })
@@ -76,9 +83,8 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
       const fallbackPollInterval = setInterval(async () => {
         if (res.destroyed) return;
         try {
-          const allAlerts = await alerts.findSince(userId, lastChecked);
-          const inAppAlerts = allAlerts.filter((a) => a.channel === 'in_app');
-          await sendAlerts(inAppAlerts);
+          // findSince returns in_app alerts only.
+          await sendAlerts(await alerts.findSince(userId, lastChecked));
         } catch (err) {
           if (!res.destroyed) {
             logger.error('SSE fallback poll error', {

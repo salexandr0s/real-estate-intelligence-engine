@@ -15,6 +15,7 @@ const ENV_KEYS = [
   'API_DOCS_PUBLIC',
   'API_DOCS_PUBLIC_PRODUCTION_OVERRIDE',
   'API_TRUST_PROXY',
+  'API_HOST',
   'DOCUMENT_DOWNLOAD_TIMEOUT_MS',
   'DOCUMENT_MAX_BYTES',
   'IMMORADAR_RUNTIME_BOOT_MODE',
@@ -70,6 +71,17 @@ describe('config loaders', () => {
     expect(config.api.trustProxy).toBe(false);
     expect(config.documents.downloadTimeoutMs).toBe(20000);
     expect(config.documents.maxBytes).toBe(10000000);
+  });
+
+  // Outside production the token falls back to dev-token, so an all-interfaces default would
+  // open the API to the whole network.
+  it('binds the API to loopback unless API_HOST says otherwise', () => {
+    delete process.env.API_HOST;
+    expect(loadConfig().api.host).toBe('127.0.0.1');
+
+    resetConfig();
+    process.env.API_HOST = '0.0.0.0';
+    expect(loadConfig().api.host).toBe('0.0.0.0');
   });
 
   it('keeps a proxy address intact and refuses a hop count', () => {

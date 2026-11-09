@@ -114,12 +114,16 @@ export async function markSyncStarted(id: number): Promise<void> {
   );
 }
 
+/**
+ * Stores the sync's cursor as given: null clears the UID, which a UIDVALIDITY change needs,
+ * because old UIDs mean nothing in the new mailbox.
+ */
 export async function markSyncFinished(
   id: number,
   input: {
     status: MailboxSyncStatus;
-    lastSeenUid?: number | null;
-    lastSeenUidvalidity?: number | null;
+    lastSeenUid: number | null;
+    lastSeenUidvalidity: number | null;
     errorCode?: string | null;
     errorMessage?: string | null;
   },
@@ -129,8 +133,8 @@ export async function markSyncFinished(
      SET sync_status = $2,
          last_sync_completed_at = NOW(),
          last_successful_sync_at = CASE WHEN $2 IN ('healthy', 'degraded') THEN NOW() ELSE last_successful_sync_at END,
-         last_seen_uid = COALESCE($3, last_seen_uid),
-         last_seen_uidvalidity = COALESCE($4, last_seen_uidvalidity),
+         last_seen_uid = $3,
+         last_seen_uidvalidity = $4,
          last_error_code = $5,
          last_error_message = $6,
          updated_at = NOW()
@@ -138,8 +142,8 @@ export async function markSyncFinished(
     [
       id,
       input.status,
-      input.lastSeenUid ?? null,
-      input.lastSeenUidvalidity ?? null,
+      input.lastSeenUid,
+      input.lastSeenUidvalidity,
       input.errorCode ?? null,
       input.errorMessage ?? null,
     ],

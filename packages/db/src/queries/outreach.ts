@@ -179,7 +179,11 @@ function decodeCursor(cursor: string | null): { updatedAt: string; id: number } 
   }
 }
 
-export async function createThreadWithInitialDraft(input: {
+/**
+ * Creates the thread with its initial email already queued, in one transaction, so a thread
+ * never sits in draft with no way forward. The caller adds the send job afterwards.
+ */
+export async function createThreadWithQueuedInitial(input: {
   userId: number;
   listingId: number;
   mailboxAccountId: number;
@@ -198,7 +202,7 @@ export async function createThreadWithInitialDraft(input: {
          user_id, listing_id, mailbox_account_id,
          contact_name, contact_company, contact_email, contact_phone,
          workflow_state
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued_send')
        RETURNING *`,
       [
         input.userId,
@@ -217,7 +221,7 @@ export async function createThreadWithInitialDraft(input: {
       `INSERT INTO outreach_messages (
          thread_id, mailbox_account_id, direction, message_kind, delivery_status,
          subject, body_text, from_email, to_email, match_strategy
-       ) VALUES ($1, $2, 'outbound', 'initial', 'draft', $3, $4, $5, $6, 'manual')
+       ) VALUES ($1, $2, 'outbound', 'initial', 'queued', $3, $4, $5, $6, 'manual')
        RETURNING *`,
       [
         thread.id,
@@ -238,8 +242,155 @@ export async function createThreadWithInitialDraft(input: {
       toState: 'draft',
       payload: { listingId: input.listingId },
     });
+    await appendEventWithClient(client, {
+      threadId: thread.id,
+      messageId: message.id,
+      eventType: 'queued_send',
+      fromState: 'draft',
+      toState: 'queued_send',
+      payload: { sendKind: 'initial' },
+    });
 
     return { thread, message };
+  });
+}
+
+interface ThreadEventInput {
+  messageId?: number | null;
+  eventType: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * Moves a thread to `to` only while it is still in one of the `from` states, and records the
+ * event in the same transaction. Returns null when the thread was in another state, so two
+ * requests can't both queue a send.
+ */
+export async function transitionThreadState(input: {
+  threadId: number;
+  from: OutreachWorkflowState[];
+  to: OutreachWorkflowState;
+  nextActionAt: Date | null;
+  event: ThreadEventInput;
+}): Promise<OutreachThreadRow | null> {
+  return transaction(async (client) => {
+    const current = await queryWithClient<{ workflow_state: OutreachWorkflowState }>(
+      client,
+      'SELECT workflow_state FROM outreach_threads WHERE id = $1 FOR UPDATE',
+      [input.threadId],
+    );
+    const fromState = current[0]?.workflow_state;
+    if (!fromState || !input.from.includes(fromState)) return null;
+
+    const rows = await queryWithClient<OutreachThreadDbRow>(
+      client,
+      `UPDATE outreach_threads
+       SET workflow_state = $2, next_action_at = $3, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [input.threadId, input.to, input.nextActionAt],
+    );
+    await appendEventWithClient(client, {
+      threadId: input.threadId,
+      messageId: input.event.messageId ?? null,
+      eventType: input.event.eventType,
+      fromState,
+      toState: input.to,
+      payload: input.event.payload ?? {},
+    });
+    return toThreadRow(rows[0]!);
+  });
+}
+
+/**
+ * Marks a queued send as failed when its job could not be added, so the thread shows a
+ * retry instead of a send that will never run. Does nothing once the thread left queued_send.
+ */
+export async function failQueuedSend(input: {
+  threadId: number;
+  messageId: number;
+  errorMessage: string;
+}): Promise<OutreachThreadRow | null> {
+  return transaction(async (client) => {
+    const rows = await queryWithClient<OutreachThreadDbRow>(
+      client,
+      `UPDATE outreach_threads
+       SET workflow_state = 'failed', next_action_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND workflow_state = 'queued_send'
+       RETURNING *`,
+      [input.threadId],
+    );
+    if (!rows[0]) return null;
+    await queryWithClient(
+      client,
+      `UPDATE outreach_messages
+       SET delivery_status = 'failed', error_message = $2, updated_at = NOW()
+       WHERE id = $1 AND delivery_status <> 'sent'`,
+      [input.messageId, input.errorMessage],
+    );
+    await appendEventWithClient(client, {
+      threadId: input.threadId,
+      messageId: input.messageId,
+      eventType: 'send_failed',
+      fromState: 'queued_send',
+      toState: 'failed',
+      payload: { error: input.errorMessage },
+    });
+    return toThreadRow(rows[0]);
+  });
+}
+
+/**
+ * Records an email SMTP accepted, with its event, in one transaction. A thread still in
+ * queued_send moves to `to`. A thread paused or closed while the email was in flight keeps its
+ * state, and only the send is recorded. Returns true when the thread moved.
+ */
+export async function recordSentEmail(input: {
+  threadId: number;
+  sendKind: 'initial' | 'followup';
+  to: OutreachWorkflowState;
+  sentAt: Date;
+  nextActionAt: Date | null;
+  event: ThreadEventInput;
+}): Promise<boolean> {
+  return transaction(async (client) => {
+    const current = await queryWithClient<{ workflow_state: OutreachWorkflowState }>(
+      client,
+      'SELECT workflow_state FROM outreach_threads WHERE id = $1 FOR UPDATE',
+      [input.threadId],
+    );
+    const fromState = current[0]?.workflow_state;
+    if (!fromState) return false;
+
+    const moved = fromState === 'queued_send';
+    const toState = moved ? input.to : fromState;
+    await queryWithClient(
+      client,
+      `UPDATE outreach_threads
+       SET workflow_state = $2,
+           next_action_at = CASE WHEN $3::boolean THEN $4::timestamptz ELSE next_action_at END,
+           last_outbound_at = GREATEST(last_outbound_at, $5::timestamptz),
+           auto_followup_count = auto_followup_count + $6::int,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        input.threadId,
+        toState,
+        moved,
+        input.nextActionAt,
+        input.sentAt,
+        input.sendKind === 'followup' ? 1 : 0,
+      ],
+    );
+    await appendEventWithClient(client, {
+      threadId: input.threadId,
+      messageId: input.event.messageId ?? null,
+      eventType: input.event.eventType,
+      fromState,
+      toState,
+      payload: input.event.payload ?? {},
+    });
+    return moved;
   });
 }
 
@@ -269,60 +420,6 @@ async function appendEventWithClient(
     ],
   );
   return toEventRow(rows[0]!);
-}
-
-export async function appendEvent(input: {
-  threadId: number;
-  messageId?: number | null;
-  eventType: string;
-  fromState?: OutreachWorkflowState | null;
-  toState?: OutreachWorkflowState | null;
-  payload?: Record<string, unknown>;
-}): Promise<OutreachEventRow> {
-  const rows = await query<OutreachEventDbRow>(
-    `INSERT INTO outreach_events (thread_id, message_id, event_type, from_state, to_state, payload)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [
-      input.threadId,
-      input.messageId ?? null,
-      input.eventType,
-      input.fromState ?? null,
-      input.toState ?? null,
-      JSON.stringify(input.payload ?? {}),
-    ],
-  );
-  return toEventRow(rows[0]!);
-}
-
-export async function updateThreadState(input: {
-  threadId: number;
-  workflowState: OutreachWorkflowState;
-  lastOutboundAt?: Date | null;
-  lastInboundAt?: Date | null;
-  nextActionAt?: Date | null;
-  autoFollowupCount?: number;
-}): Promise<OutreachThreadRow | null> {
-  const rows = await query<OutreachThreadDbRow>(
-    `UPDATE outreach_threads
-     SET workflow_state = $2,
-         last_outbound_at = CASE WHEN $3::timestamptz IS NULL THEN last_outbound_at ELSE $3 END,
-         last_inbound_at = CASE WHEN $4::timestamptz IS NULL THEN last_inbound_at ELSE $4 END,
-         next_action_at = $5,
-         auto_followup_count = COALESCE($6, auto_followup_count),
-         updated_at = NOW()
-     WHERE id = $1
-     RETURNING *`,
-    [
-      input.threadId,
-      input.workflowState,
-      input.lastOutboundAt ?? null,
-      input.lastInboundAt ?? null,
-      input.nextActionAt ?? null,
-      input.autoFollowupCount ?? null,
-    ],
-  );
-  return rows[0] ? toThreadRow(rows[0]) : null;
 }
 
 export async function findOpenThreadByListingContact(
@@ -563,68 +660,150 @@ export async function updateMessageStatus(input: {
   return rows[0] ? toMessageRow(rows[0]) : null;
 }
 
-export async function insertInboundMessage(input: {
-  mailboxAccountId: number;
-  threadId?: number | null;
-  providerMessageId?: string | null;
-  imapUid?: number | null;
-  imapUidvalidity?: number | null;
-  inReplyTo?: string | null;
-  referencesHeader?: string | null;
-  subject: string;
-  bodyText?: string | null;
-  bodyHtml?: string | null;
-  fromEmail?: string | null;
-  toEmail?: string | null;
-  matchStrategy: OutreachMatchStrategy;
-  storageKey?: string | null;
-  checksum?: string | null;
-  occurredAt?: Date;
-  errorMessage?: string | null;
-}): Promise<OutreachMessageRow> {
-  const rows = await query<OutreachMessageDbRow>(
-    `INSERT INTO outreach_messages (
-       thread_id, mailbox_account_id, direction, message_kind, delivery_status,
-       provider_message_id, imap_uid, imap_uidvalidity,
-       in_reply_to, references_header, subject, body_text, body_html,
-       from_email, to_email, match_strategy, storage_key, checksum, occurred_at, error_message
-     ) VALUES (
-       $1, $2, 'inbound', 'reply', 'received',
-       $3, $4, $5,
-       $6, $7, $8, $9, $10,
-       $11, $12, $13, $14, $15, COALESCE($16, NOW()), $17
-     )
-     ON CONFLICT (mailbox_account_id, provider_message_id)
-       WHERE provider_message_id IS NOT NULL
-     DO UPDATE SET
-       updated_at = NOW(),
-       thread_id = COALESCE(EXCLUDED.thread_id, outreach_messages.thread_id),
-       error_message = EXCLUDED.error_message
-     RETURNING *`,
-    [
-      input.threadId ?? null,
-      input.mailboxAccountId,
-      input.providerMessageId ?? null,
-      input.imapUid ?? null,
-      input.imapUidvalidity ?? null,
-      input.inReplyTo ?? null,
-      input.referencesHeader ?? null,
-      input.subject,
-      input.bodyText ?? null,
-      input.bodyHtml ?? null,
-      input.fromEmail ?? null,
-      input.toEmail ?? null,
-      input.matchStrategy,
-      input.storageKey ?? null,
-      input.checksum ?? null,
-      input.occurredAt ?? null,
-      input.errorMessage ?? null,
-    ],
-  );
-  return toMessageRow(rows[0]!);
+/**
+ * Message-IDs are stored without angle brackets, but rows written before that carry them,
+ * so lookups try both spellings.
+ */
+function messageIdSpellings(ids: string[]): string[] {
+  return ids.flatMap((id) => [id, `<${id}>`]);
 }
 
+/** Any message of this mailbox, sent or received, that carries the Message-ID. */
+export async function findMessageByProviderId(
+  mailboxAccountId: number,
+  providerMessageId: string,
+): Promise<OutreachMessageRow | null> {
+  const rows = await query<OutreachMessageDbRow>(
+    `SELECT * FROM outreach_messages
+     WHERE mailbox_account_id = $1 AND provider_message_id = ANY($2::text[])
+     ORDER BY id ASC
+     LIMIT 1`,
+    [mailboxAccountId, messageIdSpellings([providerMessageId])],
+  );
+  return rows[0] ? toMessageRow(rows[0]) : null;
+}
+
+/**
+ * Stores an inbound message once per mailbox and Message-ID. When `nextThreadState` is given
+ * and the message is new, the thread moves to the state it returns for the thread's current
+ * state and gets a reply_received event; null leaves the thread as it is. The thread is locked
+ * first and everything commits together, so a crash can't leave a stored reply the thread never
+ * saw, and a send finishing at the same moment can't overwrite the reply's state.
+ */
+export async function recordInboundMessage(
+  input: {
+    mailboxAccountId: number;
+    threadId: number | null;
+    providerMessageId: string;
+    imapUid?: number | null;
+    imapUidvalidity?: number | null;
+    inReplyTo?: string | null;
+    referencesHeader?: string | null;
+    subject: string;
+    bodyText?: string | null;
+    bodyHtml?: string | null;
+    fromEmail?: string | null;
+    toEmail?: string | null;
+    matchStrategy: OutreachMatchStrategy;
+    storageKey?: string | null;
+    checksum?: string | null;
+    occurredAt: Date;
+    errorMessage?: string | null;
+  },
+  nextThreadState: ((current: OutreachWorkflowState) => OutreachWorkflowState | null) | null,
+): Promise<{ message: OutreachMessageRow; inserted: boolean }> {
+  return transaction(async (client) => {
+    const threadId = nextThreadState ? input.threadId : null;
+    const locked =
+      threadId != null
+        ? await queryWithClient<{ workflow_state: OutreachWorkflowState }>(
+            client,
+            'SELECT workflow_state FROM outreach_threads WHERE id = $1 FOR UPDATE',
+            [threadId],
+          )
+        : [];
+
+    const rows = await queryWithClient<OutreachMessageDbRow>(
+      client,
+      `INSERT INTO outreach_messages (
+         thread_id, mailbox_account_id, direction, message_kind, delivery_status,
+         provider_message_id, imap_uid, imap_uidvalidity,
+         in_reply_to, references_header, subject, body_text, body_html,
+         from_email, to_email, match_strategy, storage_key, checksum, occurred_at, error_message
+       ) VALUES (
+         $1, $2, 'inbound', 'reply', 'received',
+         $3, $4, $5,
+         $6, $7, $8, $9, $10,
+         $11, $12, $13, $14, $15, $16, $17
+       )
+       ON CONFLICT (mailbox_account_id, provider_message_id)
+         WHERE provider_message_id IS NOT NULL
+       DO NOTHING
+       RETURNING *`,
+      [
+        input.threadId,
+        input.mailboxAccountId,
+        input.providerMessageId,
+        input.imapUid ?? null,
+        input.imapUidvalidity ?? null,
+        input.inReplyTo ?? null,
+        input.referencesHeader ?? null,
+        input.subject,
+        input.bodyText ?? null,
+        input.bodyHtml ?? null,
+        input.fromEmail ?? null,
+        input.toEmail ?? null,
+        input.matchStrategy,
+        input.storageKey ?? null,
+        input.checksum ?? null,
+        input.occurredAt,
+        input.errorMessage ?? null,
+      ],
+    );
+
+    if (!rows[0]) {
+      const existing = await queryWithClient<OutreachMessageDbRow>(
+        client,
+        `SELECT * FROM outreach_messages
+         WHERE mailbox_account_id = $1 AND provider_message_id = $2`,
+        [input.mailboxAccountId, input.providerMessageId],
+      );
+      return { message: toMessageRow(existing[0]!), inserted: false };
+    }
+
+    const message = toMessageRow(rows[0]);
+    const fromState = locked[0]?.workflow_state;
+    const toState = fromState && nextThreadState ? nextThreadState(fromState) : null;
+    if (threadId != null && fromState && toState) {
+      await queryWithClient(
+        client,
+        `UPDATE outreach_threads
+         SET workflow_state = $2,
+             last_inbound_at = GREATEST(last_inbound_at, $3::timestamptz),
+             next_action_at = NULL,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [threadId, toState, input.occurredAt],
+      );
+      await appendEventWithClient(client, {
+        threadId,
+        messageId: message.id,
+        eventType: 'reply_received',
+        fromState,
+        toState,
+        payload: { matchStrategy: input.matchStrategy },
+      });
+    }
+    return { message, inserted: true };
+  });
+}
+
+/**
+ * The user's thread that sent or received one of these Message-IDs (In-Reply-To and
+ * References of a reply), newest first.
+ */
 export async function findThreadByProviderMessageIds(
+  userId: number,
   providerMessageIds: string[],
 ): Promise<OutreachThreadRow | null> {
   if (providerMessageIds.length === 0) return null;
@@ -632,11 +811,11 @@ export async function findThreadByProviderMessageIds(
     `SELECT t.*
      FROM outreach_messages m
      JOIN outreach_threads t ON t.id = m.thread_id
-     WHERE m.provider_message_id = ANY($1::text[])
-       AND m.thread_id IS NOT NULL
+     WHERE t.user_id = $1
+       AND m.provider_message_id = ANY($2::text[])
      ORDER BY m.occurred_at DESC, m.id DESC
      LIMIT 1`,
-    [providerMessageIds],
+    [userId, messageIdSpellings(providerMessageIds)],
   );
   return rows[0] ? toThreadRow(rows[0]) : null;
 }

@@ -8,12 +8,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/v1/dashboard/velocity', async (_request, reply) => {
-    const rows = await query<{ day: Date; count: string }>(
-      `SELECT date_trunc('day', first_seen_at)::date AS day,
+    // Days follow the Vienna calendar and come back as text, so neither the database session's
+    // time zone nor the Mac's can move a listing to the day before.
+    const rows = await query<{ day: string; count: string }>(
+      `SELECT to_char((first_seen_at AT TIME ZONE 'Europe/Vienna')::date, 'YYYY-MM-DD') AS day,
               COUNT(*) AS count
        FROM listings
        WHERE listing_status = 'active'
-         AND first_seen_at >= CURRENT_DATE - INTERVAL '14 days'
+         AND first_seen_at >= (((NOW() AT TIME ZONE 'Europe/Vienna')::date - 14)::timestamp
+                               AT TIME ZONE 'Europe/Vienna')
        GROUP BY 1
        ORDER BY 1`,
       [],
@@ -21,7 +24,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       data: rows.map((r) => ({
-        day: r.day.toISOString().slice(0, 10),
+        day: r.day,
         count: Number(r.count),
       })),
     });

@@ -67,14 +67,14 @@ export function redactLogContext(ctx: LogContext): LogContext {
   return result;
 }
 
+const ENTRY_KEYS = new Set(['timestamp', 'level', 'message']);
+
 function formatLog(level: LogLevel, message: string, context?: LogContext): string {
-  const redacted = context ? redactLogContext(context) : undefined;
-  const entry = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    ...redacted,
-  };
+  const entry: Record<string, unknown> = { timestamp: new Date().toISOString(), level, message };
+  // A context key such as an error's `message` is renamed, so it can't replace the entry's own.
+  for (const [key, value] of Object.entries(context ? redactLogContext(context) : {})) {
+    entry[ENTRY_KEYS.has(key) ? `context_${key}` : key] = value;
+  }
   return redactSensitive(JSON.stringify(entry));
 }
 

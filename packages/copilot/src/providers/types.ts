@@ -1,12 +1,4 @@
-// ── Provider-agnostic types for LLM streaming with tool-use ─────────────────
-
-export type ProviderEvent =
-  | { type: 'text_delta'; delta: string }
-  | { type: 'tool_call_start'; id: string; name: string }
-  | { type: 'tool_call_delta'; id: string; jsonChunk: string }
-  | { type: 'tool_call_complete'; id: string; name: string; input: unknown }
-  | { type: 'end_turn' }
-  | { type: 'needs_tool_results' }; // stop_reason=tool_use, need to feed results and continue
+// ── Provider-agnostic types for LLM streaming with tool use ─────────────────
 
 export interface ToolDefinition {
   name: string;
@@ -14,27 +6,63 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>; // JSON Schema
 }
 
+/** One turn of the app's chat history, flattened to text. */
 export interface ProviderMessage {
   role: 'user' | 'assistant';
-  content: string | ProviderContentBlock[];
+  content: string;
 }
 
-export type ProviderContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; toolUseId: string; content: string; isError?: boolean };
+export interface ProviderToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
 
-export interface StreamParams {
+export interface ProviderToolResult {
+  toolCallId: string;
+  content: string;
+  isError: boolean;
+}
+
+/** Why the model stopped, mapped to the cases the conversation loop handles. */
+export type ProviderStopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'pause_turn';
+
+export type ProviderEvent =
+  | { type: 'text_delta'; delta: string }
+  | { type: 'tool_call_start'; id: string; name: string }
+  | { type: 'turn_end'; stopReason: ProviderStopReason; toolCalls: ProviderToolCall[] };
+
+export interface ConversationParams {
   systemPrompt: string;
   messages: ProviderMessage[];
   tools: ToolDefinition[];
   maxTokens: number;
 }
 
-export interface LLMProvider {
-  /** Stream a chat completion with tool-use support. Yields events until the turn is complete. */
-  streamChat(params: StreamParams): AsyncGenerator<ProviderEvent>;
+/**
+ * A conversation that keeps the provider's own transcript, so every assistant
+ * turn goes back to the model exactly as the provider returned it.
+ */
+export interface ProviderConversation {
+  /** Streams one model turn, appends it to the transcript and ends with `turn_end`. */
+  streamTurn(): AsyncGenerator<ProviderEvent>;
+  /** Appends the results for the last turn's tool calls as one message. */
+  addToolResults(results: ProviderToolResult[]): void;
+}
 
-  /** Continue the conversation after tool results. Pass the full messages including tool results. */
-  continueWithToolResults(params: StreamParams): AsyncGenerator<ProviderEvent>;
+export type ProviderErrorKind =
+  | 'auth'
+  | 'billing'
+  | 'rate_limit'
+  | 'overloaded'
+  | 'invalid_request'
+  | 'model_not_found'
+  | 'timeout'
+  | 'connection'
+  | 'server';
+
+export interface LLMProvider {
+  startConversation(params: ConversationParams): ProviderConversation;
+  /** Maps an SDK error to a kind. Returns undefined for errors the SDK didn't raise. */
+  classifyError(err: unknown): ProviderErrorKind | undefined;
 }

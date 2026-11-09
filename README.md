@@ -223,12 +223,6 @@ npm run report:quality
 npm run baselines
 ```
 
-### Type generation
-
-```bash
-npm run generate:types
-```
-
 ### macOS packaging
 
 Build a macOS DMG:

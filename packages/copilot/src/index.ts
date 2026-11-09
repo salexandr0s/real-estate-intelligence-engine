@@ -5,10 +5,14 @@ export type { CopilotToolDefinition } from './tools.js';
 export type { ToolResult, CopilotStreamEvent } from './types.js';
 export { createAnthropicProvider, createOpenAIProvider } from './providers/index.js';
 export type {
+  ConversationParams,
   LLMProvider,
+  ProviderConversation,
+  ProviderErrorKind,
   ProviderEvent,
   ProviderMessage,
-  ProviderContentBlock,
+  ProviderStopReason,
+  ProviderToolCall,
+  ProviderToolResult,
   ToolDefinition,
-  StreamParams,
 } from './providers/index.js';

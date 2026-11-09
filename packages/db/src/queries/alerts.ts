@@ -56,6 +56,11 @@ interface AlertDbRow {
   listing_last_price_change_at?: Date | null;
 }
 
+/** A row of the alert list, with its sort key as Postgres printed it (null when missing). */
+interface AlertListDbRow extends AlertDbRow {
+  sort_key: string | null;
+}
+
 const ALERT_SELECT_WITH_LISTING = `
   a.*,
   uf.name AS filter_name,
@@ -115,61 +120,55 @@ const ALERT_LISTING_JOIN = `
   ) pc ON true
 `;
 
+/**
+ * The app's alert inbox is the in_app channel. Every other channel gets its own copy of the
+ * same alert, with a delivery status ('sent', 'failed') instead of a read status, so the inbox
+ * queries leave those copies out.
+ */
+const INBOX_CHANNEL = 'in_app';
+
 export type AlertSortBy = 'age' | 'district' | 'price';
 export type AlertSortDirection = 'asc' | 'desc';
 
-interface AlertListOptions {
+export interface AlertListOptions {
   sortBy?: AlertSortBy;
   sortDirection?: AlertSortDirection;
+  /** Only the alerts of this filter. */
+  userFilterId?: number | null;
 }
 
-interface AgeCursorPayload {
-  sortBy: 'age';
+interface AlertCursorPayload {
+  sortBy: AlertSortBy;
   sortDirection: AlertSortDirection;
   id: number;
-  matchedAt: string;
+  /**
+   * The last row's sort key as Postgres printed it, so the cursor loses no precision. Null when
+   * that row had no district or price.
+   */
+  key: string | null;
 }
 
-interface DistrictCursorPayload {
-  sortBy: 'district';
-  sortDirection: AlertSortDirection;
-  id: number;
-  districtKey: string;
-}
-
-interface PriceCursorPayload {
-  sortBy: 'price';
-  sortDirection: AlertSortDirection;
-  id: number;
-  priceKey: number;
-}
-
-type AlertCursorPayload = AgeCursorPayload | DistrictCursorPayload | PriceCursorPayload;
-
-const DISTRICT_SORT_SENTINEL_ASC = '~~~~';
-const DISTRICT_SORT_SENTINEL_DESC = '';
-const PRICE_SORT_SENTINEL_ASC = Number.MAX_SAFE_INTEGER;
-const PRICE_SORT_SENTINEL_DESC = -1;
-
-function normalizeDistrictSortKey(
-  row: Pick<AlertDbRow, 'listing_district_name' | 'listing_city'>,
-  direction: AlertSortDirection,
-): string {
-  return (
-    row.listing_district_name ??
-    row.listing_city ??
-    (direction === 'asc' ? DISTRICT_SORT_SENTINEL_ASC : DISTRICT_SORT_SENTINEL_DESC)
-  );
-}
-
-function normalizePriceSortKey(
-  row: Pick<AlertDbRow, 'listing_list_price_eur_cents'>,
-  direction: AlertSortDirection,
-): number {
-  if (row.listing_list_price_eur_cents != null) {
-    return Number(row.listing_list_price_eur_cents);
+/**
+ * The sort key per mode. Alerts without a district or price have a NULL key, which sorts last
+ * in both directions whatever the database collation.
+ */
+function alertSortKey(sortBy: AlertSortBy): {
+  expr: string;
+  type: 'timestamptz' | 'text' | 'bigint';
+  nullable: boolean;
+} {
+  switch (sortBy) {
+    case 'district':
+      return {
+        expr: `COALESCE(NULLIF(l.district_name, ''), NULLIF(l.city, ''))`,
+        type: 'text',
+        nullable: true,
+      };
+    case 'price':
+      return { expr: 'l.list_price_eur_cents', type: 'bigint', nullable: true };
+    case 'age':
+      return { expr: 'a.matched_at', type: 'timestamptz', nullable: false };
   }
-  return direction === 'asc' ? PRICE_SORT_SENTINEL_ASC : PRICE_SORT_SENTINEL_DESC;
 }
 
 function toAlertListing(row: AlertDbRow): AlertListingSummary | null {
@@ -242,7 +241,8 @@ function decodeAlertCursor(cursor: string | null): AlertCursorPayload | null {
       typeof decoded !== 'object' ||
       (decoded.sortBy !== 'age' && decoded.sortBy !== 'district' && decoded.sortBy !== 'price') ||
       (decoded.sortDirection !== 'asc' && decoded.sortDirection !== 'desc') ||
-      typeof decoded.id !== 'number'
+      typeof decoded.id !== 'number' ||
+      (typeof decoded.key !== 'string' && decoded.key !== null)
     ) {
       return null;
     }
@@ -252,43 +252,18 @@ function decodeAlertCursor(cursor: string | null): AlertCursorPayload | null {
   }
 }
 
-function encodeAlertCursor(payload: AlertCursorPayload): string {
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-}
-
 export function buildNextAlertCursor(
-  row: Pick<
-    AlertDbRow,
-    'id' | 'matched_at' | 'listing_district_name' | 'listing_city' | 'listing_list_price_eur_cents'
-  >,
+  row: Pick<AlertListDbRow, 'id' | 'sort_key'>,
   sortBy: AlertSortBy,
   sortDirection: AlertSortDirection,
 ): string {
-  const id = Number(row.id);
-
-  switch (sortBy) {
-    case 'age':
-      return encodeAlertCursor({
-        sortBy,
-        sortDirection,
-        id,
-        matchedAt: row.matched_at.toISOString(),
-      });
-    case 'district':
-      return encodeAlertCursor({
-        sortBy,
-        sortDirection,
-        id,
-        districtKey: normalizeDistrictSortKey(row, sortDirection),
-      });
-    case 'price':
-      return encodeAlertCursor({
-        sortBy,
-        sortDirection,
-        id,
-        priceKey: normalizePriceSortKey(row, sortDirection),
-      });
-  }
+  const payload: AlertCursorPayload = {
+    sortBy,
+    sortDirection,
+    id: Number(row.id),
+    key: row.sort_key,
+  };
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 }
 
 export function buildAlertSortSpec(
@@ -296,60 +271,37 @@ export function buildAlertSortSpec(
   sortDirection: AlertSortDirection = 'desc',
   cursor: string | null,
 ): {
+  sortKeySql: string;
   cursorValues: [string | null, number | null];
   cursorWhere: string;
   orderBy: string;
 } {
+  const { expr, type, nullable } = alertSortKey(sortBy);
   const decodedCursor = decodeAlertCursor(cursor);
   const parsedCursor =
-    decodedCursor?.sortBy == sortBy && decodedCursor.sortDirection == sortDirection
+    decodedCursor?.sortBy === sortBy &&
+    decodedCursor.sortDirection === sortDirection &&
+    (nullable || decodedCursor.key !== null)
       ? decodedCursor
       : null;
+  const direction = sortDirection.toUpperCase();
+  const after = sortDirection === 'asc' ? '>' : '<';
+  const pastCursor = `(${expr}, a.id) ${after} ($3::${type}, $4::bigint)`;
 
-  switch (sortBy) {
-    case 'district': {
-      const districtExpr = `COALESCE(NULLIF(l.district_name, ''), NULLIF(l.city, ''), '${
-        sortDirection === 'asc' ? DISTRICT_SORT_SENTINEL_ASC : DISTRICT_SORT_SENTINEL_DESC
-      }')`;
-      return {
-        cursorValues: [
-          parsedCursor?.sortBy === 'district' ? parsedCursor.districtKey : null,
-          parsedCursor?.id ?? null,
-        ],
-        cursorWhere: `AND ($3::text IS NULL OR (${districtExpr}, a.id) ${
-          sortDirection === 'asc' ? '>' : '<'
-        } ($3::text, $4::bigint))`,
-        orderBy: `ORDER BY ${districtExpr} ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
-      };
-    }
-    case 'price': {
-      const priceExpr = `COALESCE(l.list_price_eur_cents, ${
-        sortDirection === 'asc' ? PRICE_SORT_SENTINEL_ASC : PRICE_SORT_SENTINEL_DESC
-      })`;
-      return {
-        cursorValues: [
-          parsedCursor?.sortBy === 'price' ? String(parsedCursor.priceKey) : null,
-          parsedCursor?.id ?? null,
-        ],
-        cursorWhere: `AND ($3::bigint IS NULL OR (${priceExpr}, a.id) ${
-          sortDirection === 'asc' ? '>' : '<'
-        } ($3::bigint, $4::bigint))`,
-        orderBy: `ORDER BY ${priceExpr} ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
-      };
-    }
-    case 'age':
-    default:
-      return {
-        cursorValues: [
-          parsedCursor?.sortBy === 'age' ? parsedCursor.matchedAt : null,
-          parsedCursor?.id ?? null,
-        ],
-        cursorWhere: `AND ($3::timestamptz IS NULL OR (a.matched_at, a.id) ${
-          sortDirection === 'asc' ? '>' : '<'
-        } ($3::timestamptz, $4::bigint))`,
-        orderBy: `ORDER BY a.matched_at ${sortDirection.toUpperCase()}, a.id ${sortDirection.toUpperCase()}`,
-      };
-  }
+  // $4 (the cursor id) is null on the first page. A NULL key compares as unknown, so rows
+  // without a district or price are matched on their own after the keyed rows.
+  const cursorWhere = nullable
+    ? `AND ($4::bigint IS NULL
+        OR ($3::${type} IS NULL AND ${expr} IS NULL AND a.id ${after} $4::bigint)
+        OR ($3::${type} IS NOT NULL AND (${pastCursor} OR ${expr} IS NULL)))`
+    : `AND ($4::bigint IS NULL OR ${pastCursor})`;
+
+  return {
+    sortKeySql: expr,
+    cursorValues: [parsedCursor?.key ?? null, parsedCursor?.id ?? null],
+    cursorWhere,
+    orderBy: `ORDER BY ${expr} ${direction}${nullable ? ' NULLS LAST' : ''}, a.id ${direction}`,
+  };
 }
 
 // ── Queries ─────────────────────────────────────────────────────────────────
@@ -413,7 +365,7 @@ export async function existsForCluster(
 }
 
 /**
- * Find alerts for a user with optional status filter and cursor pagination.
+ * A page of the user's inbox alerts, with an optional status and filter, and cursor pagination.
  */
 export async function findByUser(
   userId: number,
@@ -424,18 +376,24 @@ export async function findByUser(
 ): Promise<{ data: AlertRow[]; nextCursor: string | null }> {
   const sortBy = options.sortBy ?? 'age';
   const sortDirection = options.sortDirection ?? 'desc';
-  const { cursorValues, cursorWhere, orderBy } = buildAlertSortSpec(sortBy, sortDirection, cursor);
+  const { sortKeySql, cursorValues, cursorWhere, orderBy } = buildAlertSortSpec(
+    sortBy,
+    sortDirection,
+    cursor,
+  );
 
-  const rows = await query<AlertDbRow>(
-    `SELECT ${ALERT_SELECT_WITH_LISTING}
+  const rows = await query<AlertListDbRow>(
+    `SELECT ${ALERT_SELECT_WITH_LISTING}, (${sortKeySql})::text AS sort_key
      FROM alerts a
      ${ALERT_LISTING_JOIN}
      WHERE a.user_id = $1
+       AND a.channel = '${INBOX_CHANNEL}'
        AND ($2::text IS NULL OR a.status = $2)
+       AND ($6::bigint IS NULL OR a.user_filter_id = $6)
        ${cursorWhere}
      ${orderBy}
      LIMIT $5`,
-    [userId, status, ...cursorValues, limit + 1],
+    [userId, status, ...cursorValues, limit + 1, options.userFilterId ?? null],
   );
 
   const hasMore = rows.length > limit;
@@ -489,7 +447,7 @@ export async function updateStatus(
 }
 
 /**
- * Count unread (queued + sent but not opened/dismissed) alerts for a user.
+ * Count unread (queued + sent but not opened/dismissed) inbox alerts for a user.
  */
 export async function countUnread(userId: number): Promise<number> {
   interface CountResult {
@@ -498,6 +456,7 @@ export async function countUnread(userId: number): Promise<number> {
   const rows = await query<CountResult>(
     `SELECT COUNT(*) AS count FROM alerts
      WHERE user_id = $1
+       AND channel = '${INBOX_CHANNEL}'
        AND status IN ('queued', 'sent')`,
     [userId],
   );
@@ -524,7 +483,8 @@ export async function bulkUpdateStatus(
 }
 
 /**
- * Bulk-update alert status for all alerts matching a user + optional current status filter.
+ * Bulk-update the status of a user's inbox alerts, optionally only those in one status. Other
+ * channels keep their delivery status.
  */
 export async function bulkUpdateByFilter(
   userId: number,
@@ -535,6 +495,7 @@ export async function bulkUpdateByFilter(
     `UPDATE alerts
      SET status = $3, updated_at = NOW()
      WHERE user_id = $1
+       AND channel = '${INBOX_CHANNEL}'
        AND ($2::text IS NULL OR status = $2)
      RETURNING id`,
     [userId, currentStatus, newStatus],
@@ -543,7 +504,7 @@ export async function bulkUpdateByFilter(
 }
 
 /**
- * Find alerts for a user matched since a given timestamp.
+ * Find a user's inbox alerts matched since a given timestamp.
  * Used by the SSE stream endpoint to poll for new alerts.
  */
 export async function findSince(userId: number, since: Date, limit = 100): Promise<AlertRow[]> {
@@ -551,7 +512,9 @@ export async function findSince(userId: number, since: Date, limit = 100): Promi
     `SELECT ${ALERT_SELECT_WITH_LISTING}
      FROM alerts a
      ${ALERT_LISTING_JOIN}
-     WHERE a.user_id = $1 AND a.matched_at > $2
+     WHERE a.user_id = $1
+       AND a.channel = '${INBOX_CHANNEL}'
+       AND a.matched_at > $2
      ORDER BY a.matched_at ASC
      LIMIT $3`,
     [userId, since, limit],

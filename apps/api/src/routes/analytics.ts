@@ -159,9 +159,11 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       const parsed = parseOrThrow(districtTrendQuerySchema, request.query);
       const months = parsed.months ?? 12;
 
+      // The date comes back as text: node-postgres turns a DATE into local midnight, which a Mac
+      // east of UTC printed as the day before.
       const rows = await query<{
         district_no: number;
-        baseline_date: Date;
+        baseline_day: string;
         avg_median_ppsqm: string;
         total_samples: string;
         avg_p25: string | null;
@@ -169,7 +171,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       }>(
         `SELECT
           district_no,
-          baseline_date,
+          to_char(baseline_date, 'YYYY-MM-DD') AS baseline_day,
           ROUND(AVG(median_ppsqm_eur)::numeric, 2) AS avg_median_ppsqm,
           SUM(sample_size)::int AS total_samples,
           ROUND(AVG(p25_ppsqm_eur)::numeric, 2) AS avg_p25,
@@ -182,7 +184,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
           AND ($1::smallint IS NULL OR district_no = $1)
           AND ($2::text IS NULL OR operation_type = $2)
           AND ($3::text IS NULL OR property_type = $3)
-          AND baseline_date >= CURRENT_DATE - ($4::int * INTERVAL '1 month')
+          AND baseline_date >= (NOW() AT TIME ZONE 'Europe/Vienna')::date - ($4::int * INTERVAL '1 month')
         GROUP BY district_no, baseline_date
         ORDER BY district_no, baseline_date`,
         [
@@ -196,7 +198,7 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({
         data: rows.map((r) => ({
           districtNo: r.district_no,
-          date: r.baseline_date.toISOString().slice(0, 10),
+          date: r.baseline_day,
           avgMedianPpsqm: Number(r.avg_median_ppsqm),
           totalSamples: Number(r.total_samples),
           avgP25: r.avg_p25 != null ? Number(r.avg_p25) : null,

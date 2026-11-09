@@ -1,7 +1,7 @@
 // ── Copilot streaming client ─────────────────────────────────────────────────
-// Orchestrates the conversation loop: streams the LLM response via a
-// provider abstraction, intercepts tool calls, executes them against
-// the DB, and resumes the conversation.  Supports Anthropic and OpenAI.
+// Runs the conversation loop: streams each model turn through a provider,
+// runs the tools the model asks for against the DB and sends the results
+// back. Supports Anthropic and OpenAI.
 
 import { createLogger } from '@immoradar/observability';
 import type { ContentBlock, CopilotRequestMessage } from '@immoradar/contracts';
@@ -12,19 +12,63 @@ import { executeTool } from './tool-executor.js';
 import { createAnthropicProvider, createOpenAIProvider } from './providers/index.js';
 import type {
   LLMProvider,
+  ProviderErrorKind,
   ProviderMessage,
-  ProviderContentBlock,
+  ProviderStopReason,
+  ProviderToolCall,
+  ProviderToolResult,
   ToolDefinition,
 } from './providers/types.js';
 
 const logger = createLogger('copilot');
 
-const MAX_TOOL_LOOPS = 5;
+/** Tool rounds per request. Each round adds one assistant and one user message. */
+const MAX_TOOL_ROUNDS = 5;
 
-const DEFAULT_MAX_TOKENS = 4096;
-const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
-const DEFAULT_ANTHROPIC_OAUTH_MODEL = 'claude-sonnet-4-20250514';
+/** Thinking counts toward the limit as well as the answer. */
+const DEFAULT_MAX_TOKENS = 16000;
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 const DEFAULT_OPENAI_MODEL = 'gpt-4o';
+
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI' } as const;
+
+/** Claude subscription sign-in tokens start with this. The Messages API needs a Console API key. */
+const CLAUDE_SIGN_IN_TOKEN_PREFIX = 'sk-ant-oat';
+
+const STRUCTURED_CONTENT_PLACEHOLDER = '(structured content)';
+
+const SIGN_IN_TOKEN_MESSAGE =
+  'Copilot needs an Anthropic API key, not a Claude sign-in token. Create a key in the Claude Console and add it in Settings.';
+const REFUSAL_MESSAGE = 'The model declined to answer this request. Try rewording it.';
+const MAX_TOKENS_NOTE =
+  '*The answer hit the length limit and was cut off. Ask a narrower question.*';
+const TOOL_LIMIT_NOTE = `*Copilot stopped after ${MAX_TOOL_ROUNDS} rounds of data lookups. Ask a narrower question.*`;
+const UNEXPECTED_ERROR_MESSAGE = 'Copilot hit an unexpected error. Try again.';
+
+function errorMessage(kind: ProviderErrorKind | undefined, label: string): string {
+  switch (kind) {
+    case 'auth':
+      return `${label} rejected the API key. Check the key in Settings.`;
+    case 'billing':
+      return `${label} rejected the request because of a billing problem. Check the account's plan and credit balance.`;
+    case 'rate_limit':
+      return `${label} is rate limiting requests. Wait a minute, then try again.`;
+    case 'overloaded':
+      return `${label} is overloaded. Try again in a few minutes.`;
+    case 'invalid_request':
+      return `${label} rejected this chat as invalid. Start a new chat and try again.`;
+    case 'model_not_found':
+      return `The selected model isn't available with this ${label} API key. Check the model in Settings.`;
+    case 'timeout':
+      return `${label} took too long to respond. Try again.`;
+    case 'connection':
+      return `Copilot couldn't reach ${label}. Check the server's internet connection, then try again.`;
+    case 'server':
+      return `${label} had a server error. Try again in a moment.`;
+    case undefined:
+      return UNEXPECTED_ERROR_MESSAGE;
+  }
+}
 
 // ── Convert tool definitions to provider format ─────────────────────────
 
@@ -41,18 +85,27 @@ function toToolDefinitions(): ToolDefinition[] {
 function toProviderMessages(messages: CopilotRequestMessage[]): ProviderMessage[] {
   return messages.map((msg) => {
     if (typeof msg.content === 'string') {
-      return { role: msg.role, content: msg.content };
+      // The app sends '' for an answer that had only cards; the API rejects empty text.
+      return { role: msg.role, content: msg.content || STRUCTURED_CONTENT_PLACEHOLDER };
     }
-    // For assistant messages with ContentBlock[], serialize to text so
-    // the LLM can reference earlier responses.
+    // For assistant messages with ContentBlock[], send the text so the model
+    // can refer to earlier answers.
     const textParts = msg.content
       .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
       .map((b) => b.text);
-    return {
-      role: msg.role,
-      content: textParts.join('\n') || '(structured content)',
-    };
+    return { role: msg.role, content: textParts.join('\n') || STRUCTURED_CONTENT_PLACEHOLDER };
   });
+}
+
+function buildSystemPrompt(context: StreamCopilotChatParams['context']): string {
+  let systemPrompt = SYSTEM_PROMPT;
+  if (context?.currentListingId) {
+    systemPrompt += `\n\nThe user is currently viewing listing #${context.currentListingId}. Refer to it naturally if relevant.`;
+  }
+  if (context?.currentDistrictNo) {
+    systemPrompt += `\nThe user is currently browsing district ${context.currentDistrictNo}.`;
+  }
+  return systemPrompt;
 }
 
 // ── Create provider from config ─────────────────────────────────────────
@@ -63,14 +116,62 @@ function createProvider(
   model?: string,
 ): LLMProvider {
   switch (providerName) {
-    case 'anthropic': {
-      const isOAuth = apiKey.startsWith('sk-ant-oat');
-      const defaultModel = isOAuth ? DEFAULT_ANTHROPIC_OAUTH_MODEL : DEFAULT_ANTHROPIC_MODEL;
-      return createAnthropicProvider(apiKey, model ?? defaultModel);
-    }
+    case 'anthropic':
+      return createAnthropicProvider(apiKey, model ?? DEFAULT_ANTHROPIC_MODEL);
     case 'openai':
       return createOpenAIProvider(apiKey, model ?? DEFAULT_OPENAI_MODEL);
   }
+}
+
+// ── Tool execution ──────────────────────────────────────────────────────
+
+interface ToolOutcome {
+  block?: ContentBlock;
+  result: ProviderToolResult;
+}
+
+async function runTool(call: ProviderToolCall): Promise<ToolOutcome> {
+  try {
+    const result = await executeTool(call.name, call.input);
+    return {
+      block: result.contentBlock,
+      result: { toolCallId: call.id, content: result.rawForClaude, isError: false },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    logger.error('Tool execution failed', {
+      toolName: call.name,
+      errorClass: err instanceof Error ? err.name : 'Unknown',
+      message,
+    });
+    return {
+      result: {
+        toolCallId: call.id,
+        content: `Error executing ${call.name}: ${message}`,
+        isError: true,
+      },
+    };
+  }
+}
+
+// ── Error logging ───────────────────────────────────────────────────────
+
+/** Logs the raw provider error on the server. The client only gets a fixed message. */
+function logProviderError(providerName: string, err: unknown): void {
+  const rawMessage = err instanceof Error ? err.message : String(err);
+  const details: Record<string, unknown> = {
+    provider: providerName,
+    // SDK errors keep the default name 'Error', so log the class instead.
+    errorClass: err instanceof Error ? err.constructor.name : typeof err,
+    message: rawMessage.replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]'),
+  };
+  if (typeof err === 'object' && err !== null) {
+    if ('status' in err) details.status = err.status;
+    if ('type' in err) details.type = err.type;
+    if ('requestID' in err) details.requestId = err.requestID;
+    if ('request_id' in err) details.requestId = err.request_id;
+  }
+  logger.error('Copilot provider error', details);
 }
 
 // ── Streaming entry point ───────────────────────────────────────────────
@@ -95,186 +196,85 @@ export async function* streamCopilotChat(
     model,
     maxTokens = DEFAULT_MAX_TOKENS,
   } = params;
+  const label = PROVIDER_LABELS[providerName];
 
   if (!apiKey) {
-    yield { type: 'error', message: `${providerName} API key not configured` };
+    yield { type: 'error', message: `No ${label} API key is set. Add one in Settings.` };
+    return;
+  }
+  // Checked before any client exists, so a sign-in token never reaches the API.
+  if (providerName === 'anthropic' && apiKey.startsWith(CLAUDE_SIGN_IN_TOKEN_PREFIX)) {
+    yield { type: 'error', message: SIGN_IN_TOKEN_MESSAGE };
     return;
   }
 
   const provider = createProvider(providerName, apiKey, model);
+  const conversation = provider.startConversation({
+    systemPrompt: buildSystemPrompt(context),
+    messages: toProviderMessages(messages),
+    tools: toToolDefinitions(),
+    maxTokens,
+  });
 
-  // Build the system prompt with optional context
-  let systemPrompt = SYSTEM_PROMPT;
-  if (context?.currentListingId) {
-    systemPrompt += `\n\nThe user is currently viewing listing #${context.currentListingId}. Refer to it naturally if relevant.`;
-  }
-  if (context?.currentDistrictNo) {
-    systemPrompt += `\nThe user is currently browsing district ${context.currentDistrictNo}.`;
-  }
-
-  const tools = toToolDefinitions();
-  const providerMessages = toProviderMessages(messages);
-
-  // Conversation loop — the LLM may call tools, then we continue
-  let conversationMessages: ProviderMessage[] = [...providerMessages];
-  let loopCount = 0;
-  let isFirstIteration = true;
-
-  while (loopCount < MAX_TOOL_LOOPS) {
-    loopCount++;
-
-    // Collect completed tool calls from the response
-    const completedToolCalls: {
-      id: string;
-      name: string;
-      input: unknown;
-    }[] = [];
-
-    // Track the full assistant content for the conversation history
-    const assistantBlocks: ProviderContentBlock[] = [];
-    let accumulatedText = '';
-
-    try {
-      const streamParams = {
-        systemPrompt,
-        messages: conversationMessages,
-        tools,
-        maxTokens,
-      };
-
-      const stream = isFirstIteration
-        ? provider.streamChat(streamParams)
-        : provider.continueWithToolResults(streamParams);
-      isFirstIteration = false;
-
-      for await (const event of stream) {
-        switch (event.type) {
-          case 'text_delta':
-            accumulatedText += event.delta;
-            yield { type: 'text_delta', delta: event.delta };
-            break;
-
-          case 'tool_call_start':
-            yield { type: 'tool_use', toolName: event.name };
-            break;
-
-          case 'tool_call_delta':
-            // Internal streaming of tool input — no client event needed
-            break;
-
-          case 'tool_call_complete':
-            completedToolCalls.push({
-              id: event.id,
-              name: event.name,
-              input: event.input,
-            });
-            assistantBlocks.push({
-              type: 'tool_use',
-              id: event.id,
-              name: event.name,
-              input: event.input as Record<string, unknown>,
-            });
-            break;
-
-          case 'end_turn':
-            yield { type: 'done' };
-            return;
-
-          case 'needs_tool_results':
-            // Will be handled below after the stream ends
-            break;
-        }
-      }
-
-      // Capture any accumulated text in the assistant message
-      if (accumulatedText.length > 0) {
-        assistantBlocks.push({ type: 'text', text: accumulatedText });
-      }
-
-      // If no tool calls were made, we are done
-      if (completedToolCalls.length === 0) {
-        yield { type: 'done' };
-        return;
-      }
-
-      // Execute all tool calls and build tool result blocks
-      const toolResultBlocks: ProviderContentBlock[] = [];
-      for (const toolCall of completedToolCalls) {
-        try {
-          const result = await executeTool(toolCall.name, toolCall.input);
-          // Yield the content block for the client
-          yield { type: 'content_block', block: result.contentBlock };
-          toolResultBlocks.push({
-            type: 'tool_result',
-            toolUseId: toolCall.id,
-            content: result.rawForClaude,
-          });
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : 'Unknown error';
-          logger.error('Tool execution failed', {
-            toolName: toolCall.name,
-            errorClass: err instanceof Error ? err.name : 'Unknown',
-            message: errMsg,
-          });
-          toolResultBlocks.push({
-            type: 'tool_result',
-            toolUseId: toolCall.id,
-            content: `Error executing ${toolCall.name}: ${errMsg}`,
-            isError: true,
-          });
-        }
-      }
-
-      // Continue conversation with tool results
-      conversationMessages = [
-        ...conversationMessages,
-        { role: 'assistant' as const, content: assistantBlocks },
-        { role: 'user' as const, content: toolResultBlocks },
-      ];
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Unknown error';
-      const errName = err instanceof Error ? err.name : 'Unknown';
-      logger.error('Copilot stream error', { errorClass: errName, message: errMsg });
-
-      const lower = errMsg.toLowerCase();
-      const isAuthError =
-        lower.includes('api key') ||
-        lower.includes('auth') ||
-        lower.includes('unauthorized') ||
-        lower.includes('401');
-      // Stale OAuth tokens produce an opaque invalid_request_error with a generic "error" message.
-      // Detect this specifically to surface a clear re-auth message instead of the raw API error.
-      const isStaleOAuth =
-        lower.includes('invalid_request_error') &&
-        (lower.includes('"message":"error"') ||
-          lower.includes("'message':'error'") ||
-          /\bmessage.*:\s*"?error"?\s*[,}]/i.test(errMsg));
-      const isRateLimit = lower.includes('rate') || lower.includes('429');
-      const isOverloaded = lower.includes('overloaded') || lower.includes('529');
-
-      let clientMessage: string;
-      if (isStaleOAuth) {
-        clientMessage =
-          'OAuth token rejected. Your Claude subscription token may be stale — try running "claude auth logout && claude auth login" in Terminal, then restart the app.';
-      } else if (isAuthError) {
-        clientMessage =
-          'Authentication failed with the AI provider. Please check your API key in Settings.';
-      } else if (isRateLimit) {
-        clientMessage = 'Rate limited by the AI provider. Please wait a moment and try again.';
-      } else if (isOverloaded) {
-        clientMessage = 'The AI provider is currently overloaded. Please try again shortly.';
-      } else {
-        clientMessage = `${errName}: ${errMsg.replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]')}`;
-      }
-      yield { type: 'error', message: clientMessage };
-      return;
-    }
-  }
-
-  // If we exhausted the loop, yield a final message
-  yield {
+  let streamedText = false;
+  const note = (text: string): CopilotStreamEvent => ({
     type: 'text_delta',
-    delta: '\n\n*Reached maximum tool call depth. Please refine your question.*',
-  };
+    delta: streamedText ? `\n\n${text}` : text,
+  });
+
+  try {
+    for (let round = 0; ; round++) {
+      let stopReason: ProviderStopReason | undefined;
+      let toolCalls: ProviderToolCall[] = [];
+
+      for await (const event of conversation.streamTurn()) {
+        if (event.type === 'text_delta') {
+          streamedText = true;
+          yield { type: 'text_delta', delta: event.delta };
+        } else if (event.type === 'tool_call_start') {
+          yield { type: 'tool_use', toolName: event.name };
+        } else {
+          stopReason = event.stopReason;
+          toolCalls = event.toolCalls;
+        }
+      }
+
+      if (stopReason === undefined) {
+        throw new Error('Provider turn ended without a stop reason');
+      }
+      if (stopReason === 'refusal') {
+        yield note(REFUSAL_MESSAGE);
+        break;
+      }
+      if (stopReason === 'max_tokens') {
+        // Tool calls in a cut-off turn can be incomplete, so none of them run.
+        yield note(MAX_TOKENS_NOTE);
+        break;
+      }
+      if (stopReason === 'end_turn' || (stopReason === 'tool_use' && toolCalls.length === 0)) {
+        break;
+      }
+      if (round >= MAX_TOOL_ROUNDS) {
+        yield note(TOOL_LIMIT_NOTE);
+        break;
+      }
+      if (stopReason === 'tool_use') {
+        const results: ProviderToolResult[] = [];
+        for (const call of toolCalls) {
+          const outcome = await runTool(call);
+          if (outcome.block) yield { type: 'content_block', block: outcome.block };
+          results.push(outcome.result);
+        }
+        conversation.addToolResults(results);
+      }
+      // pause_turn: the paused turn is already in the transcript, and the
+      // next request lets the model continue it.
+    }
+  } catch (err) {
+    logProviderError(providerName, err);
+    yield { type: 'error', message: errorMessage(provider.classifyError(err), label) };
+    return;
+  }
+
   yield { type: 'done' };
 }

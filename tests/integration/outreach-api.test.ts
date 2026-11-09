@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { resetConfig } from '@immoradar/config';
+import { QUEUE_NAMES } from '@immoradar/scraper-core';
 
 const AUTH_HEADER = { authorization: 'Bearer dev-token' };
 
@@ -11,10 +12,10 @@ const hoisted = vi.hoisted(() => ({
   findMailboxByIdForUser: vi.fn(),
   findListingById: vi.fn(),
   findOpenThreadByListingContact: vi.fn(),
-  createThreadWithInitialDraft: vi.fn(),
-  updateThreadState: vi.fn(),
+  createThreadWithQueuedInitial: vi.fn(),
+  transitionThreadState: vi.fn(),
+  failQueuedSend: vi.fn(),
   updateMessageStatus: vi.fn(),
-  appendEvent: vi.fn(),
   findThreadsByUser: vi.fn(),
   findThreadByIdForUser: vi.fn(),
   findMessagesByThreadId: vi.fn(),
@@ -53,10 +54,10 @@ vi.mock('@immoradar/db', async () => {
     outreach: {
       ...actual.outreach,
       findOpenThreadByListingContact: hoisted.findOpenThreadByListingContact,
-      createThreadWithInitialDraft: hoisted.createThreadWithInitialDraft,
-      updateThreadState: hoisted.updateThreadState,
+      createThreadWithQueuedInitial: hoisted.createThreadWithQueuedInitial,
+      transitionThreadState: hoisted.transitionThreadState,
+      failQueuedSend: hoisted.failQueuedSend,
       updateMessageStatus: hoisted.updateMessageStatus,
-      appendEvent: hoisted.appendEvent,
       findThreadsByUser: hoisted.findThreadsByUser,
       findThreadByIdForUser: hoisted.findThreadByIdForUser,
       findMessagesByThreadId: hoisted.findMessagesByThreadId,
@@ -78,10 +79,12 @@ describe('mailbox/outreach API routes', () => {
       OUTREACH_ENABLED: process.env['OUTREACH_ENABLED'],
       OUTREACH_IMAP_USER: process.env['OUTREACH_IMAP_USER'],
       OUTREACH_FROM_NAME: process.env['OUTREACH_FROM_NAME'],
+      BULLMQ_PREFIX: process.env['BULLMQ_PREFIX'],
     };
     process.env['OUTREACH_ENABLED'] = 'true';
     process.env['OUTREACH_IMAP_USER'] = 'shared@example.com';
     process.env['OUTREACH_FROM_NAME'] = 'ImmoRadar';
+    process.env['BULLMQ_PREFIX'] = `immoradar-test-outreach-api-${process.pid}`;
     resetConfig();
 
     const mod = await import('../../apps/api/src/app.js');
@@ -95,6 +98,9 @@ describe('mailbox/outreach API routes', () => {
 
   afterAll(async () => {
     await app.close();
+    const scraperCore =
+      await vi.importActual<typeof import('@immoradar/scraper-core')>('@immoradar/scraper-core');
+    await scraperCore.closeRedisConnection();
     for (const [key, value] of Object.entries(previousEnv)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -244,17 +250,19 @@ describe('mailbox/outreach API routes', () => {
       title: 'Fixture Listing',
     });
     hoisted.findOpenThreadByListingContact.mockResolvedValue(null);
-    hoisted.createThreadWithInitialDraft.mockResolvedValue({
+    hoisted.createThreadWithQueuedInitial.mockResolvedValue({
       thread: { id: 21 },
       message: { id: 501 },
     });
-    hoisted.updateThreadState.mockResolvedValue({ workflowState: 'queued_send' });
+    hoisted.transitionThreadState.mockResolvedValue({ workflowState: 'queued_send' });
+    hoisted.failQueuedSend.mockResolvedValue({ workflowState: 'failed' });
+    hoisted.queueAdd.mockResolvedValue({ id: 'job-1' });
     hoisted.updateMessageStatus.mockResolvedValue({});
-    hoisted.appendEvent.mockResolvedValue({});
     hoisted.findOutboundMessageByKind.mockResolvedValue({
       id: 501,
       subject: 'Hallo',
       providerMessageId: 'msg-1',
+      deliveryStatus: 'sent',
     });
     hoisted.createOrReuseFollowupDraft.mockResolvedValue({ id: 502 });
   });
@@ -282,8 +290,6 @@ describe('mailbox/outreach API routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(hoisted.queueAdd).toHaveBeenCalledTimes(1);
-    // BullMQ rejects a custom job ID with more than two colons, which the mock above can't show.
-    expect(hoisted.queueAdd.mock.calls[0]?.[2]?.jobId).not.toContain(':');
   });
 
   it('validates mailbox sync ids', async () => {
@@ -365,7 +371,7 @@ describe('mailbox/outreach API routes', () => {
       payload: JSON.stringify({ subject: 'Hello', bodyText: 'Interested' }),
     });
     expect(res.statusCode).toBe(201);
-    expect(hoisted.createThreadWithInitialDraft).toHaveBeenCalled();
+    expect(hoisted.createThreadWithQueuedInitial).toHaveBeenCalled();
     expect(hoisted.queueAdd).toHaveBeenCalled();
   });
 
@@ -412,15 +418,34 @@ describe('mailbox/outreach API routes', () => {
   });
 
   it('applies a thread action', async () => {
+    hoisted.transitionThreadState.mockResolvedValueOnce({ workflowState: 'paused' });
+
     const res = await app.inject({
       method: 'PATCH',
       url: '/v1/outreach/threads/21',
       headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
       payload: JSON.stringify({ action: 'pause' }),
     });
+
     expect(res.statusCode).toBe(200);
-    expect(hoisted.updateThreadState).toHaveBeenCalled();
-    expect(hoisted.appendEvent).toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ data: { workflowState: 'paused' } });
+    expect(hoisted.transitionThreadState).toHaveBeenCalledWith(
+      expect.objectContaining({ from: ['sent_waiting_reply'], to: 'paused', nextActionAt: null }),
+    );
+  });
+
+  // The action wrote its state over whatever the thread had become, such as a reply.
+  it('refuses a thread action when the thread changed since it was read', async () => {
+    hoisted.transitionThreadState.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/21',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'pause' }),
+    });
+
+    expect(res.statusCode).toBe(409);
   });
 
   it('validates thread actions', async () => {
@@ -457,7 +482,9 @@ describe('mailbox/outreach API routes', () => {
     expect(res.statusCode).toBe(200);
     expect(hoisted.createOrReuseFollowupDraft).toHaveBeenCalled();
     expect(hoisted.queueAdd).toHaveBeenCalled();
-    expect(hoisted.queueAdd.mock.calls[0]?.[2]?.jobId).not.toContain(':');
+    expect(hoisted.transitionThreadState).toHaveBeenCalledWith(
+      expect.objectContaining({ from: ['sent_waiting_reply', 'followup_due'], to: 'queued_send' }),
+    );
   });
 
   it('rejects follow-up when a reply already exists', async () => {
@@ -516,4 +543,184 @@ describe('mailbox/outreach API routes', () => {
 
     expect(res.statusCode).toBe(409);
   });
+
+  // BullMQ throws on a custom ID with colons unless it splits into exactly three parts.
+  // The route tests mock the queue, so these jobs go through a real one on the test prefix.
+  it('builds job IDs that BullMQ accepts', async () => {
+    const json = { ...AUTH_HEADER, 'content-type': 'application/json' };
+    await app.inject({ method: 'POST', url: '/v1/mailboxes/10/sync', headers: AUTH_HEADER });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/listings/300/outreach/start',
+      headers: json,
+      payload: JSON.stringify({ subject: 'Hello', bodyText: 'Interested' }),
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/outreach/threads/21/follow-up',
+      headers: json,
+      payload: '{}',
+    });
+    expect(hoisted.queueAdd).toHaveBeenCalledTimes(3);
+
+    const { createQueue } =
+      await vi.importActual<typeof import('@immoradar/scraper-core')>('@immoradar/scraper-core');
+    const queue = createQueue<unknown>(QUEUE_NAMES.OUTREACH_SEND);
+    try {
+      for (const [name, data, opts] of hoisted.queueAdd.mock.calls) {
+        const job = await queue.add(name, data, opts);
+        expect(job.id).toBe(opts.jobId);
+      }
+    } finally {
+      await queue.obliterate({ force: true });
+      await queue.close();
+    }
+  });
+
+  // The thread used to be committed as queued before the add, so a failed add left a thread
+  // that claimed a pending send with no job behind it.
+  it('marks a new thread failed when its send job cannot be queued', async () => {
+    hoisted.queueAdd.mockRejectedValueOnce(new Error('redis down'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/listings/300/outreach/start',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ subject: 'Hello', bodyText: 'Interested' }),
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(hoisted.failQueuedSend).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 21, messageId: 501 }),
+    );
+  });
+
+  // A failed follow-up keeps autoFollowupCount at 0, which made the retry resend the
+  // initial email.
+  it('retries a failed follow-up as a follow-up', async () => {
+    hoisted.findThreadByIdForUser.mockResolvedValueOnce(
+      threadInState('failed', { lastOutboundAt: new Date('2026-03-26T10:00:00Z') }),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/21',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'retry' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(hoisted.transitionThreadState).toHaveBeenCalledWith(
+      expect.objectContaining({ from: ['failed'], to: 'queued_send' }),
+    );
+    expect(hoisted.queueAdd.mock.calls[0]?.[1]).toMatchObject({ sendKind: 'followup' });
+  });
+
+  it('refuses a retry when nothing failed', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/21',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'retry' }),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(hoisted.queueAdd).not.toHaveBeenCalled();
+  });
+
+  // A thread whose job was lost stayed queued: retry returned 200 and queued nothing.
+  it('queues the send again when a queued thread is retried', async () => {
+    hoisted.findThreadByIdForUser.mockResolvedValueOnce(
+      threadInState('queued_send', { lastOutboundAt: new Date('2026-03-26T10:00:00Z') }),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/outreach/threads/21',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: JSON.stringify({ action: 'retry' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(hoisted.transitionThreadState).not.toHaveBeenCalled();
+    expect(hoisted.queueAdd.mock.calls[0]?.[1]).toMatchObject({
+      threadId: 21,
+      sendKind: 'followup',
+    });
+  });
+
+  // These states used to pass the guard and queue a second send.
+  it.each(['queued_send', 'paused', 'closed', 'failed', 'draft'] as const)(
+    'refuses a manual follow-up while the thread is %s',
+    async (workflowState) => {
+      hoisted.findThreadByIdForUser.mockResolvedValueOnce(threadInState(workflowState));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/outreach/threads/21/follow-up',
+        headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+        payload: '{}',
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(hoisted.queueAdd).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a manual follow-up before the initial email went out', async () => {
+    hoisted.findOutboundMessageByKind.mockResolvedValueOnce({
+      id: 501,
+      subject: 'Hallo',
+      providerMessageId: null,
+      deliveryStatus: 'queued',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/outreach/threads/21/follow-up',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: '{}',
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(hoisted.queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second manual follow-up that loses the race to queue', async () => {
+    hoisted.transitionThreadState.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/outreach/threads/21/follow-up',
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: '{}',
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(hoisted.queueAdd).not.toHaveBeenCalled();
+  });
 });
+
+function threadInState(
+  workflowState: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 21,
+    listingId: 300,
+    mailboxAccountId: 10,
+    contactName: 'Max Broker',
+    contactCompany: 'Broker GmbH',
+    contactEmail: 'broker@example.com',
+    contactPhone: '+431234567',
+    workflowState,
+    autoFollowupCount: 0,
+    nextActionAt: null,
+    lastInboundAt: null,
+    lastOutboundAt: null,
+    createdAt: new Date('2026-03-26T10:00:00Z'),
+    updatedAt: new Date('2026-03-26T10:00:00Z'),
+    userId: 1,
+    ...overrides,
+  };
+}

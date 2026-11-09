@@ -37,6 +37,7 @@ function makeFilterRow(overrides: Partial<UserFilterRow> = {}): UserFilterRow {
     criteriaJson: {},
     lastEvaluatedAt: null,
     lastMatchAt: null,
+    deletedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

@@ -346,6 +346,12 @@ export async function disableWithReason(id: number, reason: string): Promise<Sou
   return row ? toSourceRow(row) : null;
 }
 
+/** The cause `disableWithReason` stored, or null when the source has none. */
+export function disabledReasonOf(source: Pick<SourceRow, 'config'>): string | null {
+  const reason = source.config?.['disabledReason'];
+  return typeof reason === 'string' && reason.trim() !== '' ? reason : null;
+}
+
 /**
  * Set a source's health after a failed run and return the previous and new status. A failure
  * that doesn't count toward disabling the source, such as a network error, still leaves it
