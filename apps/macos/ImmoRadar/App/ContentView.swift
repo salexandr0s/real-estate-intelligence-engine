@@ -34,7 +34,7 @@ struct ContentView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This stops the local engine and deletes its database on this Mac, with every listing, score, filter, alert, saved listing and outreach thread in it. ImmoRadar then starts a new, empty engine. You can't undo this.")
+            Text("This stops the local engine and deletes its database on this Mac, with every listing, score, filter, alert, saved listing and outreach thread in it. ImmoRadar then starts a new, empty engine. You can’t undo this.")
         }
     }
 

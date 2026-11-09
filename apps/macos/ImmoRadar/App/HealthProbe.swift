@@ -13,9 +13,9 @@ struct HealthProbe: Sendable {
             let databaseDown = checks["postgres"] == "error"
             let redisDown = checks["redis"] == "error"
             switch (databaseDown, redisDown) {
-            case (true, true): return "The database and Redis aren't responding."
-            case (true, false): return "The database isn't responding."
-            case (false, true): return "Redis isn't responding."
+            case (true, true): return "The database and Redis aren’t responding."
+            case (true, false): return "The database isn’t responding."
+            case (false, true): return "Redis isn’t responding."
             case (false, false): return nil
             }
         }

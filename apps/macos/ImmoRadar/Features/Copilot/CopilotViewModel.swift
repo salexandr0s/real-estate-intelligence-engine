@@ -182,7 +182,7 @@ final class CopilotViewModel {
         activeStreamID = streamID
 
         guard let authToken = appState.resolvedConnectionAuthToken() else {
-            errorMessage = "There's no API token for this connection. Check the connection in Settings."
+            errorMessage = "There’s no API token for this connection. Check the connection in Settings."
             finalizeStream()
             return
         }

@@ -36,7 +36,7 @@ enum APIError: Error, LocalizedError {
             if let message = detail?.message, !message.isEmpty {
                 return message
             }
-            return "The server couldn't complete the request (HTTP \(code))."
+            return "The server couldn’t complete the request (HTTP \(code))."
         case .decodingError(let err):
             return "Failed to parse response: \(err.localizedDescription)"
         case .unauthorized:

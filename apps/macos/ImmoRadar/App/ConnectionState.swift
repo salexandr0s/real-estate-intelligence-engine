@@ -148,7 +148,7 @@ final class ConnectionState {
             settingsErrorMessage = nil
             return true
         } catch {
-            settingsErrorMessage = "Couldn't save the API token. \(error.localizedDescription)"
+            settingsErrorMessage = "Couldn’t save the API token. \(error.localizedDescription)"
             return false
         }
     }

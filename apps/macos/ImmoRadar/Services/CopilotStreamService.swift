@@ -215,7 +215,7 @@ final class CopilotStreamService: Sendable {
             let message = envelope.error.message.trimmingCharacters(in: .whitespacesAndNewlines)
             if !message.isEmpty { return message }
         }
-        return "Copilot couldn't start. The server answered with HTTP \(statusCode)."
+        return "Copilot couldn’t start. The server answered with HTTP \(statusCode)."
     }
 
     /// `details` can hold any JSON, so only the message is decoded.

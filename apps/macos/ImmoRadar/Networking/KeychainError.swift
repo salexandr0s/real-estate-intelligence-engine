@@ -11,7 +11,7 @@ enum KeychainError: Error, LocalizedError {
         case .unhandledError(let status):
             return Self.describe(status)
         case .readFailed(let status):
-            return "ImmoRadar couldn't read its Keychain item, so it left the item unchanged. \(Self.describe(status))"
+            return "ImmoRadar couldn’t read its Keychain item, so it left the item unchanged. \(Self.describe(status))"
         }
     }
 

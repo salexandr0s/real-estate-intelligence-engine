@@ -400,7 +400,7 @@ private struct SettingsAISection: View {
                 prompt: Text(draft.defaultModelDescription)
             )
             .textFieldStyle(.roundedBorder)
-            Text("Leave empty to use the server's default, \(draft.defaultModelDescription).")
+            Text("Leave empty to use the server’s default, \(draft.defaultModelDescription).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

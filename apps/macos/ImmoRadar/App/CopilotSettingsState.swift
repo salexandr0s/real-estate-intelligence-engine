@@ -138,7 +138,7 @@ final class CopilotSettingsState {
             settingsErrorMessage = nil
             return true
         } catch {
-            settingsErrorMessage = "Couldn't save the \(label). \(error.localizedDescription)"
+            settingsErrorMessage = "Couldn’t save the \(label). \(error.localizedDescription)"
             return false
         }
     }

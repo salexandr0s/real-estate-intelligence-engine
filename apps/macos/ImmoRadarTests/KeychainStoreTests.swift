@@ -154,7 +154,7 @@ final class HealthProbeTests: XCTestCase {
 
         let report = try JSONDecoder().decode(HealthProbe.Report.self, from: body)
 
-        XCTAssertEqual(report.issueMessage, "The database isn't responding.")
+        XCTAssertEqual(report.issueMessage, "The database isn’t responding.")
     }
 
     func testHealthyReportHasNoIssue() throws {
