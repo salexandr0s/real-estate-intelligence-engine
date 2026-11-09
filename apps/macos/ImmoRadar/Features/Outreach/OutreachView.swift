@@ -6,8 +6,6 @@ struct OutreachView: View {
     @State private var viewModel = OutreachViewModel()
 
     var body: some View {
-        @Bindable var bindableViewModel = viewModel
-
         HSplitView {
             VStack(spacing: 0) {
                 // With nothing loaded, the inbox column below says why instead.
@@ -22,14 +20,9 @@ struct OutreachView: View {
 
                 Divider()
 
-                OutreachScopePicker(
-                    scope: $bindableViewModel.selectedScope,
-                    onChange: { _ in
-                        Task { await viewModel.refresh(using: appState.apiClient) }
-                    }
-                )
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.vertical, Theme.Spacing.md)
+                OutreachScopePicker(scope: scopeSelection)
+                    .padding(.horizontal, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.md)
 
                 Divider()
 
@@ -112,6 +105,19 @@ struct OutreachView: View {
     /// The mailbox or thread list didn't load and no threads are loaded from before.
     private var listLoadFailed: Bool {
         viewModel.pageErrorMessage != nil && viewModel.threads.isEmpty && !viewModel.isLoadingList
+    }
+
+    /// The picker's scope. Only a pick here reloads the list: opening a thread from a link sets
+    /// the scope itself and loads what it needs.
+    private var scopeSelection: Binding<OutreachScope> {
+        Binding(
+            get: { viewModel.selectedScope },
+            set: { scope in
+                guard scope != viewModel.selectedScope else { return }
+                viewModel.selectedScope = scope
+                Task { await viewModel.refresh(using: appState.apiClient) }
+            }
+        )
     }
 
     private func consumePendingDeepLinkIfNeeded() async {
@@ -227,7 +233,6 @@ private struct OutreachMailboxHeader: View {
 
 private struct OutreachScopePicker: View {
     @Binding var scope: OutreachScope
-    let onChange: @Sendable (OutreachScope) -> Void
 
     var body: some View {
         Picker("Thread Scope", selection: $scope) {
@@ -237,9 +242,6 @@ private struct OutreachScopePicker: View {
         }
         .pickerStyle(.segmented)
         .accessibilityLabel("Thread scope")
-        .onChange(of: scope) { _, newValue in
-            onChange(newValue)
-        }
     }
 }
 

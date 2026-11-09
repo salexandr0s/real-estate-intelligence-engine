@@ -378,6 +378,58 @@ final class OutreachViewModelTests: XCTestCase {
 
         XCTAssertEqual(snapshot.followupCalls, [21, 21])
     }
+
+    /// A refresh used to reload only the first page, so a thread picked from a later page lost
+    /// its selection and the list lost the pages loaded with Load More.
+    func testRefreshKeepsLaterPagesAndTheThreadPickedFromThem() async {
+        let viewModel = OutreachViewModel()
+        let pageSize = OutreachViewModel.pageSize
+        let laterThreadID = 100 + pageSize
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: (100...laterThreadID).map { makeThreadSummary(id: $0) },
+            thread: makeThread(),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.loadMoreThreads(using: client)
+        await viewModel.selectThread(id: laterThreadID, using: client)
+        await viewModel.refresh(using: client)
+
+        XCTAssertEqual(viewModel.threads.count, pageSize + 1)
+        XCTAssertEqual(viewModel.selectedThreadID, laterThreadID)
+        XCTAssertEqual(viewModel.selectedThread?.id, laterThreadID)
+    }
+
+    /// A refresh could move the selection to another thread and leave a failed request on
+    /// screen, so Try Again sent that request for the thread selected now.
+    func testRefreshThatMovesTheSelectionDropsTheFailedRequest() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+        // Thread 21 left the scope shown, and the list has no more pages.
+        await client.setThreads([makeThreadSummary(id: 22)])
+        await viewModel.refresh(using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(viewModel.selectedThreadID, 22)
+        XCTAssertNil(viewModel.actionFailure)
+        XCTAssertEqual(snapshot.followupCalls, [21])
+    }
 }
 
 private func makeAPIError(status: Int, code: String, message: String) -> APIError {
@@ -403,7 +455,7 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
 
     private let mailboxes: [MailboxAccount]
     private let mailboxesError: Error?
-    private let threads: [OutreachThreadSummary]
+    private var threads: [OutreachThreadSummary]
     private let threadsError: Error?
     private let thread: OutreachThread
     private let threadError: Error?
@@ -449,23 +501,28 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
         return mailboxes
     }
 
+    /// Pages through `threads` like the server. A cursor is the offset of the next page.
     func fetchOutreachThreads(
         scope: OutreachScope,
         cursor: String?,
         limit: Int?
     ) async throws -> (threads: [OutreachThreadSummary], nextCursor: String?) {
         _ = scope
-        _ = cursor
-        _ = limit
         if let threadsError { throw threadsError }
-        return (threads, nil)
+        let start = min(cursor.flatMap { Int($0) } ?? 0, threads.count)
+        let end = min(start + (limit ?? threads.count), threads.count)
+        return (Array(threads[start..<end]), end < threads.count ? String(end) : nil)
+    }
+
+    /// Replaces the threads the server lists from now on.
+    func setThreads(_ newThreads: [OutreachThreadSummary]) {
+        threads = newThreads
     }
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {
-        _ = id
         threadFetchCountStorage += 1
         if let threadError { throw threadError }
-        return thread
+        return id == thread.id ? thread : makeThread(id: id)
     }
 
     func threadFetchCount() -> Int {
@@ -517,11 +574,12 @@ private func makeMailbox() -> MailboxAccount {
 }
 
 private func makeThreadSummary(
+    id: Int = 21,
     workflowState: String = "sent_waiting_reply",
     unreadInboundCount: Int = 1
 ) -> OutreachThreadSummary {
     OutreachThreadSummary(
-        id: 21,
+        id: id,
         listingId: 300,
         mailboxAccountId: 10,
         contactName: "Max Broker",
@@ -538,11 +596,12 @@ private func makeThreadSummary(
 }
 
 private func makeThread(
+    id: Int = 21,
     workflowState: String = "sent_waiting_reply",
     unreadInboundCount: Int = 1
 ) -> OutreachThread {
     OutreachThread(
-        id: 21,
+        id: id,
         listingId: 300,
         mailboxAccountId: 10,
         contactName: "Max Broker",

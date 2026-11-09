@@ -20,6 +20,8 @@ extension APIClient: OutreachAPIClient {}
 final class OutreachViewModel {
     /// Threads per request.
     static let pageSize = 25
+    /// The most threads the server returns for one request.
+    static let maxPageSize = 200
 
     var mailboxes: [MailboxAccount] = []
     var threads: [OutreachThreadSummary] = []
@@ -49,6 +51,10 @@ final class OutreachViewModel {
     private(set) var moreThreadsErrorMessage: String?
     /// Goes up with every list load, so an earlier, slower load can't replace the list shown now.
     @ObservationIgnored private var listLoadID = 0
+    /// The scope of the threads shown, nil while no list is shown.
+    @ObservationIgnored private var listScope: OutreachScope?
+    /// The cursor of the page of more threads loading now.
+    @ObservationIgnored private var loadingMoreCursor: String?
     /// Cursors asked for since the first page. A cursor the server hands back again ends paging.
     @ObservationIgnored private var requestedCursors: Set<String> = []
     /// Goes up with every thread load, so an earlier, slower load can't replace the thread shown now.
@@ -59,9 +65,18 @@ final class OutreachViewModel {
     var selectedMailbox: MailboxAccount? { mailboxes.first }
 
     func refresh(using client: any OutreachAPIClient) async {
+        // Reloading the scope shown keeps the user's place in it.
+        let keepsPlace = listScope == selectedScope
         guard await loadList(using: client) else { return }
 
-        let nextSelection = resolvedSelectionID(from: threads)
+        // A thread missing from the reloaded list may sit on a page not loaded yet, so it stays
+        // selected while the server has more.
+        let nextSelection = resolvedSelectionID(keepsUnlistedSelection: keepsPlace && nextCursor != nil)
+        if nextSelection != selectedThreadID {
+            // A failed request belongs to the thread it was sent for, so Try Again mustn't send
+            // it for the next one.
+            actionFailure = nil
+        }
         selectedThreadID = nextSelection
 
         if let nextSelection {
@@ -71,12 +86,6 @@ final class OutreachViewModel {
             selectedListing = nil
             detailErrorMessage = nil
         }
-    }
-
-    func setScope(_ scope: OutreachScope, using client: any OutreachAPIClient) async {
-        guard selectedScope != scope else { return }
-        selectedScope = scope
-        await refresh(using: client)
     }
 
     /// Loads a thread picked in the list. The list's selection binding has already set
@@ -89,14 +98,14 @@ final class OutreachViewModel {
     }
 
     func openThread(id: Int, using client: any OutreachAPIClient) async {
-        let scopeChanged = selectedScope != .all
+        let showsAll = listScope == .all
         selectedScope = .all
         if selectedThread?.id != id {
             actionFailure = nil
         }
 
-        // The list shows the selected scope's threads, so a new scope loads it again.
-        if scopeChanged || mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
+        // Load the All list unless it's already shown with the thread in it.
+        if !showsAll || mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
             await loadList(using: client)
         }
 
@@ -106,7 +115,8 @@ final class OutreachViewModel {
 
     /// Loads the threads after the ones shown, when the server has more.
     func loadMoreThreads(using client: any OutreachAPIClient) async {
-        guard let cursor = nextCursor, !isLoadingList, !isLoadingMoreThreads else { return }
+        // The cursor belongs to the list shown, so the page comes from that list's scope.
+        guard let cursor = nextCursor, let scope = listScope, !isLoadingList, !isLoadingMoreThreads else { return }
         guard requestedCursors.insert(cursor).inserted else {
             // The server handed back a cursor it already gave, so nothing new follows it.
             nextCursor = nil
@@ -114,11 +124,14 @@ final class OutreachViewModel {
         }
 
         let loadID = listLoadID
-        let scope = selectedScope
+        loadingMoreCursor = cursor
         isLoadingMoreThreads = true
         moreThreadsErrorMessage = nil
         defer {
-            if loadID == listLoadID { isLoadingMoreThreads = false }
+            if loadID == listLoadID {
+                isLoadingMoreThreads = false
+                loadingMoreCursor = nil
+            }
         }
 
         do {
@@ -213,15 +226,22 @@ final class OutreachViewModel {
         actionInFlight = nil
     }
 
-    /// Loads the mailboxes and the first page of threads in the selected scope. Returns false
-    /// when the load failed or a newer one replaced it.
+    /// Loads the mailboxes and the first page of threads in the selected scope. A reload of the
+    /// scope shown asks for as many threads as it shows, so pages added with Load More stay
+    /// listed. Returns false when the load failed or a newer one replaced it.
     @discardableResult
     private func loadList(using client: any OutreachAPIClient) async -> Bool {
         listLoadID += 1
         let loadID = listLoadID
         let scope = selectedScope
+        let limit = scope == listScope ? min(max(Self.pageSize, threads.count), Self.maxPageSize) : Self.pageSize
         isLoadingList = true
-        // A page of more threads still loading belongs to the list this load replaces.
+        // A page of more threads still loading belongs to the list this load replaces, so its
+        // cursor may be asked for again.
+        if let cursor = loadingMoreCursor {
+            requestedCursors.remove(cursor)
+            loadingMoreCursor = nil
+        }
         isLoadingMoreThreads = false
         moreThreadsErrorMessage = nil
         pageErrorMessage = nil
@@ -231,18 +251,25 @@ final class OutreachViewModel {
 
         do {
             async let mailboxRows = client.fetchMailboxes()
-            async let threadPage = client.fetchOutreachThreads(scope: scope, cursor: nil, limit: Self.pageSize)
+            async let threadPage = client.fetchOutreachThreads(scope: scope, cursor: nil, limit: limit)
             let (loadedMailboxes, loadedPage) = try await (mailboxRows, threadPage)
             guard loadID == listLoadID else { return false }
 
             mailboxes = loadedMailboxes
             threads = loadedPage.threads
+            listScope = scope
             nextCursor = loadedPage.nextCursor
             requestedCursors = []
             hasLoaded = true
             return true
         } catch {
             guard loadID == listLoadID else { return false }
+            if scope != listScope {
+                // The threads shown belong to another scope, so the failure shows in their place.
+                threads = []
+                nextCursor = nil
+                listScope = nil
+            }
             pageErrorMessage = Self.message(
                 for: error,
                 fallback: "Outreach is currently unavailable. Check mailbox configuration and try again."
@@ -290,8 +317,11 @@ final class OutreachViewModel {
         }
     }
 
-    private func resolvedSelectionID(from threads: [OutreachThreadSummary]) -> Int? {
-        if let selectedThreadID, threads.contains(where: { $0.id == selectedThreadID }) {
+    /// The thread to select after a list load: the selected one while it's listed or
+    /// `keepsUnlistedSelection` is true, otherwise the first one listed.
+    private func resolvedSelectionID(keepsUnlistedSelection: Bool) -> Int? {
+        if let selectedThreadID,
+           keepsUnlistedSelection || threads.contains(where: { $0.id == selectedThreadID }) {
             return selectedThreadID
         }
         return threads.first?.id
