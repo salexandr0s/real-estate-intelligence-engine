@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { resetConfig } from '@immoradar/config';
@@ -7,6 +8,21 @@ import { seed } from '../../packages/db/seeds/seed.js';
 
 const AUTH_HEADER = { authorization: 'Bearer dev-token' };
 const hasDb = !!process.env.DATABASE_URL;
+
+interface HealthBody {
+  status: string;
+  checks: { postgres: string; redis: string };
+}
+
+/** A local port nothing listens on: the OS hands it out, and it is released again. */
+async function closedPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address !== null ? address.port : 0;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
+}
 
 describe('API endpoints', () => {
   let app: FastifyInstance;
@@ -36,8 +52,115 @@ describe('API endpoints', () => {
     it('returns 200 without auth', async () => {
       const res = await app.inject({ method: 'GET', url: '/health' });
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ status: string }>();
-      expect(body.status).toBe('ok');
+    });
+
+    it.skipIf(!hasDb)('reports ok when Postgres and Redis both answer', async () => {
+      const res = await app.inject({ method: 'GET', url: '/health' });
+      expect(res.json<HealthBody>()).toMatchObject({
+        status: 'ok',
+        checks: { postgres: 'ok', redis: 'ok' },
+      });
+    });
+  });
+
+  // The app restarts the API when /health fails, and a restart can't bring Redis back, so the API
+  // keeps answering 200 within the app's 2 s probe and names what is down.
+  describe('GET /health (Redis unreachable)', () => {
+    let downApp: FastifyInstance;
+    const originalRedisUrl = process.env.REDIS_URL;
+
+    beforeAll(async () => {
+      process.env.REDIS_URL = `redis://127.0.0.1:${await closedPort()}`;
+      resetConfig();
+      downApp = await buildApp();
+      await downApp.ready();
+    });
+
+    afterAll(async () => {
+      await downApp.close();
+      if (originalRedisUrl === undefined) delete process.env.REDIS_URL;
+      else process.env.REDIS_URL = originalRedisUrl;
+      resetConfig();
+    });
+
+    it('answers 200 quickly, degraded, with redis marked as the failed check', async () => {
+      const startedAt = Date.now();
+      const res = await downApp.inject({ method: 'GET', url: '/health' });
+      expect(Date.now() - startedAt).toBeLessThan(2_000);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<HealthBody>()).toMatchObject({
+        status: 'degraded',
+        checks: { redis: 'error' },
+      });
+    });
+  });
+
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+
+  describe('Rate limiting', () => {
+    let limitedApp: FastifyInstance;
+    const remote = { remoteAddress: '203.0.113.10' };
+
+    beforeAll(async () => {
+      process.env.API_RATE_LIMIT_MAX = '2';
+      resetConfig();
+      limitedApp = await buildApp();
+      await limitedApp.ready();
+    });
+
+    afterAll(async () => {
+      await limitedApp.close();
+      delete process.env.API_RATE_LIMIT_MAX;
+      resetConfig();
+    });
+
+    it('answers a remote client over the limit with 429, never loopback clients or /health', async () => {
+      const remoteStatuses: number[] = [];
+      let lastRemote = await limitedApp.inject({ method: 'GET', url: '/docs/json', ...remote });
+      remoteStatuses.push(lastRemote.statusCode);
+      for (let i = 0; i < 2; i++) {
+        lastRemote = await limitedApp.inject({ method: 'GET', url: '/docs/json', ...remote });
+        remoteStatuses.push(lastRemote.statusCode);
+      }
+      expect(remoteStatuses).toEqual([200, 200, 429]);
+      expect(lastRemote.json()).toMatchObject({ error: { code: 'rate_limited' } });
+
+      for (let i = 0; i < 3; i++) {
+        const loopback = await limitedApp.inject({ method: 'GET', url: '/docs/json' });
+        expect(loopback.statusCode).toBe(200);
+        const health = await limitedApp.inject({ method: 'GET', url: '/health', ...remote });
+        expect(health.statusCode).toBe(200);
+      }
+    });
+  });
+
+  // ── JSON request bodies ────────────────────────────────────────────────────
+
+  // The macOS app sends Content-Type: application/json on every non-GET request, body or not.
+  describe('JSON request bodies', () => {
+    it.skipIf(!hasDb)('treats an empty JSON body as no body', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/scrape-runs/999999999/cancel',
+        headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      });
+      // The route's own 404 shows the request got past the body parser.
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: { code: 'not_found' } });
+    });
+
+    it('answers malformed or prototype-poisoned JSON with 400, not 500', async () => {
+      for (const payload of ['{bad json', '{"__proto__": {"admin": true}}']) {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/v1/filters',
+          headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+          payload,
+        });
+        expect(res.statusCode).toBe(400);
+        // Fastify's own code passes through in the standard envelope.
+        expect(res.json()).toMatchObject({ error: { code: 'FST_ERR_CTP_INVALID_JSON_BODY' } });
+      }
     });
   });
 

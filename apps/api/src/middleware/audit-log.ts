@@ -1,26 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { createLogger } from '@immoradar/observability';
 
-declare module 'fastify' {
-  interface FastifyRequest {
-    startTime: bigint;
-  }
-}
-
 const auditLogger = createLogger('api:audit');
 
 export function registerAuditLog(app: FastifyInstance): void {
-  app.decorateRequest('startTime', BigInt(0));
-
-  app.addHook('onRequest', async (request) => {
-    request.startTime = process.hrtime.bigint();
-  });
-
   app.addHook('onResponse', async (request, reply) => {
     const route = request.routeOptions.url ?? request.url;
     if (route === '/health' || route === '/metrics') return;
 
-    const durationMs = Number(process.hrtime.bigint() - request.startTime) / 1_000_000;
+    // Fastify times the request from its arrival, so a request the auth hook rejects before any
+    // later hook runs still gets its real duration.
+    const durationMs = reply.elapsedTime;
     const statusCode = reply.statusCode;
 
     const ctx = {

@@ -88,6 +88,7 @@ export { getRedisConnection, closeRedisConnection, getQueuePrefix } from './queu
 export { createQueue, WORKER_CONCURRENCY, type QueueName } from './queues/queue-factory.js';
 export {
   discoveryCron,
+  discoveryIntervalHours,
   discoverySchedulerId,
   hourlyCron,
   maxPagesForSource,

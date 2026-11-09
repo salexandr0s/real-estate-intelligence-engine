@@ -6,7 +6,8 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { loadConfig } from '@immoradar/config';
-import { apiRequestDuration } from '@immoradar/observability';
+import { API_ERROR_CODES } from '@immoradar/contracts';
+import { AppError, apiRequestDuration } from '@immoradar/observability';
 import { registerAuth } from './middleware/auth.js';
 import { registerAuditLog } from './middleware/audit-log.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
@@ -29,6 +30,34 @@ import { legalRentRoutes } from './routes/legal-rent.js';
 import { mailboxRoutes } from './routes/mailboxes.js';
 import { outreachRoutes } from './routes/outreach.js';
 
+/**
+ * Clients on this machine, the macOS app among them, are never rate limited. Behind a reverse
+ * proxy on the same host every request arrives from loopback, so set API_TRUST_PROXY to the
+ * proxy's address there, or no client is limited at all.
+ */
+const LOOPBACK_ADDRESSES = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+
+/**
+ * The macOS app sends `Content-Type: application/json` on every non-GET request, with or without
+ * a body, and Fastify's parser answers an empty body with 400. Here an empty body counts as no
+ * body. Anything else goes to the default parser, which keeps its prototype-poisoning checks.
+ */
+function acceptEmptyJsonBody(app: FastifyInstance): void {
+  const parseJson = app.getDefaultJsonParser('error', 'error');
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser<string>(
+    'application/json',
+    { parseAs: 'string' },
+    (request, body, done) => {
+      if (body === '') {
+        done(null, undefined);
+        return;
+      }
+      return parseJson(request, body, done);
+    },
+  );
+}
+
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
 
@@ -38,6 +67,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     // An open SSE stream would otherwise hold app.close() open.
     forceCloseConnections: true,
   });
+
+  acceptEmptyJsonBody(app);
+
+  // Before any plugin adds routes: a route keeps the error handler that was set when it was added,
+  // so /docs would otherwise answer errors in Fastify's own format instead of the envelope.
+  registerErrorHandler(app);
 
   // Security headers
   await app.register(helmet, {
@@ -54,16 +89,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     credentials: false,
   });
 
-  // Rate limiting
+  // Rate limiting. The app makes several requests for each listing it opens, so loopback clients
+  // skip the limit. /health opts out on its route.
   await app.register(rateLimit, {
     max: config.api.rateLimitMax,
     timeWindow: config.api.rateLimitWindowMs,
-    errorResponseBuilder: (_request, context) => ({
-      error: {
-        code: 'rate_limited',
-        message: `Rate limit exceeded. Retry after ${context.after}`,
-      },
-    }),
+    allowList: LOOPBACK_ADDRESSES,
+    // The plugin throws what this returns, so it carries the status for the error handler.
+    errorResponseBuilder: (_request, context) =>
+      new AppError(
+        `Too many requests. Try again in ${context.after}.`,
+        API_ERROR_CODES.RATE_LIMITED,
+        context.statusCode,
+      ),
   });
 
   // OpenAPI / Swagger
@@ -90,9 +128,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(swaggerUi, {
     routePrefix: '/docs',
   });
-
-  // Error handler
-  registerErrorHandler(app);
 
   // Auth middleware
   registerAuth(app);

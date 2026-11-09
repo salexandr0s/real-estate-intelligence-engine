@@ -97,10 +97,12 @@ describe('POST /v1/filters/:id/test', () => {
       },
     });
 
+    // The app sends this POST as JSON with no body.
     const res = await app.inject({
       method: 'POST',
       url: '/v1/filters/9/test',
-      headers: AUTH_HEADER,
+      headers: { ...AUTH_HEADER, 'content-type': 'application/json' },
+      payload: '',
     });
 
     expect(res.statusCode).toBe(200);
