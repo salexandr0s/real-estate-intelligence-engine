@@ -26,8 +26,10 @@ final class CopilotSettingsState {
     /// Observed, so the Copilot view can tell "no key stored" from "not read yet".
     private var keyStates: [SecretKey: KeyState] = [:]
 
+    /// Keys read with user interaction allowed. A Copilot message lets the Keychain prompt for its
+    /// key only once, so a refused prompt doesn't come back with every message.
     @ObservationIgnored
-    private var didLoadCopilotSecretsWithInteraction = false
+    private var keysReadInteractively: Set<SecretKey> = []
 
     var settingsErrorMessage: String?
 
@@ -50,10 +52,6 @@ final class CopilotSettingsState {
         return !value(of: key).isEmpty
     }
 
-    private var didLoadCopilotSecrets: Bool {
-        SecretKey.allCases.allSatisfy { keyStates[$0] == .known }
-    }
-
     init(secretStore: any SecretStore = KeychainStore.api) {
         self.secretStore = secretStore
         // Older builds could save "claudeSubscription", which now reads as Anthropic.
@@ -71,26 +69,10 @@ final class CopilotSettingsState {
         settingsErrorMessage = nil
     }
 
+    /// Reads the keys not read yet. A key already read matches the stored one.
     func loadCopilotSecretsIfNeeded(allowUserInteraction: Bool) {
-        if didLoadCopilotSecrets && (!allowUserInteraction || didLoadCopilotSecretsWithInteraction) {
-            return
-        }
-
         for key in SecretKey.allCases {
-            switch secretStore.load(key: key.rawValue, allowUserInteraction: allowUserInteraction) {
-            case .value(let stored):
-                setValue(stored, of: key)
-                keyStates[key] = .known
-            case .unreadable:
-                // The key in memory stays, and a later call reads it again. A key read before
-                // still matches the stored one.
-                if keyStates[key] != .known {
-                    keyStates[key] = .unreadable
-                }
-            }
-        }
-        if didLoadCopilotSecrets {
-            didLoadCopilotSecretsWithInteraction = allowUserInteraction
+            load(key, allowUserInteraction: allowUserInteraction)
         }
     }
 
@@ -117,10 +99,12 @@ final class CopilotSettingsState {
         return true
     }
 
-    /// The key Copilot sends as `X-Copilot-Api-Key` for the selected provider.
+    /// The key Copilot sends as `X-Copilot-Api-Key` for the selected provider. Only that key is
+    /// read, and only its first read may prompt.
     func activeAPIKey() -> String {
-        loadCopilotSecretsIfNeeded(allowUserInteraction: true)
-        return value(of: SecretKey(copilotProvider))
+        let key = SecretKey(copilotProvider)
+        load(key, allowUserInteraction: !keysReadInteractively.contains(key))
+        return value(of: key)
     }
 
     func cleanupStoredSecrets() {
@@ -135,6 +119,22 @@ final class CopilotSettingsState {
             secretStore.deleteIfEmpty(key: key.rawValue, allowUserInteraction: false)
         }
         UserDefaults.standard.set(true, forKey: versionKey)
+    }
+
+    /// Reads a key not read yet. After a refused read the key stays unread, and a later call
+    /// tries again.
+    private func load(_ key: SecretKey, allowUserInteraction: Bool) {
+        guard keyStates[key] != .known else { return }
+        if allowUserInteraction {
+            keysReadInteractively.insert(key)
+        }
+        switch secretStore.load(key: key.rawValue, allowUserInteraction: allowUserInteraction) {
+        case .value(let stored):
+            setValue(stored, of: key)
+            keyStates[key] = .known
+        case .unreadable:
+            keyStates[key] = .unreadable
+        }
     }
 
     private func save(_ rawValue: String, as key: SecretKey, label: String) -> Bool {

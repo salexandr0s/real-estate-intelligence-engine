@@ -5,10 +5,16 @@ import XCTest
 
 /// Keeps items in memory, so the secret rules run without touching the real Keychain.
 final class InMemorySecretStore: SecretStore {
+    struct Read: Equatable {
+        let key: String
+        let allowsUserInteraction: Bool
+    }
+
     private struct State {
         var items: [String: String] = [:]
         var readFailure: OSStatus?
         var deleteCount = 0
+        var reads: [Read] = []
     }
 
     private let state: OSAllocatedUnfairLock<State>
@@ -19,6 +25,8 @@ final class InMemorySecretStore: SecretStore {
 
     var items: [String: String] { state.withLock { $0.items } }
     var deleteCount: Int { state.withLock { $0.deleteCount } }
+    /// Every read so far, oldest first.
+    var reads: [Read] { state.withLock { $0.reads } }
 
     /// Makes later reads fail with `status`, or succeed again when it is nil.
     func failReads(with status: OSStatus?) {
@@ -27,6 +35,7 @@ final class InMemorySecretStore: SecretStore {
 
     func read(key: String, allowUserInteraction: Bool) -> KeychainReadResult {
         state.withLock { state in
+            state.reads.append(Read(key: key, allowsUserInteraction: allowUserInteraction))
             if let failure = state.readFailure { return .failed(failure) }
             guard let value = state.items[key] else { return .notFound }
             return .found(value)
@@ -74,6 +83,23 @@ final class KeychainStoreTests: XCTestCase {
         XCTAssertEqual(store.deleteCount, 0)
         XCTAssertNil(state.hasAPIKeyForActiveProvider)
         XCTAssertTrue(state.isKeyUnreadable(for: .anthropic))
+    }
+
+    /// Each Copilot message reads the selected provider's key. After a refused read it used to
+    /// read every key with prompts allowed, on every message, so a denied prompt kept coming back.
+    func testCopilotMessagesReadOnlyTheSelectedKeyAndPromptOnce() {
+        let store = InMemorySecretStore(readFailure: errSecAuthFailed)
+        let state = CopilotSettingsState(secretStore: store)
+
+        XCTAssertEqual(state.activeAPIKey(), "")
+        XCTAssertEqual(state.activeAPIKey(), "")
+        store.failReads(with: nil)
+        XCTAssertEqual(state.activeAPIKey(), "")
+        XCTAssertEqual(state.activeAPIKey(), "")
+
+        // One key, whichever provider is selected. A key read once isn't read again.
+        XCTAssertEqual(Set(store.reads.map(\.key)).count, 1)
+        XCTAssertEqual(store.reads.map(\.allowsUserInteraction), [true, false, false])
     }
 
     /// After a failed read the fields are empty. Saving them as they were used to delete the
