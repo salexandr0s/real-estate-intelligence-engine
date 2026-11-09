@@ -54,6 +54,9 @@ RUN rm -rf \
 COPY --chown=node:node --from=builder /runtime /app
 
 ENV NODE_ENV=production
+# The API listens on loopback unless told otherwise, and a published port only reaches a
+# container process that listens on all interfaces.
+ENV API_HOST=0.0.0.0
 
 EXPOSE 8080
 
