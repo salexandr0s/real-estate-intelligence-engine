@@ -13,14 +13,26 @@ final class InMemorySecretStore: SecretStore {
     private struct State {
         var items: [String: String] = [:]
         var readFailure: OSStatus?
+        var writeFailure: OSStatus?
+        var readFailureAfterWrite: OSStatus?
         var deleteCount = 0
         var reads: [Read] = []
     }
 
     private let state: OSAllocatedUnfairLock<State>
 
-    init(items: [String: String] = [:], readFailure: OSStatus? = nil) {
-        state = OSAllocatedUnfairLock(initialState: State(items: items, readFailure: readFailure))
+    init(
+        items: [String: String] = [:],
+        readFailure: OSStatus? = nil,
+        writeFailure: OSStatus? = nil,
+        readFailureAfterWrite: OSStatus? = nil
+    ) {
+        state = OSAllocatedUnfairLock(initialState: State(
+            items: items,
+            readFailure: readFailure,
+            writeFailure: writeFailure,
+            readFailureAfterWrite: readFailureAfterWrite
+        ))
     }
 
     var items: [String: String] { state.withLock { $0.items } }
@@ -43,7 +55,11 @@ final class InMemorySecretStore: SecretStore {
     }
 
     func write(key: String, value: String) throws {
-        state.withLock { $0.items[key] = value }
+        try state.withLock {
+            if let status = $0.writeFailure { throw KeychainError.unhandledError(status: status) }
+            $0.items[key] = value
+            if let status = $0.readFailureAfterWrite { $0.readFailure = status }
+        }
     }
 
     @discardableResult
@@ -58,6 +74,118 @@ final class InMemorySecretStore: SecretStore {
 
 @MainActor
 final class KeychainStoreTests: XCTestCase {
+    func testDevelopmentBuildDoesNotUseTheReleaseCredentialService() {
+        #if DEBUG
+        XCTAssertEqual(LocalRuntimeAuth.keychainService, "com.immoradar.local-runtime.debug")
+        #else
+        XCTAssertEqual(LocalRuntimeAuth.keychainService, "com.immoradar.local-runtime.v2")
+        #endif
+        XCTAssertNotEqual(LocalRuntimeAuth.keychainService, LocalRuntimeAuth.legacyKeychainService)
+    }
+
+    func testRuntimeMigrationCopiesOnceAndLaterLaunchesReadOnlyTheNewItem() throws {
+        let key = LocalRuntimeAuth.keychainKey
+        let current = InMemorySecretStore()
+        let legacy = InMemorySecretStore(items: [key: "existing-runtime-token"])
+        let firstLaunch = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(try LocalRuntimeAuth.ensureToken(in: firstLaunch), "existing-runtime-token")
+        XCTAssertEqual(current.items[key], "existing-runtime-token")
+        XCTAssertEqual(legacy.items[key], "existing-runtime-token")
+        XCTAssertEqual(legacy.deleteCount, 0)
+        XCTAssertEqual(current.reads.map(\.allowsUserInteraction), [true, false])
+
+        let secondLaunch = MigratingSecretStore(current: current, legacy: legacy)
+        XCTAssertEqual(try LocalRuntimeAuth.ensureToken(in: secondLaunch), "existing-runtime-token")
+        XCTAssertEqual(legacy.reads.count, 1)
+    }
+
+    func testQuietRuntimeReadDoesNotMigrateOrWrite() {
+        let current = InMemorySecretStore()
+        let legacy = InMemorySecretStore(items: ["key": "old"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: false), .found("old"))
+        XCTAssertTrue(current.items.isEmpty)
+        XCTAssertEqual(legacy.reads.map(\.allowsUserInteraction), [false])
+    }
+
+    func testCurrentCredentialWinsOverTheRollbackCopy() {
+        let current = InMemorySecretStore(items: ["key": "current"])
+        let legacy = InMemorySecretStore(items: ["key": "older"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: true), .found("current"))
+        XCTAssertTrue(legacy.reads.isEmpty)
+        XCTAssertEqual(current.items["key"], "current")
+    }
+
+    func testFailedNewItemReadNeverFallsBackToAnOlderToken() {
+        let current = InMemorySecretStore(readFailure: errSecInteractionNotAllowed)
+        let legacy = InMemorySecretStore(items: ["key": "outdated"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: true), .failed(errSecInteractionNotAllowed))
+        XCTAssertTrue(legacy.reads.isEmpty)
+        XCTAssertEqual(legacy.items["key"], "outdated")
+    }
+
+    func testFailedLegacyReadDoesNotCreateAReplacementRuntimeToken() {
+        let key = LocalRuntimeAuth.keychainKey
+        let current = InMemorySecretStore()
+        let legacy = InMemorySecretStore(items: [key: "existing"], readFailure: errSecAuthFailed)
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertThrowsError(try LocalRuntimeAuth.ensureToken(in: store))
+        XCTAssertTrue(current.items.isEmpty)
+        XCTAssertEqual(legacy.items[key], "existing")
+        XCTAssertEqual(legacy.deleteCount, 0)
+    }
+
+    func testFailedMigrationWritePreservesTheLegacyToken() {
+        let current = InMemorySecretStore(writeFailure: errSecAuthFailed)
+        let legacy = InMemorySecretStore(items: ["key": "existing"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: true), .failed(errSecAuthFailed))
+        XCTAssertTrue(current.items.isEmpty)
+        XCTAssertEqual(legacy.items["key"], "existing")
+        XCTAssertEqual(legacy.deleteCount, 0)
+    }
+
+    func testNewRuntimeInstallCreatesAndReusesItsOwnToken() throws {
+        let current = InMemorySecretStore()
+        let legacy = InMemorySecretStore()
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+        let token = try LocalRuntimeAuth.ensureToken(in: store)
+
+        XCTAssertEqual(token.count, 64)
+        XCTAssertEqual(try LocalRuntimeAuth.ensureToken(in: store), token)
+        XCTAssertTrue(legacy.items.isEmpty)
+    }
+
+    func testMigrationRequiresThePersistedItemToBeReadable() {
+        let current = InMemorySecretStore(readFailureAfterWrite: errSecInteractionNotAllowed)
+        let legacy = InMemorySecretStore(items: ["key": "existing"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: true), .failed(errSecInteractionNotAllowed))
+        XCTAssertEqual(current.items["key"], "existing")
+        XCTAssertEqual(legacy.items["key"], "existing")
+        XCTAssertEqual(legacy.deleteCount, 0)
+    }
+
+    func testExplicitRuntimeResetRemovesBothItems() {
+        let current = InMemorySecretStore(items: ["key": "new"])
+        let legacy = InMemorySecretStore(items: ["key": "old"])
+        let store = MigratingSecretStore(current: current, legacy: legacy)
+
+        XCTAssertTrue(store.delete(key: "key", allowUserInteraction: true))
+        XCTAssertEqual(store.read(key: "key", allowUserInteraction: false), .notFound)
+        XCTAssertTrue(current.items.isEmpty)
+        XCTAssertTrue(legacy.items.isEmpty)
+    }
+
     /// A denied or interrupted read on an unsigned build used to erase the stored token.
     func testFailedReadLeavesTheTokenAndTheValueInMemory() {
         let store = InMemorySecretStore(items: ["apiToken": "stored"])

@@ -171,6 +171,53 @@ struct KeychainStore: SecretStore {
     }
 }
 
+/// Copies a legacy secret once, leaving the original available for rollback.
+/// A quiet read never writes or prompts. A failed destination read never falls
+/// back to the legacy value, which may be older than the current credential.
+struct MigratingSecretStore: SecretStore {
+    let current: any SecretStore
+    let legacy: any SecretStore
+
+    func read(key: String, allowUserInteraction: Bool) -> KeychainReadResult {
+        let result = current.read(key: key, allowUserInteraction: allowUserInteraction)
+        guard result == .notFound else { return result }
+
+        let previous = legacy.read(key: key, allowUserInteraction: allowUserInteraction)
+        guard allowUserInteraction, case .found(let value) = previous, !value.isEmpty else {
+            return previous
+        }
+
+        do {
+            try current.write(key: key, value: value)
+        } catch {
+            return .failed((error as? KeychainError)?.status ?? errSecInternalComponent)
+        }
+
+        // Persisted access, rather than this process's cache, must work before the
+        // engine accepts the migration. No failure deletes or replaces the legacy item.
+        switch current.read(key: key, allowUserInteraction: false) {
+        case .found(let stored) where stored == value:
+            return .found(stored)
+        case .failed(let status):
+            return .failed(status)
+        case .found, .notFound:
+            return .failed(errSecDecode)
+        }
+    }
+
+    func write(key: String, value: String) throws {
+        try current.write(key: key, value: value)
+    }
+
+    @discardableResult
+    func delete(key: String, allowUserInteraction: Bool) -> Bool {
+        guard current.delete(key: key, allowUserInteraction: allowUserInteraction) else { return false }
+        // An explicit reset must also remove the rollback copy, so it cannot be
+        // imported again on the next launch.
+        return legacy.delete(key: key, allowUserInteraction: allowUserInteraction)
+    }
+}
+
 /// What a read means for the copy of a secret kept in memory.
 enum SecretLoad: Equatable, Sendable {
     /// Use this value. It is empty when nothing is stored.
