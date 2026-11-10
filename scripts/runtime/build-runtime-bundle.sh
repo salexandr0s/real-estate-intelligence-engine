@@ -323,10 +323,14 @@ build_workspaces() {
   ) || fail "compiling the TypeScript workspaces failed"
 }
 
-# Leaves out the packages only devDependencies need, as `npm ci --omit=dev` would. The lockfile
-# marks them "dev". A package that production code needs too carries no mark and stays.
+# Leaves out the packages only devDependencies need, as `npm ci --omit=dev` would. npm marks them
+# "dev" in node_modules/.package-lock.json, which describes the installed tree the bundle copies.
+# package-lock.json can describe a newer tree, after a pull without npm ci. A package that
+# production code needs too carries no mark and stays.
 prune_dev_dependencies() {
-  LOCKFILE="$REPO_ROOT/package-lock.json" BUNDLE_ROOT="$OUTPUT_DIR" "$NODE_BIN" -e '
+  local lockfile="$REPO_ROOT/node_modules/.package-lock.json"
+  [[ -f "$lockfile" ]] || fail "$lockfile is missing; run npm ci"
+  LOCKFILE="$lockfile" BUNDLE_ROOT="$OUTPUT_DIR" "$NODE_BIN" -e '
     const fs = require("node:fs");
     const path = require("node:path");
     const root = path.resolve(process.env.BUNDLE_ROOT);

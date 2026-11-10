@@ -41,7 +41,11 @@ function isBareImport(specifier) {
 
 // Node looks in node_modules next to the importing file, then in each folder above it.
 function isInstalled(name, fromDir) {
-  for (let dir = fromDir; dir === root || dir.startsWith(root + path.sep); dir = path.dirname(dir)) {
+  for (
+    let dir = fromDir;
+    dir === root || dir.startsWith(root + path.sep);
+    dir = path.dirname(dir)
+  ) {
     if (existsSync(path.join(dir, 'node_modules', name))) return true;
   }
   return false;
@@ -61,7 +65,8 @@ for (const folder of distFolders) {
       for (const [, specifier] of source.matchAll(pattern)) {
         if (!isBareImport(specifier)) continue;
         const name = packageName(specifier);
-        if (builtins.has(specifier) || builtins.has(name)) continue;
+        // Only the exact name is a built-in: `punycode/` and `string_decoder/` load the npm packages.
+        if (builtins.has(specifier)) continue;
         if (!isInstalled(name, path.dirname(file))) {
           missing.add(`${path.relative(root, file)} imports ${name}`);
         }
@@ -74,4 +79,6 @@ if (missing.size > 0) {
   console.error(`The bundle lacks packages its code imports:\n${[...missing].join('\n')}`);
   process.exit(1);
 }
-console.log(`[runtime-bundle] every package that ${distFolders.length} dist folders import is in the bundle`);
+console.log(
+  `[runtime-bundle] every package that ${distFolders.length} dist folders import is in the bundle`,
+);
