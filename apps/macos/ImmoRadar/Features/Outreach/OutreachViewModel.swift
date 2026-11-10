@@ -40,9 +40,8 @@ final class OutreachViewModel {
     var detailErrorMessage: String?
     /// The mailbox sync the user asked for failed.
     var syncErrorMessage: String?
-    /// The last thread request the user sent failed. The next request or another thread clears it.
-    /// A request can fail after the user picked another thread, so the view reads
-    /// `shownActionFailure`.
+    /// The last thread request the user sent failed. It stays until the next request or Dismiss,
+    /// also while another thread is selected, so the view reads `shownActionFailure`.
     var actionFailure: OutreachRequestFailure?
     var hasLoaded = false
     /// The cursor of the next page of threads, nil on the last page.
@@ -98,7 +97,6 @@ final class OutreachViewModel {
     func selectThread(id: Int, using client: any OutreachAPIClient) async {
         guard selectedThread?.id != id, threadIDInFlight != id else { return }
         selectedThreadID = id
-        actionFailure = nil
         await loadThread(id: id, using: client)
     }
 
@@ -107,9 +105,6 @@ final class OutreachViewModel {
         // the All list counts as shown only while no load is out.
         let showsAll = listScope == .all && selectedScope == .all && !isLoadingList
         selectedScope = .all
-        if selectedThread?.id != id {
-            actionFailure = nil
-        }
 
         // Load the All list unless it's already shown with the thread in it. The load replaces
         // any list still loading.
@@ -325,12 +320,8 @@ final class OutreachViewModel {
         }
     }
 
-    /// Selects the thread with `id` and loads it, or clears the detail for nil. A failed request
-    /// belongs to the thread it was sent for, so it goes when the selection moves.
+    /// Selects the thread with `id` and loads it, or clears the detail for nil.
     private func select(_ id: Int?, using client: any OutreachAPIClient) async {
-        if id != selectedThreadID {
-            actionFailure = nil
-        }
         selectedThreadID = id
 
         if let id {

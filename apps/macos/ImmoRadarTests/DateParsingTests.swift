@@ -404,7 +404,7 @@ final class OutreachViewModelTests: XCTestCase {
 
     /// A refresh could move the selection to another thread and leave a failed request on
     /// screen, so Try Again sent that request for the thread selected now.
-    func testRefreshThatMovesTheSelectionDropsTheFailedRequest() async {
+    func testRefreshThatMovesTheSelectionHidesTheFailedRequest() async {
         let viewModel = OutreachViewModel()
         let client = MockOutreachAPIClient(
             mailboxes: [makeMailbox()],
@@ -427,12 +427,13 @@ final class OutreachViewModelTests: XCTestCase {
         let snapshot = await client.snapshot()
 
         XCTAssertEqual(viewModel.selectedThreadID, 22)
-        XCTAssertNil(viewModel.actionFailure)
+        XCTAssertNil(viewModel.shownActionFailure)
         XCTAssertEqual(snapshot.followupCalls, [21])
     }
 
     /// A request could fail after the user picked another thread. The failure then showed under
-    /// that thread, and Try Again sent the request for it.
+    /// that thread, and Try Again sent the request for it. Going back to its thread dropped the
+    /// failure, so the user never saw it.
     func testFailureThatArrivesAfterPickingAnotherThreadStaysWithItsThread() async {
         let viewModel = OutreachViewModel()
         let client = MockOutreachAPIClient(
@@ -454,12 +455,17 @@ final class OutreachViewModelTests: XCTestCase {
         }
         await viewModel.sendFollowup(using: client)
         await viewModel.tryFailedRequestAgain(using: client)
-        let snapshot = await client.snapshot()
 
         XCTAssertEqual(viewModel.selectedThread?.id, 22)
-        XCTAssertEqual(viewModel.actionFailure?.threadID, 21)
         XCTAssertNil(viewModel.shownActionFailure)
-        XCTAssertEqual(snapshot.followupCalls, [21])
+
+        // Back on thread 21, the failure shows, and Try Again sends the follow-up for it.
+        await viewModel.selectThread(id: 21, using: client)
+        XCTAssertEqual(viewModel.shownActionFailure?.threadID, 21)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(snapshot.followupCalls, [21, 21])
     }
 
     /// A link to a thread could arrive while another scope's list loaded. That list then
