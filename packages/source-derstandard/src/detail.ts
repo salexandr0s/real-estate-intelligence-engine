@@ -14,6 +14,13 @@ import { decodeHtmlEntities, numberText, stripTags } from './text.js';
 /** Markup of the current layout, which the old layout's text patterns misread. */
 const CURRENT_LAYOUT = /\bsc-metadata-item\b/;
 
+/**
+ * Status of a listing whose page parses. Sold, rented and gone notices reach normalization through
+ * the availability check, which overrides it. An unknown status would keep the listing out of the
+ * app's list and out of alert matching, which take active listings only.
+ */
+const PARSED_STATUS = 'active';
+
 export function parseDetailPage(
   html: string,
   url: string,
@@ -87,7 +94,7 @@ function buildCaptureFromJson(
     propertyTypeRaw: detailData.propertyType ?? null,
     propertySubtypeRaw: detailData.subType ?? null,
     operationTypeRaw: 'sale', // derstandard kaufen section is always sale
-    statusRaw: detailData.status ?? 'unknown',
+    statusRaw: detailData.status ?? PARSED_STATUS,
     floorRaw: rawText(detailData.floor),
     yearBuiltRaw: rawText(detailData.yearBuilt),
     heatingTypeRaw: detailData.heatingType ?? null,
@@ -163,7 +170,7 @@ function buildCaptureFromJsonLd(
     propertyTypeRaw: listing.propertyType,
     propertySubtypeRaw: null,
     operationTypeRaw: 'sale', // kaufen section is always sale
-    statusRaw: 'unknown',
+    statusRaw: PARSED_STATUS,
     floorRaw: facts.get('Stockwerk') ?? facts.get('Etage') ?? null,
     yearBuiltRaw: /\b(\d{4})\b/.exec(facts.get('Baujahr') ?? '')?.[1] ?? null,
     heatingTypeRaw: facts.get('Heizungsart') ?? null,
@@ -465,7 +472,7 @@ function buildCaptureFromDom(
     propertyTypeRaw: null, // not reliably available in DOM
     propertySubtypeRaw: null,
     operationTypeRaw: 'sale', // kaufen section is always sale
-    statusRaw: 'unknown', // DOM pages don't expose status
+    statusRaw: PARSED_STATUS,
     floorRaw: dom.floor,
     yearBuiltRaw: dom.yearBuilt,
     heatingTypeRaw: dom.heatingType,
