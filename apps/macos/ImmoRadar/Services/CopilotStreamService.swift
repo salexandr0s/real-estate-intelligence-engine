@@ -139,57 +139,17 @@ final class CopilotStreamService: Sendable {
                         return
                     }
 
-                    var eventType = ""
-                    var dataBuffer = ""
-
-                    for try await line in bytes.lines {
+                    // Each event goes out as soon as its blank line arrives. `bytes.lines` drops
+                    // blank lines, so reading lines held every event back until the next one began.
+                    var parser = ServerSentEventParser()
+                    for try await byte in bytes {
+                        guard let serverEvent = parser.feed(byte) else { continue }
                         if Task.isCancelled { break }
-
-                        if line.isEmpty {
-                            // Empty line = event boundary (standard SSE).
-                            // Note: AsyncBytes.lines often skips empty lines,
-                            // so we also dispatch on seeing a new "event:" line below.
-                            if !dataBuffer.isEmpty {
-                                if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                                    continuation.yield(event)
-                                    if case .done = event { break }
-                                }
-                            }
-                            eventType = ""
-                            dataBuffer = ""
+                        guard let event = Self.parseEvent(type: serverEvent.type, data: serverEvent.data) else {
                             continue
                         }
-
-                        if line.hasPrefix(":") {
-                            continue // SSE comment / keepalive
-                        }
-
-                        if line.hasPrefix("event:") {
-                            // Dispatch the previous event if we have buffered data,
-                            // since AsyncBytes.lines skips empty lines between events.
-                            if !dataBuffer.isEmpty {
-                                if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                                    continuation.yield(event)
-                                    if case .done = event { break }
-                                }
-                                dataBuffer = ""
-                            }
-                            eventType = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-                        } else if line.hasPrefix("data:") {
-                            let value = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                            if dataBuffer.isEmpty {
-                                dataBuffer = value
-                            } else {
-                                dataBuffer += "\n" + value
-                            }
-                        }
-                    }
-
-                    // Dispatch any remaining buffered event
-                    if !dataBuffer.isEmpty {
-                        if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                            continuation.yield(event)
-                        }
+                        continuation.yield(event)
+                        if case .done = event { break }
                     }
 
                     continuation.finish()
