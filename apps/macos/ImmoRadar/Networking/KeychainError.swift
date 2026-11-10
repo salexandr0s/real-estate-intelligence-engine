@@ -6,6 +6,12 @@ enum KeychainError: Error, LocalizedError {
     /// The item couldn't be read, so it was left as it is instead of being replaced.
     case readFailed(status: OSStatus)
 
+    var status: OSStatus {
+        switch self {
+        case .unhandledError(let status), .readFailed(let status): status
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .unhandledError(let status):

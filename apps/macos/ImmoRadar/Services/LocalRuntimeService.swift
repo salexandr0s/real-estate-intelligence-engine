@@ -3,7 +3,15 @@ import os
 
 enum LocalRuntimeAuth {
     static let keychainKey = "localRuntimeApiToken"
-    static let keychainService = "com.immoradar.local-runtime"
+    // The original item can be restricted to an old ad-hoc build's cdhash even
+    // after Always Allow adds the installed app to its trusted applications.
+    // A new item created by the signed app receives its stable team partition.
+    #if DEBUG
+    static let keychainService = "com.immoradar.local-runtime.debug"
+    #else
+    static let keychainService = "com.immoradar.local-runtime.v2"
+    #endif
+    static let legacyKeychainService = "com.immoradar.local-runtime"
     private enum AuthError: Error { case isolatedSmokeBlocked }
     private static var smokeRequested: Bool { ProcessInfo.processInfo.environment["IMMORADAR_SMOKE_TEST"] != nil }
     private static var permitsStoredCredentials: Bool { AppLaunchMode.current == .production && !smokeRequested }
@@ -18,7 +26,16 @@ enum LocalRuntimeAuth {
         return raw
     }
 
+    #if DEBUG
+    // Ad-hoc development signatures change with each build. Keep their item
+    // separate so a Debug launch cannot create the Release migration target.
     private static let store = KeychainStore(service: keychainService)
+    #else
+    private static let store = MigratingSecretStore(
+        current: KeychainStore(service: keychainService),
+        legacy: KeychainStore(service: legacyKeychainService)
+    )
+    #endif
 
     /// The token this launch's engine runs with. The engine lives as long as the app, so later reads
     /// use this copy. When macOS lets the app read the Keychain item only once, the rest still works.
