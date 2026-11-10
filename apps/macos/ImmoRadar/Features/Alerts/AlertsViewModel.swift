@@ -1,9 +1,12 @@
 import Foundation
 
+/// The status filter of the alerts list.
 enum AlertsScope: String, CaseIterable, Hashable {
     case unread
     case active
     case dismissed
+    case failed
+    case suppressed
     case all
 
     var displayName: String {
@@ -11,12 +14,38 @@ enum AlertsScope: String, CaseIterable, Hashable {
         case .unread: "Unread"
         case .active: "Active"
         case .dismissed: "Dismissed"
+        case .failed: "Failed"
+        case .suppressed: "Suppressed"
         case .all: "All"
+        }
+    }
+
+    /// The `status` values of GET /v1/alerts that make up this scope, one request each. Nil asks
+    /// for every status. Unread is the server's `queued` and `sent`.
+    var serverStatuses: [AlertServerStatus?] {
+        switch self {
+        case .unread: [.queued, .sent]
+        case .active: [.queued, .sent, .opened]
+        case .dismissed: [.dismissed]
+        case .failed: [.failed]
+        case .suppressed: [.suppressed]
+        case .all: [nil]
+        }
+    }
+
+    func includes(_ status: AlertStatus) -> Bool {
+        switch self {
+        case .unread: status == .unread
+        case .active: status == .unread || status == .opened
+        case .dismissed: status == .dismissed
+        case .failed: status == .failed
+        case .suppressed: status == .suppressed
+        case .all: true
         }
     }
 }
 
-/// View model for listing alerts with filtering by status.
+/// View model for listing alerts with filtering by status and saved filter.
 @MainActor @Observable
 final class AlertsViewModel {
 
@@ -24,11 +53,21 @@ final class AlertsViewModel {
 
     var alerts: [Alert] = []
     var isLoading: Bool = false
+    /// Why the last load failed. The view hides it while the global connection banner shows.
+    var loadErrorMessage: String?
+    /// Why the user's last action (read, dismiss, undo) failed.
     var errorMessage: String?
     var selectedAlertID: Int?
+    /// Changing the scope loads that status from the server.
     var scope: AlertsScope = .unread {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
+    /// Only alerts raised by this saved filter, or nil for every filter.
+    var userFilterId: Int? {
+        didSet { normalizeSelection(preferredID: selectedAlertID) }
+    }
+    /// The saved filters the filter bar offers.
+    var availableFilters: [Filter] = []
     var sortBy: AlertSortBy = .age {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
@@ -39,21 +78,25 @@ final class AlertsViewModel {
         didSet { normalizeSelection(preferredID: selectedAlertID) }
     }
 
+    /// Goes up with each load, so an older load that finishes late changes nothing.
+    @ObservationIgnored
+    private var loadGeneration = 0
+
+    /// Streamed alerts that arrived while a load ran. The load's result may predate them.
+    @ObservationIgnored
+    private var alertsStreamedDuringLoad: [Alert] = []
+
     // MARK: - Computed
 
+    /// The loaded alerts still in the current filters. A status change made here can take an
+    /// alert out of its scope before the next load.
     var scopedAlerts: [Alert] {
-        var result = alerts
-        switch scope {
-        case .unread:
-            result = result.filter { $0.status == .unread }
-        case .active:
-            result = result.filter { $0.status == .unread || $0.status == .opened }
-        case .dismissed:
-            result = result.filter { $0.status == .dismissed }
-        case .all:
-            break
-        }
-        return result
+        alerts.filter(matchesFilters)
+    }
+
+    var selectedFilterName: String? {
+        guard let userFilterId else { return nil }
+        return availableFilters.first { $0.id == userFilterId }?.name
     }
 
     var visibleAlerts: [Alert] {
@@ -64,10 +107,6 @@ final class AlertsViewModel {
         return result
     }
 
-    var unreadCount: Int {
-        alerts.count(where: { $0.status == .unread })
-    }
-
     var selectedAlert: Alert? {
         guard let id = selectedAlertID else { return nil }
         return alerts.first { $0.id == id }
@@ -75,10 +114,6 @@ final class AlertsViewModel {
 
     var visibleCount: Int {
         visibleAlerts.count
-    }
-
-    var hasAnyAlerts: Bool {
-        !alerts.isEmpty
     }
 
     var sortDescription: String {
@@ -116,35 +151,108 @@ final class AlertsViewModel {
         return haystack.localizedStandardContains(query)
     }
 
+    /// Whether an alert belongs in the list under the current status and saved filter.
+    func matchesFilters(_ alert: Alert) -> Bool {
+        if let userFilterId, alert.userFilterId != userFilterId {
+            return false
+        }
+        return scope.includes(alert.status)
+    }
+
     // MARK: - Actions
 
+    /// Loads every alert in the current scope and saved filter, plus the filters the bar offers.
     func refresh(using client: APIClient) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        errorMessage = nil
+        loadErrorMessage = nil
+        alertsStreamedDuringLoad = []
 
+        // The query as it is now. Changing it starts a newer load, and this one stops paging.
+        let statuses = scope.serverStatuses
+        let filterID = userFilterId
+        let sortBy = self.sortBy
+        let sortDirection = self.sortDirection
+
+        async let filterOptions = Self.fetchFilterOptions(using: client)
         do {
-            var allAlerts: [Alert] = []
-            var cursor: String? = nil
+            var loaded: [Alert] = []
+            var isComplete = true
+            pages: for status in statuses {
+                var cursor: String? = nil
+                var requestedCursors = Set<String>()
+                repeat {
+                    guard generation == loadGeneration, !Task.isCancelled else {
+                        isComplete = false
+                        break pages
+                    }
+                    var query = AlertQuery()
+                    query.status = status
+                    query.userFilterId = filterID
+                    query.limit = 200
+                    query.cursor = cursor
+                    query.sortBy = sortBy
+                    query.sortDirection = sortDirection
 
-            repeat {
-                var query = AlertQuery()
-                query.limit = 200
-                query.cursor = cursor
-                query.sortBy = sortBy
-                query.sortDirection = sortDirection
+                    let response = try await client.fetchAlertsPaginated(query: query)
+                    loaded.append(contentsOf: response.alerts)
+                    cursor = response.nextCursor
+                    // A cursor the server hands back again would page forever.
+                    if let next = cursor, !requestedCursors.insert(next).inserted {
+                        Log.api.error("The alerts list repeated a cursor, so paging stopped")
+                        cursor = nil
+                    }
+                } while cursor != nil
+            }
+            guard isComplete, generation == loadGeneration else {
+                // Superseded, or cancelled with the last loaded alerts still on screen.
+                _ = await filterOptions
+                if generation == loadGeneration {
+                    alertsStreamedDuringLoad = []
+                    isLoading = false
+                }
+                return
+            }
 
-                let response = try await client.fetchAlertsPaginated(query: query)
-                allAlerts.append(contentsOf: response.alerts)
-                cursor = response.nextCursor
-            } while cursor != nil
-
-            alerts = allAlerts
+            // One request per status: drop an alert that moved between two of them during the
+            // load, and sort the union, since each request came sorted on its own.
+            var seenIDs = Set<Int>()
+            var merged = loaded.filter { seenIDs.insert($0.id).inserted }
+            if statuses.count > 1 {
+                merged = sortAlerts(merged)
+            }
+            for alert in alertsStreamedDuringLoad where matchesFilters(alert) {
+                guard seenIDs.insert(alert.id).inserted else { continue }
+                merged = inserting(alert, into: merged)
+            }
+            alerts = merged
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            // The last loaded alerts stay.
+            if generation == loadGeneration, !Task.isCancelled {
+                loadErrorMessage = AppErrorPresentation.message(for: error)
+            }
         }
 
-        isLoading = false
+        if let options = await filterOptions, generation == loadGeneration {
+            availableFilters = options.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            // The picked filter was deleted since: show every filter's alerts.
+            if let userFilterId, !availableFilters.contains(where: { $0.id == userFilterId }) {
+                self.userFilterId = nil
+            }
+        }
+        if generation == loadGeneration {
+            alertsStreamedDuringLoad = []
+            isLoading = false
+        }
+    }
+
+    /// The saved filters, or nil when they can't be read. The bar then keeps the last ones.
+    private nonisolated static func fetchFilterOptions(using client: APIClient) async -> [Filter]? {
+        try? await client.fetchFilters()
     }
 
     func markAsRead(_ alert: Alert, using client: APIClient) async {
@@ -168,15 +276,21 @@ final class AlertsViewModel {
 
         do {
             _ = try await client.bulkUpdateAlerts(ids: ids, action: "opened")
-            for i in alerts.indices {
-                if ids.contains(alerts[i].id), alerts[i].status == .unread {
-                    alerts[i].status = .opened
-                }
+            let changedIDs = Set(ids)
+            for i in alerts.indices where changedIDs.contains(alerts[i].id) && alerts[i].status == .unread {
+                alerts[i].status = .opened
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            await showBulkFailure(error, using: client)
         }
+    }
+
+    /// The client sends a long list in chunks, so the chunks before a failure may have changed.
+    /// A reload shows what the server holds now.
+    private func showBulkFailure(_ error: Error, using client: APIClient) async {
+        errorMessage = AppErrorPresentation.message(for: error)
+        await refresh(using: client)
     }
 
     func dismissVisible(using client: APIClient) async {
@@ -188,73 +302,99 @@ final class AlertsViewModel {
 
         do {
             _ = try await client.bulkUpdateAlerts(ids: ids, action: "dismissed")
-            for i in alerts.indices {
-                if ids.contains(alerts[i].id), alerts[i].status != .dismissed {
-                    alerts[i].status = .dismissed
-                }
+            let changedIDs = Set(ids)
+            for i in alerts.indices where changedIDs.contains(alerts[i].id) {
+                alerts[i].status = .dismissed
             }
             normalizeSelection(preferredID: selectedAlertID)
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            await showBulkFailure(error, using: client)
         }
     }
 
-    /// Insert a streamed alert if not already present (deduplicated by ID).
+    /// Takes an alert from the live stream. A listed alert is updated in place. A new one goes in
+    /// only when it matches the current status and saved filter, so the list shows it once.
     func insertStreamAlert(_ alert: Alert) {
+        if isLoading {
+            alertsStreamedDuringLoad.append(alert)
+        }
         if let existingIndex = alerts.firstIndex(where: { $0.id == alert.id }) {
             alerts[existingIndex] = alert
-        } else {
-            switch sortBy {
-            case .age:
-                if sortDirection == .desc {
-                    alerts.insert(alert, at: 0)
-                } else {
-                    alerts.append(alert)
-                }
-            case .district, .price:
-                alerts.append(alert)
-                alerts = sortAlerts(alerts)
-            }
+        } else if matchesFilters(alert) {
+            alerts = inserting(alert, into: alerts)
         }
         normalizeSelection(preferredID: selectedAlertID)
     }
 
-    func dismiss(_ alert: Alert, using client: APIClient, undoManager: UndoManager? = nil) async {
+    /// The list with a new alert where the sort puts it. Newest first puts it on top.
+    private func inserting(_ alert: Alert, into list: [Alert]) -> [Alert] {
+        switch sortBy {
+        case .age:
+            sortDirection == .desc ? [alert] + list : list + [alert]
+        case .district, .price:
+            sortAlerts(list + [alert])
+        }
+    }
+
+    /// Dismisses one alert. Undo sends its earlier status back, then runs `afterUndo`.
+    func dismiss(
+        _ alert: Alert,
+        using client: APIClient,
+        undoManager: UndoManager? = nil,
+        afterUndo: (@MainActor @Sendable () async -> Void)? = nil
+    ) async {
         let previousStatus = alert.status
-        let body: Data
         do {
-            body = try JSONEncoder().encode(APIAlertUpdateRequest(status: "dismissed"))
+            let body = try JSONEncoder().encode(APIAlertUpdateRequest(status: AlertStatus.dismissed.serverValue))
+            try await client.requestVoid(.updateAlert(id: alert.id, body: body))
         } catch {
             errorMessage = AppErrorPresentation.message(for: error)
             return
         }
 
+        if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
+            alerts[idx].status = .dismissed
+        }
+        normalizeSelection(preferredID: alert.id)
+        undoManager?.registerUndo(withTarget: self) { vm in
+            Task { @MainActor in
+                await vm.restoreStatus(previousStatus, of: alert, using: client)
+                await afterUndo?()
+            }
+        }
+        undoManager?.setActionName("Dismiss Alert")
+    }
+
+    /// Undo of a status change: sends the earlier status back, unread as `sent`. On failure the
+    /// alert keeps its current status and the error shows.
+    func restoreStatus(_ status: AlertStatus, of alert: Alert, using client: APIClient) async {
         do {
+            let body = try JSONEncoder().encode(APIAlertUpdateRequest(status: status.serverValue))
             try await client.requestVoid(.updateAlert(id: alert.id, body: body))
-            if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
-                alerts[idx].status = .dismissed
-            }
-            normalizeSelection(preferredID: alert.id)
-            undoManager?.registerUndo(withTarget: self) { vm in
-                Task { @MainActor in
-                    let revertBody = try? JSONEncoder().encode(APIAlertUpdateRequest(status: previousStatus.rawValue))
-                    if let revertBody {
-                        try? await client.requestVoid(.updateAlert(id: alert.id, body: revertBody))
-                    }
-                    if let idx = vm.alerts.firstIndex(where: { $0.id == alert.id }) {
-                        vm.alerts[idx].status = previousStatus
-                    }
-                    vm.normalizeSelection(preferredID: alert.id)
-                }
-            }
-            undoManager?.setActionName("Dismiss Alert")
         } catch {
             errorMessage = AppErrorPresentation.message(for: error)
+            return
         }
+
+        if let idx = alerts.firstIndex(where: { $0.id == alert.id }) {
+            alerts[idx].status = status
+        } else {
+            // A reload since the dismiss left it out of this status.
+            var restored = alert
+            restored.status = status
+            if matchesFilters(restored) {
+                alerts = sortAlerts(alerts + [restored])
+            }
+        }
+        normalizeSelection(preferredID: alert.id)
     }
 
     func clearError() {
         errorMessage = nil
+    }
+
+    func clearLoadError() {
+        loadErrorMessage = nil
     }
 
     func toggleSortDirection() {

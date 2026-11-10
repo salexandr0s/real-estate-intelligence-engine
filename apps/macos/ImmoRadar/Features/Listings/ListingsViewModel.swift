@@ -18,10 +18,11 @@ final class ListingsViewModel {
         didSet { rebuildFilteredListings() }
     }
     var isLoading: Bool = false
-    var isLoadingMore: Bool = false
     var hasLoaded: Bool = false
     var errorMessage: String?
-    var nextCursor: String?
+
+    /// Goes up with each refresh, so a slower earlier refresh can't overwrite a newer one.
+    @ObservationIgnored private var latestRefreshID = 0
 
     // MARK: - Filters
 
@@ -72,8 +73,6 @@ final class ListingsViewModel {
 
     // MARK: - Computed
 
-    var hasMore: Bool { nextCursor != nil }
-
     var filteredListings: [Listing] = []
 
     var selectedListing: Listing? {
@@ -109,55 +108,79 @@ final class ListingsViewModel {
 
     // MARK: - Actions
 
-    func refresh(using client: APIClient, cache: LocalCache? = nil) async {
+    /// Loads every listing. The screen's first load may use the copy cached in the last
+    /// 300 seconds; an explicit refresh passes `bypassingCache` so it always asks the server.
+    func refresh(using client: APIClient, cache: LocalCache? = nil, bypassingCache: Bool = false) async {
+        latestRefreshID += 1
+        let refreshID = latestRefreshID
         isLoading = true
         errorMessage = nil
-        nextCursor = nil
 
-        // Check cache first
-        if let cache, let cached = cache.get(Self.listingsCacheKey, as: [Listing].self) {
+        if !bypassingCache, let cache, let cached = cache.get(Self.listingsCacheKey, as: [Listing].self) {
             listings = cached
             hasLoaded = true
             isLoading = false
             // Still refresh alert badges
-            await refreshAlertBadges(using: client)
+            await refreshAlertBadges(using: client, refreshID: refreshID)
             return
         }
 
         do {
-            // Load all listings by paginating through all pages (map needs everything)
-            var all: [Listing] = []
-            var cursor: String? = nil
-            repeat {
+            // The map needs every listing, so this follows the cursor through all pages.
+            let all = try await Self.fetchAllPages { cursor in
                 var query = ListingQuery()
                 query.limit = 200
                 query.cursor = cursor
-                let response = try await client.fetchListingsPaginated(query: query)
-                all.append(contentsOf: response.listings)
-                cursor = response.nextCursor
-            } while cursor != nil
+                return try await client.fetchListingsPaginated(query: query)
+            }
+            guard refreshID == latestRefreshID else { return }
 
             listings = all
-            nextCursor = nil
             cache?.set(Self.listingsCacheKey, value: listings)
             SpotlightIndexer.shared.indexListings(all)
             Log.ui.info("Fetched all \(all.count) listings")
         } catch {
+            guard refreshID == latestRefreshID else { return }
             errorMessage = AppErrorPresentation.message(for: error)
             Log.ui.error("Fetch error: \(error, privacy: .public)")
         }
 
         // Fetch alerts to cross-reference listing IDs for badge display
-        await refreshAlertBadges(using: client)
+        await refreshAlertBadges(using: client, refreshID: refreshID)
+        guard refreshID == latestRefreshID else { return }
 
         hasLoaded = true
         isLoading = false
     }
 
+    /// Follows `nextCursor` from the first page until the server stops sending one. It stops
+    /// when the server hands back a cursor it already gave, so a repeated cursor can't loop,
+    /// and a listing that is already loaded isn't added again.
+    static func fetchAllPages(
+        _ fetchPage: (_ cursor: String?) async throws -> (listings: [Listing], nextCursor: String?)
+    ) async throws -> [Listing] {
+        var all: [Listing] = []
+        var loadedIDs = Set<Int>()
+        var usedCursors = Set<String>()
+        var cursor: String?
+
+        while true {
+            let page = try await fetchPage(cursor)
+            for listing in page.listings where loadedIDs.insert(listing.id).inserted {
+                all.append(listing)
+            }
+            guard let next = page.nextCursor, usedCursors.insert(next).inserted else {
+                return all
+            }
+            cursor = next
+        }
+    }
+
     /// Fetches alert listing IDs and marks matching listings with alert badges.
-    private func refreshAlertBadges(using client: APIClient) async {
+    private func refreshAlertBadges(using client: APIClient, refreshID: Int) async {
         do {
             let alerts = try await client.fetchAlerts(query: AlertQuery())
+            guard refreshID == latestRefreshID else { return }
             alertedListingIds = Set(alerts.compactMap(\.listingId))
             var updatedListings = listings
             for index in updatedListings.indices {
@@ -167,27 +190,6 @@ final class ListingsViewModel {
         } catch {
             // Non-critical: badges simply won't show
         }
-    }
-
-    func loadMore(using client: APIClient) async {
-        guard let cursor = nextCursor, !isLoadingMore else { return }
-
-        isLoadingMore = true
-
-        do {
-            var query = ListingQuery()
-            query.cursor = cursor
-            let response = try await client.fetchListingsPaginated(query: query)
-            // Deduplicate by ID before appending
-            let existingIDs = Set(listings.map(\.id))
-            let newListings = response.listings.filter { !existingIDs.contains($0.id) }
-            listings.append(contentsOf: newListings)
-            nextCursor = response.nextCursor
-        } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
-        }
-
-        isLoadingMore = false
     }
 
     func clearFilters() {
@@ -212,7 +214,9 @@ final class ListingsViewModel {
         selectedListingID = id
     }
 
-    func exportCSV(using client: APIClient) async -> Data? {
+    /// Throws, so the view reports a failed export as the user's own action rather than as a
+    /// failed load.
+    func exportCSV(using client: APIClient) async throws -> Data {
         var query = ListingQuery()
         if let d = selectedDistrict { query.districts = [d] }
         if let p = selectedPropertyType { query.propertyTypes = [p.rawValue] }
@@ -221,12 +225,7 @@ final class ListingsViewModel {
         if let max = Int(maxPrice) { query.maxPriceEur = max }
         if let score = Double(minScore) { query.minScore = score }
 
-        do {
-            return try await client.exportListingsCSV(query: query)
-        } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
-            return nil
-        }
+        return try await client.exportListingsCSV(query: query)
     }
 
     private func rebuildFilteredListings() {

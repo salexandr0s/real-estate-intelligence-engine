@@ -1,31 +1,99 @@
 import Foundation
 import os
 
+// MARK: - Request
+
+/// The body `POST /v1/copilot/chat` takes.
+struct CopilotChatRequest: Encodable, Sendable {
+    struct Message: Encodable, Equatable, Sendable {
+        let role: String
+        let content: String
+    }
+
+    struct Context: Encodable, Sendable {
+        let currentListingId: Int?
+        let currentDistrictNo: Int?
+    }
+
+    /// The route refuses a chat with more messages than this.
+    static let maxMessages = 50
+
+    let messages: [Message]
+    let context: Context?
+    let provider: String
+    let model: String?
+
+    /// The most recent messages the route accepts. The history starts on a user turn, because a
+    /// cut that leaves an assistant turn first gives the model an answer to a question it never saw.
+    static func history(from messages: [CopilotMessage], limit: Int = maxMessages) -> [Message] {
+        var recent = Array(messages.suffix(limit))
+        while let first = recent.first, first.role != .user {
+            recent.removeFirst()
+        }
+        return recent.map { Message(role: $0.role.rawValue, content: requestContent(for: $0)) }
+    }
+
+    /// The message's text. An answer that was only cards is described in words: the route turns
+    /// empty text into a placeholder, which would tell the model nothing about what it showed.
+    static func requestContent(for message: CopilotMessage) -> String {
+        let text = message.contentBlocks
+            .compactMap { block -> String? in
+                if case .text(let value) = block.content { return value }
+                return nil
+            }
+            .joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty else { return text }
+
+        let cards = message.contentBlocks.compactMap { cardSummary(for: $0.content) }
+        guard !cards.isEmpty else { return "(No answer.)" }
+        return "Shown as cards in the app:\n" + cards.joined(separator: "\n")
+    }
+
+    private static func cardSummary(for content: ContentBlockType) -> String? {
+        switch content {
+        case .text, .loading:
+            return nil
+        case .listingCards(let listings):
+            return "Listings: " + listings.map { "#\($0.id) \($0.title)" }.joined(separator: "; ")
+        case .comparisonTable:
+            return "A comparison table"
+        case .scoreBreakdown(let breakdown):
+            return "The score breakdown for listing #\(breakdown.listingId)"
+        case .priceHistory(let history):
+            return "The price history for listing #\(history.listingId)"
+        case .chartData(let chart):
+            return "A chart: \(chart.title)"
+        case .marketStats:
+            return "Market statistics"
+        case .listingComparison:
+            return "A comparison of listings"
+        case .proximitySummary:
+            return "A summary of nearby places"
+        case .crossSourceComparison:
+            return "The same listing on other sources"
+        }
+    }
+}
+
 // MARK: - Stream Service
 
 /// SSE client for copilot chat streaming responses.
 /// Unlike AlertStreamService (long-lived GET), this is request-response via POST.
 final class CopilotStreamService: Sendable {
 
+    /// The largest error body read from a failed answer.
+    private static let errorBodyLimit = 64 * 1024
+
     func stream(
         baseURL: String,
         token: String,
-        messages: [[String: Any]],
-        context: [String: Any]? = nil,
-        provider: String,
-        copilotApiKey: String,
-        model: String? = nil
+        request chatRequest: CopilotChatRequest,
+        copilotApiKey: String
     ) -> AsyncThrowingStream<CopilotStreamEvent, Error> {
-        // Serialize body outside the async closure to avoid Sendable issues with [String: Any]
-        var body: [String: Any] = ["messages": messages]
-        if let context {
-            body["context"] = context
-        }
-        body["provider"] = provider
-        if let model, !model.isEmpty { body["model"] = model }
         let bodyData: Data
         do {
-            bodyData = try JSONSerialization.data(withJSONObject: body)
+            bodyData = try JSONEncoder().encode(chatRequest)
         } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
@@ -60,63 +128,28 @@ final class CopilotStreamService: Sendable {
                         return
                     }
 
-                    guard http.statusCode == 200 else {
-                        continuation.yield(.error("Server returned status \(http.statusCode)"))
+                    guard (200..<300).contains(http.statusCode) else {
+                        var body = Data()
+                        for try await byte in bytes {
+                            body.append(byte)
+                            if body.count >= Self.errorBodyLimit { break }
+                        }
+                        continuation.yield(.error(Self.failureMessage(statusCode: http.statusCode, body: body)))
                         continuation.finish()
                         return
                     }
 
-                    var eventType = ""
-                    var dataBuffer = ""
-
-                    for try await line in bytes.lines {
+                    // Each event goes out as soon as its blank line arrives. `bytes.lines` drops
+                    // blank lines, so reading lines held every event back until the next one began.
+                    var parser = ServerSentEventParser()
+                    for try await byte in bytes {
+                        guard let serverEvent = parser.feed(byte) else { continue }
                         if Task.isCancelled { break }
-
-                        if line.isEmpty {
-                            // Empty line = event boundary (standard SSE).
-                            // Note: AsyncBytes.lines often skips empty lines,
-                            // so we also dispatch on seeing a new "event:" line below.
-                            if !dataBuffer.isEmpty {
-                                if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                                    continuation.yield(event)
-                                    if case .done = event { break }
-                                }
-                            }
-                            eventType = ""
-                            dataBuffer = ""
+                        guard let event = Self.parseEvent(type: serverEvent.type, data: serverEvent.data) else {
                             continue
                         }
-
-                        if line.hasPrefix(":") {
-                            continue // SSE comment / keepalive
-                        }
-
-                        if line.hasPrefix("event:") {
-                            // Dispatch the previous event if we have buffered data,
-                            // since AsyncBytes.lines skips empty lines between events.
-                            if !dataBuffer.isEmpty {
-                                if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                                    continuation.yield(event)
-                                    if case .done = event { break }
-                                }
-                                dataBuffer = ""
-                            }
-                            eventType = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-                        } else if line.hasPrefix("data:") {
-                            let value = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                            if dataBuffer.isEmpty {
-                                dataBuffer = value
-                            } else {
-                                dataBuffer += "\n" + value
-                            }
-                        }
-                    }
-
-                    // Dispatch any remaining buffered event
-                    if !dataBuffer.isEmpty {
-                        if let event = Self.parseEvent(type: eventType, data: dataBuffer) {
-                            continuation.yield(event)
-                        }
+                        continuation.yield(event)
+                        if case .done = event { break }
                     }
 
                     continuation.finish()
@@ -133,36 +166,75 @@ final class CopilotStreamService: Sendable {
         }
     }
 
+    // MARK: - Errors
+
+    /// The `message` of the API's error envelope, `{"error":{"code":…,"message":…,"details":…}}`,
+    /// or the status when the answer has no envelope.
+    static func failureMessage(statusCode: Int, body: Data) -> String {
+        if let envelope = try? JSONDecoder().decode(ErrorEnvelope.self, from: body) {
+            let message = envelope.error.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !message.isEmpty { return message }
+        }
+        return "Copilot couldn’t start. The server answered with HTTP \(statusCode)."
+    }
+
+    /// `details` can hold any JSON, so only the message is decoded.
+    private struct ErrorEnvelope: Decodable {
+        struct Detail: Decodable {
+            let message: String
+        }
+
+        let error: Detail
+    }
+
     // MARK: - Event Parsing
 
+    private struct TextDeltaPayload: Decodable {
+        let delta: String
+    }
+
+    /// Decoded from snake case, so `tool_name` works as well as `toolName`.
+    private struct ToolUsePayload: Decodable {
+        let toolName: String
+    }
+
+    private struct MessagePayload: Decodable {
+        let message: String
+    }
+
+    private struct BlockTypePayload: Decodable {
+        let type: String
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
     private static func parseEvent(type: String, data: String) -> CopilotStreamEvent? {
+        let jsonData = Data(data.utf8)
+        let decoder = makeDecoder()
+
         switch type {
         case "text_delta":
-            guard let json = parseJSON(data),
-                  let delta = json["delta"] as? String else {
-                return nil
-            }
-            return .textDelta(delta)
+            guard let payload = try? decoder.decode(TextDeltaPayload.self, from: jsonData) else { return nil }
+            return .textDelta(payload.delta)
 
         case "tool_use":
-            guard let json = parseJSON(data),
-                  let name = json["toolName"] as? String ?? json["tool_name"] as? String else {
-                return nil
-            }
-            return .toolUse(name: name)
+            guard let payload = try? decoder.decode(ToolUsePayload.self, from: jsonData) else { return nil }
+            return .toolUse(name: payload.toolName)
 
         case "content_block":
-            return parseContentBlock(data: data)
+            return parseContentBlock(data: jsonData, decoder: decoder)
 
         case "done":
             return .done
 
         case "error":
-            if let json = parseJSON(data),
-               let message = json["message"] as? String {
-                return .error(message)
-            }
-            return .error("Unknown error")
+            let payload = try? decoder.decode(MessagePayload.self, from: jsonData)
+            return .error(payload?.message ?? "Copilot hit an error and stopped. Try again.")
 
         default:
             Log.stream.debug("Unknown copilot event type: \(type, privacy: .public)")
@@ -172,16 +244,10 @@ final class CopilotStreamService: Sendable {
 
     // MARK: - Content Block Parsing
 
-    private static func parseContentBlock(data: String) -> CopilotStreamEvent? {
-        guard let jsonData = data.data(using: .utf8),
-              let json = parseJSON(data),
-              let blockType = json["type"] as? String else {
+    private static func parseContentBlock(data jsonData: Data, decoder: JSONDecoder) -> CopilotStreamEvent? {
+        guard let blockType = (try? decoder.decode(BlockTypePayload.self, from: jsonData))?.type else {
             return nil
         }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .iso8601
 
         do {
             switch blockType {
@@ -246,11 +312,6 @@ final class CopilotStreamService: Sendable {
             Log.stream.error("Failed to decode content block '\(blockType, privacy: .public)': \(error, privacy: .public)")
             return nil
         }
-    }
-
-    private static func parseJSON(_ string: String) -> [String: Any]? {
-        guard let data = string.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }
 

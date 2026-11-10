@@ -6,63 +6,117 @@ final class DashboardViewModel {
 
     // MARK: - State
 
+    /// The last stats loaded. A failed refresh keeps them.
     var stats: DashboardStats?
+    /// The last active filters loaded. A failed refresh keeps them.
     var activeFilters: [Filter] = []
+    /// The last matches loaded per active filter. A filter is missing until its matches load once.
     var filterListings: [Int: [Listing]] = [:]
     var filterLoadingStates: [Int: Bool] = [:]
     var isLoading: Bool = false
     var errorMessage: String?
+    /// When a refresh last loaded everything without an error.
     var lastRefreshDate: Date?
+    /// False until a refresh loads the filter list. Until then the view shows a loading or error
+    /// state, because empty filter sections would read as real zeros.
+    private(set) var hasLoaded = false
+
+    /// Goes up with each refresh, so a slower earlier refresh can't overwrite a newer one.
+    @ObservationIgnored private var latestRefreshID = 0
 
     // MARK: - Load
 
     func refresh(using client: APIClient) async {
+        latestRefreshID += 1
+        let refreshID = latestRefreshID
         isLoading = true
         errorMessage = nil
 
         async let statsTask = client.fetchDashboardStats()
         async let filtersTask = client.fetchFilters()
 
-        do { stats = try await statsTask } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
-        }
+        var failure: Error?
 
         do {
-            let allFilters = try await filtersTask
-            activeFilters = allFilters.filter(\.isActive)
+            let loadedStats = try await statsTask
+            if refreshID == latestRefreshID {
+                stats = loadedStats
+            }
         } catch {
-            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
-            activeFilters = []
+            failure = error
         }
 
-        await fetchFilterListings(using: client)
+        var loadedFilters: [Filter]?
+        do {
+            loadedFilters = try await filtersTask
+        } catch {
+            failure = failure ?? error
+        }
 
-        lastRefreshDate = .now
+        guard refreshID == latestRefreshID else { return }
+
+        // Without a new filter list, the filters and matches loaded before stay as they are.
+        if let loadedFilters {
+            setActiveFilters(loadedFilters.filter(\.isActive))
+            if let matchFailure = await fetchFilterListings(using: client, refreshID: refreshID) {
+                failure = failure ?? matchFailure
+            }
+            guard refreshID == latestRefreshID else { return }
+            hasLoaded = true
+        } else {
+            // This refresh loads no matches, and an earlier refresh's loads are dropped on
+            // arrival, so no row waits on them.
+            filterLoadingStates = [:]
+        }
+
+        if let failure {
+            errorMessage = AppErrorPresentation.message(for: failure)
+        } else {
+            lastRefreshDate = .now
+        }
         isLoading = false
     }
 
-    private func fetchFilterListings(using client: APIClient) async {
-        for filter in activeFilters {
-            filterLoadingStates[filter.id] = true
+    /// Replaces the active filters and drops the matches of filters that are no longer active.
+    private func setActiveFilters(_ filters: [Filter]) {
+        activeFilters = filters
+        let activeIDs = Set(filters.map(\.id))
+        filterListings = filterListings.filter { activeIDs.contains($0.key) }
+        filterLoadingStates = filterLoadingStates.filter { activeIDs.contains($0.key) }
+    }
+
+    /// Loads each active filter's matches and returns the first failure. A filter whose load fails
+    /// keeps the matches loaded before, or has none, which the view shows as unavailable.
+    private func fetchFilterListings(using client: APIClient, refreshID: Int) async -> Error? {
+        let filterIDs = activeFilters.map(\.id)
+        for filterID in filterIDs {
+            filterLoadingStates[filterID] = true
         }
 
-        await withTaskGroup(of: (Int, [Listing]?).self) { group in
-            for filter in activeFilters {
-                group.addTask { [filter] in
+        var firstFailure: Error?
+        await withTaskGroup(of: (Int, Result<[Listing], Error>).self) { group in
+            for filterID in filterIDs {
+                group.addTask {
                     do {
-                        let listings = try await client.testFilter(id: filter.id)
-                        return (filter.id, listings)
+                        return (filterID, .success(try await client.testFilter(id: filterID)))
                     } catch {
-                        return (filter.id, nil)
+                        return (filterID, .failure(error))
                     }
                 }
             }
 
-            for await (filterId, listings) in group {
-                filterListings[filterId] = listings ?? []
-                filterLoadingStates[filterId] = false
+            for await (filterID, result) in group {
+                guard refreshID == latestRefreshID else { continue }
+                switch result {
+                case .success(let listings):
+                    filterListings[filterID] = listings
+                case .failure(let error):
+                    firstFailure = firstFailure ?? error
+                }
+                filterLoadingStates[filterID] = false
             }
         }
+        return firstFailure
     }
 
     // MARK: - Derived Models
@@ -92,7 +146,10 @@ final class DashboardViewModel {
         let activeFilters: Int
         let matchedFilters: Int
         let emptyFilters: Int
-        let totalUniqueMatches: Int
+        /// Active filters whose matches failed to load and none were loaded before.
+        let unavailableFilters: Int
+        /// Nil while an active filter's matches are missing.
+        let totalUniqueMatches: Int?
         let strongestFilterName: String?
         let strongestFilterCount: Int
     }
@@ -100,7 +157,8 @@ final class DashboardViewModel {
     struct FilterCoverageRow: Identifiable {
         let id: Int
         let name: String
-        let matchCount: Int
+        /// Nil until the filter's matches have loaded.
+        let matchCount: Int?
         let isLoading: Bool
     }
 
@@ -135,10 +193,31 @@ final class DashboardViewModel {
         return lhsScore > rhsScore
     }
 
+    /// Whether an active filter's matches failed to load and none were loaded before.
+    func matchesUnavailable(for filterID: Int) -> Bool {
+        filterListings[filterID] == nil && filterLoadingStates[filterID] != true
+    }
+
+    /// Active filters whose matches failed to load and none were loaded before.
+    var unavailableMatchFilterCount: Int {
+        activeFilters.count { matchesUnavailable(for: $0.id) }
+    }
+
+    /// Whether an active filter has no matches loaded yet. Counts over matches would leave it out,
+    /// so they show as unknown instead.
+    private var isMissingMatches: Bool {
+        activeFilters.contains { filterListings[$0.id] == nil }
+    }
+
+    /// The unique matches across active filters, or nil while a filter's matches are missing.
+    var knownUniqueMatchCount: Int? {
+        isMissingMatches ? nil : totalUniqueMatches
+    }
+
     private var uniqueMatchedListings: [Listing] {
         var deduped: [Int: Listing] = [:]
 
-        for listing in filterListings.values.flatMap({ $0 }) {
+        for listing in activeFilters.flatMap({ filterListings[$0.id] ?? [] }) {
             if let existing = deduped[listing.id] {
                 deduped[listing.id] = isBetterOpportunity(listing, than: existing) ? listing : existing
             } else {
@@ -183,15 +262,21 @@ final class DashboardViewModel {
         activeFilters.count { (filterListings[$0.id] ?? []).isEmpty == false }
     }
 
-    var activitySnapshot: ActivitySnapshot {
+    /// Activity across the loaded matches, or nil while an active filter's matches are missing.
+    var activitySnapshot: ActivitySnapshot? {
+        guard !isMissingMatches else { return nil }
+
         let newListings = uniqueMatchedListings.count { listing in
             listing.wasSeenWithinLast24Hours
         }
 
+        // Only the loaded matches, the first page of each active filter, carry price changes, so
+        // the tile says it counts top matches. A drop without a date can't be placed in the week.
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
         let priceDrops = uniqueMatchedListings.count { listing in
-            guard let pct = listing.lastPriceChangePct, pct < 0 else { return false }
-            guard let changedAt = listing.lastPriceChangeAt else { return true }
-            return changedAt >= Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
+            guard let pct = listing.lastPriceChangePct, pct < 0,
+                  let changedAt = listing.lastPriceChangeAt else { return false }
+            return changedAt >= weekAgo
         }
 
         let highScoreMatches = uniqueMatchedListings.count { ($0.currentScore ?? 0) >= 70 }
@@ -211,8 +296,10 @@ final class DashboardViewModel {
         return FilterCoverageSummary(
             activeFilters: activeFilters.count,
             matchedFilters: matchedFilterCount,
-            emptyFilters: max(activeFilters.count - matchedFilterCount, 0),
-            totalUniqueMatches: totalUniqueMatches,
+            // A filter whose matches didn't load isn't known to be empty.
+            emptyFilters: activeFilters.count { filterListings[$0.id]?.isEmpty == true },
+            unavailableFilters: unavailableMatchFilterCount,
+            totalUniqueMatches: knownUniqueMatchCount,
             strongestFilterName: strongest?.name,
             strongestFilterCount: strongestCount
         )
@@ -223,7 +310,7 @@ final class DashboardViewModel {
             FilterCoverageRow(
                 id: filter.id,
                 name: filter.name,
-                matchCount: displayedMatchCount(for: filter),
+                matchCount: filterListings[filter.id]?.count,
                 isLoading: filterLoadingStates[filter.id] ?? false
             )
         }
@@ -231,18 +318,20 @@ final class DashboardViewModel {
 
     // MARK: - Summary Cards
 
-    func summaryCards(unreadAlertCount: Int) -> [SummaryCard] {
+    /// The overview cards. `unreadAlertCount` is nil until the server reports it.
+    func summaryCards(unreadAlertCount: Int?) -> [SummaryCard] {
         let s = stats
 
         let weekDelta: Delta? = s?.newThisWeek.map {
             Delta(value: "+\($0) this week", isPositive: $0 > 0)
         }
 
+        // Without a loaded count a card shows a dash, never a zero that reads as a real count.
         var cards: [SummaryCard] = [
             SummaryCard(
                 id: "active-listings",
                 title: "Active Listings",
-                value: "\(s?.totalActive ?? 0)",
+                value: s.map { "\($0.totalActive)" } ?? "—",
                 icon: "building.2.fill",
                 tone: .neutral,
                 delta: weekDelta
@@ -250,7 +339,7 @@ final class DashboardViewModel {
             SummaryCard(
                 id: "new-this-week",
                 title: "New This Week",
-                value: "\(s?.newThisWeek ?? s?.newToday ?? 0)",
+                value: s.map { "\($0.newThisWeek ?? $0.newToday)" } ?? "—",
                 icon: "sparkles",
                 tone: .accent,
                 delta: nil
@@ -258,7 +347,7 @@ final class DashboardViewModel {
             SummaryCard(
                 id: "high-score",
                 title: "High Score (70+)",
-                value: "\(s?.highScore70 ?? 0)",
+                value: s.map { "\($0.highScore70)" } ?? "—",
                 icon: "star.fill",
                 tone: .score,
                 delta: s?.avgScore.map {
@@ -273,9 +362,9 @@ final class DashboardViewModel {
         cards.append(SummaryCard(
             id: "unread-alerts",
             title: "Unread Alerts",
-            value: "\(unreadAlertCount)",
+            value: unreadAlertCount.map { "\($0)" } ?? "—",
             icon: "bell.badge.fill",
-            tone: unreadAlertCount > 0 ? .alert : .neutral,
+            tone: (unreadAlertCount ?? 0) > 0 ? .alert : .neutral,
             delta: nil
         ))
 

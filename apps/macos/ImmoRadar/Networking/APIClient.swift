@@ -28,8 +28,8 @@ actor APIClient {
         self.decoder = JSONDecoder()
         self.decoder.keyDecodingStrategy = .convertFromSnakeCase
 
+        // Request bodies keep their camelCase keys: the server's schemas use camelCase.
         self.encoder = JSONEncoder()
-        self.encoder.keyEncodingStrategy = .convertToSnakeCase
     }
 
     // MARK: - Configuration Updates
@@ -60,13 +60,8 @@ actor APIClient {
         do {
             return try decoder.decode(PaginatedResponse<T>.self, from: data)
         } catch {
-            let preview = String(data: data.prefix(800), encoding: .utf8) ?? "<binary>"
-            let msg = """
-            [APIClient] Decode FAILED for \(T.self)
-            Error: \(error)
-            Response (\(data.count) bytes): \(preview)
-            """
-            try? msg.write(toFile: "/tmp/immoradar-decode-error.txt", atomically: true, encoding: .utf8)
+            // The type and the decoding error only: the body holds scraped listing data.
+            Log.api.error("Decoding a page of \(String(describing: T.self), privacy: .public) failed: \(error, privacy: .public)")
             throw error
         }
     }
@@ -182,26 +177,58 @@ actor APIClient {
         return response.data
     }
 
-    /// Save a listing to the watchlist, optionally updating notes if already saved.
-    func saveListing(listingId: Int, notes: String? = nil) async throws {
-        struct SaveListingBody: Codable {
-            let listingId: Int
-            let notes: String?
+    /// Saves a listing to the watchlist. A listing that is already saved keeps its note.
+    func saveListing(listingId: Int) async throws {
+        let body = try encoder.encode(SaveListingBody(listingId: listingId, note: .keep))
+        try await requestVoid(.saveListing(body: body))
+    }
+
+    /// Saves a listing to the watchlist with this note. A nil or blank note clears the stored one.
+    func saveListing(listingId: Int, notes: String?) async throws {
+        let note = SaveListingBody.Note.replace(Self.nonBlank(notes))
+        let body = try encoder.encode(SaveListingBody(listingId: listingId, note: note))
+        try await requestVoid(.saveListing(body: body))
+    }
+
+    /// The server keeps a saved listing's note when the body has no `notes`, and clears it on null.
+    private struct SaveListingBody: Encodable {
+        enum Note {
+            case keep
+            case replace(String?)
         }
 
-        let normalizedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = try encoder.encode(
-            SaveListingBody(
-                listingId: listingId,
-                notes: normalizedNotes?.isEmpty == true ? nil : normalizedNotes
-            )
-        )
-        try await requestVoid(.saveListing(body: body))
+        let listingId: Int
+        let note: Note
+
+        private enum CodingKeys: String, CodingKey {
+            case listingId
+            case notes
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(listingId, forKey: .listingId)
+            if case .replace(let notes) = note {
+                // A nil note encodes as null.
+                try container.encode(notes, forKey: .notes)
+            }
+        }
     }
 
     /// Remove a listing from the watchlist.
     func unsaveListing(listingId: Int) async throws {
         try await requestVoid(.unsaveListing(listingId: listingId))
+    }
+
+    /// One page of the watchlist. Pass the returned `nextCursor` to load the next page; it is nil
+    /// on the last page.
+    func fetchSavedListingsPage(cursor: String?, limit: Int) async throws -> (items: [SavedListingItem], nextCursor: String?) {
+        // The server takes a limit of 1 to 200.
+        let pageSize = min(max(limit, 1), 200)
+        let response: PaginatedResponse<SavedListingItem> = try await requestPaginated(
+            .listSavedListings(limit: pageSize, cursor: cursor)
+        )
+        return (response.data, response.meta?.nextCursor)
     }
 
     /// Check which listing IDs are saved in the watchlist.
@@ -274,8 +301,19 @@ actor APIClient {
         return response.data.toDomain()
     }
 
+    /// A 409 (the thread exists or changed) or 503 (`outreach_enqueue_failed`) arrives as
+    /// `APIError.httpError` with the server's message.
     func startOutreach(listingId: Int, input: OutreachStartInput) async throws -> Int {
-        let body = try encoder.encode(input)
+        // The server rejects an empty contact email, so blank contact fields stay out of the body.
+        let normalizedInput = OutreachStartInput(
+            subject: input.subject,
+            bodyText: input.bodyText,
+            contactEmail: Self.nonBlank(input.contactEmail),
+            contactName: Self.nonBlank(input.contactName),
+            contactCompany: Self.nonBlank(input.contactCompany),
+            contactPhone: Self.nonBlank(input.contactPhone)
+        )
+        let body = try encoder.encode(normalizedInput)
         struct StartResponse: Codable, Sendable { let threadId: Int }
         let response: APIResponse<StartResponse> = try await request(.startOutreach(listingId: listingId, body: body))
         return response.data.threadId
@@ -286,12 +324,15 @@ actor APIClient {
         try await requestVoid(.updateOutreachThread(id: id, body: body))
     }
 
+    /// Nil or blank `subject` and `bodyText` stay out of the body: the server rejects empty strings.
     func sendOutreachFollowup(id: Int, subject: String? = nil, bodyText: String? = nil) async throws {
         struct FollowupRequest: Codable, Sendable {
             let subject: String?
             let bodyText: String?
         }
-        let body = try encoder.encode(FollowupRequest(subject: subject, bodyText: bodyText))
+        let body = try encoder.encode(
+            FollowupRequest(subject: Self.nonBlank(subject), bodyText: Self.nonBlank(bodyText))
+        )
         try await requestVoid(.sendOutreachFollowup(id: id, body: body))
     }
 
@@ -318,11 +359,14 @@ actor APIClient {
         return mapFilterResponse(response.data)
     }
 
+    /// Pauses or resumes a filter: PATCH `{"isActive": true}`. The criteria stay as they are.
     func updateFilter(id: Int, isActive: Bool) async throws {
-        let body = try encoder.encode(["isActive": isActive])
+        struct ActiveBody: Encodable { let isActive: Bool }
+        let body = try encoder.encode(ActiveBody(isActive: isActive))
         try await requestVoid(.updateFilter(id: id, body: body))
     }
 
+    /// Soft-deletes a filter (204). Deleting it again throws `APIError.notFound`.
     func deleteFilter(id: Int) async throws {
         try await requestVoid(.deleteFilter(id: id))
     }
@@ -331,6 +375,8 @@ actor APIClient {
         return try await createFilter(apiRequest)
     }
 
+    /// Saves an edited filter. The body carries criteria fields, so the server replaces the whole
+    /// criteria set and clears every criteria field the request leaves nil.
     func updateFilterFull(id: Int, apiRequest: APICreateFilterRequest) async throws -> Filter {
         let body = try encoder.encode(apiRequest)
         let response: APIResponse<APIFilterResponse> = try await request(.updateFilter(id: id, body: body))
@@ -353,8 +399,13 @@ actor APIClient {
         return (alerts, response.meta?.nextCursor)
     }
 
-    /// Bulk update alert statuses. Returns the number of updated alerts.
-    func bulkUpdateAlerts(ids: [Int]? = nil, filterStatus: String? = nil, action: String) async throws -> Int {
+    /// The most alert ids PATCH /v1/alerts/bulk takes in one request.
+    static let bulkAlertIdLimit = 500
+
+    /// Sets the status of many alerts and returns how many changed. `action` is `opened` or
+    /// `dismissed`. With `ids`, those alerts change, sent in chunks the server accepts. With
+    /// `ids` nil, every inbox alert changes, or only those in `filterStatus`.
+    func bulkUpdateAlerts(ids: [Int]? = nil, filterStatus: AlertServerStatus? = nil, action: String) async throws -> Int {
         struct BulkBody: Encodable {
             let action: String
             let ids: [Int]?
@@ -364,18 +415,29 @@ actor APIClient {
                 let status: String?
             }
         }
-        let payload = BulkBody(
-            action: action,
-            ids: ids,
-            filter: filterStatus.map { BulkBody.FilterBody(status: $0) }
-        )
-        let body = try encoder.encode(payload)
-
         struct BulkResponse: Codable, Sendable {
             let updatedCount: Int
         }
-        let response: APIResponse<BulkResponse> = try await request(.bulkUpdateAlerts(body: body))
-        return response.data.updatedCount
+
+        let payloads: [BulkBody]
+        if let ids {
+            payloads = stride(from: 0, to: ids.count, by: Self.bulkAlertIdLimit).map { start in
+                let chunk = Array(ids[start..<min(start + Self.bulkAlertIdLimit, ids.count)])
+                return BulkBody(action: action, ids: chunk, filter: nil)
+            }
+        } else {
+            payloads = [
+                BulkBody(action: action, ids: nil, filter: BulkBody.FilterBody(status: filterStatus?.rawValue))
+            ]
+        }
+
+        var updatedCount = 0
+        for payload in payloads {
+            let body = try encoder.encode(payload)
+            let response: APIResponse<BulkResponse> = try await request(.bulkUpdateAlerts(body: body))
+            updatedCount += response.data.updatedCount
+        }
+        return updatedCount
     }
 
     /// Export listings as CSV data.
@@ -393,11 +455,16 @@ actor APIClient {
         return response.data.unreadCount
     }
 
+    /// Switches a source on or off, or sets its interval (5 to 1440 minutes). Switching on a legally
+    /// disabled source fails with 409 `conflict`.
     func updateSource(id: Int, isActive: Bool? = nil, crawlIntervalMinutes: Int? = nil) async throws {
-        var payload: [String: Any] = [:]
-        if let isActive { payload["isActive"] = isActive }
-        if let crawlIntervalMinutes { payload["crawlIntervalMinutes"] = crawlIntervalMinutes }
-        let body = try JSONSerialization.data(withJSONObject: payload)
+        struct SourceUpdateBody: Encodable {
+            let isActive: Bool?
+            let crawlIntervalMinutes: Int?
+        }
+        let body = try encoder.encode(
+            SourceUpdateBody(isActive: isActive, crawlIntervalMinutes: crawlIntervalMinutes)
+        )
         try await requestVoid(.updateSource(id: id, body: body))
     }
 
@@ -428,6 +495,8 @@ actor APIClient {
                 name: dto.name,
                 isActive: dto.isActive,
                 healthStatus: SourceHealthStatus(rawValue: dto.healthStatus) ?? .unknown,
+                legalStatus: dto.legalStatus.flatMap(SourceLegalStatus.init(rawValue:)) ?? .unknown,
+                disabledReason: dto.disabledReason,
                 lastSuccessfulRun: (dto.lastSuccessfulRun ?? dto.lastSuccessfulRunAt).flatMap(Date.fromISO),
                 crawlIntervalMinutes: dto.crawlIntervalMinutes,
                 lastErrorSummary: dto.lastErrorSummary,
@@ -459,8 +528,8 @@ actor APIClient {
                 operationType: dto.operationType.flatMap { OperationType(rawValue: $0) },
                 propertyTypes: (dto.propertyTypes ?? []).compactMap { PropertyType(rawValue: $0) },
                 districts: dto.districts ?? [],
-                minPriceEur: dto.minPriceEur,
-                maxPriceEur: dto.maxPriceEur,
+                minPriceEur: dto.wholeEuroMinPrice,
+                maxPriceEur: dto.wholeEuroMaxPrice,
                 minAreaSqm: dto.minAreaSqm,
                 maxAreaSqm: dto.maxAreaSqm,
                 minRooms: dto.minRooms,
@@ -470,7 +539,8 @@ actor APIClient {
                 excludedKeywords: dto.excludedKeywords ?? [],
                 sortBy: dto.sortBy
             ),
-            alertFrequency: AlertFrequency(rawValue: dto.alertFrequency ?? "off") ?? .off,
+            alertFrequency: dto.alertFrequency.flatMap(AlertFrequency.init(rawValue:)) ?? .off,
+            alertChannels: dto.alertChannels,
             createdAt: Date.fromISO(dto.createdAt),
             updatedAt: Date.fromISO(dto.updatedAt),
             matchCount: dto.matchCount
@@ -505,18 +575,27 @@ actor APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = endpoint.method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        // Fastify rejects a JSON content type with an empty body, so only a request with a body sets it.
         if let body = endpoint.body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = body
         }
 
         return request
+    }
+
+    /// The value trimmed, or nil when nothing is left.
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {

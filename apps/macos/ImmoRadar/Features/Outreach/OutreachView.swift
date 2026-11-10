@@ -6,27 +6,23 @@ struct OutreachView: View {
     @State private var viewModel = OutreachViewModel()
 
     var body: some View {
-        @Bindable var bindableViewModel = viewModel
-
         HSplitView {
             VStack(spacing: 0) {
+                // With nothing loaded, the inbox column below says why instead.
                 OutreachMailboxHeader(
                     mailboxes: viewModel.mailboxes,
+                    mailboxesLoaded: viewModel.hasLoaded && viewModel.pageErrorMessage == nil,
                     isSyncing: viewModel.isSyncingMailbox,
-                    errorMessage: viewModel.pageErrorMessage,
+                    errorMessage: viewModel.syncErrorMessage
+                        ?? (listLoadFailed ? nil : appState.screenLoadError(viewModel.pageErrorMessage)),
                     onSync: { Task { await viewModel.syncPrimaryMailbox(using: appState.apiClient) } }
                 )
 
                 Divider()
 
-                OutreachScopePicker(
-                    scope: $bindableViewModel.selectedScope,
-                    onChange: { _ in
-                        Task { await viewModel.refresh(using: appState.apiClient) }
-                    }
-                )
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.vertical, Theme.Spacing.md)
+                OutreachScopePicker(scope: scopeSelection)
+                    .padding(.horizontal, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.md)
 
                 Divider()
 
@@ -43,6 +39,12 @@ struct OutreachView: View {
                                 .offset(y: -54)
                         }
                     }
+                } else if listLoadFailed {
+                    LoadFailedView(
+                        title: "Outreach Didn’t Load",
+                        message: appState.screenLoadError(viewModel.pageErrorMessage),
+                        onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                    )
                 } else if viewModel.threads.isEmpty {
                     OutreachInboxPlaceholder(alignment: .top) {
                         OutreachEmptyListState(scope: viewModel.selectedScope, hasMailbox: !viewModel.mailboxes.isEmpty)
@@ -95,6 +97,27 @@ struct OutreachView: View {
             guard newValue != nil else { return }
             Task { await consumePendingDeepLinkIfNeeded() }
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
+    }
+
+    /// The mailbox or thread list didn't load and no threads are loaded from before.
+    private var listLoadFailed: Bool {
+        viewModel.pageErrorMessage != nil && viewModel.threads.isEmpty && !viewModel.isLoadingList
+    }
+
+    /// The picker's scope. Only a pick here reloads the list: opening a thread from a link sets
+    /// the scope itself and loads what it needs.
+    private var scopeSelection: Binding<OutreachScope> {
+        Binding(
+            get: { viewModel.selectedScope },
+            set: { scope in
+                guard scope != viewModel.selectedScope else { return }
+                viewModel.selectedScope = scope
+                Task { await viewModel.refresh(using: appState.apiClient) }
+            }
+        )
     }
 
     private func consumePendingDeepLinkIfNeeded() async {
@@ -124,6 +147,8 @@ private struct OutreachInboxPlaceholder<Content: View>: View {
 
 private struct OutreachMailboxHeader: View {
     let mailboxes: [MailboxAccount]
+    /// False until the mailbox list loads, so an empty list doesn't read as no mailbox.
+    let mailboxesLoaded: Bool
     let isSyncing: Bool
     let errorMessage: String?
     let onSync: () -> Void
@@ -135,7 +160,7 @@ private struct OutreachMailboxHeader: View {
                     Text("Shared mailbox")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(mailboxes.first?.displayName ?? mailboxes.first?.email ?? "Mailbox not configured")
+                    Text(mailboxes.first?.displayName ?? mailboxes.first?.email ?? emptyTitle)
                         .font(.headline)
                 }
 
@@ -147,9 +172,11 @@ private struct OutreachMailboxHeader: View {
             }
 
             if mailboxes.isEmpty {
-                Text("Configure the shared mailbox to sync outreach replies and send follow-ups.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if mailboxesLoaded {
+                    Text("Configure the shared mailbox to sync outreach replies and send follow-ups.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     ForEach(mailboxes) { mailbox in
@@ -198,11 +225,14 @@ private struct OutreachMailboxHeader: View {
         }
         .padding(Theme.Spacing.lg)
     }
+
+    private var emptyTitle: String {
+        mailboxesLoaded ? "Mailbox not configured" : "Mailbox status unknown"
+    }
 }
 
 private struct OutreachScopePicker: View {
     @Binding var scope: OutreachScope
-    let onChange: @Sendable (OutreachScope) -> Void
 
     var body: some View {
         Picker("Thread Scope", selection: $scope) {
@@ -212,9 +242,6 @@ private struct OutreachScopePicker: View {
         }
         .pickerStyle(.segmented)
         .accessibilityLabel("Thread scope")
-        .onChange(of: scope) { _, newValue in
-            onChange(newValue)
-        }
     }
 }
 
@@ -229,12 +256,49 @@ private struct OutreachThreadList: View {
                     .tag(thread.id)
                     .contentShape(Rectangle())
             }
+
+            if viewModel.nextCursor != nil {
+                OutreachMoreThreadsRow(
+                    isLoading: viewModel.isLoadingMoreThreads,
+                    errorMessage: viewModel.moreThreadsErrorMessage,
+                    onLoadMore: { Task { await viewModel.loadMoreThreads(using: appState.apiClient) } }
+                )
+                .selectionDisabled()
+            }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
         .onChange(of: viewModel.selectedThreadID) { _, newValue in
             guard let newValue else { return }
             Task { await viewModel.selectThread(id: newValue, using: appState.apiClient) }
         }
+    }
+}
+
+/// The last row while the server has more threads than the list shows.
+private struct OutreachMoreThreadsRow: View {
+    let isLoading: Bool
+    let errorMessage: String?
+    let onLoadMore: () -> Void
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.xs) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("Load More Threads", action: onLoadMore)
+                    .controlSize(.small)
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Spacing.xs)
     }
 }
 
@@ -352,19 +416,30 @@ private struct OutreachDetailPane: View {
 
                         OutreachActionRow(
                             thread: thread,
-                            actionInFlight: viewModel.actionInFlight,
+                            isBusy: viewModel.actionInFlight != nil,
                             onReload: { Task { await viewModel.reloadSelectedThread(using: appState.apiClient) } },
                             onAction: { action in Task { await viewModel.performThreadAction(action, using: appState.apiClient) } },
                             onSendFollowup: { Task { await viewModel.sendFollowup(using: appState.apiClient) } }
                         )
 
-                        if let detailErrorMessage = viewModel.detailErrorMessage, !detailErrorMessage.isEmpty {
-                            Label(detailErrorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, Theme.Spacing.md)
-                                .padding(.vertical, Theme.Spacing.sm)
-                                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                        if let failure = viewModel.shownActionFailure {
+                            InlineWarningBanner(
+                                title: failure.request.failureTitle,
+                                message: failure.message,
+                                actions: failureActions(for: failure)
+                            )
+                        }
+
+                        if let detailError = appState.screenLoadError(viewModel.detailErrorMessage) {
+                            InlineWarningBanner(
+                                title: "Couldn’t reload the thread",
+                                message: detailError,
+                                actions: [
+                                    .init("Try Again") {
+                                        Task { await viewModel.reloadSelectedThread(using: appState.apiClient) }
+                                    }
+                                ]
+                            )
                         }
 
                         OutreachMessageTimeline(messages: thread.messages)
@@ -373,14 +448,35 @@ private struct OutreachDetailPane: View {
                     .padding(Theme.Spacing.xl)
                 }
             } else if let detailErrorMessage = viewModel.detailErrorMessage {
-                ContentUnavailableView("Thread unavailable", systemImage: "exclamationmark.triangle", description: Text(detailErrorMessage))
-            } else if let pageErrorMessage = viewModel.pageErrorMessage, viewModel.threads.isEmpty {
-                ContentUnavailableView("Outreach unavailable", systemImage: "exclamationmark.triangle", description: Text(pageErrorMessage))
+                ContentUnavailableView(
+                    "Thread unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(
+                        appState.screenLoadError(detailErrorMessage)
+                            ?? "The thread shows here once the server responds."
+                    )
+                )
+            } else if viewModel.pageErrorMessage != nil, viewModel.threads.isEmpty {
+                // The inbox column says why the list didn't load.
+                ContentUnavailableView("Outreach unavailable", systemImage: "envelope.open", description: Text("Threads show here once the list loads."))
             } else {
                 ContentUnavailableView("Select a thread", systemImage: "envelope.open", description: Text("Choose a thread to inspect replies, timeline events, and next actions."))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Try Again shows only when the server couldn't queue the email and kept the thread as it was,
+    /// and the thread still takes the request.
+    private func failureActions(for failure: OutreachRequestFailure) -> [InlineWarningBanner.Action] {
+        var actions: [InlineWarningBanner.Action] = []
+        if failure.canTryAgain(on: viewModel.selectedThread) {
+            actions.append(.init("Try Again", isProminent: true) {
+                Task { await viewModel.tryFailedRequestAgain(using: appState.apiClient) }
+            })
+        }
+        actions.append(.init("Dismiss") { viewModel.dismissActionFailure() })
+        return actions
     }
 }
 
@@ -470,34 +566,58 @@ private struct OutreachThreadHeader: View {
 
 private struct OutreachActionRow: View {
     let thread: OutreachThread
-    let actionInFlight: String?
+    let isBusy: Bool
     let onReload: () -> Void
     let onAction: (OutreachAction) -> Void
     let onSendFollowup: () -> Void
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Button("Reload", action: onReload)
-                .buttonStyle(.bordered)
-
-            Button("Pause") { onAction(.pause) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState == "paused" || thread.workflowState == "closed" || actionInFlight != nil)
-
-            Button("Resume") { onAction(.resume) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState != "paused" || actionInFlight != nil)
-
-            Button("Close") { onAction(.close) }
-                .buttonStyle(.bordered)
-                .disabled(thread.workflowState == "closed" || actionInFlight != nil)
-
-            Button("Send Follow-up", action: onSendFollowup)
-                .buttonStyle(.borderedProminent)
-                .disabled(thread.lastInboundAt != nil || thread.workflowState == "closed" || actionInFlight != nil)
-
-            Spacer()
+        // Each button is enabled only when the server accepts its request in the thread's state.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.Spacing.sm) {
+                reloadButton
+                stateButtons
+                followupButton
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.sm) {
+                    stateButtons
+                }
+                HStack(spacing: Theme.Spacing.sm) {
+                    reloadButton
+                    followupButton
+                }
+            }
         }
+    }
+
+    private var reloadButton: some View {
+        Button("Reload", action: onReload)
+            .buttonStyle(.bordered)
+    }
+
+    @ViewBuilder
+    private var stateButtons: some View {
+        Button("Pause") { onAction(.pause) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canPause)
+        Button("Resume") { onAction(.resume) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canResume)
+        Button("Retry") { onAction(.retry) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canRetry)
+            .help("Queue the unsent email again")
+        Button("Close") { onAction(.close) }
+            .buttonStyle(.bordered)
+            .disabled(isBusy || !thread.canClose)
+    }
+
+    private var followupButton: some View {
+        Button("Send Follow-Up", action: onSendFollowup)
+            .buttonStyle(.borderedProminent)
+            .disabled(isBusy || !thread.canSendFollowup)
     }
 }
 

@@ -11,6 +11,9 @@ struct ListingHeaderSection: View {
             HStack {
                 StatusBadge(listingStatus: listing.listingStatus)
 
+                ListingLastSeenLabel(lastSeenAt: listing.lastSeenAt)
+                    .font(.caption)
+
                 Spacer()
 
                 HStack(spacing: Theme.Spacing.xs) {

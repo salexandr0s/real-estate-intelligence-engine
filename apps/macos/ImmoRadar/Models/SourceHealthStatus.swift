@@ -7,6 +7,12 @@ enum SourceHealthStatus: String, Codable, CaseIterable, Hashable {
     case disabled
     case unknown
 
+    /// A status the app doesn't know decodes as `.unknown`.
+    init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = SourceHealthStatus(rawValue: rawValue) ?? .unknown
+    }
+
     var displayName: String {
         switch self {
         case .healthy: "Healthy"

@@ -4,19 +4,37 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppState.self) private var appState
 
+    /// Set once the main content has shown. From then on the launch screen covers the content
+    /// instead of replacing it, so an engine restart or reset keeps each feature's view model.
+    @State private var hasShownMainShell = false
+
     var body: some View {
-        Group {
-            if appState.shouldPresentBundledLaunchExperience {
-                BundledLaunchExperienceView()
-            } else {
+        @Bindable var appState = appState
+        let presentsLaunchExperience = appState.shouldPresentBundledLaunchExperience
+
+        ZStack {
+            if hasShownMainShell || !presentsLaunchExperience {
                 mainShell
+                    .opacity(presentsLaunchExperience ? 0 : 1)
+                    .disabled(presentsLaunchExperience)
+                    .accessibilityHidden(presentsLaunchExperience)
+                    .onAppear { hasShownMainShell = true }
+            }
+
+            if presentsLaunchExperience {
+                BundledLaunchExperienceView()
             }
         }
+        // The hidden content's toolbar would otherwise show above the launch screen.
+        .toolbar(presentsLaunchExperience ? .hidden : .automatic, for: .windowToolbar)
         .frame(minWidth: 1100, minHeight: 600)
-        .onChange(of: appState.alertStream.lastEvent?.id) { _, _ in
-            if let alert = appState.alertStream.lastEvent {
-                appState.handleStreamAlert(alert)
+        .alert("Reset the local engine?", isPresented: $appState.isEngineResetConfirmationPresented) {
+            Button("Reset Local Engine", role: .destructive) {
+                Task { await appState.resetLocalEngine() }
             }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This stops the local engine and deletes its database on this Mac, with every listing, score, filter, alert, saved listing and outreach thread in it. ImmoRadar then starts a new, empty engine. You can’t undo this.")
         }
     }
 
@@ -28,9 +46,7 @@ struct ContentView: View {
 
             if let message = appState.globalConnectionWarningMessage {
                 InlineWarningBanner(
-                    title: appState.usesManagedLocalRuntime
-                        ? "Local API unavailable"
-                        : AppErrorPresentation.apiConnectionTitle,
+                    title: appState.usesManagedLocalRuntime ? "Local engine problem" : "Connection problem",
                     message: message,
                     actions: connectionWarningActions
                 )
@@ -54,6 +70,12 @@ struct ContentView: View {
             actions.append(
                 InlineWarningBanner.Action("Open Sources") {
                     appState.navigateTo(.sources)
+                }
+            )
+        } else {
+            actions.append(
+                InlineWarningBanner.Action("Open Settings") {
+                    appState.navigateTo(.settings)
                 }
             )
         }
@@ -251,8 +273,8 @@ private struct BundledLaunchExperienceView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("Reset Local Engine", role: .destructive) {
-                    Task { await appState.resetLocalEngine() }
+                Button("Reset Local Engine…", role: .destructive) {
+                    appState.requestEngineReset()
                 }
                 .buttonStyle(.bordered)
                 .disabled(appState.isLocalEngineBusy)

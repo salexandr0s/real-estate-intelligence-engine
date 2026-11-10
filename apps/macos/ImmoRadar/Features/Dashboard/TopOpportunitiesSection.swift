@@ -3,7 +3,8 @@ import SwiftUI
 /// Ranked queue of the strongest live matches across active filters.
 struct TopOpportunitiesSection: View {
     let listings: [Listing]
-    let totalMatches: Int
+    /// Nil while an active filter's matches are missing.
+    let totalMatches: Int?
     var onListingTap: ((Int) -> Void)?
 
     @State private var hoveredListingId: Int?
@@ -23,12 +24,14 @@ struct TopOpportunitiesSection: View {
 
                 Spacer(minLength: Theme.Spacing.md)
 
-                Text("\(totalMatches) live matches")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, Theme.Spacing.sm)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.08), in: Capsule())
+                if let totalMatches {
+                    Text("\(totalMatches) live matches")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.Spacing.sm)
+                        .padding(.vertical, 6)
+                        .background(Color.secondary.opacity(0.08), in: Capsule())
+                }
             }
 
             Divider()

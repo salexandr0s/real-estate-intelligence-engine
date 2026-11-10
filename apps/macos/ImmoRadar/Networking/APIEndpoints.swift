@@ -171,8 +171,11 @@ enum APIEndpoint {
 
     var queryItems: [URLQueryItem]? {
         switch self {
-        case .listListings(let query), .exportListings(let query):
+        case .listListings(let query):
             return query.toQueryItems()
+        case .exportListings(let query):
+            // The export route takes no paging parameters.
+            return query.filterQueryItems()
         case .listAlerts(let query):
             return query?.toQueryItems()
         case .listScrapeRuns(let limit):

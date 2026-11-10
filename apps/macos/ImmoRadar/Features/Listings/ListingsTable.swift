@@ -1,36 +1,28 @@
 import AppKit
 import SwiftUI
 
-/// Table displaying listings with sortable columns and infinite scroll via sentinel row.
+/// Table displaying every loaded listing with sortable columns.
 struct ListingsTable: View {
     @Bindable var viewModel: ListingsViewModel
-    @Environment(AppState.self) private var appState
 
     var body: some View {
-        VStack(spacing: 0) {
-            listingTable
-            if viewModel.isLoadingMore {
-                loadingIndicator
-            }
-        }
-        .frame(maxHeight: .infinity)
+        listingTable
+            .frame(maxHeight: .infinity)
     }
 
     private var listingTable: some View {
-        let filtered = viewModel.filteredListings
-        let lastID = filtered.last?.id
-        return Table(
-            filtered,
+        Table(
+            viewModel.filteredListings,
             selection: $viewModel.selectedListingID,
             sortOrder: $viewModel.sortOrder
         ) {
             TableColumn("Score") { (listing: Listing) in
-                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+                ScoreIndicator(score: listing.currentScore, size: .compact)
             }
             .width(min: 50, ideal: 56, max: 64)
 
             TableColumn("Title", value: \.title) { (listing: Listing) in
-                titleCell(listing, isLast: listing.id == lastID)
+                titleCell(listing)
             }
             .width(min: 160, ideal: 300)
 
@@ -110,7 +102,7 @@ struct ListingsTable: View {
     // MARK: - Cell Views
 
     @ViewBuilder
-    private func titleCell(_ listing: Listing, isLast: Bool) -> some View {
+    private func titleCell(_ listing: Listing) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: Theme.Spacing.xs) {
                 Text(listing.title)
@@ -127,11 +119,10 @@ struct ListingsTable: View {
                 Text(listing.sourceCode)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                ListingLastSeenLabel(lastSeenAt: listing.lastSeenAt)
+                    .font(.caption)
+                    .lineLimit(1)
             }
-        }
-        .task(id: isLast ? listing.id : nil) {
-            guard isLast, viewModel.hasMore else { return }
-            await viewModel.loadMore(using: appState.apiClient)
         }
     }
 
@@ -143,20 +134,5 @@ struct ListingsTable: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
-    }
-
-    // MARK: - Loading
-
-    private var loadingIndicator: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            ProgressView()
-                .controlSize(.small)
-            Text("Loading more listings...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 }

@@ -12,23 +12,38 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
 
     private var summaryCards: [DashboardViewModel.SummaryCard] {
-        viewModel.summaryCards(unreadAlertCount: appState.unreadAlertCount)
+        viewModel.summaryCards(unreadAlertCount: appState.alertsState.loadedUnreadAlertCount)
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let layoutMode = layoutMode(for: proxy.size.width)
+        // One container keeps the page's identity, so the load below doesn't run again when the
+        // content replaces the loading state.
+        ZStack {
+            if viewModel.hasLoaded {
+                GeometryReader { proxy in
+                    let layoutMode = layoutMode(for: proxy.size.width)
 
-            DashboardContent(
-                viewModel: viewModel,
-                appState: appState,
-                layoutMode: layoutMode,
-                summaryCards: summaryCards,
-                focusPanel: focusPanel
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
+                    DashboardContent(
+                        viewModel: viewModel,
+                        appState: appState,
+                        loadError: visibleLoadError,
+                        layoutMode: layoutMode,
+                        summaryCards: summaryCards,
+                        focusPanel: focusPanel
+                    )
+                }
+            } else {
+                DashboardLoadStateView(
+                    isLoading: viewModel.isLoading,
+                    errorMessage: visibleLoadError,
+                    hasFailed: viewModel.errorMessage != nil,
+                    loadsAutomatically: appState.allowsAutomaticFeatureLoads,
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Dashboard")
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -52,6 +67,14 @@ struct DashboardView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
+    }
+
+    /// The load error to show, or nil while the global banner already explains it.
+    private var visibleLoadError: String? {
+        appState.screenLoadError(viewModel.errorMessage)
     }
 
     private func layoutMode(for width: CGFloat) -> DashboardLayoutMode {
@@ -72,7 +95,7 @@ struct DashboardView: View {
             PriorityBriefingCard(
                 listing: priorityListing,
                 matchedFilterCount: viewModel.matchedFilterCount,
-                totalMatches: viewModel.totalUniqueMatches,
+                totalMatches: viewModel.knownUniqueMatchCount,
                 onOpenListing: {
                     appState.openListing(priorityListing.id)
                 },
@@ -83,6 +106,7 @@ struct DashboardView: View {
         } else {
             DashboardFocusEmptyCard(
                 hasActiveFilters: !viewModel.dashboardFilters.isEmpty,
+                matchesUnavailable: viewModel.unavailableMatchFilterCount > 0,
                 totalMatches: viewModel.totalUniqueMatches,
                 onOpenFilters: { appState.navigateTo(.filters) },
                 onBrowseListings: { appState.navigateTo(.listings) }
@@ -92,9 +116,44 @@ struct DashboardView: View {
 
 }
 
+/// What the dashboard shows until its filter list has loaded once.
+private struct DashboardLoadStateView: View {
+    let isLoading: Bool
+    /// The load error to show. Nil when there is none or the global banner already explains it.
+    let errorMessage: String?
+    let hasFailed: Bool
+    /// False when automatic loads are off, so nothing loads until the user asks.
+    let loadsAutomatically: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        if let errorMessage, !isLoading {
+            ContentUnavailableView {
+                Label("Couldn’t Load the Dashboard", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(errorMessage)
+            } actions: {
+                Button("Try Again", action: onRetry)
+            }
+        } else if isLoading || (loadsAutomatically && !hasFailed) {
+            ProgressView("Loading dashboard…")
+        } else {
+            ContentUnavailableView {
+                Label("Dashboard Unavailable", systemImage: "rectangle.grid.2x2")
+            } description: {
+                Text("Counts and matches show here once the server responds.")
+            } actions: {
+                Button("Try Again", action: onRetry)
+            }
+        }
+    }
+}
+
 private struct DashboardContent<FocusPanel: View>: View {
     let viewModel: DashboardViewModel
     let appState: AppState
+    /// The load error to show. Nil when there is none or the global banner already explains it.
+    let loadError: String?
     let layoutMode: DashboardLayoutMode
     let summaryCards: [DashboardViewModel.SummaryCard]
     let focusPanel: FocusPanel
@@ -104,12 +163,12 @@ private struct DashboardContent<FocusPanel: View>: View {
             VStack(alignment: .leading, spacing: Theme.Dashboard.sectionSpacing) {
                 DashboardOverviewHeader(
                     lastRefresh: viewModel.lastRefreshDate,
-                    totalMatches: viewModel.totalUniqueMatches,
+                    totalMatches: viewModel.knownUniqueMatchCount,
                     isLoading: viewModel.isLoading
                 )
 
-                if let error = viewModel.errorMessage,
-                   !AppErrorPresentation.isConnectionIssue(message: error) {
+                // The values loaded before stay on screen below the banner.
+                if let error = loadError {
                     InlineWarningBanner(
                         title: "Couldn’t load the dashboard.",
                         message: error,
@@ -175,7 +234,7 @@ private struct DashboardContent<FocusPanel: View>: View {
     private func topOpportunitiesSection(limit: Int) -> some View {
         TopOpportunitiesSection(
             listings: viewModel.topOpportunities(limit: limit),
-            totalMatches: viewModel.totalUniqueMatches,
+            totalMatches: viewModel.knownUniqueMatchCount,
             onListingTap: { id in
                 appState.openListing(id)
             }
@@ -202,8 +261,15 @@ private struct DashboardContent<FocusPanel: View>: View {
 
 private struct DashboardOverviewHeader: View {
     let lastRefresh: Date?
-    let totalMatches: Int
+    /// Nil while an active filter's matches are missing.
+    let totalMatches: Int?
     let isLoading: Bool
+
+    private var matchesText: String {
+        if let totalMatches, totalMatches > 0 { return "\(totalMatches) live matches" }
+        if isLoading { return "Loading matches" }
+        return totalMatches == nil ? "Matches unavailable" : "No live matches"
+    }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -256,8 +322,8 @@ private struct DashboardOverviewHeader: View {
         }
 
         DashboardStatusPill(
-            text: totalMatches > 0 ? "\(totalMatches) live matches" : (isLoading ? "Loading matches" : "No live matches"),
-            systemImage: totalMatches > 0 ? "sparkles" : "line.3.horizontal.decrease.circle"
+            text: matchesText,
+            systemImage: (totalMatches ?? 0) > 0 ? "sparkles" : "line.3.horizontal.decrease.circle"
         )
     }
 }
@@ -296,7 +362,8 @@ private struct DashboardStatusPill: View {
 private struct PriorityBriefingCard: View {
     let listing: Listing
     let matchedFilterCount: Int
-    let totalMatches: Int
+    /// Nil while an active filter's matches are missing.
+    let totalMatches: Int?
     let onOpenListing: () -> Void
     let onOpenFilters: () -> Void
 
@@ -360,7 +427,7 @@ private struct PriorityBriefingCard: View {
                         label: "Filters returning matches"
                     )
                     DashboardSupportingStat(
-                        value: "\(totalMatches)",
+                        value: totalMatches.map { "\($0)" } ?? "—",
                         label: "Unique matched listings"
                     )
                     DashboardSupportingStat(
@@ -375,7 +442,7 @@ private struct PriorityBriefingCard: View {
                         label: "Filters returning matches"
                     )
                     DashboardSupportingStat(
-                        value: "\(totalMatches)",
+                        value: totalMatches.map { "\($0)" } ?? "—",
                         label: "Unique matched listings"
                     )
                     DashboardSupportingStat(
@@ -395,25 +462,37 @@ private struct PriorityBriefingCard: View {
 
 private struct DashboardFocusEmptyCard: View {
     let hasActiveFilters: Bool
+    /// True when an active filter's matches failed to load, so it isn't known whether anything stands out.
+    let matchesUnavailable: Bool
     let totalMatches: Int
     let onOpenFilters: () -> Void
     let onBrowseListings: () -> Void
 
+    private var title: LocalizedStringKey {
+        if matchesUnavailable { return "Matches didn’t load" }
+        return hasActiveFilters ? "Nothing compelling yet" : "Build your first investor queue"
+    }
+
+    private var message: LocalizedStringKey {
+        if matchesUnavailable {
+            return "The dashboard can’t pick a listing until every active filter’s matches load. Refresh to try again."
+        }
+        return hasActiveFilters
+            ? "Your filters are active, but nothing currently stands out as a dashboard priority. Review the criteria or browse the full listings view."
+            : "Create active filters so the dashboard can surface strong matches, live activity, and a clear place to start each time you open the app."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-            Text(hasActiveFilters ? "Nothing compelling yet" : "Build your first investor queue")
+            Text(title)
                 .font(.title2)
                 .fontDesign(.rounded)
                 .adaptiveFontWeight(.semibold)
 
-            Text(
-                hasActiveFilters
-                    ? "Your filters are active, but nothing currently stands out as a dashboard priority. Review the criteria or browse the full listings view."
-                    : "Create active filters so the dashboard can surface strong matches, live activity, and a clear place to start each time you open the app."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: Theme.Spacing.sm) {
                 Button(hasActiveFilters ? "Review Filters" : "Set Up Filters", action: onOpenFilters)
@@ -465,7 +544,8 @@ private struct DashboardSupportingStat: View {
 
 private struct DashboardSignalsPanel: View {
     let cards: [DashboardViewModel.SummaryCard]
-    let snapshot: DashboardViewModel.ActivitySnapshot
+    /// Nil while an active filter's matches are missing.
+    let snapshot: DashboardViewModel.ActivitySnapshot?
     var onCardNavigate: ((String) -> Void)?
 
     private let columns = [
@@ -485,10 +565,11 @@ private struct DashboardSignalsPanel: View {
             Divider()
 
             LazyVGrid(columns: columns, spacing: Theme.Spacing.md) {
-                DashboardActivityMetric(title: "New 24h", value: snapshot.newListings, icon: "sparkles", tone: .accent)
-                DashboardActivityMetric(title: "Price drops", value: snapshot.priceDrops, icon: "arrow.down.circle", tone: .alert)
-                DashboardActivityMetric(title: "Score 70+", value: snapshot.highScoreMatches, icon: "star.fill", tone: .score)
-                DashboardActivityMetric(title: "Unique matches", value: snapshot.totalMatches, icon: "tray.full.fill", tone: .neutral)
+                DashboardActivityMetric(title: "New 24h", value: snapshot?.newListings, icon: "sparkles", tone: .accent)
+                // Counts the first page of matches each active filter returns, not every listing.
+                DashboardActivityMetric(title: "Price drops in top matches", value: snapshot?.priceDrops, icon: "arrow.down.circle", tone: .alert)
+                DashboardActivityMetric(title: "Score 70+", value: snapshot?.highScoreMatches, icon: "star.fill", tone: .score)
+                DashboardActivityMetric(title: "Unique matches", value: snapshot?.totalMatches, icon: "tray.full.fill", tone: .neutral)
             }
         }
         .dashboardPanelStyle(tone: .neutral)
@@ -497,7 +578,8 @@ private struct DashboardSignalsPanel: View {
 
 private struct DashboardActivityMetric: View {
     let title: String
-    let value: Int
+    /// Nil when the count isn't known. It shows as a dash, never as a zero.
+    let value: Int?
     let icon: String
     let tone: Theme.Dashboard.SemanticTone
 
@@ -513,7 +595,7 @@ private struct DashboardActivityMetric: View {
                 Spacer(minLength: 0)
             }
 
-            Text(value.formatted())
+            Text(value.map { $0.formatted() } ?? "—")
                 .font(.title3)
                 .bold()
                 .fontDesign(.rounded)
@@ -541,7 +623,7 @@ private struct DashboardFilterCoveragePanel: View {
     let onOpenFilters: () -> Void
 
     private var maxCount: Int {
-        max(rows.map(\.matchCount).max() ?? 0, 1)
+        max(rows.compactMap(\.matchCount).max() ?? 0, 1)
     }
 
     var body: some View {
@@ -555,6 +637,9 @@ private struct DashboardFilterCoveragePanel: View {
                         }
                         if summary.strongestFilterCount > 0, let strongestFilterName = summary.strongestFilterName {
                             return "Strongest filter: \(strongestFilterName) (\(summary.strongestFilterCount) matches)."
+                        }
+                        if summary.unavailableFilters > 0 {
+                            return unavailableSentence
                         }
                         return "All active filters are currently empty."
                     }()
@@ -585,14 +670,14 @@ private struct DashboardFilterCoveragePanel: View {
                     DashboardSupportingStat(value: "\(summary.activeFilters)", label: "Active filters")
                     DashboardSupportingStat(value: "\(summary.matchedFilters)", label: "With matches")
                     DashboardSupportingStat(value: "\(summary.emptyFilters)", label: "Empty")
-                    DashboardSupportingStat(value: "\(summary.totalUniqueMatches)", label: "Unique matches")
+                    DashboardSupportingStat(value: summary.totalUniqueMatches.map { "\($0)" } ?? "—", label: "Unique matches")
                 }
 
                 VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                     DashboardSupportingStat(value: "\(summary.activeFilters)", label: "Active filters")
                     DashboardSupportingStat(value: "\(summary.matchedFilters)", label: "With matches")
                     DashboardSupportingStat(value: "\(summary.emptyFilters)", label: "Empty")
-                    DashboardSupportingStat(value: "\(summary.totalUniqueMatches)", label: "Unique matches")
+                    DashboardSupportingStat(value: summary.totalUniqueMatches.map { "\($0)" } ?? "—", label: "Unique matches")
                 }
             }
         }
@@ -618,12 +703,12 @@ private struct DashboardFilterCoveragePanel: View {
                                 ProgressView()
                                     .controlSize(.mini)
                             }
-                            Text("\(row.matchCount)")
+                            Text(row.matchCount.map { "\($0)" } ?? "—")
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
 
-                        DashboardCoverageBar(value: Double(row.matchCount), maximum: Double(maxCount))
+                        DashboardCoverageBar(value: Double(row.matchCount ?? 0), maximum: Double(maxCount))
                     }
                     .padding(.horizontal, Theme.Spacing.md)
                     .padding(.vertical, Theme.Spacing.sm)
@@ -637,10 +722,22 @@ private struct DashboardFilterCoveragePanel: View {
         if summary.activeFilters == 0 {
             return "No active filters yet. Create filters to turn the dashboard into a real investor briefing."
         }
+        var sentences: [String] = []
         if let strongestFilterName = summary.strongestFilterName, summary.strongestFilterCount > 0 {
-            return "\(summary.matchedFilters) of \(summary.activeFilters) active filters are returning matches. Strongest filter: \(strongestFilterName) with \(summary.strongestFilterCount) matches."
+            sentences.append("\(summary.matchedFilters) of \(summary.activeFilters) active filters are returning matches. Strongest filter: \(strongestFilterName) with \(summary.strongestFilterCount) matches.")
+        } else if summary.unavailableFilters == 0 {
+            sentences.append("You have \(summary.activeFilters) active filters, but none are currently returning matches.")
         }
-        return "You have \(summary.activeFilters) active filters, but none are currently returning matches."
+        if summary.unavailableFilters > 0 {
+            sentences.append(unavailableSentence)
+        }
+        return sentences.joined(separator: " ")
+    }
+
+    /// For example "Matches for 2 filters didn't load."
+    private var unavailableSentence: String {
+        let filters = summary.unavailableFilters == 1 ? "1 filter" : "\(summary.unavailableFilters) filters"
+        return "Matches for \(filters) didn’t load."
     }
 }
 

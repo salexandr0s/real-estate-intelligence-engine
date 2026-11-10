@@ -150,9 +150,7 @@ struct ImmoRadarApp: App {
     private var viewCommands: some Commands {
         CommandGroup(after: .toolbar) {
             Button("Refresh Data") {
-                Task {
-                    await appState.refreshConnection(userInitiated: true)
-                }
+                appState.requestRefresh()
             }
             .keyboardShortcut("r", modifiers: .command)
         }

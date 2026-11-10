@@ -6,17 +6,34 @@ struct SourcesView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = SourcesViewModel()
 
+    /// The last load failed and no sources are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.loadErrorMessage != nil && viewModel.sources.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                if let error = viewModel.errorMessage,
-                   !AppErrorPresentation.isConnectionIssue(message: error) {
+                if let error = viewModel.errorMessage {
                     InlineWarningBanner(
-                        title: "Couldn’t complete the last sources action.",
+                        title: "Couldn’t complete the last source action.",
                         message: error,
                         actions: [
                             .init("Dismiss") {
                                 viewModel.clearError()
+                            },
+                        ]
+                    )
+                }
+
+                // With nothing loaded, the placeholder below says it instead.
+                if let error = appState.screenLoadError(viewModel.loadErrorMessage), !showsLoadFailure {
+                    InlineWarningBanner(
+                        title: "Couldn’t load sources.",
+                        message: error,
+                        actions: [
+                            .init("Dismiss") {
+                                viewModel.clearLoadError()
                             },
                             .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
                                 Task { await viewModel.refresh(using: appState.apiClient) }
@@ -27,14 +44,25 @@ struct SourcesView: View {
 
                 SourcesRuntimeCard(viewModel: viewModel)
 
-                SourcesSummaryBar(viewModel: viewModel)
-
-                SourcesLifecycleOpsCard(viewModel: viewModel)
-
-                if viewModel.sources.isEmpty && !viewModel.isLoading {
-                    SourcesEmptyState()
+                // The summary and lifecycle cards would count sources that didn't load as zero.
+                if showsLoadFailure {
+                    LoadFailedView(
+                        title: "Sources Didn’t Load",
+                        message: appState.screenLoadError(viewModel.loadErrorMessage),
+                        onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                    )
+                    .frame(minHeight: 220)
+                    .cardStyle(.subtle, padding: Theme.Spacing.xl, cornerRadius: Theme.Radius.lg)
                 } else {
-                    SourcesListContent(viewModel: viewModel)
+                    SourcesSummaryBar(viewModel: viewModel)
+
+                    SourcesLifecycleOpsCard(viewModel: viewModel)
+
+                    if viewModel.sources.isEmpty && !viewModel.isLoading {
+                        SourcesEmptyState()
+                    } else {
+                        SourcesListContent(viewModel: viewModel)
+                    }
                 }
             }
             .padding(Theme.Spacing.xl)
@@ -60,7 +88,7 @@ struct SourcesView: View {
                         systemImage: viewModel.allPaused ? "play.fill" : "pause.fill"
                     )
                 }
-                .disabled(viewModel.sources.isEmpty)
+                .disabled(viewModel.sources.isEmpty || viewModel.isUpdatingAll)
             }
             ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
@@ -73,6 +101,9 @@ struct SourcesView: View {
         .task {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
+        }
+        .onChange(of: appState.navigationState.refreshGeneration) { _, _ in
+            Task { await viewModel.refresh(using: appState.apiClient) }
         }
     }
 }
@@ -172,8 +203,9 @@ private struct SourcesRuntimeCard: View {
                         }
                         .buttonStyle(.bordered)
 
-                        Button("Reset Local Engine", role: .destructive) {
-                            Task { await appState.resetLocalEngine() }
+                        // ContentView asks for confirmation before anything is erased.
+                        Button("Reset Local Engine…", role: .destructive) {
+                            appState.requestEngineReset()
                         }
                         .buttonStyle(.bordered)
                         .disabled(appState.isLocalEngineBusy)
@@ -588,6 +620,10 @@ private struct SourcesListContent: View {
             if !viewModel.pausedSources.isEmpty {
                 SourcesSection(title: "Paused", subtitle: "Sources kept out of rotation until you resume them.", sources: viewModel.pausedSources, viewModel: viewModel)
             }
+
+            if !viewModel.disabledSources.isEmpty {
+                SourcesSection(title: "Disabled", subtitle: "Sources stopped by failed runs or by their legal status. Each card says why.", sources: viewModel.disabledSources, viewModel: viewModel)
+            }
         }
     }
 }
@@ -660,7 +696,9 @@ private struct SourceDetailCard: View {
                         HStack(spacing: Theme.Spacing.xs) {
                             Text(source.name)
                                 .font(.body.weight(.medium))
-                            if !source.isActive {
+                            if source.legalStatus == .disabled {
+                                StatusBadge(label: "Legally Disabled", color: .sourceDisabled, icon: "nosign")
+                            } else if !source.isActive && source.healthStatus != .disabled {
                                 StatusBadge(label: "Paused", color: .secondary, icon: "pause.fill")
                             }
                         }
@@ -702,6 +740,7 @@ private struct SourceDetailCard: View {
                     .foregroundStyle(.secondary)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
+                    .disabled(viewModel.togglingSourceIDs.contains(source.id) || viewModel.isUpdatingAll)
                     .onChange(of: isActive) { _, newValue in
                         guard newValue != source.isActive else { return }
                         Task { await viewModel.toggleActive(source, using: appState.apiClient) }
@@ -723,6 +762,7 @@ private struct SourceDetailCard: View {
                     .pickerStyle(.menu)
                     .controlSize(.small)
                     .frame(width: 72)
+                    .disabled(viewModel.updatingIntervalSourceIDs.contains(source.id))
                     .onChange(of: selectedInterval) { _, newValue in
                         guard newValue != source.crawlIntervalMinutes else { return }
                         Task { await viewModel.updateInterval(source, minutes: newValue, using: appState.apiClient) }
@@ -749,8 +789,8 @@ private struct SourceDetailCard: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(viewModel.runningSourceIDs.contains(source.id) || !source.isActive || appState.sourceRunBlockedReason != nil)
-                .help(runNowHelp)
+                .disabled(viewModel.runningSourceIDs.contains(source.id) || runBlockedReason != nil)
+                .help(runBlockedReason ?? "Trigger a manual scrape run")
 
                 Spacer()
             }
@@ -834,10 +874,15 @@ private struct SourceDetailCard: View {
                     systemImage: source.isActive ? "pause.circle" : "play.circle"
                 )
             }
+            .disabled(viewModel.togglingSourceIDs.contains(source.id) || viewModel.isUpdatingAll)
         }
     }
 
     private var readinessText: String {
+        if SourcesViewModel.isDisabled(source),
+           let explanation = SourcesViewModel.disabledExplanation(for: source) {
+            return explanation
+        }
         switch source.healthStatus {
         case .blocked:
             return source.lastErrorSummary ?? "Blocked or repeatedly failing. Intervention is required before the source goes silent."
@@ -855,9 +900,9 @@ private struct SourceDetailCard: View {
         }
     }
 
-    private var runNowHelp: String {
-        guard source.isActive else { return "Enable source to run" }
-        return appState.sourceRunBlockedReason ?? "Trigger a manual scrape run"
+    /// Why Run Now is off: the source's own state first, then the local engine's.
+    private var runBlockedReason: String? {
+        SourcesViewModel.disabledExplanation(for: source) ?? appState.sourceRunBlockedReason
     }
 
     private var intervalLabel: String {

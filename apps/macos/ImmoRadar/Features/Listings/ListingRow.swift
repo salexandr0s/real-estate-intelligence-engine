@@ -6,7 +6,7 @@ struct ListingRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+            ScoreIndicator(score: listing.currentScore, size: .compact)
 
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text(listing.title)
@@ -17,6 +17,10 @@ struct ListingRow: View {
                     Label(listing.districtName ?? listing.city, systemImage: "mappin")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    ListingLastSeenLabel(lastSeenAt: listing.lastSeenAt)
+                        .font(.caption)
+                        .lineLimit(1)
 
                     Spacer()
 

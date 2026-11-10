@@ -26,8 +26,14 @@ struct AlertsList: View {
 
                     if alert.status != .dismissed {
                         Button {
+                            let appState = appState
                             Task {
-                                await viewModel.dismiss(alert, using: appState.apiClient, undoManager: undoManager)
+                                await viewModel.dismiss(
+                                    alert,
+                                    using: appState.apiClient,
+                                    undoManager: undoManager,
+                                    afterUndo: { await appState.refreshUnreadCount() }
+                                )
                                 await appState.refreshUnreadCount()
                             }
                         } label: {

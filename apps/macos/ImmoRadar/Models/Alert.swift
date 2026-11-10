@@ -157,6 +157,8 @@ struct Alert: Identifiable, Codable, Hashable {
     let listingId: Int?
     let matchReasons: AlertMatchReasons?
     let listing: AlertListingSummary?
+    /// The filter that raised the alert.
+    var userFilterId: Int? = nil
 
     var matchedAtSortDate: Date {
         matchedAt ?? .distantPast

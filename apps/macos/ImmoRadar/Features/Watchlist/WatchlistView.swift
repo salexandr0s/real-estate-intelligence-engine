@@ -14,10 +14,15 @@ struct WatchlistView: View {
         viewModel.filteredSavedListings(matching: searchText)
     }
 
+    /// The last load failed and no saved listings are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.errorMessage != nil && viewModel.savedListings.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let error = viewModel.errorMessage,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.errorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load the watchlist.",
                     message: error,
@@ -29,29 +34,51 @@ struct WatchlistView: View {
                 )
             }
 
-            if viewModel.savedListings.isEmpty && !viewModel.isLoading {
+            if let actionError = viewModel.actionErrorMessage {
+                InlineWarningBanner(
+                    title: "Couldn’t update the watchlist.",
+                    message: actionError,
+                    actions: [
+                        .init("Dismiss") { viewModel.actionErrorMessage = nil },
+                    ]
+                )
+            }
+
+            if showsLoadFailure {
+                LoadFailedView(
+                    title: "Watchlist Didn’t Load",
+                    message: appState.screenLoadError(viewModel.errorMessage),
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            } else if viewModel.savedListings.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView {
                     Label("No Saved Listings", systemImage: "bookmark")
                 } description: {
                     Text("Save listings from the detail view to track them here.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !viewModel.savedListings.isEmpty && filteredItems.isEmpty && !searchText.isEmpty {
+            } else if !viewModel.savedListings.isEmpty && filteredItems.isEmpty && !searchText.isEmpty && !viewModel.hasMorePages {
                 ContentUnavailableView.search
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(filteredItems, selection: $selectedItemID) { item in
-                    WatchlistRow(
-                        item: item,
-                        isSavingNotes: viewModel.savingNotesListingId == item.listingId,
-                        onSaveNotes: { notes in
-                            Task { await viewModel.saveNotes(for: item.listingId, notes: notes, using: appState.apiClient) }
-                        },
-                        onUnsave: {
-                            Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
-                        }
-                    )
-                    .tag(item.listingId)
+                List(selection: $selectedItemID) {
+                    ForEach(filteredItems) { item in
+                        WatchlistRow(
+                            item: item,
+                            isSavingNotes: viewModel.savingNotesListingId == item.listingId,
+                            onSaveNotes: { notes in
+                                Task { await viewModel.saveNotes(for: item.listingId, notes: notes, using: appState.apiClient) }
+                            },
+                            onUnsave: {
+                                Task { await viewModel.unsave(listingId: item.listingId, using: appState.apiClient, undoManager: undoManager) }
+                            }
+                        )
+                        .tag(item.listingId)
+                    }
+
+                    if viewModel.hasMorePages {
+                        nextPageRow
+                    }
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
                 .onDeleteCommand {
@@ -78,8 +105,11 @@ struct WatchlistView: View {
             ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
-                        if let data = await viewModel.exportCSV(using: appState.apiClient) {
+                        do {
+                            let data = try await viewModel.exportCSV(using: appState.apiClient)
                             exportToFile(data)
+                        } catch {
+                            exportError = AppErrorPresentation.message(for: error)
                         }
                     }
                 } label: {
@@ -99,6 +129,9 @@ struct WatchlistView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
         .onChange(of: exportError) { _, newValue in
             showExportError = newValue != nil
         }
@@ -106,6 +139,29 @@ struct WatchlistView: View {
             Button("OK", role: .cancel) { exportError = nil }
         } message: {
             if let msg = exportError { Text(msg) }
+        }
+    }
+
+    /// The last row while the server has more saved listings. Reaching it loads the next page.
+    private var nextPageRow: some View {
+        HStack {
+            Spacer()
+            if viewModel.nextPageFailed && !viewModel.isLoadingNextPage {
+                Button("Load More") {
+                    Task { await viewModel.loadNextPage(using: appState.apiClient) }
+                }
+                .controlSize(.small)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Spacer()
+        }
+        .padding(.vertical, Theme.Spacing.xs)
+        // A refresh can hand back the cursor already shown, so its end starts the load too.
+        .task(id: NextPageTrigger(cursor: viewModel.nextCursor, isRefreshing: viewModel.isLoading)) {
+            guard !viewModel.nextPageFailed else { return }
+            await viewModel.loadNextPage(using: appState.apiClient)
         }
     }
 
@@ -123,6 +179,12 @@ struct WatchlistView: View {
             }
         }
     }
+}
+
+/// What starts the next page's load when it changes.
+private struct NextPageTrigger: Equatable {
+    let cursor: String?
+    let isRefreshing: Bool
 }
 
 #Preview {

@@ -38,6 +38,7 @@ final class DateParsingTests: XCTestCase {
             lastPriceChangePct: nil,
             lastPriceChangeAt: nil,
             firstSeenAt: "invalid-date",
+            lastSeenAt: nil,
             listingStatus: ListingStatus.active.rawValue,
             contactName: nil,
             contactCompany: nil,
@@ -55,13 +56,14 @@ final class DateParsingTests: XCTestCase {
     func testAlertMappingPreservesInvalidMatchedDateAsNil() {
         let dto = APIAlertResponse(
             id: 1,
+            userFilterId: nil,
+            listingId: 123,
             alertType: AlertType.newMatch.rawValue,
-            status: AlertStatus.unread.rawValue,
+            status: "sent",
             title: "Alert",
             body: "Body",
             matchedAt: "bad-date",
             filterName: "Value Filter",
-            listingId: 123,
             matchReasons: nil,
             listing: nil
         )
@@ -82,6 +84,24 @@ final class DateParsingTests: XCTestCase {
         )
 
         XCTAssertNil(point.parsedDate)
+    }
+
+    /// The server sends trend and velocity days as Vienna calendar days. West of UTC, a UTC
+    /// midnight falls on the previous local day, so the day must parse as local midnight.
+    func testCalendarDayParsesAsLocalMidnight() throws {
+        let losAngeles = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let date = try XCTUnwrap(Date.fromCalendarDay("2026-03-01", timeZone: losAngeles))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = losAngeles
+        let parts = calendar.dateComponents([.year, .month, .day, .hour], from: date)
+        XCTAssertEqual(parts.year, 2026)
+        XCTAssertEqual(parts.month, 3)
+        XCTAssertEqual(parts.day, 1)
+        XCTAssertEqual(parts.hour, 0)
+
+        XCTAssertNil(Date.fromCalendarDay("2026-02-30", timeZone: losAngeles))
+        XCTAssertNil(Date.fromCalendarDay("2026-03-01T00:00:00Z", timeZone: losAngeles))
     }
 
     func testMailboxResponseDecodesAndMapsLastSuccessfulSyncAt() throws {
@@ -305,6 +325,289 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.hasLoaded)
         XCTAssertFalse(viewModel.isLoadingList)
     }
+
+    /// A 409 means the thread moved on: show the server's reason and reload the thread, so its
+    /// buttons match what the server accepts now.
+    func testConflictShowsServerMessageAndReloadsThread() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary()],
+            thread: makeThread(),
+            listing: makeListing(),
+            updateError: makeAPIError(
+                status: 409,
+                code: "conflict",
+                message: "The thread changed in the meantime. Reload it and try again"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.performThreadAction(.pause, using: client)
+        let fetchCount = await client.threadFetchCount()
+
+        XCTAssertEqual(viewModel.shownActionFailure?.message, "The thread changed in the meantime. Reload it and try again")
+        XCTAssertEqual(viewModel.shownActionFailure?.canTryAgain, false)
+        XCTAssertEqual(fetchCount, 2, "The 409 should reload the thread")
+        XCTAssertNil(viewModel.actionInFlight)
+    }
+
+    /// A 503 `outreach_enqueue_failed` leaves the thread as it was, so Try Again sends the same request.
+    func testEnqueueFailureOffersTryAgainThatResendsFollowup() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary()],
+            thread: makeThread(),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+
+        XCTAssertEqual(viewModel.shownActionFailure?.message, "Could not queue the follow-up. Try again in a moment")
+        XCTAssertEqual(viewModel.shownActionFailure?.canTryAgain, true)
+
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(snapshot.followupCalls, [21, 21])
+    }
+
+    /// A refresh used to reload only the first page, so a thread picked from a later page lost
+    /// its selection and the list lost the pages loaded with Load More.
+    func testRefreshKeepsLaterPagesAndTheThreadPickedFromThem() async {
+        let viewModel = OutreachViewModel()
+        let pageSize = OutreachViewModel.pageSize
+        let laterThreadID = 100 + pageSize
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: (100...laterThreadID).map { makeThreadSummary(id: $0) },
+            thread: makeThread(),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.loadMoreThreads(using: client)
+        viewModel.selectedThreadID = laterThreadID
+        await viewModel.selectThread(id: laterThreadID, using: client)
+        await viewModel.refresh(using: client)
+
+        XCTAssertEqual(viewModel.threads.count, pageSize + 1)
+        XCTAssertEqual(viewModel.selectedThreadID, laterThreadID)
+        XCTAssertEqual(viewModel.selectedThread?.id, laterThreadID)
+    }
+
+    /// A refresh could move the selection to another thread and leave a failed request on
+    /// screen, so Try Again sent that request for the thread selected now.
+    func testRefreshThatMovesTheSelectionHidesTheFailedRequest() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+        // Thread 21 left the scope shown, and the list has no more pages.
+        await client.setThreads([makeThreadSummary(id: 22)])
+        await viewModel.refresh(using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(viewModel.selectedThreadID, 22)
+        XCTAssertNil(viewModel.shownActionFailure)
+        XCTAssertEqual(snapshot.followupCalls, [21])
+    }
+
+    /// A request could fail after the user picked another thread. The failure then showed under
+    /// that thread, and Try Again sent the request for it. Going back to its thread, or sending a
+    /// request on the other thread first, dropped the failure, so the user never saw it.
+    func testFailureThatArrivesAfterPickingAnotherThreadStaysWithItsThread() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22 while the follow-up for thread 21 is out.
+        await client.setFollowupHook { client in
+            await MainActor.run { viewModel.selectedThreadID = 22 }
+            await viewModel.selectThread(id: 22, using: client)
+        }
+        await viewModel.sendFollowup(using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+
+        XCTAssertEqual(viewModel.selectedThread?.id, 22)
+        XCTAssertNil(viewModel.shownActionFailure)
+
+        // A request for thread 22 leaves thread 21's failure alone.
+        await viewModel.performThreadAction(.pause, using: client)
+
+        // Back on thread 21, the failure shows, and Try Again sends the follow-up for it.
+        viewModel.selectedThreadID = 21
+        await viewModel.selectThread(id: 21, using: client)
+        XCTAssertEqual(viewModel.shownActionFailure?.request, .followup)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(snapshot.followupCalls, [21, 21])
+    }
+
+    /// A kept failure offered Try Again after its thread stopped taking the request, as a
+    /// follow-up does once a reply arrives, and the server refused the second send.
+    func testTryAgainSendsNothingOnceTheThreadNoLongerTakesTheRequest() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+        // The user looks at thread 22 while a reply to thread 21 arrives, then goes back.
+        viewModel.selectedThreadID = 22
+        await viewModel.selectThread(id: 22, using: client)
+        await client.setThread(makeThread(id: 21, workflowState: "reply_received"))
+        viewModel.selectedThreadID = 21
+        await viewModel.selectThread(id: 21, using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(viewModel.shownActionFailure?.request, .followup)
+        XCTAssertEqual(snapshot.followupCalls, [21])
+    }
+
+    /// Picking the thread on screen while another thread loaded did nothing, so the slower load
+    /// replaced it, and the detail showed a thread the list didn't select.
+    func testPickingTheThreadOnScreenWhileAnotherLoadsKeepsIt() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22, then thread 21 again before 22 loads. The list's selection
+        // binding sets the ID before the view model hears of it.
+        await client.setThreadHook { client in
+            await MainActor.run { viewModel.selectedThreadID = 21 }
+            await viewModel.selectThread(id: 21, using: client)
+        }
+        viewModel.selectedThreadID = 22
+        await viewModel.selectThread(id: 22, using: client)
+
+        XCTAssertEqual(viewModel.selectedThreadID, 21)
+        XCTAssertEqual(viewModel.selectedThread?.id, 21)
+        XCTAssertFalse(viewModel.isLoadingThread)
+    }
+
+    /// The list's selection binding sets the thread ID, and the pick that loads it runs later. A
+    /// link that selected another thread in between lost to the late pick, which loaded its own
+    /// thread and put its ID back.
+    func testPickThatANewerSelectionReplacedDoesNothing() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22), makeThreadSummary(id: 30)],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22, and a link to thread 30 opens before the pick runs.
+        viewModel.selectedThreadID = 22
+        await viewModel.openThread(id: 30, using: client)
+        await viewModel.selectThread(id: 22, using: client)
+
+        XCTAssertEqual(viewModel.selectedThreadID, 30)
+        XCTAssertEqual(viewModel.selectedThread?.id, 30)
+    }
+
+    /// A link to a thread could arrive while another scope's list loaded. That list then
+    /// replaced the All list the link had opened, so the picker said All over the Open threads.
+    func testLinkThatArrivesDuringAScopeChangeShowsTheAllList() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 30, workflowState: "closed")],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        viewModel.selectedScope = .all
+        await viewModel.refresh(using: client)
+        // The user picks Open, and a link to closed thread 30 arrives while that list loads.
+        await client.setThreadsHook { client in
+            await viewModel.openThread(id: 30, using: client)
+        }
+        viewModel.selectedScope = .open
+        await viewModel.refresh(using: client)
+
+        XCTAssertEqual(viewModel.selectedScope, .all)
+        XCTAssertEqual(viewModel.threads.map(\.id), [21, 30])
+        XCTAssertEqual(viewModel.selectedThreadID, 30)
+        XCTAssertEqual(viewModel.selectedThread?.id, 30)
+    }
+
+    /// A thread closed from a list with more pages stayed selected, as if it sat on a page not
+    /// loaded yet, though the Open scope no longer lists it.
+    func testThreadThatLeavesTheScopeLosesTheSelectionWhileMorePagesRemain() async {
+        let viewModel = OutreachViewModel()
+        let lastThreadID = 21 + OutreachViewModel.pageSize + 1
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: (21...lastThreadID).map { makeThreadSummary(id: $0) },
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // Thread 21 gets closed, so the Open scope leaves it out.
+        await client.setThreads(
+            [makeThreadSummary(id: 21, workflowState: "closed")]
+                + (22...lastThreadID).map { makeThreadSummary(id: $0) }
+        )
+        await client.setThread(makeThread(id: 21, workflowState: "closed"))
+        await viewModel.refresh(using: client)
+
+        XCTAssertNotNil(viewModel.nextCursor, "The Open list should still have more pages")
+        XCTAssertEqual(viewModel.selectedThreadID, 22)
+        XCTAssertEqual(viewModel.selectedThread?.id, 22)
+    }
+}
+
+private func makeAPIError(status: Int, code: String, message: String) -> APIError {
+    .httpError(statusCode: status, detail: APIErrorDetail(code: code, message: message, details: nil))
 }
 
 private enum MockOutreachError: Error {
@@ -326,9 +629,9 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
 
     private let mailboxes: [MailboxAccount]
     private let mailboxesError: Error?
-    private let threads: [OutreachThreadSummary]
+    private var threads: [OutreachThreadSummary]
     private let threadsError: Error?
-    private let thread: OutreachThread
+    private var thread: OutreachThread
     private let threadError: Error?
     private let listing: Listing
     private let listingError: Error?
@@ -339,6 +642,14 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     private var syncMailboxCallsStorage: [Int] = []
     private var updateCallsStorage: [(id: Int, action: OutreachAction)] = []
     private var followupCallsStorage: [Int] = []
+    private var threadFetchCountStorage = 0
+    /// Runs once inside the next follow-up request, before it answers, so a test can act while
+    /// the request is out.
+    private var followupHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
+    /// Runs once inside the next thread list request, before it answers.
+    private var threadsHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
+    /// Runs once inside the next thread request, before it answers.
+    private var threadHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
 
     init(
         mailboxes: [MailboxAccount] = [],
@@ -371,22 +682,60 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
         return mailboxes
     }
 
+    /// Pages through the threads `scope` lists, like the server. A cursor is the offset of the
+    /// next page.
     func fetchOutreachThreads(
         scope: OutreachScope,
         cursor: String?,
         limit: Int?
     ) async throws -> (threads: [OutreachThreadSummary], nextCursor: String?) {
-        _ = scope
-        _ = cursor
-        _ = limit
         if let threadsError { throw threadsError }
-        return (threads, nil)
+        if let hook = threadsHook {
+            threadsHook = nil
+            await hook(self)
+        }
+        let listed = threads.filter { thread in
+            switch scope {
+            case .open: thread.workflowState != "closed"
+            case .closed: thread.workflowState == "closed"
+            case .all: true
+            }
+        }
+        let start = min(cursor.flatMap { Int($0) } ?? 0, listed.count)
+        let end = min(start + (limit ?? listed.count), listed.count)
+        return (Array(listed[start..<end]), end < listed.count ? String(end) : nil)
+    }
+
+    /// Replaces the threads the server lists from now on.
+    func setThreads(_ newThreads: [OutreachThreadSummary]) {
+        threads = newThreads
+    }
+
+    func setThreadsHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        threadsHook = hook
+    }
+
+    /// Replaces the thread the server returns for its ID from now on.
+    func setThread(_ newThread: OutreachThread) {
+        thread = newThread
     }
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {
-        _ = id
+        threadFetchCountStorage += 1
+        if let hook = threadHook {
+            threadHook = nil
+            await hook(self)
+        }
         if let threadError { throw threadError }
-        return thread
+        return id == thread.id ? thread : makeThread(id: id)
+    }
+
+    func setThreadHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        threadHook = hook
+    }
+
+    func threadFetchCount() -> Int {
+        threadFetchCountStorage
     }
 
     func fetchListing(id: Int) async throws -> Listing {
@@ -409,7 +758,15 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
         _ = subject
         _ = bodyText
         followupCallsStorage.append(id)
+        if let hook = followupHook {
+            followupHook = nil
+            await hook(self)
+        }
         if let followupError { throw followupError }
+    }
+
+    func setFollowupHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        followupHook = hook
     }
 
     func snapshot() -> Snapshot {
@@ -434,11 +791,12 @@ private func makeMailbox() -> MailboxAccount {
 }
 
 private func makeThreadSummary(
+    id: Int = 21,
     workflowState: String = "sent_waiting_reply",
     unreadInboundCount: Int = 1
 ) -> OutreachThreadSummary {
     OutreachThreadSummary(
-        id: 21,
+        id: id,
         listingId: 300,
         mailboxAccountId: 10,
         contactName: "Max Broker",
@@ -455,11 +813,12 @@ private func makeThreadSummary(
 }
 
 private func makeThread(
+    id: Int = 21,
     workflowState: String = "sent_waiting_reply",
     unreadInboundCount: Int = 1
 ) -> OutreachThread {
     OutreachThread(
-        id: 21,
+        id: id,
         listingId: 300,
         mailboxAccountId: 10,
         contactName: "Max Broker",

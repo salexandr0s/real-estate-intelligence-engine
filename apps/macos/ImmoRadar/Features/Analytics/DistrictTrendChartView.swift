@@ -5,7 +5,8 @@ import SwiftUI
 struct DistrictTrendChartView: View {
     let data: [DistrictTrendPoint]
     @Binding var selectedDistrictNo: Int?
-    var onMonthsChanged: ((Int) -> Void)?
+    /// Trims the loaded data, which covers the server's default of 12 months, so a change needs
+    /// no request.
     @State private var selectedMonths: Int = 12
 
     private struct ChartPoint: Identifiable {
@@ -118,9 +119,6 @@ struct DistrictTrendChartView: View {
             }
         }
         .cardStyle(.subtle, padding: Theme.Spacing.lg, cornerRadius: Theme.Radius.lg)
-        .onChange(of: selectedMonths) { _, newValue in
-            onMonthsChanged?(newValue)
-        }
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: selectedDistrictNo)
     }
 }

@@ -6,11 +6,16 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        if appState.unreadAlertCount > 0 {
-            Text("^[\(appState.unreadAlertCount) unread alert](inflect: true)")
+        switch appState.alertsState.loadedUnreadAlertCount {
+        case .some(let count) where count > 0:
+            Text("^[\(count) unread alert](inflect: true)")
                 .font(.headline)
-        } else {
+        case .some:
             Text("No unread alerts")
+                .foregroundStyle(.secondary)
+        case .none:
+            // Until the server reports the count, "No unread alerts" could be wrong.
+            Text("Unread alerts not loaded")
                 .foregroundStyle(.secondary)
         }
 
@@ -28,12 +33,10 @@ struct MenuBarContent: View {
 
         Divider()
 
+        // Command-R belongs to Refresh Data in the main menu.
         Button("Refresh") {
-            Task {
-                await appState.refreshConnection(userInitiated: true)
-            }
+            appState.requestRefresh()
         }
-        .keyboardShortcut("r", modifiers: .command)
 
         Divider()
 
@@ -45,6 +48,6 @@ struct MenuBarContent: View {
     private func showMainWindow(at item: NavigationItem) {
         appState.navigateTo(item)
         openWindow(id: ImmoRadarApp.mainWindowID)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 }

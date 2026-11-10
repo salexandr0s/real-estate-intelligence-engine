@@ -20,7 +20,7 @@ struct OpportunityCard: View {
                     .foregroundStyle(.tertiary)
                     .frame(width: 28, alignment: .leading)
 
-                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+                ScoreIndicator(score: listing.currentScore, size: .compact)
 
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     Text(listing.title)

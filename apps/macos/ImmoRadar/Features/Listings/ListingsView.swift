@@ -40,8 +40,11 @@ struct ListingsView: View {
             ToolbarItem(id: "export", placement: .automatic) {
                 Button {
                     Task {
-                        if let data = await viewModel.exportCSV(using: appState.apiClient) {
+                        do {
+                            let data = try await viewModel.exportCSV(using: appState.apiClient)
                             exportToFile(data)
+                        } catch {
+                            exportError = AppErrorPresentation.message(for: error)
                         }
                     }
                 } label: {
@@ -52,7 +55,7 @@ struct ListingsView: View {
             }
             ToolbarItem(id: "refresh", placement: .automatic) {
                 Button {
-                    Task { await viewModel.refresh(using: appState.apiClient, cache: appState.localCache) }
+                    Task { await reload() }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -73,6 +76,9 @@ struct ListingsView: View {
             await viewModel.refresh(using: appState.apiClient, cache: appState.localCache)
             consumePendingDeepLinkIfNeeded()
         }
+        .onChange(of: appState.navigationState.refreshGeneration) {
+            Task { await reload() }
+        }
         .onChange(of: viewModel.selectedListingID) { _, newValue in
             if newValue != nil {
                 showInspector = true
@@ -91,6 +97,11 @@ struct ListingsView: View {
         } message: {
             if let msg = exportError { Text(msg) }
         }
+    }
+
+    /// An explicit refresh: it skips the cached listings.
+    private func reload() async {
+        await viewModel.refresh(using: appState.apiClient, cache: appState.localCache, bypassingCache: true)
     }
 
     private func exportToFile(_ data: Data) {
@@ -125,26 +136,30 @@ private struct ListingsPrimaryPane: View {
             ListingsFilterBar(viewModel: viewModel)
             Divider()
 
-            if let error = viewModel.errorMessage,
-               !AppErrorPresentation.isConnectionIssue(message: error) {
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.errorMessage), !showsLoadFailure {
                 InlineWarningBanner(
                     title: "Couldn’t load listings.",
                     message: error,
                     actions: [
-                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
-                            Task {
-                                await viewModel.refresh(
-                                    using: appState.apiClient,
-                                    cache: appState.localCache
-                                )
-                            }
-                        },
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) { retry() },
                     ]
                 )
                 Divider()
             }
 
             content
+        }
+    }
+
+    /// The last load failed and no listings are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.errorMessage != nil && viewModel.listings.isEmpty && !viewModel.isLoading
+    }
+
+    private func retry() {
+        Task {
+            await viewModel.refresh(using: appState.apiClient, cache: appState.localCache, bypassingCache: true)
         }
     }
 
@@ -162,6 +177,12 @@ private struct ListingsPrimaryPane: View {
                     .controlSize(.large)
                     .offset(y: -60)
             }
+        } else if showsLoadFailure {
+            LoadFailedView(
+                title: "Listings Didn’t Load",
+                message: appState.screenLoadError(viewModel.errorMessage),
+                onRetry: retry
+            )
         } else if !viewModel.isLoading && viewModel.hasLoaded && viewModel.filteredListings.isEmpty {
             ContentUnavailableView {
                 Label(

@@ -6,9 +6,46 @@ struct FiltersView: View {
     @State private var viewModel = FiltersViewModel()
     @State private var showTestError: Bool = false
 
+    /// The last load failed and no filters are loaded from before.
+    private var showsLoadFailure: Bool {
+        viewModel.loadErrorMessage != nil && viewModel.filters.isEmpty && !viewModel.isLoading
+    }
+
     var body: some View {
-        Group {
-            if viewModel.filters.isEmpty && !viewModel.isLoading {
+        VStack(spacing: 0) {
+            if let error = viewModel.errorMessage {
+                InlineWarningBanner(
+                    title: "Couldn’t complete the last filter action.",
+                    message: error,
+                    actions: [
+                        .init("Dismiss") { viewModel.clearError() },
+                    ]
+                )
+                .padding(Theme.Spacing.md)
+            }
+
+            // With nothing loaded, the placeholder below says it instead.
+            if let error = appState.screenLoadError(viewModel.loadErrorMessage), !showsLoadFailure {
+                InlineWarningBanner(
+                    title: "Couldn’t load filters.",
+                    message: error,
+                    actions: [
+                        .init("Dismiss") { viewModel.clearLoadError() },
+                        .init("Retry", systemImage: "arrow.clockwise", isProminent: true) {
+                            Task { await viewModel.refresh(using: appState.apiClient) }
+                        },
+                    ]
+                )
+                .padding(Theme.Spacing.md)
+            }
+
+            if showsLoadFailure {
+                LoadFailedView(
+                    title: "Filters Didn’t Load",
+                    message: appState.screenLoadError(viewModel.loadErrorMessage),
+                    onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
+                )
+            } else if viewModel.filters.isEmpty && !viewModel.isLoading {
                 FiltersEmptyState {
                     viewModel.startNewFilter()
                 }
@@ -56,6 +93,9 @@ struct FiltersView: View {
             guard appState.allowsAutomaticFeatureLoads else { return }
             await viewModel.refresh(using: appState.apiClient)
         }
+        .onChange(of: appState.navigationState.refreshGeneration) { _, _ in
+            Task { await viewModel.refresh(using: appState.apiClient) }
+        }
         .onChange(of: viewModel.testErrorMessage) { _, newValue in
             showTestError = newValue != nil
         }
@@ -100,6 +140,7 @@ private struct FiltersList: View {
                 FilterRow(
                     filter: filter,
                     isTesting: viewModel.isTestingFilter && viewModel.testingFilterId == filter.id,
+                    isToggling: viewModel.togglingFilterIDs.contains(filter.id),
                     onToggle: { Task { await viewModel.toggleActive(filter, using: appState.apiClient) } },
                     onEdit: { viewModel.startEditing(filter) },
                     onTest: {
@@ -144,10 +185,11 @@ private struct FiltersList: View {
                         Task { await viewModel.toggleActive(filter, using: appState.apiClient) }
                     } label: {
                         Label(
-                            filter.isActive ? "Deactivate" : "Activate",
+                            filter.isActive ? "Pause Filter" : "Resume Filter",
                             systemImage: filter.isActive ? "pause.circle" : "play.circle"
                         )
                     }
+                    .disabled(viewModel.togglingFilterIDs.contains(filter.id))
 
                     Divider()
 
@@ -175,6 +217,7 @@ private struct FiltersList: View {
 private struct FilterRow: View {
     let filter: Filter
     let isTesting: Bool
+    let isToggling: Bool
     let onToggle: () -> Void
     let onEdit: () -> Void
     let onTest: () -> Void
@@ -182,25 +225,32 @@ private struct FilterRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            // Active toggle
+            // Pause or resume
             Button(
-                filter.isActive ? "Deactivate Filter" : "Activate Filter",
-                systemImage: filter.isActive ? "checkmark.circle.fill" : "circle",
+                filter.isActive ? "Pause Filter" : "Resume Filter",
+                systemImage: filter.isActive ? "checkmark.circle.fill" : "pause.circle",
                 action: onToggle
             )
             .labelStyle(.iconOnly)
             .font(.caption)
-            .foregroundStyle(filter.isActive ? .green : .secondary)
+            .foregroundStyle(filter.isActive ? Color.sourceHealthy : Color.secondary)
             .buttonStyle(.plain)
-            .accessibilityValue(filter.isActive ? "Active" : "Inactive")
-            .help(filter.isActive ? "Filter active" : "Filter inactive")
+            .disabled(isToggling)
+            .accessibilityValue(filter.isActive ? "Active" : "Paused")
+            .help(filter.isActive ? "Active. Click to pause this filter." : "Paused. Click to resume this filter.")
 
             // Filter info
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text(filter.name)
-                    .font(.body)
-                    .adaptiveFontWeight(.medium)
-                    .lineLimit(1)
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text(filter.name)
+                        .font(.body)
+                        .adaptiveFontWeight(.medium)
+                        .lineLimit(1)
+
+                    if !filter.isActive {
+                        StatusBadge(label: "Paused", color: .secondary, icon: "pause.fill")
+                    }
+                }
 
                 HStack(spacing: Theme.Spacing.sm) {
                     if let matchCount = filter.matchCount {
@@ -209,7 +259,8 @@ private struct FilterRow: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Label(filter.alertFrequency.displayName, systemImage: "bell")
+                    // A digest goes out like instant, so it shows as Instant.
+                    Label(filter.alertFrequency.delivery.displayName, systemImage: "bell")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -252,12 +303,13 @@ private struct FilterRow: View {
             }
 
             // Alert frequency
-            Text(filter.alertFrequency.displayName)
+            Text(filter.alertFrequency.delivery.displayName)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 50, alignment: .trailing)
         }
         .padding(.vertical, Theme.Spacing.xs)
+        .opacity(filter.isActive ? 1.0 : 0.76)
         .background(isHovered ? Color(nsColor: .separatorColor).opacity(0.05) : .clear)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
@@ -420,8 +472,8 @@ private struct FilterEditorSheet: View {
                                 Text("Alert cadence")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Picker("Frequency", selection: $draft.alertFrequency) {
-                                    ForEach(AlertFrequency.allCases, id: \.self) { freq in
+                                Picker("Frequency", selection: $draft.alertFrequencyChoice) {
+                                    ForEach(AlertFrequency.editorChoices, id: \.self) { freq in
                                         Text(freq.displayName).tag(freq)
                                     }
                                 }
@@ -441,7 +493,7 @@ private struct FilterEditorSheet: View {
                             Text("Vienna districts")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            DistrictGrid(selected: $draft.selectedDistricts)
+                            DistrictGrid(draft: draft)
                         }
                     }
 
@@ -505,6 +557,12 @@ private struct FilterEditorSheet: View {
 
             // Actions
             HStack {
+                if let error = viewModel.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.scorePoor)
+                        .lineLimit(2)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -619,13 +677,7 @@ private struct PropertyTypeGrid: View {
     private func selectionBinding(for propertyType: PropertyType) -> Binding<Bool> {
         Binding(
             get: { draft.selectedPropertyTypes.contains(propertyType) },
-            set: { isSelected in
-                if isSelected {
-                    draft.selectedPropertyTypes.insert(propertyType)
-                } else {
-                    draft.selectedPropertyTypes.remove(propertyType)
-                }
-            }
+            set: { draft.togglePropertyType(propertyType, isSelected: $0) }
         )
     }
 }
@@ -633,7 +685,7 @@ private struct PropertyTypeGrid: View {
 // MARK: - District Grid
 
 private struct DistrictGrid: View {
-    @Binding var selected: Set<Int>
+    @Bindable var draft: FilterDraft
 
     private let columns = [GridItem(.adaptive(minimum: 140), spacing: Theme.Spacing.xs)]
 
@@ -652,14 +704,8 @@ private struct DistrictGrid: View {
 
     private func selectionBinding(for districtNumber: Int) -> Binding<Bool> {
         Binding(
-            get: { selected.contains(districtNumber) },
-            set: { isSelected in
-                if isSelected {
-                    selected.insert(districtNumber)
-                } else {
-                    selected.remove(districtNumber)
-                }
-            }
+            get: { draft.selectedDistricts.contains(districtNumber) },
+            set: { draft.toggleDistrict(districtNumber, isSelected: $0) }
         )
     }
 }

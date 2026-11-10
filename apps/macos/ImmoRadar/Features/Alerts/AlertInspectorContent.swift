@@ -137,7 +137,7 @@ struct AlertInspectorContent: View {
         if let listing = alert.listing {
             inspectorSection(title: "Listing Snapshot", systemImage: "building.2") {
                 HStack(alignment: .top, spacing: Theme.Spacing.md) {
-                    ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+                    ScoreIndicator(score: listing.currentScore, size: .compact)
 
                     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                         HStack(spacing: Theme.Spacing.sm) {

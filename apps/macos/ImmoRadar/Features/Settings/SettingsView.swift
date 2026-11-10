@@ -21,6 +21,7 @@ struct SettingsView: View {
                         title: "Advanced Connection Settings",
                         draft: $draft,
                         connectionStatus: appState.connectionStatus,
+                        tokenIsUnreadable: appState.isAPITokenUnreadable,
                         hasChanges: draft.hasConnectionChanges(comparedTo: appState),
                         onApply: applyConnectionSettings,
                         onTest: testConnectionSettings
@@ -31,6 +32,7 @@ struct SettingsView: View {
                     title: "API Connection",
                     draft: $draft,
                     connectionStatus: appState.connectionStatus,
+                    tokenIsUnreadable: appState.isAPITokenUnreadable,
                     hasChanges: draft.hasConnectionChanges(comparedTo: appState),
                     onApply: applyConnectionSettings,
                     onTest: testConnectionSettings
@@ -39,7 +41,7 @@ struct SettingsView: View {
 
             SettingsAISection(
                 draft: $draft,
-                appState: appState,
+                keyIsUnreadable: appState.isCopilotKeyUnreadable(for: draft.copilotProvider),
                 hasChanges: draft.hasAIChanges(comparedTo: appState),
                 onApply: applyAISettings
             )
@@ -54,7 +56,20 @@ struct SettingsView: View {
             }
 
             Section("Notifications") {
-                Toggle("Enable Notifications", isOn: $alertsState.notificationsEnabled)
+                Toggle(
+                    "Enable Notifications",
+                    isOn: Binding(
+                        get: { alertsState.notificationsEnabled },
+                        set: { isEnabled in
+                            Task { await alertsState.setNotificationsEnabled(isEnabled) }
+                        }
+                    )
+                )
+                if let hint = alertsState.notificationPermissionHint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if alertsState.notificationsEnabled {
                     Toggle("New Matches", isOn: $alertsState.notifyOnNewMatch)
                     Toggle("Price Drops", isOn: $alertsState.notifyOnPriceDrop)
@@ -72,10 +87,6 @@ struct SettingsView: View {
         .task {
             guard appState.allowsAutomaticFeatureLoads else { return }
             loadDraftIfNeeded()
-        }
-        .onChange(of: draft.copilotProvider) { _, newValue in
-            guard newValue == .claudeSubscription else { return }
-            appState.loadClaudeSubscriptionIfNeeded()
         }
         .onChange(of: appState.settingsErrorMessage) { _, newValue in
             showSettingsError = newValue != nil
@@ -95,9 +106,6 @@ struct SettingsView: View {
         guard !didLoadDraft else { return }
         appState.loadSettingsSecretsIfNeeded()
         syncDraftFromAppState()
-        if draft.copilotProvider == .claudeSubscription {
-            appState.loadClaudeSubscriptionIfNeeded()
-        }
         didLoadDraft = true
     }
 
@@ -115,7 +123,7 @@ struct SettingsView: View {
         Task {
             await appState.applyConnectionSettings(
                 baseURL: draft.apiBaseURL,
-                token: draft.apiToken
+                token: draft.editedAPIToken
             )
             if appState.settingsErrorMessage == nil {
                 syncDraftFromAppState()
@@ -136,8 +144,8 @@ struct SettingsView: View {
         Task {
             await appState.applyCopilotSettings(
                 provider: draft.copilotProvider,
-                anthropicKey: draft.anthropicApiKey,
-                openAIKey: draft.openaiKey,
+                anthropicKey: draft.editedAnthropicKey,
+                openAIKey: draft.editedOpenAIKey,
                 model: draft.copilotModel
             )
             if appState.settingsErrorMessage == nil {
@@ -147,13 +155,42 @@ struct SettingsView: View {
     }
 }
 
-private struct SettingsDraft: Equatable {
+/// What the Settings fields show. Apply saves only the secrets the user edited, so a field left
+/// empty by a failed Keychain read, or by a read that finished after the draft was made, never
+/// deletes the stored secret.
+struct SettingsDraft: Equatable {
     var apiBaseURL = ""
     var apiToken = ""
     var copilotProvider: CopilotProvider = .anthropic
     var anthropicApiKey = ""
     var openaiKey = ""
     var copilotModel = ""
+
+    /// The secrets as the draft got them.
+    private var loadedAPIToken = ""
+    private var loadedAnthropicKey = ""
+    private var loadedOpenAIKey = ""
+
+    init() {}
+
+    init(
+        apiBaseURL: String,
+        apiToken: String,
+        copilotProvider: CopilotProvider,
+        anthropicApiKey: String,
+        openaiKey: String,
+        copilotModel: String
+    ) {
+        self.apiBaseURL = apiBaseURL
+        self.apiToken = apiToken
+        self.copilotProvider = copilotProvider
+        self.anthropicApiKey = anthropicApiKey
+        self.openaiKey = openaiKey
+        self.copilotModel = copilotModel
+        loadedAPIToken = apiToken
+        loadedAnthropicKey = anthropicApiKey
+        loadedOpenAIKey = openaiKey
+    }
 
     @MainActor static func from(_ appState: AppState) -> Self {
         Self(
@@ -166,29 +203,30 @@ private struct SettingsDraft: Equatable {
         )
     }
 
+    /// The token to save, or nil when the field still shows the token the draft got.
+    var editedAPIToken: String? { apiToken == loadedAPIToken ? nil : apiToken }
+    var editedAnthropicKey: String? { anthropicApiKey == loadedAnthropicKey ? nil : anthropicApiKey }
+    var editedOpenAIKey: String? { openaiKey == loadedOpenAIKey ? nil : openaiKey }
+
     @MainActor func hasConnectionChanges(comparedTo appState: AppState) -> Bool {
-        apiBaseURL != appState.apiBaseURL || apiToken != appState.apiToken
+        apiBaseURL != appState.apiBaseURL || editedAPIToken != nil
     }
 
     @MainActor func hasAIChanges(comparedTo appState: AppState) -> Bool {
         copilotProvider != appState.copilotProvider
-            || anthropicApiKey != appState.anthropicApiKey
-            || openaiKey != appState.openaiApiKey
+            || editedAnthropicKey != nil
+            || editedOpenAIKey != nil
             || copilotModel != appState.copilotModel
     }
 
     var defaultModelDescription: String {
-        switch copilotProvider {
-        case .openai:
-            "gpt-4o"
-        case .anthropic, .claudeSubscription:
-            "claude-sonnet-4"
-        }
+        copilotProvider.defaultModel
     }
 }
 
 private struct SettingsLocalEngineSection: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @Binding var showAdvancedConnectionSettings: Bool
 
     var body: some View {
@@ -252,8 +290,10 @@ private struct SettingsLocalEngineSection: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("Reset Local Engine", role: .destructive) {
-                    Task { await appState.resetLocalEngine() }
+                Button("Reset Local Engine…", role: .destructive) {
+                    appState.requestEngineReset()
+                    // The confirmation shows in the main window, which may be closed or behind this one.
+                    openWindow(id: ImmoRadarApp.mainWindowID)
                 }
                 .buttonStyle(.bordered)
                 .disabled(appState.isLocalEngineBusy)
@@ -341,6 +381,7 @@ private struct SettingsConnectionSection: View {
     let title: String
     @Binding var draft: SettingsDraft
     let connectionStatus: ConnectionStatus
+    let tokenIsUnreadable: Bool
     let hasChanges: Bool
     let onApply: () -> Void
     let onTest: () -> Void
@@ -352,6 +393,14 @@ private struct SettingsConnectionSection: View {
 
             SecureField("Bearer Token", text: $draft.apiToken)
                 .textFieldStyle(.roundedBorder)
+            if tokenIsUnreadable && draft.editedAPIToken == nil {
+                Label(
+                    "The stored token couldn’t be read. Apply keeps it unless you type a new one.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
 
             HStack {
                 Circle()
@@ -376,7 +425,8 @@ private struct SettingsConnectionSection: View {
 
 private struct SettingsAISection: View {
     @Binding var draft: SettingsDraft
-    let appState: AppState
+    /// Whether the Keychain refused to read the selected provider's stored key.
+    let keyIsUnreadable: Bool
     let hasChanges: Bool
     let onApply: () -> Void
 
@@ -391,11 +441,14 @@ private struct SettingsAISection: View {
             .pickerStyle(.radioGroup)
 
             providerCredentials
-            providerStatus
 
-            TextField("Model override (optional)", text: $draft.copilotModel)
-                .textFieldStyle(.roundedBorder)
-            Text("Leave empty for default (\(draft.defaultModelDescription))")
+            TextField(
+                "Model override (optional)",
+                text: $draft.copilotModel,
+                prompt: Text(draft.defaultModelDescription)
+            )
+            .textFieldStyle(.roundedBorder)
+            Text("Leave empty to use the server’s default, \(draft.defaultModelDescription).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -413,7 +466,9 @@ private struct SettingsAISection: View {
         if draft.copilotProvider == .anthropic {
             SecureField("Anthropic API Key", text: $draft.anthropicApiKey)
                 .textFieldStyle(.roundedBorder)
-            if draft.anthropicApiKey.isEmpty {
+            if keyIsUnreadable && draft.editedAnthropicKey == nil {
+                unreadableKeyNote
+            } else if draft.anthropicApiKey.isEmpty {
                 Label("Get your API key from console.anthropic.com", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -423,7 +478,9 @@ private struct SettingsAISection: View {
         if draft.copilotProvider == .openai {
             SecureField("OpenAI API Key", text: $draft.openaiKey)
                 .textFieldStyle(.roundedBorder)
-            if draft.openaiKey.isEmpty {
+            if keyIsUnreadable && draft.editedOpenAIKey == nil {
+                unreadableKeyNote
+            } else if draft.openaiKey.isEmpty {
                 Label("Get your API key from platform.openai.com", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -431,51 +488,13 @@ private struct SettingsAISection: View {
         }
     }
 
-    @ViewBuilder
-    private var providerStatus: some View {
-        if draft.copilotProvider == .claudeSubscription {
-            if appState.claudeSubscriptionAvailable {
-                subscriptionStatusRow(
-                    title: "Claude subscription detected",
-                    subtitle: appState.claudeSubscriptionType.map { "Plan: \($0.capitalized)" },
-                    systemImage: "checkmark.circle.fill",
-                    tint: .green
-                )
-            } else {
-                subscriptionStatusRow(
-                    title: "No Claude subscription found",
-                    subtitle: "Run 'claude login' in Terminal to authenticate",
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: .yellow
-                )
-            }
-        }
-    }
-
-    private func subscriptionStatusRow(
-        title: String,
-        subtitle: String?,
-        systemImage: String,
-        tint: Color
-    ) -> some View {
-        HStack {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            Button("Refresh") {
-                appState.refreshClaudeSubscription()
-            }
-            .controlSize(.small)
-        }
+    private var unreadableKeyNote: some View {
+        Label(
+            "The stored key couldn’t be read. Apply AI Settings keeps it unless you type a new one.",
+            systemImage: "exclamationmark.triangle"
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
 

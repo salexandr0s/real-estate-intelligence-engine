@@ -66,11 +66,6 @@ final class AppState {
         set { runtimeState.bundledLaunchExperienceState = newValue }
     }
 
-    var unreadAlertCount: Int {
-        get { alertsState.unreadAlertCount }
-        set { alertsState.unreadAlertCount = newValue }
-    }
-
     var settingsErrorMessage: String? {
         let connectionError = connectionState.settingsErrorMessage
         let runtimeError = runtimeState.settingsErrorMessage
@@ -98,10 +93,10 @@ final class AppState {
         set { connectionState.updateAPIBaseURL(newValue) }
     }
 
-    var apiToken: String {
-        get { connectionState.apiToken }
-        set { connectionState.updateAPIToken(newValue) }
-    }
+    var apiToken: String { connectionState.apiToken }
+
+    /// True when the Keychain refused to read the stored API token.
+    var isAPITokenUnreadable: Bool { connectionState.isAPITokenUnreadable }
 
     var refreshIntervalSeconds: Int {
         get { connectionState.refreshIntervalSeconds }
@@ -136,14 +131,13 @@ final class AppState {
         set { copilotSettingsState.copilotProvider = newValue }
     }
 
-    var anthropicApiKey: String {
-        get { copilotSettingsState.anthropicApiKey }
-        set { copilotSettingsState.anthropicApiKey = newValue }
-    }
+    var anthropicApiKey: String { copilotSettingsState.anthropicApiKey }
 
-    var openaiApiKey: String {
-        get { copilotSettingsState.openaiApiKey }
-        set { copilotSettingsState.openaiApiKey = newValue }
+    var openaiApiKey: String { copilotSettingsState.openaiApiKey }
+
+    /// True when the Keychain refused to read this provider's stored key.
+    func isCopilotKeyUnreadable(for provider: CopilotProvider) -> Bool {
+        copilotSettingsState.isKeyUnreadable(for: provider)
     }
 
     var copilotModel: String {
@@ -151,15 +145,14 @@ final class AppState {
         set { copilotSettingsState.copilotModel = newValue }
     }
 
-    var claudeSubscriptionAvailable: Bool {
-        get { copilotSettingsState.claudeSubscriptionAvailable }
-        set { copilotSettingsState.claudeSubscriptionAvailable = newValue }
-    }
+    /// Reset Local Engine asks first. ContentView shows the confirmation, and confirming it runs
+    /// `resetLocalEngine()`.
+    var isEngineResetConfirmationPresented = false
 
-    var claudeSubscriptionType: String? {
-        get { copilotSettingsState.claudeSubscriptionType }
-        set { copilotSettingsState.claudeSubscriptionType = newValue }
-    }
+    /// Set when the connection fails or the engine restarts, so the next successful check asks the
+    /// feature views, which keep their state, to reload.
+    @ObservationIgnored
+    private var needsFeatureRefresh = false
 
     var hasActiveBackgroundRefreshTasks: Bool {
         connectionState.hasActiveRefreshTask
@@ -215,24 +208,36 @@ final class AppState {
         runtimeState.localRuntime
     }
 
+    /// Any failure of the live connection, a dependency that is down, or a rejected alert stream
+    /// shows here.
     var globalConnectionWarningMessage: String? {
-        guard !shouldPresentBundledLaunchExperience,
-              let message = connectionState.connectionStatus.message else {
-            return nil
+        guard !shouldPresentBundledLaunchExperience else { return nil }
+        if let connectionIssue = connectionState.connectionIssue {
+            return connectionIssue
         }
-
-        let standardized = AppErrorPresentation.standardized(message: message)
-        guard AppErrorPresentation.isConnectionIssue(message: standardized) else {
-            return nil
-        }
-
-        return standardized
+        guard alertStream.isUnauthorized else { return nil }
+        return usesManagedLocalRuntime
+            ? "The local engine rejected this app’s token, so new alerts can’t arrive. Click Retry to restart the engine."
+            : "The server rejected this app’s API token, so new alerts can’t arrive. Check the API token in Settings."
     }
 
-    /// The active API key for the current provider, resolving Claude subscription OAuth.
+    /// A screen's own load error, or nil while the global banner is up and already says what's
+    /// wrong. A connection error shows too, because the global banner waits for the next check.
+    func screenLoadError(_ message: String?) -> String? {
+        guard let message, !message.isEmpty, globalConnectionWarningMessage == nil else { return nil }
+        return message
+    }
+
+    /// The API key stored for the selected Copilot provider.
     var activeCopilotApiKey: String {
         guard launchPolicy.allowsStoredCredentials else { return "" }
         return copilotSettingsState.activeAPIKey()
+    }
+
+    /// Whether a Copilot API key is stored, or nil while that isn't known.
+    var hasCopilotAPIKey: Bool? {
+        guard launchPolicy.allowsStoredCredentials else { return nil }
+        return copilotSettingsState.hasAPIKeyForActiveProvider
     }
 
     // MARK: - Init
@@ -271,10 +276,13 @@ final class AppState {
             self?.startBackgroundRefreshTasksIfNeeded()
         }
 
+        // Keeps the setting true to macOS. When notifications are on at launch, this asks the same
+        // way Settings does: macOS prompts only if it never asked, and a denial, including one
+        // made later in System Settings, turns the setting off with the same hint.
         if launchMode.shouldRequestNotificationPermission,
            smokeContext == nil,
            alertsState.notificationsEnabled {
-            NotificationManager.shared.requestPermission()
+            Task { [alertsState] in await alertsState.setNotificationsEnabled(true) }
         }
 
         if launchPolicy.allowsStoredCredentials {
@@ -295,14 +303,10 @@ final class AppState {
         connectionState.loadConnectionSecretForUserAction()
     }
 
-    func loadClaudeSubscriptionIfNeeded() {
+    /// Reads the Copilot keys without a Keychain prompt, so Copilot can say when none is stored.
+    func loadCopilotKeysQuietly() {
         guard launchPolicy.allowsStoredCredentials else { return }
-        copilotSettingsState.loadClaudeSubscriptionIfNeeded()
-    }
-
-    func refreshClaudeSubscription() {
-        guard launchPolicy.allowsStoredCredentials else { return }
-        copilotSettingsState.refreshClaudeSubscription()
+        copilotSettingsState.loadCopilotSecretsIfNeeded(allowUserInteraction: false)
     }
 
     func clearSettingsError() {
@@ -316,11 +320,12 @@ final class AppState {
         await connectionState.testConnection(baseURL: baseURL, token: token)
     }
 
-    func applyConnectionSettings(baseURL: String, token: String) async {
+    /// Saves the connection settings. A nil token leaves the stored token as it is, and an empty
+    /// one deletes it.
+    func applyConnectionSettings(baseURL: String, token: String?) async {
         guard launchPolicy.allowsStoredCredentials else { return }
         let previousBaseURL = connectionState.apiBaseURL
         let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !normalizedBaseURL.isEmpty else {
             connectionState.settingsErrorMessage = "Base URL is required."
@@ -329,16 +334,16 @@ final class AppState {
 
         clearSettingsError()
 
-        guard connectionState.persistAPIToken(normalizedToken) else { return }
-
-        connectionState.updateAPIToken(normalizedToken)
-        connectionState.markSecretsLoaded(withUserInteraction: true)
+        if let token {
+            let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard connectionState.saveAPIToken(normalizedToken) else { return }
+        }
         connectionState.updateAPIBaseURL(normalizedBaseURL)
 
         let appliedBaseURL = connectionState.apiBaseURL
         let appliedAuthToken = connectionState.resolvedConnectionAuthToken(
             for: appliedBaseURL,
-            userToken: normalizedToken,
+            userToken: connectionState.apiToken,
             allowUserInteraction: true
         )
 
@@ -364,10 +369,11 @@ final class AppState {
         startBackgroundRefreshTasksIfNeeded()
     }
 
+    /// A nil key leaves the stored key as it is, and an empty one deletes it.
     func applyCopilotSettings(
         provider: CopilotProvider,
-        anthropicKey: String,
-        openAIKey: String,
+        anthropicKey: String?,
+        openAIKey: String?,
         model: String
     ) async {
         guard launchPolicy.allowsStoredCredentials else { return }
@@ -410,6 +416,23 @@ final class AppState {
 
     func navigateTo(_ item: NavigationItem) {
         navigationState.navigateTo(item)
+    }
+
+    /// Refresh Data: the connection is checked again, and feature views reload. While they wait
+    /// on a failed connection or an engine start, they reload after the check instead, so a check
+    /// that succeeds doesn't load them twice. The check asks only for the unread count, so one
+    /// that fails again doesn't prove they can't load, and they reload then too.
+    func requestRefresh() {
+        let waitsForConnection = needsFeatureRefresh
+        if !waitsForConnection {
+            navigationState.requestRefresh()
+        }
+        Task {
+            await refreshConnection(userInitiated: true)
+            if waitsForConnection && needsFeatureRefresh {
+                navigationState.requestRefresh()
+            }
+        }
     }
 
     func openListing(_ listingId: Int) {
@@ -517,6 +540,13 @@ final class AppState {
         runtimeState.openLocalEngineDataFolder()
     }
 
+    /// Every Reset Local Engine button calls this. Nothing is erased until the person confirms.
+    func requestEngineReset() {
+        guard usesManagedLocalRuntime, !isLocalEngineBusy else { return }
+        isEngineResetConfirmationPresented = true
+    }
+
+    /// Erases the local engine. Only the confirmation that `requestEngineReset()` shows calls this.
     func resetLocalEngine() async {
         // Cleared before any wait, so a monitoring choice made during the reset is the one the new
         // engine starts with.
@@ -565,12 +595,25 @@ final class AppState {
         }
         await apiClient.updateAuthToken(authToken)
 
-        connectionState.connectionStatus = .connecting
+        // A poll of a working connection stays Connected. Only the first connect and a reconnect
+        // after a failure show Connecting, and the banner keeps the last failure until it's fixed.
+        if connectionState.connectionStatus != .connected {
+            connectionState.connectionStatus = .connecting
+        }
+
+        // A smoke launch talks to its own API, so it doesn't probe the stored address.
+        async let healthReport = Self.probeHealth(baseURL: isIsolatedSmokeLaunch ? nil : connectionState.apiBaseURL)
         let connectionResult = await apiClient.testConnection()
+        let dependencyIssue = await healthReport?.issueMessage
 
         switch connectionResult {
         case .success:
             connectionState.connectionStatus = .connected
+            connectionState.connectionIssue = dependencyIssue
+            if needsFeatureRefresh {
+                needsFeatureRefresh = false
+                navigationState.requestRefresh()
+            }
             reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection()
             if !isIsolatedSmokeLaunch {
                 await alertsState.refreshUnreadCount(using: apiClient)
@@ -581,9 +624,19 @@ final class AppState {
                 )
             }
         case .failure(let error):
-            connectionState.connectionStatus = .error(AppErrorPresentation.message(for: error))
+            // A named dependency says more than the unread-count request's own error.
+            let message = dependencyIssue ?? AppErrorPresentation.message(for: error)
+            connectionState.connectionStatus = .error(message)
+            connectionState.connectionIssue = message
+            needsFeatureRefresh = true
             alertsState.disconnectStream(alertStream)
         }
+    }
+
+    /// Off the main actor. Returns nil without a base URL, or when `/health` can't be read.
+    private nonisolated static func probeHealth(baseURL: String?) async -> HealthProbe.Report? {
+        guard let baseURL else { return nil }
+        return await HealthProbe().check(baseURL: baseURL)
     }
 
     private func reconcileManagedLocalRuntimeLaunchExperienceAfterSuccessfulConnection() {
@@ -599,10 +652,6 @@ final class AppState {
         } else {
             runtimeState.bundledLaunchExperienceState = .readyToStartMonitoring
         }
-    }
-
-    func handleStreamAlert(_ alert: Alert) {
-        alertsState.handleStreamAlert(alert)
     }
 
     func refreshUnreadCount() async {
@@ -668,6 +717,8 @@ final class AppState {
         }
 
         runtimeState.bundledLaunchExperienceState = .starting
+        // The feature views stay up under the launch screen, so they reload once the engine answers.
+        needsFeatureRefresh = true
 
         let startPolicy: LocalRuntimeService.StartPolicy = restartExistingRuntime ? .forceRestart : .ifNeeded
         await runtimeState.localRuntime.start(

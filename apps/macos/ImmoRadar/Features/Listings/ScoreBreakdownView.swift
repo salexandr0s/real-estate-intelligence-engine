@@ -32,14 +32,13 @@ struct ScoreBreakdownView: View {
                         Text("District baseline")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPerSqm(explanation.districtBaselinePpsqmEur) + "/m\u{00B2}")
-                            .font(.caption.monospacedDigit())
+                        baselineValue(explanation.districtBaselinePpsqmEur)
                     }
                     VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                         Text("Discount to district")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPercent(explanation.discountToDistrictPct))
+                        Text(explanation.discountToDistrictPct.map(PriceFormatter.formatPercent) ?? "—")
                             .font(.caption.monospacedDigit().bold())
                             .foregroundStyle(.green)
                     }
@@ -49,19 +48,31 @@ struct ScoreBreakdownView: View {
                         Text("Bucket baseline")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPerSqm(explanation.bucketBaselinePpsqmEur) + "/m\u{00B2}")
-                            .font(.caption.monospacedDigit())
+                        baselineValue(explanation.bucketBaselinePpsqmEur)
                     }
                     VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                         Text("Discount to bucket")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(PriceFormatter.formatPercent(explanation.discountToBucketPct))
+                        Text(explanation.discountToBucketPct.map(PriceFormatter.formatPercent) ?? "—")
                             .font(.caption.monospacedDigit().bold())
                             .foregroundStyle(.green)
                     }
                 }
             }
+        }
+    }
+
+    /// The baseline price per m², or a plain note when no baseline covers the listing yet.
+    @ViewBuilder
+    private func baselineValue(_ ppsqmEur: Double?) -> some View {
+        if let ppsqmEur {
+            Text(PriceFormatter.formatPerSqm(ppsqmEur) + "/m\u{00B2}")
+                .font(.caption.monospacedDigit())
+        } else {
+            Text("No baseline yet")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

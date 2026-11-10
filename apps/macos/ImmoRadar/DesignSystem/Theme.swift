@@ -68,8 +68,9 @@ enum Theme {
         case .newMatch: .accentColor
         case .priceDrop: .scoreGood
         case .scoreUpgrade: .scoreGood
-        case .scoreDowngrade: .sourceDegraded
         case .statusChange: .secondary
+        case .priceChange, .digest, .unknown: .secondary
+        case .sourceDegraded: .sourceDegraded
         }
     }
 
@@ -80,8 +81,9 @@ enum Theme {
         case .newMatch: return Color.accentColor
         case .priceDrop: return Color.scoreGoodHC
         case .scoreUpgrade: return Color.scoreGoodHC
-        case .scoreDowngrade: return Color.sourceDegradedHC
         case .statusChange: return Color.primary
+        case .priceChange, .digest, .unknown: return Color.primary
+        case .sourceDegraded: return Color.sourceDegradedHC
         }
     }
 

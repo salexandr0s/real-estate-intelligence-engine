@@ -1,7 +1,6 @@
 import Foundation
 
 enum AppErrorPresentation {
-    static let apiConnectionTitle = "API unavailable"
     static let apiConnectionMessage =
         APIError.noConnection.errorDescription
         ?? "Cannot connect to the API server. Check that the backend is running."
@@ -26,7 +25,7 @@ enum AppErrorPresentation {
         return isConnectionIssue(message: trimmed) ? apiConnectionMessage : trimmed
     }
 
-    static func isConnectionIssue(message: String) -> Bool {
+    private static func isConnectionIssue(message: String) -> Bool {
         let normalizedMessage = normalized(message)
         return normalizedMessage == normalized(apiConnectionMessage)
             || normalizedMessage == "noconnection"

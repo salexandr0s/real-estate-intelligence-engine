@@ -11,7 +11,33 @@ final class AnalyticsViewModel {
     var temperatureData: [MarketTemperaturePoint] = []
     var isLoading: Bool = false
     var hasCompletedInitialLoad: Bool = false
-    var errorMessage: String?
+    /// Why each data set's last fetch failed, so the screen doesn't call that data empty.
+    private(set) var loadErrors: [DataSet: String] = [:]
+    /// Goes up with every refresh, so an earlier, slower one can't replace what a newer one loads.
+    @ObservationIgnored private var latestRefreshID = 0
+
+    enum DataSet: Hashable {
+        case baselines, trends, temperature
+    }
+
+    /// The first load error, in the order the data sets load.
+    var errorMessage: String? {
+        loadErrors[.baselines] ?? loadErrors[.trends] ?? loadErrors[.temperature]
+    }
+
+    func hasData(for dataSet: DataSet) -> Bool {
+        switch dataSet {
+        case .baselines: !baselines.isEmpty
+        case .trends: !trendData.isEmpty
+        case .temperature: !temperatureData.isEmpty
+        }
+    }
+
+    /// True while a data set loads with nothing loaded from before, and before the first load,
+    /// so the screen shows it loading rather than empty.
+    func isLoadingWithoutData(for dataSet: DataSet) -> Bool {
+        !hasCompletedInitialLoad || (isLoading && !hasData(for: dataSet))
+    }
 
     // MARK: - Computed
 
@@ -27,10 +53,6 @@ final class AnalyticsViewModel {
 
     var districtsWithDataCount: Int {
         districtBreakdown.filter(\.hasData).count
-    }
-
-    var isInitialLoading: Bool {
-        !hasCompletedInitialLoad
     }
 
     /// District-level breakdown aggregating across area/room buckets.
@@ -79,37 +101,42 @@ final class AnalyticsViewModel {
     // MARK: - Actions
 
     func refresh(using client: APIClient) async {
+        latestRefreshID += 1
+        let refreshID = latestRefreshID
         isLoading = true
-        errorMessage = nil
+        loadErrors = [:]
         defer {
-            isLoading = false
-            hasCompletedInitialLoad = true
+            if refreshID == latestRefreshID {
+                isLoading = false
+                hasCompletedInitialLoad = true
+            }
         }
 
         do {
-            baselines = try await client.fetchBaselines()
+            let loaded = try await client.fetchBaselines()
+            guard refreshID == latestRefreshID else { return }
+            baselines = loaded
         } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            guard refreshID == latestRefreshID else { return }
+            loadErrors[.baselines] = AppErrorPresentation.message(for: error)
         }
 
         do {
-            trendData = try await client.fetchDistrictTrends()
+            let loaded = try await client.fetchDistrictTrends()
+            guard refreshID == latestRefreshID else { return }
+            trendData = loaded
         } catch {
-            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
+            guard refreshID == latestRefreshID else { return }
+            loadErrors[.trends] = AppErrorPresentation.message(for: error)
         }
 
         do {
-            temperatureData = try await client.fetchMarketTemperature()
+            let loaded = try await client.fetchMarketTemperature()
+            guard refreshID == latestRefreshID else { return }
+            temperatureData = loaded
         } catch {
-            errorMessage = errorMessage ?? AppErrorPresentation.message(for: error)
-        }
-    }
-
-    func refreshTrends(using client: APIClient, districtNo: Int? = nil, months: Int? = nil) async {
-        do {
-            trendData = try await client.fetchDistrictTrends(districtNo: districtNo, months: months)
-        } catch {
-            errorMessage = AppErrorPresentation.message(for: error)
+            guard refreshID == latestRefreshID else { return }
+            loadErrors[.temperature] = AppErrorPresentation.message(for: error)
         }
     }
 

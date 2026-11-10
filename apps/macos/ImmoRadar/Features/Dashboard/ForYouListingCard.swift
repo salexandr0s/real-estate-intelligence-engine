@@ -14,7 +14,7 @@ struct ForYouListingCard: View {
     var body: some View {
         Button(action: { onTap?() }) {
             HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+                ScoreIndicator(score: listing.currentScore, size: .compact)
 
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     HStack(alignment: .top, spacing: Theme.Spacing.sm) {

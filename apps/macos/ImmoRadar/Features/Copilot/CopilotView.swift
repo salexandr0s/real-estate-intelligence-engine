@@ -116,6 +116,7 @@ struct CopilotView: View {
             }
         }
         .task {
+            appState.loadCopilotKeysQuietly()
             await viewModel.loadSavedStateIfNeeded()
         }
         .sheet(isPresented: $showHistorySheet) {
@@ -207,16 +208,32 @@ struct CopilotView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: viewModel.activeConversationID)
     }
 
-    @ViewBuilder
     private var conversationContent: some View {
-        if viewModel.messages.isEmpty {
-            CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
-        } else {
-            CopilotConversationContainer(
-                viewModel: viewModel,
-                appState: appState,
-                showInspector: $showInspector
-            )
+        VStack(spacing: 0) {
+            // Copilot authenticates with the person's own API key and nothing else.
+            if appState.hasCopilotAPIKey == false {
+                InlineWarningBanner(
+                    title: "Copilot needs an API key",
+                    message: "Add your \(appState.copilotProvider.displayName) API key in Settings to use Copilot.",
+                    actions: [
+                        InlineWarningBanner.Action("Open Settings", isProminent: true) {
+                            appState.navigateTo(.settings)
+                        },
+                    ]
+                )
+                .padding(.horizontal, Theme.Copilot.horizontalPadding)
+                .padding(.top, Theme.Spacing.md)
+            }
+
+            if viewModel.messages.isEmpty {
+                CopilotEmptyStateContainer(viewModel: viewModel, appState: appState)
+            } else {
+                CopilotConversationContainer(
+                    viewModel: viewModel,
+                    appState: appState,
+                    showInspector: $showInspector
+                )
+            }
         }
     }
 

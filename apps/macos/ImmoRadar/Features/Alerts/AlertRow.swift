@@ -32,6 +32,10 @@ struct AlertPresentation {
             .init(title: "Reviewed", icon: "eye.fill", tint: .secondary, background: Color.secondary.opacity(0.10))
         case .dismissed:
             .init(title: "Dismissed", icon: "archivebox.fill", tint: .secondary, background: Color.secondary.opacity(0.10))
+        case .failed:
+            .init(title: "Failed", icon: "exclamationmark.circle", tint: .sourceFailing, background: Color.sourceFailing.opacity(0.12))
+        case .suppressed:
+            .init(title: "Suppressed", icon: "eye.slash", tint: .secondary, background: Color.secondary.opacity(0.10))
         }
 
         return .init(
@@ -43,17 +47,17 @@ struct AlertPresentation {
 
     private static func reasonSummary(for alert: Alert) -> String {
         switch alert.alertType {
-        case .priceDrop:
+        case .priceDrop, .priceChange:
             if let change = alert.listing?.lastPriceChangePct, change != 0 {
                 return "Price moved \(change.formatted(.number.precision(.fractionLength(1))))% since the previous observation."
             }
-        case .scoreUpgrade, .scoreDowngrade:
+        case .scoreUpgrade:
             if let score = alert.listing?.currentScore {
                 return "Current score is \(score.formatted(.number.precision(.fractionLength(1)))) with updated investor fit."
             }
         case .statusChange:
             return "Listing status changed and needs review."
-        case .newMatch:
+        case .newMatch, .digest, .sourceDegraded, .unknown:
             break
         }
 
@@ -227,9 +231,14 @@ struct AlertRow: View {
             Spacer(minLength: Theme.Spacing.sm)
 
             if alert.status != .unread {
+                // A failed alert keeps its status color, so it stands out from reviewed ones.
                 Label(presentation.status.title, systemImage: presentation.status.icon)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(
+                        alert.status == .failed
+                            ? AnyShapeStyle(presentation.status.tint)
+                            : AnyShapeStyle(.tertiary)
+                    )
             }
         }
     }
