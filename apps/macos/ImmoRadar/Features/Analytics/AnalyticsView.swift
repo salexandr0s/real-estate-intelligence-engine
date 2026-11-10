@@ -38,6 +38,11 @@ struct AnalyticsView: View {
                     message: appState.screenLoadError(viewModel.loadErrors[selectedTab.dataSet]),
                     onRetry: { Task { await viewModel.refresh(using: appState.apiClient) } }
                 )
+            } else if viewModel.isLoadingWithoutData(for: selectedTab.dataSet) {
+                // A first load, or a retry after a failed one, shows the loading state rather
+                // than an empty tab or a summary of zeros.
+                AnalyticsLoadingState()
+                    .padding(Theme.Spacing.xl)
             } else {
                 switch selectedTab {
                 case .overview:
@@ -132,11 +137,7 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var overviewMainContent: some View {
-        // A retry after a failed load shows the loading state, not the empty one.
-        if viewModel.isInitialLoading || (viewModel.isLoading && viewModel.baselines.isEmpty) {
-            AnalyticsLoadingState()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.baselines.isEmpty {
+        if viewModel.baselines.isEmpty {
             AnalyticsEmptyState()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
