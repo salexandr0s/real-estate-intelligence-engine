@@ -396,7 +396,7 @@ private struct PriorityBriefingCard: View {
             }
 
             FlowLayout(spacing: Theme.Spacing.sm) {
-                DashboardMetaChip(text: PriceFormatter.format(eur: listing.listPriceEur), systemImage: "eurosign.circle")
+                DashboardMetaChip(text: listing.formattedPrice, systemImage: "eurosign.circle")
 
                 if let district = listing.districtName {
                     DashboardMetaChip(text: district, systemImage: "mappin")

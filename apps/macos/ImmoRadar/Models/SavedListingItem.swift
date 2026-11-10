@@ -20,6 +20,12 @@ struct SavedListingItem: Identifiable, Codable, Sendable {
         let districtNo: Int?
         let districtName: String?
         let listPriceEur: Double?
+        var isProject: Bool? = nil
+        var priceFromEurCents: Int? = nil
+
+        var formattedPrice: String {
+            PriceFormatter.formatListingPrice(askingEur: listPriceEur.map(Int.init), fromCents: priceFromEurCents)
+        }
         let livingAreaSqm: Double?
         let rooms: Double?
         let pricePerSqmEur: Double?

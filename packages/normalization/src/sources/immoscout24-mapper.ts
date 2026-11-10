@@ -33,6 +33,14 @@ export class Immoscout24Mapper extends BaseSourceMapper {
     const enriched = this.enrichPayload(rawPayload);
     const result = super.normalize(enriched, context);
 
+    if (rawPayload.priceFromRaw === undefined && enriched.priceFromRaw != null) {
+      result.provenance['priceFrom'] = 'payload.attributesRaw.priceFromRaw';
+    }
+    if (rawPayload.isProjectRaw === undefined && enriched.isProjectRaw === true) {
+      result.provenance['isProject'] =
+        'inferred (parser v3: attributesRaw.priceFromRaw + estateTypeRaw)';
+    }
+
     if (result.success && result.listing) {
       result.listing.normalizedPayload = {
         ...result.listing.normalizedPayload,
@@ -60,6 +68,26 @@ export class Immoscout24Mapper extends BaseSourceMapper {
 
   private enrichPayload(raw: Immoscout24RawListing): Immoscout24RawListing {
     const enriched: Immoscout24RawListing = { ...raw };
+
+    // Parser v3 put the from-price in attributes. An estate type is evidence of
+    // an Expose record, which emitted a from-price only for a project.
+    const legacyFrom = raw.attributesRaw?.['priceFromRaw'];
+    if (
+      raw.priceFromRaw === undefined &&
+      (typeof legacyFrom === 'string' || typeof legacyFrom === 'number')
+    ) {
+      enriched.priceFromRaw = legacyFrom;
+    }
+    if (raw.isProjectRaw === undefined && legacyFrom != null && raw.estateTypeRaw != null) {
+      enriched.isProjectRaw = true;
+    }
+    if (enriched.isProjectRaw === true) {
+      enriched.priceRaw = null;
+      enriched.livingAreaRaw = null;
+      enriched.usableAreaRaw = null;
+      enriched.roomsRaw = null;
+      enriched.roomsCountRaw = null;
+    }
 
     enriched.contactNameRaw ??= (raw as { contactName?: string | null }).contactName ?? null;
     enriched.contactCompanyRaw ??= raw.brokerName ?? null;

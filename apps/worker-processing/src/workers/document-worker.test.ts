@@ -35,6 +35,8 @@ function makeListing(overrides: Partial<ListingRow> = {}): ListingRow {
     geocodeUpdatedAt: null,
     crossSourceFingerprint: null,
     listPriceEurCents: null,
+    priceFromEurCents: null,
+    isProject: false,
     monthlyOperatingCostEurCents: null,
     reserveFundEurCents: null,
     commissionEurCents: null,

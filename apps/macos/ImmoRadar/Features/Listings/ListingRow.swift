@@ -14,6 +14,11 @@ struct ListingRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: Theme.Spacing.sm) {
+                    if listing.isProject == true {
+                        Text("Projekt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Label(listing.districtName ?? listing.city, systemImage: "mappin")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -24,7 +29,7 @@ struct ListingRow: View {
 
                     Spacer()
 
-                    Text(PriceFormatter.format(eur: listing.listPriceEur))
+                    Text(listing.formattedPrice)
                         .font(.caption.monospacedDigit().bold())
 
                     if let pct = listing.lastPriceChangePct, pct != 0 {

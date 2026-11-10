@@ -7,7 +7,7 @@
  * changed listings and appends a version with reason 'backfill'.
  *
  * Usage:
- *   npx tsx scripts/replay-normalization.ts [--source <code>] [--limit N] [--dry-run]
+ *   npx tsx scripts/replay-normalization.ts [--source <code>] [--limit N] [--dry-run] [--current-only]
  */
 
 import { loadConfig } from '@immoradar/config';
@@ -49,6 +49,7 @@ interface CliArgs {
   sourceCode: string | null;
   limit: number;
   dryRun: boolean;
+  currentOnly: boolean;
 }
 
 function parseArgs(): CliArgs {
@@ -56,6 +57,7 @@ function parseArgs(): CliArgs {
   let sourceCode: string | null = null;
   let limit = 1000;
   let dryRun = false;
+  let currentOnly = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--source' && args[i + 1]) {
@@ -69,9 +71,10 @@ function parseArgs(): CliArgs {
     if (args[i] === '--dry-run') {
       dryRun = true;
     }
+    if (args[i] === '--current-only') currentOnly = true;
   }
 
-  return { sourceCode, limit, dryRun };
+  return { sourceCode, limit, dryRun, currentOnly };
 }
 
 // ── DB row type for raw_listings join ───────────────────────────────────────
@@ -92,10 +95,15 @@ interface RawListingJoinRow {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { sourceCode, limit, dryRun } = parseArgs();
+  const { sourceCode, limit, dryRun, currentOnly } = parseArgs();
   loadConfig();
 
-  log.info('Starting normalization replay', { sourceCode: sourceCode ?? undefined, limit, dryRun });
+  log.info('Starting normalization replay', {
+    sourceCode: sourceCode ?? undefined,
+    limit,
+    dryRun,
+    currentOnly,
+  });
 
   // Resolve source ID if filtered
   let sourceId: number | null = null;
@@ -111,6 +119,11 @@ async function main(): Promise<void> {
 
   // Query raw_listings with source code
   const sourceFilter = sourceId != null ? 'AND rl.source_id = $2' : '';
+  // Replaying an older observation must not replace a listing's current source state.
+  // Listing source/id and raw primary-key indexes serve this bounded maintenance join.
+  const currentJoin = currentOnly
+    ? 'JOIN listings current_listing ON current_listing.current_raw_listing_id = rl.id AND current_listing.source_id = rl.source_id'
+    : '';
   const params: unknown[] = [limit];
   if (sourceId != null) params.push(sourceId);
 
@@ -120,6 +133,7 @@ async function main(): Promise<void> {
             rl.last_scrape_run_id, s.code AS source_code
      FROM raw_listings rl
      JOIN sources s ON s.id = rl.source_id
+     ${currentJoin}
      WHERE rl.extraction_status = 'captured'
        ${sourceFilter}
      ORDER BY rl.last_seen_at DESC
@@ -135,6 +149,7 @@ async function main(): Promise<void> {
   let errors = 0;
 
   for (const raw of rawRows) {
+    processed++;
     try {
       const code = raw.source_code;
       const normalizer = normalizers.get(code);
@@ -223,8 +238,6 @@ async function main(): Promise<void> {
         error: err instanceof Error ? err.message : String(err),
       });
     }
-
-    processed++;
   }
 
   console.log('\n=== Normalization Replay Summary ===');

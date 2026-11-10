@@ -29,7 +29,7 @@ export class Immoscout24Adapter implements SourceAdapter<
 > {
   readonly sourceCode = 'immoscout24';
   readonly sourceName = 'ImmobilienScout24.at';
-  readonly parserVersion = 3;
+  readonly parserVersion = 4;
 
   async buildDiscoveryRequests(_profile: CrawlProfile): Promise<RequestPlan[]> {
     const url = new URL(SEARCH_PATH, BASE_URL);

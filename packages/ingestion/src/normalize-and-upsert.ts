@@ -33,6 +33,8 @@ export interface NormalizeAndUpsertListingData {
   districtNo: number | null;
   city: string;
   listPriceEurCents: number | null;
+  isProject?: boolean;
+  priceFromEurCents?: number | null;
   livingAreaSqm: number | null;
   usableAreaSqm: number | null;
   rooms: number | null;
@@ -62,6 +64,8 @@ export interface NormalizationDeps {
     normalizationVersion: number;
     listingStatus: string;
     listPriceEurCents: number | null;
+    isProject?: boolean;
+    priceFromEurCents?: number | null;
     firstSeenAt: Date;
     lastPriceChangeAt: Date | null;
     currentScore: number | null;
@@ -273,6 +277,8 @@ export class NormalizeAndUpsert {
         districtNo: listing.districtNo ?? null,
         city: listing.city,
         listPriceEurCents: listing.listPriceEurCents ?? null,
+        isProject: listing.isProject === true,
+        priceFromEurCents: listing.priceFromEurCents ?? null,
         livingAreaSqm: listing.livingAreaSqm ?? null,
         usableAreaSqm: listing.usableAreaSqm ?? null,
         rooms: listing.rooms ?? null,
@@ -300,6 +306,8 @@ export class NormalizeAndUpsert {
       title: existing.title,
       description: existing.description ?? null,
       listPriceEurCents: existing.listPriceEurCents ?? null,
+      isProject: existing.isProject === true,
+      priceFromEurCents: existing.priceFromEurCents ?? null,
       livingAreaSqm: existing.livingAreaSqm ?? null,
       usableAreaSqm: existing.usableAreaSqm ?? null,
       rooms: existing.rooms ?? null,
@@ -362,6 +370,8 @@ export class NormalizeAndUpsert {
         pricePerSqmEur,
         normalizedSnapshot: {
           ...existing.normalizedPayload,
+          isProject: existing.isProject === true,
+          priceFromEurCents: existing.priceFromEurCents ?? null,
           listingStatus: lifecycleStatus,
           sourceStatusRaw: context.availabilityStatus ?? lifecycleStatus,
         },
@@ -386,6 +396,8 @@ export class NormalizeAndUpsert {
         districtNo: existing.districtNo ?? null,
         city: existing.city,
         listPriceEurCents: existing.listPriceEurCents ?? null,
+        isProject: existing.isProject === true,
+        priceFromEurCents: existing.priceFromEurCents ?? null,
         livingAreaSqm: existing.livingAreaSqm ?? null,
         usableAreaSqm: existing.usableAreaSqm ?? null,
         rooms: existing.rooms ?? null,

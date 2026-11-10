@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FullIngestionPipeline } from './pipeline.js';
+import { rescoreActiveListings } from './rescore.js';
 import type { NormalizationDeps } from './normalize-and-upsert.js';
 import { CURRENT_NORMALIZATION_VERSION } from '@immoradar/contracts';
 import type {
@@ -54,6 +55,7 @@ class TestNormalizer implements SourceNormalizer {
         geocodePrecision: 'none',
         crossSourceFingerprint: null,
         listPriceEurCents: priceEur * 100,
+        isProject: rawPayload.isProjectRaw === true,
         monthlyOperatingCostEurCents: null,
         reserveFundEurCents: null,
         commissionEurCents: null,
@@ -181,6 +183,8 @@ function toExistingListing(listing: CanonicalListingInput): ExistingListing {
     normalizationVersion: listing.normalizationVersion,
     listingStatus: listing.listingStatus,
     listPriceEurCents: listing.listPriceEurCents ?? null,
+    isProject: listing.isProject,
+    priceFromEurCents: listing.priceFromEurCents,
     firstSeenAt: new Date('2026-03-28T10:00:00.000Z'),
     lastPriceChangeAt: null,
     currentScore: null,
@@ -298,6 +302,35 @@ describe('FullIngestionPipeline listing versions', () => {
 });
 
 describe('FullIngestionPipeline scoring', () => {
+  it('skips projects during rescore before loading versions, health or baselines', async () => {
+    const deps = {
+      ...scoreAndAlertMocks(),
+      findActiveListings: vi.fn().mockResolvedValue([{ id: 1, sourceId: 1, isProject: true }]),
+      findLatestVersion: vi.fn(),
+      getSourceHealthScore: vi.fn(),
+      getLocationConfidence: vi.fn(),
+    };
+    const result = await rescoreActiveListings(deps);
+    expect(result).toMatchObject({ examined: 1, unchanged: 1, rescored: 0, failed: 0 });
+    expect(deps.findLatestVersion).not.toHaveBeenCalled();
+    expect(deps.findBaseline).not.toHaveBeenCalled();
+    expect(deps.persistScore).not.toHaveBeenCalled();
+    expect(deps.updateListingScore).not.toHaveBeenCalled();
+  });
+  it('preserves a project version without scoring, baseline reads or alerts on ingestion or retry', async () => {
+    const { pipeline, versions, scoredVersionIds, scoreAndAlert } = createStatefulPipeline();
+    const capture = { ...baseCapture, payload: { ...baseCapture.payload, isProjectRaw: true } };
+    const first = await pipeline.ingestDetailCapture(capture, 1, 99);
+    const replay = await pipeline.ingestDetailCapture(capture, 1, 99);
+    expect(first.normalization.listing?.isProject).toBe(true);
+    expect(first.scoring).toEqual({ overallScore: null, alertsCreated: 0 });
+    expect(replay.normalization.versionReason).toBeNull();
+    expect(versions).toHaveLength(1);
+    expect(scoredVersionIds).toEqual([]);
+    expect(scoreAndAlert.findBaseline).not.toHaveBeenCalled();
+    expect(scoreAndAlert.findMatchingFilters).not.toHaveBeenCalled();
+    expect(scoreAndAlert.createAlert).not.toHaveBeenCalled();
+  });
   // Alert matching runs after the score is computed, and a stored score would end the retry early.
   it('fails the job when alert matching fails, then scores the same version on the retry', async () => {
     const { pipeline, versions, scoredVersionIds, scoreAndAlert } = createStatefulPipeline();

@@ -43,6 +43,9 @@ export function mapListingSearchResult(listing: ListingSearchResult) {
     districtName: listing.districtName,
     listPriceEur: centsToEur(listing.listPriceEurCents),
     listPriceEurCents: listing.listPriceEurCents,
+    priceFromEur: centsToEur(listing.priceFromEurCents),
+    priceFromEurCents: listing.priceFromEurCents,
+    isProject: listing.isProject,
     livingAreaSqm: listing.livingAreaSqm,
     rooms: listing.rooms,
     pricePerSqmEur: listing.pricePerSqmEur,
@@ -272,6 +275,9 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           geocodeUpdatedAt: listing.geocodeUpdatedAt?.toISOString() ?? null,
           listPriceEur: centsToEur(listing.listPriceEurCents),
           listPriceEurCents: listing.listPriceEurCents,
+          priceFromEur: centsToEur(listing.priceFromEurCents),
+          priceFromEurCents: listing.priceFromEurCents,
+          isProject: listing.isProject,
           monthlyOperatingCostEur: centsToEur(listing.monthlyOperatingCostEurCents),
           reserveFundEur: centsToEur(listing.reserveFundEurCents),
           commissionEur: centsToEur(listing.commissionEurCents),
@@ -355,6 +361,11 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
           listPriceEurCents: v.listPriceEurCents,
           livingAreaSqm: v.livingAreaSqm,
           pricePerSqmEur: v.pricePerSqmEur,
+          isProject: v.normalizedSnapshot['isProject'] === true,
+          priceFromEurCents:
+            typeof v.normalizedSnapshot['priceFromEurCents'] === 'number'
+              ? v.normalizedSnapshot['priceFromEurCents']
+              : null,
           observedAt: v.observedAt.toISOString(),
         })),
         meta: {},
@@ -374,7 +385,7 @@ export async function listingRoutes(app: FastifyInstance): Promise<void> {
         throw new NotFoundError('Listing', id);
       }
 
-      const explanation = await listingScores.findLatestByListingId(id);
+      const explanation = listing.isProject ? null : await listingScores.findLatestByListingId(id);
       if (!explanation) {
         throw new NotFoundError('Score explanation for listing', id);
       }

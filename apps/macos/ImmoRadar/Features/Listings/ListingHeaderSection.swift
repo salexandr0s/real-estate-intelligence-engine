@@ -10,6 +10,11 @@ struct ListingHeaderSection: View {
             // Row 1: Status + source
             HStack {
                 StatusBadge(listingStatus: listing.listingStatus)
+                if listing.isProject == true {
+                    Label("Projekt", systemImage: "building.2")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 ListingLastSeenLabel(lastSeenAt: listing.lastSeenAt)
                     .font(.caption)
@@ -34,7 +39,7 @@ struct ListingHeaderSection: View {
 
             // Row 3: Price + score
             HStack(alignment: .center) {
-                Text(PriceFormatter.format(eur: listing.listPriceEur))
+                Text(listing.formattedPrice)
                     .font(.title2.bold().monospacedDigit())
                     .foregroundStyle(.blue)
 
@@ -48,6 +53,12 @@ struct ListingHeaderSection: View {
                             .foregroundStyle(Theme.scoreColor(for: score))
                     }
                 }
+            }
+
+            if listing.isProject == true {
+                Text("Mehrere Einheiten · Kein Investment-Score")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             // Row 4: Key metrics

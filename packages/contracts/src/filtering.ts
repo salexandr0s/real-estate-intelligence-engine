@@ -104,6 +104,9 @@ export interface ListingSearchResult {
   districtNo: number | null;
   districtName: string | null;
   listPriceEurCents: number | null;
+  /** A developer project's lowest unit price. Never an asking price. */
+  priceFromEurCents: number | null;
+  isProject: boolean;
   livingAreaSqm: number | null;
   rooms: number | null;
   pricePerSqmEur: number | null;

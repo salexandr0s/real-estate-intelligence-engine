@@ -16,6 +16,8 @@ struct APIListingResponse: Codable {
     let districtName: String?
     let listPriceEur: Double?
     let listPriceEurCents: Int?
+    let isProject: Bool?
+    let priceFromEurCents: Int?
     let livingAreaSqm: Double?
     let rooms: Double?
     let pricePerSqmEur: Double?
@@ -83,7 +85,9 @@ struct APIListingResponse: Codable {
             contactEmail: contactEmail,
             contactPhone: contactPhone,
             outreachSummary: outreachSummary?.toDomain(),
-            lastSeenAt: lastSeenAt.flatMap(Date.fromISO)
+            lastSeenAt: lastSeenAt.flatMap(Date.fromISO),
+            isProject: isProject,
+            priceFromEurCents: priceFromEurCents
         )
     }
 }

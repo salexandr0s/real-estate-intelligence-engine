@@ -16,6 +16,9 @@ struct Listing: Identifiable, Codable, Hashable {
     let districtNo: Int?
     let districtName: String?
     let listPriceEur: Int?
+    /// Optional so cached listings written before project support still decode.
+    let isProject: Bool?
+    let priceFromEurCents: Int?
     let livingAreaSqm: Double?
     let rooms: Double?
     let pricePerSqmEur: Double?
@@ -35,6 +38,10 @@ struct Listing: Identifiable, Codable, Hashable {
     let contactEmail: String?
     let contactPhone: String?
     let outreachSummary: OutreachSummary?
+
+    var formattedPrice: String {
+        PriceFormatter.formatListingPrice(askingEur: listPriceEur, fromCents: priceFromEurCents)
+    }
 
     /// Non-optional score for sorting (0 when nil).
     var sortableScore: Double { currentScore ?? 0 }
@@ -133,7 +140,9 @@ struct Listing: Identifiable, Codable, Hashable {
         contactPhone: String? = nil,
         outreachSummary: OutreachSummary? = nil,
         hasAlertMatch: Bool = false,
-        lastSeenAt: Date? = nil
+        lastSeenAt: Date? = nil,
+        isProject: Bool? = nil,
+        priceFromEurCents: Int? = nil
     ) {
         self.id = id
         self.listingUid = listingUid
@@ -147,6 +156,8 @@ struct Listing: Identifiable, Codable, Hashable {
         self.districtNo = districtNo
         self.districtName = districtName
         self.listPriceEur = listPriceEur
+        self.isProject = isProject
+        self.priceFromEurCents = priceFromEurCents
         self.livingAreaSqm = livingAreaSqm
         self.rooms = rooms
         self.pricePerSqmEur = pricePerSqmEur

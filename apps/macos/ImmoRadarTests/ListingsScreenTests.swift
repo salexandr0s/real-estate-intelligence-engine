@@ -3,6 +3,44 @@ import XCTest
 
 @MainActor
 final class ListingsScreenTests: XCTestCase {
+    func testProjectAPIPriceAndCacheRoundTrip() throws {
+        let data = Data(#"{"id":1,"listingUid":"project","sourceCode":"immoscout24","title":"Projekt","canonicalUrl":"https://example.com/1","operationType":"sale","propertyType":"apartment","city":"Wien","listPriceEur":null,"isProject":true,"priceFromEurCents":38900050,"firstSeenAt":"2026-11-10T08:00:00Z"}"#.utf8)
+        let decoder = JSONDecoder()
+        let dto = try decoder.decode(APIListingResponse.self, from: data)
+        let listing = try XCTUnwrap(dto.toDomain(decoder: decoder))
+        XCTAssertEqual(listing.isProject, true)
+        XCTAssertNil(listing.listPriceEur)
+        XCTAssertNil(listing.currentScore)
+        XCTAssertEqual(listing.priceFromEurCents, 38_900_050)
+        XCTAssertTrue(listing.formattedPrice.hasPrefix("ab "))
+        XCTAssertTrue(listing.formattedPrice.contains("389.000,50"))
+        XCTAssertEqual(try decoder.decode(Listing.self, from: JSONEncoder().encode(listing)), listing)
+    }
+
+    func testOlderCachedListingWithoutProjectFieldsStillDecodes() throws {
+        let encoded = try JSONEncoder().encode(Listing.samples[0])
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "isProject")
+        object.removeValue(forKey: "priceFromEurCents")
+        let listing = try JSONDecoder().decode(Listing.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(listing.isProject)
+        XCTAssertNil(listing.priceFromEurCents)
+        XCTAssertEqual(listing.formattedPrice, PriceFormatter.format(eur: listing.listPriceEur))
+    }
+
+    func testProjectViewModelClearsStaleExplanationWithoutRequestingAScore() async throws {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(Listing.samples[0])) as? [String: Any])
+        object["isProject"] = true
+        let project = try JSONDecoder().decode(Listing.self, from: JSONSerialization.data(withJSONObject: object))
+        let model = ListingDetailViewModel(listing: project)
+        model.explanation = Listing.sampleExplanation
+        model.explanationLoadFailed = true
+        await model.retryExplanation(using: APIClient(baseURL: "invalid://project-score-must-not-be-requested"))
+        XCTAssertNil(model.explanation)
+        XCTAssertFalse(model.explanationLoadFailed)
+        XCTAssertFalse(model.isLoadingExplanation)
+    }
+
     /// A server that hands back a cursor it already gave must not keep the load looping, and a
     /// listing that appears on two pages must show once.
     func testFetchAllPagesStopsOnRepeatedCursorAndDropsDuplicates() async throws {

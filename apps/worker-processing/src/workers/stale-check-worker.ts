@@ -65,6 +65,8 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
             title: listing.title,
             description: listing.description ?? null,
             listPriceEurCents: listing.listPriceEurCents ?? null,
+            isProject: listing.isProject,
+            priceFromEurCents: listing.priceFromEurCents,
             livingAreaSqm: listing.livingAreaSqm ?? null,
             usableAreaSqm: listing.usableAreaSqm ?? null,
             rooms: listing.rooms ?? null,
@@ -100,6 +102,8 @@ export function createStaleCheckWorker(): Worker<StaleCheckJobData> {
               pricePerSqmEur: listing.pricePerSqmEur,
               normalizedSnapshot: {
                 ...listing.normalizedPayload,
+                isProject: listing.isProject,
+                priceFromEurCents: listing.priceFromEurCents,
                 listingStatus: 'expired',
                 sourceStatusRaw: EXPIRED_STATUS_RAW,
               },

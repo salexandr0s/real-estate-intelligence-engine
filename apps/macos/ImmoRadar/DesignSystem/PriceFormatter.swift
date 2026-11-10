@@ -65,6 +65,15 @@ enum PriceFormatter {
         return format(eurDouble: amount)
     }
 
+    /// Asking prices and the lowest price in a project always remain distinct.
+    static func formatListingPrice(askingEur: Int?, fromCents: Int?) -> String {
+        if let askingEur { return format(eur: askingEur) }
+        guard let fromCents else { return "—" }
+        let amount = NSDecimalNumber(value: fromCents).dividing(by: 100)
+        let formatter = fromCents % 100 == 0 ? eurFormatter : eurDecimalFormatter
+        return "ab " + (formatter.string(from: amount) ?? amount.stringValue)
+    }
+
     /// Format price per sqm with decimals: "EUR 4.124,14"
     static func formatPerSqm(_ amount: Double) -> String {
         eurDecimalFormatter.string(from: NSNumber(value: amount)) ?? "EUR \(amount)"

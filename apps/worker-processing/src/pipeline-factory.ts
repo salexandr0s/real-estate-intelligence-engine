@@ -138,6 +138,8 @@ function buildPipelineDeps(): FullIngestionPipelineDeps {
           normalizationVersion: row.normalizationVersion,
           listingStatus: row.listingStatus,
           listPriceEurCents: row.listPriceEurCents,
+          isProject: row.isProject,
+          priceFromEurCents: row.priceFromEurCents,
           firstSeenAt: row.firstSeenAt,
           lastPriceChangeAt: row.lastPriceChangeAt,
           currentScore: row.currentScore ?? null,

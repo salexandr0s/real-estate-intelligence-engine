@@ -82,6 +82,11 @@ export async function rescoreActiveListings(
   for (const listing of batch) {
     result.examined++;
     result.lastListingId = listing.id;
+    if (listing.isProject === true) {
+      result.unchanged++;
+      log.debug('Project rescore skipped', { listingId: listing.id, reason: 'multiple_units' });
+      continue;
+    }
     try {
       const [version, sourceHealthScore, locationConfidence] = await Promise.all([
         deps.findLatestVersion(listing.id),

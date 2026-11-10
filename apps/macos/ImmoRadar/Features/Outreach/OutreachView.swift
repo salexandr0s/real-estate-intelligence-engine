@@ -526,7 +526,7 @@ private struct OutreachThreadHeader: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Text(PriceFormatter.format(eur: listing.listPriceEur))
+                        Text(listing.formattedPrice)
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }

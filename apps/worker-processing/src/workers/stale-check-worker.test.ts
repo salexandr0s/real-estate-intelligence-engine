@@ -162,4 +162,26 @@ describe('createStaleCheckWorker', () => {
     expect(hoisted.findExpiryCandidates).toHaveBeenCalledTimes(1);
     expect(hoisted.expireStale).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps project facts in the fingerprint and immutable expiry snapshot', async () => {
+    hoisted.findExpiryCandidates.mockResolvedValueOnce([
+      { ...candidate, isProject: true, priceFromEurCents: 38_900_000 },
+    ]);
+    hoisted.expireStale.mockResolvedValue(true);
+    createStaleCheckWorker();
+    await hoisted.processor?.({ data: {} });
+    expect(hoisted.computeContentFingerprint).toHaveBeenCalledWith(
+      expect.objectContaining({ isProject: true, priceFromEurCents: 38_900_000 }),
+    );
+    expect(hoisted.expireStale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        version: expect.objectContaining({
+          normalizedSnapshot: expect.objectContaining({
+            isProject: true,
+            priceFromEurCents: 38_900_000,
+          }),
+        }),
+      }),
+    );
+  });
 });

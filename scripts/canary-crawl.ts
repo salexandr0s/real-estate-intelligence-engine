@@ -193,19 +193,16 @@ async function crawl(
           ? `key=${detailKey} (match)`
           : `key=MISMATCH list=${discoveryKey ?? 'none'} detail=${detailKey}`;
       const payload = (capture.payload ?? {}) as Record<string, unknown>;
-      const attributes = payload.attributesRaw;
       // A developer project's lowest unit price, kept apart from the asking price
-      const priceFrom =
-        typeof attributes === 'object' && attributes !== null && 'priceFromRaw' in attributes
-          ? attributes.priceFromRaw
-          : null;
+      const priceFrom = payload.priceFromRaw ?? null;
 
       console.log(`detail ${n}: ${describeNavigation(nav)} ${keys} ${nav.finalUrl}`);
       console.log(
         `  extraction=${capture.extractionStatus} availability=${availability.status}` +
           ` title=${JSON.stringify(payload.titleRaw ?? null)}` +
           ` price=${JSON.stringify(payload.priceRaw ?? null)}` +
-          (priceFrom != null ? ` priceFrom=${JSON.stringify(priceFrom)}` : ''),
+          (priceFrom != null ? ` priceFrom=${JSON.stringify(priceFrom)}` : '') +
+          (payload.isProjectRaw === true ? ' project' : ''),
       );
       console.log(
         `  area=${JSON.stringify(payload.livingAreaRaw ?? null)}` +

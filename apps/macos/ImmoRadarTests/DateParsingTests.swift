@@ -27,6 +27,8 @@ final class DateParsingTests: XCTestCase {
             districtName: "Innere Stadt",
             listPriceEur: 250_000,
             listPriceEurCents: nil,
+            isProject: nil,
+            priceFromEurCents: nil,
             livingAreaSqm: 60,
             rooms: 2,
             pricePerSqmEur: 4166.67,

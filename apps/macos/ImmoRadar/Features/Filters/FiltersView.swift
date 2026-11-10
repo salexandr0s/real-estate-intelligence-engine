@@ -372,7 +372,7 @@ private struct FilterTestResultsSheet: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: Theme.Spacing.xxs) {
-                            Text(PriceFormatter.format(eur: listing.listPriceEur))
+                            Text(listing.formattedPrice)
                                 .font(.subheadline)
                                 .adaptiveFontWeight(.semibold)
                             if let score = listing.currentScore {
