@@ -394,6 +394,7 @@ final class OutreachViewModelTests: XCTestCase {
 
         await viewModel.refresh(using: client)
         await viewModel.loadMoreThreads(using: client)
+        viewModel.selectedThreadID = laterThreadID
         await viewModel.selectThread(id: laterThreadID, using: client)
         await viewModel.refresh(using: client)
 
@@ -451,6 +452,7 @@ final class OutreachViewModelTests: XCTestCase {
         await viewModel.refresh(using: client)
         // The user picks thread 22 while the follow-up for thread 21 is out.
         await client.setFollowupHook { client in
+            await MainActor.run { viewModel.selectedThreadID = 22 }
             await viewModel.selectThread(id: 22, using: client)
         }
         await viewModel.sendFollowup(using: client)
@@ -463,6 +465,7 @@ final class OutreachViewModelTests: XCTestCase {
         await viewModel.performThreadAction(.pause, using: client)
 
         // Back on thread 21, the failure shows, and Try Again sends the follow-up for it.
+        viewModel.selectedThreadID = 21
         await viewModel.selectThread(id: 21, using: client)
         XCTAssertEqual(viewModel.shownActionFailure?.request, .followup)
         await viewModel.tryFailedRequestAgain(using: client)
@@ -526,6 +529,28 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedThreadID, 21)
         XCTAssertEqual(viewModel.selectedThread?.id, 21)
         XCTAssertFalse(viewModel.isLoadingThread)
+    }
+
+    /// The list's selection binding sets the thread ID, and the pick that loads it runs later. A
+    /// link that selected another thread in between lost to the late pick, which loaded its own
+    /// thread and put its ID back.
+    func testPickThatANewerSelectionReplacedDoesNothing() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22), makeThreadSummary(id: 30)],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22, and a link to thread 30 opens before the pick runs.
+        viewModel.selectedThreadID = 22
+        await viewModel.openThread(id: 30, using: client)
+        await viewModel.selectThread(id: 22, using: client)
+
+        XCTAssertEqual(viewModel.selectedThreadID, 30)
+        XCTAssertEqual(viewModel.selectedThread?.id, 30)
     }
 
     /// A link to a thread could arrive while another scope's list loaded. That list then
