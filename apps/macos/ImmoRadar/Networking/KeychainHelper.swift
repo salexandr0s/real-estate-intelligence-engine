@@ -31,7 +31,7 @@ enum KeychainHelper {
         let context = LAContext()
         context.interactionNotAllowed = !allowUserInteraction
 
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
@@ -39,6 +39,12 @@ enum KeychainHelper {
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecUseAuthenticationContext as String: context,
         ]
+        if !allowUserInteraction {
+            // The login keychain ignores the context's interactionNotAllowed. For an item that a build
+            // with another signature saved, it asks for the login password, and the read waits for the
+            // answer. It respects this deprecated key and fails with errSecInteractionNotAllowed.
+            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        }
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
