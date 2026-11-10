@@ -618,6 +618,28 @@ describe('Detail page parsing — JSON primary path', () => {
   });
 });
 
+describe('Detail page parsing — listing status', () => {
+  // The parser used to report "unknown" on every layout. Normalization stored that as the unknown
+  // status, which the app's listing list and alert matching skip, so no listing from this source
+  // ever showed.
+  it('marks a parsed listing active on every layout', () => {
+    const url = 'https://immobilien.derstandard.at/detail/90000001';
+    const embedded =
+      '<script type="application/json" id="listing-detail-data">' +
+      '{"id": 90000001, "title": "Test"}</script>';
+
+    for (const html of [
+      loadFixture('detail-jsonld.html'),
+      loadFixture('detail-page.html'),
+      embedded,
+    ]) {
+      const result = parseDetailPage(html, url, 'derstandard', 3);
+      expect(result.extractionStatus).toBe('captured');
+      expect(result.payload.statusRaw).toBe('active');
+    }
+  });
+});
+
 describe('Detail page parsing — failure cases', () => {
   it('handles parse failure gracefully', () => {
     const html = '<html><body>Empty page</body></html>';
