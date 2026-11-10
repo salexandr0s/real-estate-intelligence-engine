@@ -468,6 +468,32 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertEqual(snapshot.followupCalls, [21, 21])
     }
 
+    /// Picking the thread on screen while another thread loaded did nothing, so the slower load
+    /// replaced it, and the detail showed a thread the list didn't select.
+    func testPickingTheThreadOnScreenWhileAnotherLoadsKeepsIt() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22, then thread 21 again before 22 loads. The list's selection
+        // binding sets the ID before the view model hears of it.
+        await client.setThreadHook { client in
+            await MainActor.run { viewModel.selectedThreadID = 21 }
+            await viewModel.selectThread(id: 21, using: client)
+        }
+        viewModel.selectedThreadID = 22
+        await viewModel.selectThread(id: 22, using: client)
+
+        XCTAssertEqual(viewModel.selectedThreadID, 21)
+        XCTAssertEqual(viewModel.selectedThread?.id, 21)
+        XCTAssertFalse(viewModel.isLoadingThread)
+    }
+
     /// A link to a thread could arrive while another scope's list loaded. That list then
     /// replaced the All list the link had opened, so the picker said All over the Open threads.
     func testLinkThatArrivesDuringAScopeChangeShowsTheAllList() async {
@@ -563,6 +589,8 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     private var followupHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
     /// Runs once inside the next thread list request, before it answers.
     private var threadsHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
+    /// Runs once inside the next thread request, before it answers.
+    private var threadHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
 
     init(
         mailboxes: [MailboxAccount] = [],
@@ -635,8 +663,16 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {
         threadFetchCountStorage += 1
+        if let hook = threadHook {
+            threadHook = nil
+            await hook(self)
+        }
         if let threadError { throw threadError }
         return id == thread.id ? thread : makeThread(id: id)
+    }
+
+    func setThreadHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        threadHook = hook
     }
 
     func threadFetchCount() -> Int {

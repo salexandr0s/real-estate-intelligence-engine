@@ -93,9 +93,12 @@ final class OutreachViewModel {
     }
 
     /// Loads a thread picked in the list. The list's selection binding has already set
-    /// `selectedThreadID`, so this compares against the thread on screen.
+    /// `selectedThreadID`, so this compares against the thread on screen and the one loading.
     func selectThread(id: Int, using client: any OutreachAPIClient) async {
-        guard selectedThread?.id != id, threadIDInFlight != id else { return }
+        guard threadIDInFlight != id else { return }
+        // Picking the thread on screen again while another thread loads reloads it, so the
+        // slower load can't replace it.
+        guard selectedThread?.id != id || threadIDInFlight != nil else { return }
         selectedThreadID = id
         await loadThread(id: id, using: client)
     }
