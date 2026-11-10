@@ -123,15 +123,6 @@ final class AnalyticsViewModel {
         }
     }
 
-    func refreshTrends(using client: APIClient, districtNo: Int? = nil, months: Int? = nil) async {
-        do {
-            trendData = try await client.fetchDistrictTrends(districtNo: districtNo, months: months)
-            loadErrors[.trends] = nil
-        } catch {
-            loadErrors[.trends] = AppErrorPresentation.message(for: error)
-        }
-    }
-
     func districtSummary(for districtNo: Int?) -> DistrictSummary? {
         guard let districtNo else {
             return districtBreakdown.first(where: \.hasData) ?? districtBreakdown.first

@@ -46,9 +46,7 @@ struct AnalyticsView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                             errorBanner
-                            DistrictTrendChartView(data: viewModel.trendData, selectedDistrictNo: $selectedDistrictNo) { months in
-                                Task { await viewModel.refreshTrends(using: appState.apiClient, districtNo: selectedDistrictNo, months: months) }
-                            }
+                            DistrictTrendChartView(data: viewModel.trendData, selectedDistrictNo: $selectedDistrictNo)
                         }
                         .padding(Theme.Spacing.xl)
                     }
