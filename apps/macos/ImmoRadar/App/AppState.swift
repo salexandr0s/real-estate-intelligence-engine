@@ -418,9 +418,13 @@ final class AppState {
         navigationState.navigateTo(item)
     }
 
-    /// Refresh Data: feature views reload, and the connection is checked again.
+    /// Refresh Data: the connection is checked again, and feature views reload. While they wait
+    /// on a failed connection or an engine start, they reload once the check succeeds, so they
+    /// don't load twice.
     func requestRefresh() {
-        navigationState.requestRefresh()
+        if !needsFeatureRefresh {
+            navigationState.requestRefresh()
+        }
         Task { await refreshConnection(userInitiated: true) }
     }
 
