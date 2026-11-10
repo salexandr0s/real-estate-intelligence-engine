@@ -167,6 +167,8 @@ export interface ListingRow {
   geocodeUpdatedAt: Date | null;
   crossSourceFingerprint: string | null;
   listPriceEurCents: number | null;
+  /** A developer project's lowest unit price. Never an asking price. */
+  priceFromEurCents: number | null;
   monthlyOperatingCostEurCents: number | null;
   reserveFundEurCents: number | null;
   commissionEurCents: number | null;
@@ -192,6 +194,8 @@ export interface ListingRow {
   hasElevator: boolean | null;
   parkingAvailable: boolean | null;
   isFurnished: boolean | null;
+  /** A developer project with several units. It has no score. */
+  isProject: boolean;
   pricePerSqmEur: number | null;
   completenessScore: number;
   currentScore: number | null;

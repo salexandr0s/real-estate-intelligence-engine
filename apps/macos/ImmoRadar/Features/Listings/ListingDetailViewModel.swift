@@ -369,6 +369,11 @@ final class ListingDetailViewModel {
     }
 
     private func loadExplanation(using apiClient: APIClient, token: LoadToken) async {
+        if displayedListing.isProject == true {
+            explanation = nil
+            explanationLoadFailed = false
+            return
+        }
         isLoadingExplanation = true
         defer {
             if isCurrent(token) { isLoadingExplanation = false }

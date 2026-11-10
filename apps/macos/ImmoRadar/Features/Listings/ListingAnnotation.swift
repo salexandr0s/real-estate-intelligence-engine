@@ -88,7 +88,7 @@ struct ListingAnnotation: View {
                 .frame(maxWidth: 180, alignment: .leading)
 
             HStack(spacing: Theme.Spacing.sm) {
-                Text(PriceFormatter.format(eur: listing.listPriceEur))
+                Text(listing.formattedPrice)
                     .font(.caption2)
                     .adaptiveFontWeight(.semibold)
 

@@ -11,7 +11,7 @@ import type {
  * The pipeline uses this to distinguish "source content changed" from "our parsing improved".
  * Version 3 covers the rewritten source parsers and the area and room parsing in coerce.ts.
  */
-export const CURRENT_NORMALIZATION_VERSION = 3;
+export const CURRENT_NORMALIZATION_VERSION = 4;
 
 // ── Canonical Listing Input ─────────────────────────────────────────────────
 
@@ -45,6 +45,8 @@ export interface CanonicalListingInput {
   geocodePrecision?: GeocodePrecision | null;
 
   listPriceEurCents?: number | null;
+  /** A developer project's lowest unit price. Never an asking price, so scoring ignores it. */
+  priceFromEurCents?: number | null;
   monthlyOperatingCostEurCents?: number | null;
   reserveFundEurCents?: number | null;
   commissionEurCents?: number | null;
@@ -72,6 +74,8 @@ export interface CanonicalListingInput {
   hasElevator?: boolean | null;
   parkingAvailable?: boolean | null;
   isFurnished?: boolean | null;
+  /** A developer project with several units, so price, area and rooms describe no single unit. */
+  isProject?: boolean;
 
   crossSourceFingerprint?: string | null;
 
@@ -105,6 +109,8 @@ export interface SourceRawListingBase {
   titleRaw?: string | null;
   descriptionRaw?: string | null;
   priceRaw?: string | number | null;
+  /** A developer project's lowest unit price ("ab 389.000 €"). Never an asking price. */
+  priceFromRaw?: string | number | null;
   livingAreaRaw?: string | number | null;
   usableAreaRaw?: string | number | null;
   roomsRaw?: string | number | null;
@@ -137,6 +143,11 @@ export interface SourceRawListingBase {
   contactCompanyRaw?: string | null;
   contactEmailRaw?: string | null;
   contactPhoneRaw?: string | null;
+  /**
+   * True for a developer project with several units, false when the source says the listing is
+   * one property, null when the source doesn't say.
+   */
+  isProjectRaw?: boolean | null;
   attributesRaw?: Record<string, unknown>;
   mediaRaw?: unknown[];
 }

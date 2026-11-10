@@ -16,7 +16,7 @@ describe('Immoscout24Adapter', () => {
   it('has correct source metadata', () => {
     expect(adapter.sourceCode).toBe('immoscout24');
     expect(adapter.sourceName).toBe('ImmobilienScout24.at');
-    expect(adapter.parserVersion).toBe(3);
+    expect(adapter.parserVersion).toBe(4);
   });
 
   it('canonicalizes URLs correctly', () => {
@@ -598,7 +598,9 @@ describe('Detail page parsing (@graph JSON-LD)', () => {
     expect(result.extractionStatus).toBe('captured');
     expect(result.payload.titleRaw).toBe('Altbauwohnung mit Balkon nahe Musterpark');
     expect(result.payload.priceRaw).toBeNull();
-    expect(result.payload.attributesRaw).toEqual({ priceFromRaw: '389000' });
+    expect(result.payload.priceFromRaw).toBe('389000');
+    // Without the Expose record nothing says whether the listing is a project.
+    expect(result.payload.isProjectRaw).toBeNull();
     expect(result.payload.images).toHaveLength(2);
     // The ItemList holds other listings, so their provider is not this listing's agent.
     expect(result.payload.contactName).toBeNull();
@@ -614,19 +616,19 @@ describe('Detail page parsing (@graph JSON-LD)', () => {
       '<div data-testid="primary-price">Preis auf Anfrage</div><div>65,2 m²</div>',
     );
     expect(onRequest.priceRaw).toBeNull();
-    expect(onRequest.attributesRaw).toEqual({});
+    expect(onRequest.priceFromRaw).toBeNull();
 
     const nested = withPrice(
       '<div data-testid="primary-price"><div>Kaufpreis</div><div>389.000&nbsp;€</div></div>',
     );
     expect(nested.priceRaw).toBe('389000');
-    expect(nested.attributesRaw).toEqual({});
+    expect(nested.priceFromRaw).toBeNull();
 
     // Austrian notations: "389.000,- €", and "€ ab 389.000" for the lowest price of a range.
     expect(withPrice('<div data-testid="primary-price">389.000,- €</div>').priceRaw).toBe('389000');
     const fromAfterCurrency = withPrice('<div data-testid="primary-price">€ ab 389.000</div>');
     expect(fromAfterCurrency.priceRaw).toBeNull();
-    expect(fromAfterCurrency.attributesRaw).toEqual({ priceFromRaw: '389000' });
+    expect(fromAfterCurrency.priceFromRaw).toBe('389000');
   });
 
   it('gives a fractional Offer price two decimals', () => {
@@ -700,6 +702,8 @@ describe('Detail page parsing (Expose record)', () => {
       estateTypeRaw: 'APARTMENT',
       operationTypeRaw: 'sale',
       yearBuiltRaw: '1905',
+      isProjectRaw: false,
+      priceFromRaw: null,
     });
   });
 
@@ -758,7 +762,8 @@ describe('Detail page parsing (Expose record)', () => {
       roomsRaw: null,
       balconyAreaRaw: null,
       floorRaw: null,
-      attributesRaw: { priceFromRaw: '389000' },
+      isProjectRaw: true,
+      priceFromRaw: '389000',
       postalCodeRaw: '1150',
     });
   });

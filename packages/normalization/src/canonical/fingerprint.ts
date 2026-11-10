@@ -106,6 +106,8 @@ function buildNormalizedAddress(listing: Partial<CanonicalListingInput>): string
  * Excludes: timestamps, crawl IDs, artifact keys, raw data.
  */
 interface FingerprintFields {
+  isProject?: true;
+  priceFromEurCents?: number;
   title: string | null;
   description: string | null;
   listPriceEurCents: number | null;
@@ -137,6 +139,9 @@ interface FingerprintFields {
  */
 export function computeContentFingerprint(listing: Partial<CanonicalListingInput>): string {
   const fields: FingerprintFields = {
+    // Omit absent fields to preserve fingerprints of existing single properties.
+    ...(listing.isProject === true ? { isProject: true as const } : {}),
+    ...(listing.priceFromEurCents != null ? { priceFromEurCents: listing.priceFromEurCents } : {}),
     title: listing.title ?? null,
     description: listing.description ?? null,
     listPriceEurCents: listing.listPriceEurCents ?? null,

@@ -88,6 +88,8 @@ export function parseDetailPage(
     titleRaw: product.name ?? null,
     descriptionRaw: descriptionText || null,
     priceRaw,
+    // A "from" price (a project's cheapest unit, "ab 389.000 €") is not an asking price.
+    priceFromRaw,
     // The description text fills what the Expose record leaves out, and only through labelled
     // values ("Wohnfläche: 72 m²"): a bare "8 m²" can be the balcony and "2 bis 4 Zimmer" a range.
     livingAreaRaw: isProject ? null : (facts?.livingAreaRaw ?? parseArea(descriptionText)),
@@ -116,8 +118,9 @@ export function parseDetailPage(
     reserveFundRaw: null,
     latRaw: null,
     lonRaw: null,
-    // A "from" price (a project's cheapest unit, "ab 389.000 €") is not an asking price.
-    attributesRaw: priceFromRaw !== null ? { priceFromRaw } : {},
+    // Only the Expose record says whether the listing is a project.
+    isProjectRaw: facts ? isProject : null,
+    attributesRaw: {},
     mediaRaw: [],
     images,
     contactName: agent?.name ?? null,

@@ -103,6 +103,8 @@ export interface SavedListingWithListing extends SavedListingRow {
     districtNo: number | null;
     districtName: string | null;
     listPriceEurCents: number | null;
+    priceFromEurCents: number | null;
+    isProject: boolean;
     livingAreaSqm: number | null;
     rooms: number | null;
     pricePerSqmEur: number | null;
@@ -124,6 +126,8 @@ interface SavedListingJoinedDbRow extends SavedListingDbRow {
   district_no: number | null;
   district_name: string | null;
   list_price_eur_cents: string | null;
+  price_from_eur_cents: string | null;
+  is_project: boolean;
   living_area_sqm: string | null;
   rooms: string | null;
   price_per_sqm_eur: string | null;
@@ -145,7 +149,7 @@ export async function findByUser(
        l.id AS l_id, l.listing_uid, s.code AS source_code,
        l.title, l.canonical_url, l.operation_type, l.property_type,
        l.city, l.district_no, l.district_name,
-       l.list_price_eur_cents, l.living_area_sqm, l.rooms,
+       l.list_price_eur_cents, l.price_from_eur_cents, l.is_project, l.living_area_sqm, l.rooms,
        l.price_per_sqm_eur, l.current_score, l.first_seen_at, l.listing_status
      FROM user_saved_listings usl
      JOIN listings l ON l.id = usl.listing_id
@@ -172,6 +176,8 @@ export async function findByUser(
       districtNo: r.district_no,
       districtName: r.district_name,
       listPriceEurCents: r.list_price_eur_cents != null ? Number(r.list_price_eur_cents) : null,
+      priceFromEurCents: r.price_from_eur_cents != null ? Number(r.price_from_eur_cents) : null,
+      isProject: r.is_project,
       livingAreaSqm: r.living_area_sqm != null ? Number(r.living_area_sqm) : null,
       rooms: r.rooms != null ? Number(r.rooms) : null,
       pricePerSqmEur: r.price_per_sqm_eur != null ? Number(r.price_per_sqm_eur) : null,
@@ -190,7 +196,8 @@ export async function findByUser(
 /** Generate CSV export of saved listings. */
 export async function exportCsv(userId: number): Promise<string> {
   const { data } = await findByUser(userId, 10000);
-  const header = 'id,title,source,district,price_eur,area_sqm,rooms,score,url,notes,saved_at';
+  const header =
+    'id,title,source,district,price_eur,area_sqm,rooms,score,url,notes,saved_at,is_project,price_from_eur';
   const rows = data.map((s) => {
     const l = s.listing;
     const price = l.listPriceEurCents != null ? (l.listPriceEurCents / 100).toFixed(0) : '';
@@ -199,7 +206,7 @@ export async function exportCsv(userId: number): Promise<string> {
     const score = l.currentScore?.toFixed(1) ?? '';
     const title = csvSafe(l.title);
     const notes = csvSafe(s.notes ?? '');
-    return `${l.id},"${title}",${l.sourceCode},${l.districtNo ?? ''},${price},${area},${rooms},${score},"${l.canonicalUrl}","${notes}",${s.savedAt.toISOString()}`;
+    return `${l.id},"${title}",${l.sourceCode},${l.districtNo ?? ''},${price},${area},${rooms},${score},"${l.canonicalUrl}","${notes}",${s.savedAt.toISOString()},${l.isProject},${l.priceFromEurCents != null ? (l.priceFromEurCents / 100).toFixed(2) : ''}`;
   });
   return [header, ...rows].join('\n');
 }

@@ -44,8 +44,8 @@ struct WatchlistRow: View {
                             .lineLimit(2)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        if let price = item.listing.listPriceEur {
-                            Text(PriceFormatter.format(eurDouble: price))
+                        if item.listing.listPriceEur != nil || item.listing.priceFromEurCents != nil {
+                            Text(item.listing.formattedPrice)
                                 .font(.caption.monospacedDigit())
                                 .adaptiveFontWeight(.semibold)
                                 .foregroundStyle(.primary)
@@ -53,6 +53,11 @@ struct WatchlistRow: View {
                     }
 
                     HStack(spacing: Theme.Spacing.sm) {
+                        if item.listing.isProject == true {
+                            Label("Projekt", systemImage: "building.2")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         if let district = item.listing.districtName {
                             Label(district, systemImage: "mappin")
                                 .font(.caption)

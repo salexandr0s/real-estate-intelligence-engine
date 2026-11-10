@@ -119,6 +119,7 @@ export type ListingScoringDeps = Pick<
 
 /** The listing fields a score reads. */
 export interface ScoredListing {
+  isProject?: boolean;
   title: string;
   description: string | null;
   operationType: string;
@@ -275,6 +276,7 @@ export class ScoreAndAlert {
     listingVersionId: number;
     versionReason: VersionReason;
     listing: {
+      isProject?: boolean;
       title: string;
       description: string | null;
       operationType: string;
@@ -295,6 +297,15 @@ export class ScoreAndAlert {
     locationConfidence: number;
   }): Promise<ScoreAndAlertResult> {
     const { listingId, listingVersionId, versionReason, listing } = params;
+
+    if (listing.isProject === true) {
+      log.info('Project scoring skipped', {
+        listingId,
+        listingVersionId,
+        reason: 'multiple_units',
+      });
+      return { overallScore: null, alertsCreated: 0 };
+    }
 
     // 1 to 3. Look up baselines and score
     const { score, previousPrice } = await computeListingScore(this.deps, params);

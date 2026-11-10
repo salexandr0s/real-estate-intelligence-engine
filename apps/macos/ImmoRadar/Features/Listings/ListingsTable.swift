@@ -39,7 +39,7 @@ struct ListingsTable: View {
 
             TableColumn("Price", value: \.sortableListPriceEur) { (listing: Listing) in
                 HStack(spacing: 4) {
-                    Text(PriceFormatter.format(eur: listing.listPriceEur))
+                    Text(listing.formattedPrice)
                         .monospacedDigit()
                     if let pct = listing.lastPriceChangePct, pct != 0 {
                         PriceTrendBadge(changePct: pct)
@@ -107,6 +107,11 @@ struct ListingsTable: View {
             HStack(spacing: Theme.Spacing.xs) {
                 Text(listing.title)
                     .lineLimit(1)
+                if listing.isProject == true {
+                    Text("Projekt")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if listing.hasAlertMatch {
                     Image(systemName: "bell.badge.fill")
                         .font(.caption2)

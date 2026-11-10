@@ -7,7 +7,8 @@ import { computeConfidenceScore } from './confidence.js';
 import { computeLocationScore } from './location-score.js';
 import { clamp } from './util.js';
 
-export const SCORE_VERSION = 3;
+// v4 excludes developer projects in the ingestion/rescore eligibility stage.
+export const SCORE_VERSION = 4;
 
 /**
  * Main scoring function. Produces a 0-100 weighted opportunity score.

@@ -100,6 +100,34 @@ export class BaseSourceMapper implements SourceNormalizer {
       if (priceResult.warning) warnings.push(priceResult.warning);
       provenance['price'] = rawPayload.priceRaw != null ? 'payload.priceRaw' : 'missing';
 
+      const isProject = rawPayload.isProjectRaw === true;
+      // Source prices are euros. Avoid the legacy numeric asking-price cents heuristic.
+      const priceFromResult = parseEurPrice(
+        typeof rawPayload.priceFromRaw === 'number'
+          ? String(rawPayload.priceFromRaw)
+          : rawPayload.priceFromRaw,
+      );
+      if (priceFromResult.warning) {
+        warnings.push({ ...priceFromResult.warning, field: 'priceFrom' });
+      }
+      let priceFromEurCents = priceFromResult.value;
+      if (
+        priceFromEurCents != null &&
+        (!Number.isSafeInteger(priceFromEurCents) || priceFromEurCents <= 0)
+      ) {
+        warnings.push({
+          field: 'priceFrom',
+          code: 'price_from_invalid',
+          message: 'From price must be positive integer EUR cents',
+          rawValue: rawPayload.priceFromRaw,
+        });
+        priceFromEurCents = null;
+      }
+      provenance['priceFrom'] =
+        rawPayload.priceFromRaw != null ? 'payload.priceFromRaw' : 'missing';
+      provenance['isProject'] =
+        rawPayload.isProjectRaw != null ? 'payload.isProjectRaw' : 'not_reported';
+
       // Areas
       const livingAreaResult = parseSqm(rawPayload.livingAreaRaw);
       if (livingAreaResult.warning) warnings.push(livingAreaResult.warning);
@@ -277,7 +305,7 @@ export class BaseSourceMapper implements SourceNormalizer {
       // ── Step 6: Compute price per sqm ──
       let pricePerSqmEur: number | null = null;
       const effectiveArea = livingAreaResult.value ?? usableAreaResult.value;
-      if (priceResult.value != null && effectiveArea != null && effectiveArea > 0) {
+      if (!isProject && priceResult.value != null && effectiveArea != null && effectiveArea > 0) {
         pricePerSqmEur = Math.round((priceResult.value / 100 / effectiveArea) * 100) / 100;
       }
 
@@ -314,17 +342,19 @@ export class BaseSourceMapper implements SourceNormalizer {
         longitude,
         geocodePrecision: latitude != null ? 'source_approx' : null,
 
-        listPriceEurCents: priceResult.value,
+        listPriceEurCents: isProject ? null : priceResult.value,
+        priceFromEurCents,
+        isProject,
         monthlyOperatingCostEurCents: operatingCostResult.value,
         reserveFundEurCents: reserveFundResult.value,
         commissionEurCents: commissionResult.value,
 
-        livingAreaSqm: livingAreaResult.value,
-        usableAreaSqm: usableAreaResult.value,
+        livingAreaSqm: isProject ? null : livingAreaResult.value,
+        usableAreaSqm: isProject ? null : usableAreaResult.value,
         balconyAreaSqm: balconyAreaResult.value,
         terraceAreaSqm: terraceAreaResult.value,
         gardenAreaSqm: gardenAreaResult.value,
-        rooms: roomsResult.value,
+        rooms: isProject ? null : roomsResult.value,
         floorLabel: floorResult.label,
         floorNumber: floorResult.value,
         yearBuilt: yearResult.value,
@@ -346,6 +376,8 @@ export class BaseSourceMapper implements SourceNormalizer {
         normalizedPayload: {
           provenance,
           sourceCode: this.sourceCode,
+          isProject,
+          priceFromEurCents,
           pricePerSqmEur,
           contact: {
             name: normalizeWhitespace(rawPayload.contactNameRaw),

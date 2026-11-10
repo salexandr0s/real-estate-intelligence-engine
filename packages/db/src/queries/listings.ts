@@ -45,6 +45,8 @@ interface ListingDbRow {
   geocode_updated_at: Date | null;
   cross_source_fingerprint: string | null;
   list_price_eur_cents: string | null;
+  price_from_eur_cents: string | null;
+  is_project: boolean;
   monthly_operating_cost_eur_cents: string | null;
   reserve_fund_eur_cents: string | null;
   commission_eur_cents: string | null;
@@ -121,6 +123,8 @@ function toListingRow(row: ListingDbRow): ListingRow {
     geocodeUpdatedAt: row.geocode_updated_at,
     crossSourceFingerprint: row.cross_source_fingerprint,
     listPriceEurCents: row.list_price_eur_cents != null ? Number(row.list_price_eur_cents) : null,
+    priceFromEurCents: numberOrNull(row.price_from_eur_cents),
+    isProject: row.is_project,
     monthlyOperatingCostEurCents:
       row.monthly_operating_cost_eur_cents != null
         ? Number(row.monthly_operating_cost_eur_cents)
@@ -183,6 +187,8 @@ interface ListingSearchDbRow {
   district_no: number | null;
   district_name: string | null;
   list_price_eur_cents: string | null;
+  price_from_eur_cents: string | null;
+  is_project: boolean;
   living_area_sqm: string | null;
   rooms: string | null;
   price_per_sqm_eur: string | null;
@@ -213,6 +219,8 @@ function toListingSearchResult(row: ListingSearchDbRow): ListingSearchResult {
     districtNo: row.district_no,
     districtName: row.district_name,
     listPriceEurCents: row.list_price_eur_cents != null ? Number(row.list_price_eur_cents) : null,
+    priceFromEurCents: numberOrNull(row.price_from_eur_cents),
+    isProject: row.is_project,
     livingAreaSqm: row.living_area_sqm != null ? Number(row.living_area_sqm) : null,
     rooms: row.rooms != null ? Number(row.rooms) : null,
     pricePerSqmEur: row.price_per_sqm_eur != null ? Number(row.price_per_sqm_eur) : null,
@@ -271,6 +279,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        parking_available, is_furnished,
        normalized_payload, completeness_score, content_fingerprint,
        cross_source_fingerprint, normalization_version,
+       is_project, price_from_eur_cents,
        first_seen_at, last_seen_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
@@ -278,7 +287,7 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
        $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
        $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
        $42, $43, $44, $45, $46, $47, $48, $49, $50, $51,
-       $52, $53, $54, $55,
+       $52, $53, $54, $55, $56, $57,
        NOW(), NOW()
      )
      ON CONFLICT (source_id, source_listing_key) DO UPDATE SET
@@ -315,6 +324,10 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
          ELSE listings.geocode_next_attempt_at
        END,
        list_price_eur_cents = EXCLUDED.list_price_eur_cents,
+       is_project = EXCLUDED.is_project,
+       price_from_eur_cents = EXCLUDED.price_from_eur_cents,
+       current_score = CASE WHEN EXCLUDED.is_project THEN NULL ELSE listings.current_score END,
+       last_scored_at = CASE WHEN EXCLUDED.is_project THEN NULL ELSE listings.last_scored_at END,
        monthly_operating_cost_eur_cents = EXCLUDED.monthly_operating_cost_eur_cents,
        reserve_fund_eur_cents = EXCLUDED.reserve_fund_eur_cents,
        commission_eur_cents = EXCLUDED.commission_eur_cents,
@@ -423,6 +436,8 @@ export async function upsertListing(input: CanonicalListingInput): Promise<Listi
       input.contentFingerprint,
       input.crossSourceFingerprint ?? null,
       input.normalizationVersion,
+      input.isProject === true,
+      input.priceFromEurCents ?? null,
     ],
   );
   return toListingRow(rows[0]!);
@@ -556,7 +571,7 @@ export async function searchListings(
       l.id, l.listing_uid, s.code AS source_code,
       l.canonical_url, l.title, l.operation_type, l.property_type,
       l.city, l.postal_code, l.district_no, l.district_name,
-      l.list_price_eur_cents, l.living_area_sqm, l.rooms,
+      l.list_price_eur_cents, l.price_from_eur_cents, l.is_project, l.living_area_sqm, l.rooms,
       l.price_per_sqm_eur, l.current_score,
       l.first_seen_at, l.last_seen_at, l.listing_status,
       l.latitude, l.longitude, l.geocode_precision,
@@ -718,7 +733,7 @@ export async function updateScore(
   const rows = await query<ListingDbRow>(
     `UPDATE listings
      SET current_score = $2, last_scored_at = $3
-     WHERE id = $1
+     WHERE id = $1 AND NOT is_project
      RETURNING *`,
     [id, score, scoredAt],
   );
@@ -816,6 +831,7 @@ export type RescoreCandidate = Pick<
   | 'districtNo'
   | 'city'
   | 'listPriceEurCents'
+  | 'isProject'
   | 'livingAreaSqm'
   | 'usableAreaSqm'
   | 'rooms'
@@ -836,6 +852,7 @@ type RescoreCandidateDbRow = Pick<
   | 'district_no'
   | 'city'
   | 'list_price_eur_cents'
+  | 'is_project'
   | 'living_area_sqm'
   | 'usable_area_sqm'
   | 'rooms'
@@ -860,7 +877,7 @@ export async function findActiveForRescore(page: {
 }): Promise<RescoreCandidate[]> {
   const rows = await query<RescoreCandidateDbRow>(
     `SELECT id, source_id, title, description, operation_type, property_type, district_no, city,
-            list_price_eur_cents, living_area_sqm, usable_area_sqm, rooms, completeness_score,
+            list_price_eur_cents, is_project, living_area_sqm, usable_area_sqm, rooms, completeness_score,
             first_seen_at, last_price_change_at, current_score
      FROM listings
      WHERE listing_status = 'active'
@@ -880,6 +897,7 @@ export async function findActiveForRescore(page: {
     districtNo: row.district_no,
     city: row.city,
     listPriceEurCents: numberOrNull(row.list_price_eur_cents),
+    isProject: row.is_project,
     livingAreaSqm: numberOrNull(row.living_area_sqm),
     usableAreaSqm: numberOrNull(row.usable_area_sqm),
     rooms: numberOrNull(row.rooms),
@@ -943,7 +961,7 @@ export async function exportListingsCsv(
   const truncated = result.data.length >= exportLimit;
 
   const header =
-    'id,title,source,operation,property_type,district,district_name,price_eur,area_sqm,rooms,price_per_sqm,score,url,first_seen,status';
+    'id,title,source,operation,property_type,district,district_name,price_eur,area_sqm,rooms,price_per_sqm,score,url,first_seen,status,is_project,price_from_eur';
 
   const rows = result.data.map((l) => {
     const price = l.listPriceEurCents != null ? (l.listPriceEurCents / 100).toFixed(0) : '';
@@ -953,7 +971,7 @@ export async function exportListingsCsv(
     const title = csvSafe(l.title);
     const districtName = csvSafe(l.districtName ?? '');
     const url = csvSafe(l.canonicalUrl);
-    return `${l.id},"${title}","${l.sourceCode ?? ''}","${l.operationType}","${l.propertyType}",${l.districtNo ?? ''},"${districtName}",${price},${area},${rooms},${l.pricePerSqmEur?.toFixed(0) ?? ''},${score},"${url}",${l.firstSeenAt.toISOString()},${l.listingStatus}`;
+    return `${l.id},"${title}","${l.sourceCode ?? ''}","${l.operationType}","${l.propertyType}",${l.districtNo ?? ''},"${districtName}",${price},${area},${rooms},${l.pricePerSqmEur?.toFixed(0) ?? ''},${score},"${url}",${l.firstSeenAt.toISOString()},${l.listingStatus},${l.isProject},${l.priceFromEurCents != null ? (l.priceFromEurCents / 100).toFixed(2) : ''}`;
   });
 
   const lines = [header, ...rows];
