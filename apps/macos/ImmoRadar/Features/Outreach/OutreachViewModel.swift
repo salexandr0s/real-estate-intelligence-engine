@@ -189,9 +189,10 @@ final class OutreachViewModel {
         }
     }
 
-    /// Sends the failed request again after the server couldn't queue its email.
+    /// Sends the failed request again after the server couldn't queue its email, while the thread
+    /// on screen still takes it.
     func tryFailedRequestAgain(using client: any OutreachAPIClient) async {
-        guard let failure = shownActionFailure, failure.canTryAgain else { return }
+        guard let failure = shownActionFailure, failure.canTryAgain(on: selectedThread) else { return }
         switch failure.request {
         case .action(let action):
             await performThreadAction(action, using: client)

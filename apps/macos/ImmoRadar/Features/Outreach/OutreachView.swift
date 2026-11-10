@@ -466,10 +466,11 @@ private struct OutreachDetailPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Try Again shows only when the server couldn't queue the email and kept the thread as it was.
+    /// Try Again shows only when the server couldn't queue the email and kept the thread as it was,
+    /// and the thread still takes the request.
     private func failureActions(for failure: OutreachRequestFailure) -> [InlineWarningBanner.Action] {
         var actions: [InlineWarningBanner.Action] = []
-        if failure.canTryAgain {
+        if failure.canTryAgain(on: viewModel.selectedThread) {
             actions.append(.init("Try Again", isProminent: true) {
                 Task { await viewModel.tryFailedRequestAgain(using: appState.apiClient) }
             })

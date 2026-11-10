@@ -471,6 +471,37 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertEqual(snapshot.followupCalls, [21, 21])
     }
 
+    /// A kept failure offered Try Again after its thread stopped taking the request, as a
+    /// follow-up does once a reply arrives, and the server refused the second send.
+    func testTryAgainSendsNothingOnceTheThreadNoLongerTakesTheRequest() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        await viewModel.sendFollowup(using: client)
+        // The user looks at thread 22 while a reply to thread 21 arrives, then goes back.
+        viewModel.selectedThreadID = 22
+        await viewModel.selectThread(id: 22, using: client)
+        await client.setThread(makeThread(id: 21, workflowState: "reply_received"))
+        viewModel.selectedThreadID = 21
+        await viewModel.selectThread(id: 21, using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(viewModel.shownActionFailure?.request, .followup)
+        XCTAssertEqual(snapshot.followupCalls, [21])
+    }
+
     /// Picking the thread on screen while another thread loaded did nothing, so the slower load
     /// replaced it, and the detail showed a thread the list didn't select.
     func testPickingTheThreadOnScreenWhileAnotherLoadsKeepsIt() async {

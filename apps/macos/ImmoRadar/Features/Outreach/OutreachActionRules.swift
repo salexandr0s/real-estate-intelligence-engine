@@ -36,6 +36,18 @@ extension OutreachThread {
         return initialWasSent && !followupWasSent
     }
 
+    /// Whether the thread takes `request` in its current state. A start has no thread to ask.
+    func accepts(_ request: OutreachThreadRequest) -> Bool {
+        switch request {
+        case .start: false
+        case .action(.pause): canPause
+        case .action(.resume): canResume
+        case .action(.close): canClose
+        case .action(.retry): canRetry
+        case .followup: canSendFollowup
+        }
+    }
+
     private static let pausableStates: Set<String> = ["queued_send", "sent_waiting_reply", "followup_due", "followup_sent"]
     private static let retryableStates: Set<String> = ["failed", "followup_due", "queued_send"]
     private static let followupStates: Set<String> = ["sent_waiting_reply", "followup_due"]
@@ -84,5 +96,12 @@ struct OutreachRequestFailure: Equatable {
     /// failed, and Retry on the thread sends it.
     var canTryAgain: Bool {
         enqueueFailed && request != .start
+    }
+
+    /// Whether Try Again can work on `thread` as it loaded last: the server kept the thread as it
+    /// was, and the thread still takes the request. A reply that arrived since ends a follow-up.
+    func canTryAgain(on thread: OutreachThread?) -> Bool {
+        guard canTryAgain, let thread else { return false }
+        return thread.accepts(request)
     }
 }
