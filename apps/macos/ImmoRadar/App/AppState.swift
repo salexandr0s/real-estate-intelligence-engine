@@ -419,13 +419,20 @@ final class AppState {
     }
 
     /// Refresh Data: the connection is checked again, and feature views reload. While they wait
-    /// on a failed connection or an engine start, they reload once the check succeeds, so they
-    /// don't load twice.
+    /// on a failed connection or an engine start, they reload after the check instead, so a check
+    /// that succeeds doesn't load them twice. The check asks only for the unread count, so one
+    /// that fails again doesn't prove they can't load, and they reload then too.
     func requestRefresh() {
-        if !needsFeatureRefresh {
+        let waitsForConnection = needsFeatureRefresh
+        if !waitsForConnection {
             navigationState.requestRefresh()
         }
-        Task { await refreshConnection(userInitiated: true) }
+        Task {
+            await refreshConnection(userInitiated: true)
+            if waitsForConnection && needsFeatureRefresh {
+                navigationState.requestRefresh()
+            }
+        }
     }
 
     func openListing(_ listingId: Int) {
