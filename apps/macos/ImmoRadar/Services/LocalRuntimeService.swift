@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum LocalRuntimeAuth {
     static let keychainKey = "localRuntimeApiToken"
@@ -19,11 +20,18 @@ enum LocalRuntimeAuth {
 
     private static let store = KeychainStore(service: keychainService)
 
+    /// The token this launch's engine runs with. The engine lives as long as the app, so later reads
+    /// use this copy. When macOS lets the app read the Keychain item only once, the rest still works.
+    private static let launchToken = OSAllocatedUnfairLock<String?>(initialState: nil)
+
     static func loadToken(allowUserInteraction: Bool = true) -> String? {
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
         guard permitsStoredCredentials else { return nil }
+        if let token = launchToken.withLock({ $0 }) {
+            return token
+        }
 
         guard let token = readToken(in: store, allowUserInteraction: allowUserInteraction).value,
               !token.isEmpty else {
@@ -32,13 +40,19 @@ enum LocalRuntimeAuth {
         return token
     }
 
+    /// Only the engine's start calls this, one start at a time.
     static func ensureToken() throws -> String {
         if let environmentOverrideToken {
             return environmentOverrideToken
         }
         guard permitsStoredCredentials else { throw AuthError.isolatedSmokeBlocked }
+        if let token = launchToken.withLock({ $0 }) {
+            return token
+        }
 
-        return try ensureToken(in: store)
+        let token = try ensureToken(in: store)
+        launchToken.withLock { $0 = token }
+        return token
     }
 
     /// Reuses the stored token, or stores a new one when there is none. A failed read throws
@@ -60,7 +74,8 @@ enum LocalRuntimeAuth {
     static func resetToken() {
         guard permitsStoredCredentials else { return }
         guard environmentOverrideToken == nil else { return }
-        store.delete(key: keychainKey)
+        launchToken.withLock { $0 = nil }
+        store.delete(key: keychainKey, allowUserInteraction: true)
     }
 
     private static func readToken(in store: some SecretStore, allowUserInteraction: Bool) -> KeychainReadResult {
@@ -450,7 +465,7 @@ final class LocalRuntimeService {
         do {
             let layout = try await EngineLayout.resolve(apiBaseURL: apiBaseURL)
             applyRuntimeMetadata(layout)
-            let token = try LocalRuntimeAuth.ensureToken()
+            let token = try await Self.engineToken()
             let supervisor = engineSupervisor()
 
             if supervisor.isActive {
@@ -467,6 +482,12 @@ final class LocalRuntimeService {
             await supervisor?.stop()
             recordStartFailure(startupFailure(from: error))
         }
+    }
+
+    /// Reads the engine's token, or stores a new one, off the main thread. macOS may ask for the login
+    /// password first, and the window stays responsive while it waits for the answer.
+    private nonisolated static func engineToken() async throws -> String {
+        try LocalRuntimeAuth.ensureToken()
     }
 
     // MARK: - Workers

@@ -1,5 +1,4 @@
 import Foundation
-import LocalAuthentication
 import Security
 
 /// What one Keychain read found. A failed read says nothing about the item, so it must never be
@@ -21,27 +20,31 @@ enum KeychainHelper {
 
     static let defaultServiceName = "com.immoradar.api"
 
+    /// Every Keychain call holds this lock. A quiet call turns off the process-wide prompt setting
+    /// while it holds the lock, so a call that may ask never runs with the setting off.
+    private static let accessLock = NSLock()
+
     // MARK: - Read
 
+    /// A quiet read (`allowUserInteraction: false`) never asks and never waits. It fails when the
+    /// item needs the login password, and while another call may be waiting on the user.
     static func read(
         key: String,
         service: String = defaultServiceName,
         allowUserInteraction: Bool = true
     ) -> KeychainReadResult {
-        let context = LAContext()
-        context.interactionNotAllowed = !allowUserInteraction
-
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseAuthenticationContext as String: context,
         ]
 
         var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = access(allowUserInteraction: allowUserInteraction) {
+            SecItemCopyMatching(query as CFDictionary, &result)
+        }
 
         switch status {
         case errSecSuccess:
@@ -74,15 +77,18 @@ enum KeychainHelper {
         let data = Data(value.utf8)
         let changes = [kSecValueData as String: data] as CFDictionary
 
-        var status = SecItemUpdate(itemQuery as CFDictionary, changes)
-        if status == errSecItemNotFound {
-            var addQuery = itemQuery
-            addQuery[kSecValueData as String] = data
-            status = SecItemAdd(addQuery as CFDictionary, nil)
-            if status == errSecDuplicateItem {
-                // Another writer added the item in between, so update that one.
-                status = SecItemUpdate(itemQuery as CFDictionary, changes)
+        let status = access(allowUserInteraction: true) {
+            var status = SecItemUpdate(itemQuery as CFDictionary, changes)
+            if status == errSecItemNotFound {
+                var addQuery = itemQuery
+                addQuery[kSecValueData as String] = data
+                status = SecItemAdd(addQuery as CFDictionary, nil)
+                if status == errSecDuplicateItem {
+                    // Another writer added the item in between, so update that one.
+                    status = SecItemUpdate(itemQuery as CFDictionary, changes)
+                }
             }
+            return status
         }
 
         guard status == errSecSuccess else {
@@ -93,15 +99,44 @@ enum KeychainHelper {
     // MARK: - Delete
 
     @discardableResult
-    static func delete(key: String, service: String = defaultServiceName) -> Bool {
+    static func delete(
+        key: String,
+        service: String = defaultServiceName,
+        allowUserInteraction: Bool = true
+    ) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
 
-        let status = SecItemDelete(query as CFDictionary)
+        let status = access(allowUserInteraction: allowUserInteraction) {
+            SecItemDelete(query as CFDictionary)
+        }
         return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    // MARK: - Prompts
+
+    /// Runs one Keychain call. A call that may ask waits for the lock. A quiet call fails with
+    /// errSecInteractionNotAllowed when the lock is taken, because its holder may be waiting on
+    /// the user, and otherwise runs with the prompt turned off.
+    private static func access(allowUserInteraction: Bool, _ call: () -> OSStatus) -> OSStatus {
+        guard allowUserInteraction else {
+            guard accessLock.try() else { return errSecInteractionNotAllowed }
+            defer { accessLock.unlock() }
+            // The login keychain ignores the query's own switches for this
+            // (LAContext.interactionNotAllowed, kSecUseAuthenticationUIFail): for an item that a
+            // build with another signature saved, it asks for the login password, and the call
+            // waits for the answer. It respects this deprecated process-wide setting and fails the
+            // call at once with errSecAuthFailed. Nothing else in the app changes the setting.
+            SecKeychainSetUserInteractionAllowed(false)
+            defer { SecKeychainSetUserInteractionAllowed(true) }
+            return call()
+        }
+        accessLock.lock()
+        defer { accessLock.unlock() }
+        return call()
     }
 }
 
@@ -112,7 +147,7 @@ enum KeychainHelper {
 protocol SecretStore: Sendable {
     func read(key: String, allowUserInteraction: Bool) -> KeychainReadResult
     func write(key: String, value: String) throws
-    @discardableResult func delete(key: String) -> Bool
+    @discardableResult func delete(key: String, allowUserInteraction: Bool) -> Bool
 }
 
 /// One Keychain service.
@@ -131,8 +166,8 @@ struct KeychainStore: SecretStore {
     }
 
     @discardableResult
-    func delete(key: String) -> Bool {
-        KeychainHelper.delete(key: key, service: service)
+    func delete(key: String, allowUserInteraction: Bool) -> Bool {
+        KeychainHelper.delete(key: key, service: service, allowUserInteraction: allowUserInteraction)
     }
 }
 
@@ -151,7 +186,7 @@ extension SecretStore {
         switch read(key: key, allowUserInteraction: allowUserInteraction) {
         case .found(let value):
             if value.isEmpty {
-                delete(key: key)
+                delete(key: key, allowUserInteraction: allowUserInteraction)
             }
             return .value(value)
         case .notFound:
@@ -164,7 +199,7 @@ extension SecretStore {
     /// Saves the value, or deletes the item when the value is empty. Saving never deletes.
     func save(key: String, value: String) throws {
         if value.isEmpty {
-            delete(key: key)
+            delete(key: key, allowUserInteraction: true)
         } else {
             try write(key: key, value: value)
         }
@@ -173,6 +208,6 @@ extension SecretStore {
     /// Deletes the item only when it reads back empty.
     func deleteIfEmpty(key: String, allowUserInteraction: Bool) {
         guard read(key: key, allowUserInteraction: allowUserInteraction) == .found("") else { return }
-        delete(key: key)
+        delete(key: key, allowUserInteraction: allowUserInteraction)
     }
 }
