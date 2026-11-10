@@ -75,7 +75,7 @@ enum LocalRuntimeAuth {
         guard permitsStoredCredentials else { return }
         guard environmentOverrideToken == nil else { return }
         launchToken.withLock { $0 = nil }
-        store.delete(key: keychainKey)
+        store.delete(key: keychainKey, allowUserInteraction: true)
     }
 
     private static func readToken(in store: some SecretStore, allowUserInteraction: Bool) -> KeychainReadResult {

@@ -47,7 +47,7 @@ final class InMemorySecretStore: SecretStore {
     }
 
     @discardableResult
-    func delete(key: String) -> Bool {
+    func delete(key: String, allowUserInteraction: Bool) -> Bool {
         state.withLock { state in
             state.deleteCount += 1
             state.items[key] = nil
