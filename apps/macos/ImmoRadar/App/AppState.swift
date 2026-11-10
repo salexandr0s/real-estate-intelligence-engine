@@ -66,11 +66,6 @@ final class AppState {
         set { runtimeState.bundledLaunchExperienceState = newValue }
     }
 
-    var unreadAlertCount: Int {
-        get { alertsState.unreadAlertCount }
-        set { alertsState.unreadAlertCount = newValue }
-    }
-
     var settingsErrorMessage: String? {
         let connectionError = connectionState.settingsErrorMessage
         let runtimeError = runtimeState.settingsErrorMessage

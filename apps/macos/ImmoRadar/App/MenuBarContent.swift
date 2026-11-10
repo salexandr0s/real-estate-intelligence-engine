@@ -6,11 +6,16 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        if appState.unreadAlertCount > 0 {
-            Text("^[\(appState.unreadAlertCount) unread alert](inflect: true)")
+        switch appState.alertsState.loadedUnreadAlertCount {
+        case .some(let count) where count > 0:
+            Text("^[\(count) unread alert](inflect: true)")
                 .font(.headline)
-        } else {
+        case .some:
             Text("No unread alerts")
+                .foregroundStyle(.secondary)
+        case .none:
+            // Until the server reports the count, "No unread alerts" could be wrong.
+            Text("Unread alerts not loaded")
                 .foregroundStyle(.secondary)
         }
 
