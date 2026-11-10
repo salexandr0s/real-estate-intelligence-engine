@@ -38,6 +38,9 @@ final class ListingDetailViewModel {
     /// before it, is dropped instead of filling in the listing shown now.
     @ObservationIgnored private var loadGeneration = 0
 
+    /// Goes up with every save or unsave, so a saved-status check can tell that one overlapped it.
+    @ObservationIgnored private var saveToggleCount = 0
+
     init(listing: Listing) {
         self.listing = listing
     }
@@ -109,6 +112,7 @@ final class ListingDetailViewModel {
         guard !isSaving, let wasSaved = isSaved else { return }
 
         let listingID = listing.id
+        saveToggleCount += 1
         isSaving = true
         isSaved = !wasSaved
         actionErrorMessage = nil
@@ -460,9 +464,13 @@ final class ListingDetailViewModel {
     }
 
     private func checkIfSaved(using apiClient: APIClient, token: LoadToken) async {
+        // A save or unsave that overlaps the check decides the state, since the server may have
+        // answered the check from before it.
+        let togglesBefore = saveToggleCount
+        let toggleWasInFlight = isSaving
         do {
             let savedIds = try await apiClient.checkSavedListings(ids: [token.listingID])
-            guard isCurrent(token) else { return }
+            guard isCurrent(token), !toggleWasInFlight, saveToggleCount == togglesBefore else { return }
             isSaved = savedIds.contains(token.listingID)
         } catch {
             // The status stays unknown, so Save stays off.
