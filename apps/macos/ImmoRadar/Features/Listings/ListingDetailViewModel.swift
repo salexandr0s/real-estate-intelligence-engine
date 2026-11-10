@@ -25,7 +25,8 @@ final class ListingDetailViewModel {
     /// Whether the listing is on the watchlist, or nil until the server says. Save stays off
     /// while it's nil, because the button can't tell whether to save or remove.
     var isSaved: Bool?
-    var isSaving = false
+    /// Whether the listing shown has a save or unsave out.
+    var isSaving: Bool { listingIDsSaving.contains(listing.id) }
     var actionErrorMessage: String?
 
     /// The listing a load belongs to, and which load of it.
@@ -37,6 +38,10 @@ final class ListingDetailViewModel {
     /// Goes up with every `load`. A response to an earlier load, of this listing or of the one shown
     /// before it, is dropped instead of filling in the listing shown now.
     @ObservationIgnored private var loadGeneration = 0
+
+    /// Listings with a save or unsave out. A request outlives a switch to another listing, so a
+    /// listing shown again keeps Save off until its own request ends.
+    private var listingIDsSaving: Set<Int> = []
 
     /// Goes up with every save or unsave, so a saved-status check can tell that one overlapped it.
     @ObservationIgnored private var saveToggleCount = 0
@@ -113,10 +118,12 @@ final class ListingDetailViewModel {
 
         let listingID = listing.id
         saveToggleCount += 1
-        isSaving = true
+        listingIDsSaving.insert(listingID)
+        defer { listingIDsSaving.remove(listingID) }
         isSaved = !wasSaved
         actionErrorMessage = nil
 
+        var isSavedNow = !wasSaved
         do {
             if wasSaved {
                 try await apiClient.unsaveListing(listingId: listingID)
@@ -125,16 +132,18 @@ final class ListingDetailViewModel {
             }
         } catch {
             Log.ui.error("Save/unsave failed: \(error, privacy: .public)")
+            isSavedNow = wasSaved
             if isShowing(listingID) {
-                isSaved = wasSaved
                 actionErrorMessage = wasSaved
                     ? "Could not remove the listing from the watchlist."
                     : "Could not save the listing to the watchlist."
             }
         }
 
+        // A status check that overlapped the request was dropped, and showing this listing again
+        // cleared the state, so the request's outcome sets it.
         if isShowing(listingID) {
-            isSaving = false
+            isSaved = isSavedNow
         }
     }
 
@@ -341,7 +350,6 @@ final class ListingDetailViewModel {
         outreachFailure = nil
         outreachRequestInFlight = nil
         isSaved = nil
-        isSaving = false
         actionErrorMessage = nil
     }
 
