@@ -422,7 +422,7 @@ private struct OutreachDetailPane: View {
                             onSendFollowup: { Task { await viewModel.sendFollowup(using: appState.apiClient) } }
                         )
 
-                        if let failure = viewModel.actionFailure {
+                        if let failure = viewModel.shownActionFailure {
                             InlineWarningBanner(
                                 title: failure.request.failureTitle,
                                 message: failure.message,

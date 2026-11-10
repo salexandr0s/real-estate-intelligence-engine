@@ -179,7 +179,7 @@ final class ListingDetailViewModel {
         } catch {
             Log.ui.error("Failed to start outreach for listing \(listingID): \(error, privacy: .public)")
             guard isShowing(listingID) else { return nil }
-            let failure = OutreachRequestFailure(request: .start, error: error)
+            let failure = OutreachRequestFailure(request: .start, threadID: nil, error: error)
             outreachFailure = failure
             actionErrorMessage = "Could not start outreach for this listing."
             // After a 503 the server keeps the new thread as failed, and a 409 means a thread is
@@ -275,7 +275,7 @@ final class ListingDetailViewModel {
         } catch {
             Log.ui.error("Outreach request failed for listing \(listingID): \(error, privacy: .public)")
             guard isShowing(listingID) else { return }
-            let failure = OutreachRequestFailure(request: request, error: error)
+            let failure = OutreachRequestFailure(request: request, threadID: thread.id, error: error)
             outreachFailure = failure
             guard failure.isConflict else { return }
         }

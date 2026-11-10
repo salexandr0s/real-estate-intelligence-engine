@@ -41,6 +41,8 @@ final class OutreachViewModel {
     /// The mailbox sync the user asked for failed.
     var syncErrorMessage: String?
     /// The last thread request the user sent failed. The next request or another thread clears it.
+    /// A request can fail after the user picked another thread, so the view reads
+    /// `shownActionFailure`.
     var actionFailure: OutreachRequestFailure?
     var hasLoaded = false
     /// The cursor of the next page of threads, nil on the last page.
@@ -63,6 +65,14 @@ final class OutreachViewModel {
     @ObservationIgnored private var threadIDInFlight: Int?
 
     var selectedMailbox: MailboxAccount? { mailboxes.first }
+
+    /// The failed request, while its thread is the one selected and on screen. Try Again sends it
+    /// for the thread on screen, so it mustn't show under another thread.
+    var shownActionFailure: OutreachRequestFailure? {
+        guard let actionFailure, let threadID = actionFailure.threadID,
+              threadID == selectedThreadID, threadID == selectedThread?.id else { return nil }
+        return actionFailure
+    }
 
     func refresh(using client: any OutreachAPIClient) async {
         // Reloading the scope shown keeps the user's place in it.
@@ -185,7 +195,7 @@ final class OutreachViewModel {
 
     /// Sends the failed request again after the server couldn't queue its email.
     func tryFailedRequestAgain(using client: any OutreachAPIClient) async {
-        guard let failure = actionFailure, failure.canTryAgain else { return }
+        guard let failure = shownActionFailure, failure.canTryAgain else { return }
         switch failure.request {
         case .action(let action):
             await performThreadAction(action, using: client)
@@ -216,7 +226,7 @@ final class OutreachViewModel {
             try await operation(thread.id)
             await refresh(using: client)
         } catch {
-            let failure = OutreachRequestFailure(request: request, error: error)
+            let failure = OutreachRequestFailure(request: request, threadID: thread.id, error: error)
             actionFailure = failure
             if failure.isConflict {
                 await refresh(using: client)

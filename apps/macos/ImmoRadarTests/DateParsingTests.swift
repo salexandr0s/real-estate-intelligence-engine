@@ -430,6 +430,37 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.actionFailure)
         XCTAssertEqual(snapshot.followupCalls, [21])
     }
+
+    /// A request could fail after the user picked another thread. The failure then showed under
+    /// that thread, and Try Again sent the request for it.
+    func testFailureThatArrivesAfterPickingAnotherThreadStaysWithItsThread() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 22)],
+            thread: makeThread(id: 21),
+            listing: makeListing(),
+            followupError: makeAPIError(
+                status: 503,
+                code: "outreach_enqueue_failed",
+                message: "Could not queue the follow-up. Try again in a moment"
+            )
+        )
+
+        await viewModel.refresh(using: client)
+        // The user picks thread 22 while the follow-up for thread 21 is out.
+        await client.setFollowupHook { client in
+            await viewModel.selectThread(id: 22, using: client)
+        }
+        await viewModel.sendFollowup(using: client)
+        await viewModel.tryFailedRequestAgain(using: client)
+        let snapshot = await client.snapshot()
+
+        XCTAssertEqual(viewModel.selectedThread?.id, 22)
+        XCTAssertEqual(viewModel.actionFailure?.threadID, 21)
+        XCTAssertNil(viewModel.shownActionFailure)
+        XCTAssertEqual(snapshot.followupCalls, [21])
+    }
 }
 
 private func makeAPIError(status: Int, code: String, message: String) -> APIError {
@@ -469,6 +500,9 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     private var updateCallsStorage: [(id: Int, action: OutreachAction)] = []
     private var followupCallsStorage: [Int] = []
     private var threadFetchCountStorage = 0
+    /// Runs once inside the next follow-up request, before it answers, so a test can act while
+    /// the request is out.
+    private var followupHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
 
     init(
         mailboxes: [MailboxAccount] = [],
@@ -549,7 +583,15 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
         _ = subject
         _ = bodyText
         followupCallsStorage.append(id)
+        if let hook = followupHook {
+            followupHook = nil
+            await hook(self)
+        }
         if let followupError { throw followupError }
+    }
+
+    func setFollowupHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        followupHook = hook
     }
 
     func snapshot() -> Snapshot {
