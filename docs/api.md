@@ -591,4 +591,4 @@ The macOS app should map these to user-friendly messages.
 - use parameterized SQL or typed query builder
 - expose explanation endpoints early so the app can remain transparent
 
-This API should be a stable contract between the always-on backend and the native macOS experience.
+This API should be a stable contract between the local engine and the native macOS app.

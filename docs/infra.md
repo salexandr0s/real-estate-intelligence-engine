@@ -1,6 +1,8 @@
 
 # infra.md
 
+> Status: the server deployment described here isn't maintained. The supported way to run ImmoRadar is the macOS app, which runs the engine on the Mac while the app is open. See the README.
+
 ## 1. Deployment philosophy
 
 Start with the simplest production topology that still supports:

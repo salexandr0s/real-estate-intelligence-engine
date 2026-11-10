@@ -258,7 +258,7 @@ Does not own:
 12. **Using a single “misc JSON blob” instead of typed columns for important filters**
 13. **Adding source 2 before source 1 is stable**
 14. **Introducing cross-source dedupe before source-local correctness is proven**
-15. **Letting the desktop app be the only always-on execution environment**
+15. **Leaving engine processes running after the desktop app quits**
 
 ---
 

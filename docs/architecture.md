@@ -5,24 +5,24 @@
 
 This system is not designed as a foreground desktop scraper.
 
-The production design is **backend-first, macOS-native client on top**:
+The design is **backend-first, macOS-native client on top**:
 
-- **always-on ingestion** runs as background services
+- **ingestion** runs as background services that the app starts while it is open and stops when it quits or dies
 - **Swift macOS app** is the native operator and investor workstation
 - **TypeScript services** perform scraping, normalization, scoring, alerts, and API delivery
 - **PostgreSQL** is the system of record
-- **object storage** preserves heavy raw artifacts (HTML, screenshots, HAR, attachments)
+- **a local artifacts folder** (`ARTIFACTS_DIR`) keeps failure captures (HTML and screenshots) for 7 days
 - **Redis + BullMQ** coordinate durable background jobs with retries and backoff
 
-This is the most reliable way to satisfy all constraints at once:
+This satisfies these constraints at once:
 
-1. always-on crawling
-2. robust anti-bot handling
+1. scheduled crawling while the app is open, each source at most every 3 hours
+2. polite crawling: one page at a time per scraper, per-source rate limits, and a source that keeps failing or blocks us is disabled with the reason shown
 3. strong typing in the backend
 4. native macOS UX
 5. clear separation of concerns
 
-For single-user/self-hosted deployments, the backend services can run on a **Mac mini** as launchd daemons or in Docker. For more robust operation, run them on a VPS or dedicated host and keep the macOS app as the control plane.
+Running the services on a separate server, with Docker or launchd daemons, isn't maintained. `docs/infra.md` describes that setup.
 
 ---
 
@@ -681,8 +681,8 @@ The design intentionally leaves room for:
 
 Build the system as a **three-layer product**:
 
-1. **scraping and processing backend** (always-on, TypeScript)
+1. **scraping and processing backend** (TypeScript, started and stopped by the app)
 2. **typed REST API** (TypeScript)
 3. **native Swift macOS client** (operator experience)
 
-Do not make the desktop app responsible for being the only always-on execution environment. Let the app feel native, but keep operational continuity in headless services.
+The desktop app owns the engine's lifetime: monitoring runs only while the app is open, and quitting, force quitting or a crash stops every engine process. A watchdog holds a pipe from the app and stops the engine in order when the pipe closes. The engine's logic stays in the headless services, never in the app.
