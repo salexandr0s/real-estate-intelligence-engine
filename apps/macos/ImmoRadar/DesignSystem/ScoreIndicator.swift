@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Circular score indicator with color coding based on score range.
+/// Circular score indicator with color coding based on score range. A listing not scored yet
+/// shows a dash in a neutral ring, not a score of zero.
 struct ScoreIndicator: View {
-    let score: Double
+    let score: Double?
     let size: Size
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -36,21 +37,22 @@ struct ScoreIndicator: View {
         }
     }
 
-    init(score: Double, size: Size = .regular) {
+    init(score: Double?, size: Size = .regular) {
         self.score = score
         self.size = size
     }
 
-    private var progress: Double {
-        min(max(score / 100.0, 0), 1.0)
-    }
-
     private var color: Color {
-        Theme.scoreColor(for: score, contrast: contrast)
+        guard let score else { return .secondary }
+        return Theme.scoreColor(for: score, contrast: contrast)
     }
 
     private var trackOpacity: Double {
         contrast == .increased ? 0.4 : 0.2
+    }
+
+    private var label: String {
+        score.map { Theme.scoreLabel(for: $0) } ?? "Not scored"
     }
 
     var body: some View {
@@ -58,24 +60,30 @@ struct ScoreIndicator: View {
             ZStack {
                 Circle()
                     .stroke(color.opacity(trackOpacity), lineWidth: size.lineWidth)
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(color, style: StrokeStyle(lineWidth: size.lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text(score, format: .number.precision(.fractionLength(0)))
-                    .font(size.font)
-                    .foregroundStyle(color)
+                if let score {
+                    Circle()
+                        .trim(from: 0, to: min(max(score / 100.0, 0), 1.0))
+                        .stroke(color, style: StrokeStyle(lineWidth: size.lineWidth, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text(score, format: .number.precision(.fractionLength(0)))
+                        .font(size.font)
+                        .foregroundStyle(color)
+                } else {
+                    Text("—")
+                        .font(size.font)
+                        .foregroundStyle(color)
+                }
             }
             .frame(width: size.diameter, height: size.diameter)
 
             if size == .large {
-                Text(Theme.scoreLabel(for: score))
+                Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Score \(Int(score)), \(Theme.scoreLabel(for: score))")
+        .accessibilityLabel(score.map { "Score \(Int($0)), \(label)" } ?? label)
     }
 }
 
@@ -85,6 +93,7 @@ struct ScoreIndicator: View {
         ScoreIndicator(score: 75, size: .regular)
         ScoreIndicator(score: 45, size: .large)
         ScoreIndicator(score: 18, size: .large)
+        ScoreIndicator(score: nil, size: .large)
     }
     .padding()
 }

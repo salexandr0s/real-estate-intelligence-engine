@@ -17,7 +17,7 @@ struct ListingsTable: View {
             sortOrder: $viewModel.sortOrder
         ) {
             TableColumn("Score") { (listing: Listing) in
-                ScoreIndicator(score: listing.currentScore ?? 0, size: .compact)
+                ScoreIndicator(score: listing.currentScore, size: .compact)
             }
             .width(min: 50, ideal: 56, max: 64)
 
