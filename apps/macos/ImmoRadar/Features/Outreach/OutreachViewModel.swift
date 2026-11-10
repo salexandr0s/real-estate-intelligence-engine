@@ -108,13 +108,16 @@ final class OutreachViewModel {
     }
 
     func openThread(id: Int, using client: any OutreachAPIClient) async {
-        let showsAll = listScope == .all
+        // A list of another scope that's still loading would replace the All list shown, so
+        // the All list counts as shown only while no load is out.
+        let showsAll = listScope == .all && selectedScope == .all && !isLoadingList
         selectedScope = .all
         if selectedThread?.id != id {
             actionFailure = nil
         }
 
-        // Load the All list unless it's already shown with the thread in it.
+        // Load the All list unless it's already shown with the thread in it. The load replaces
+        // any list still loading.
         if !showsAll || mailboxes.isEmpty || !threads.contains(where: { $0.id == id }) {
             await loadList(using: client)
         }

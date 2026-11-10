@@ -461,6 +461,32 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.shownActionFailure)
         XCTAssertEqual(snapshot.followupCalls, [21])
     }
+
+    /// A link to a thread could arrive while another scope's list loaded. That list then
+    /// replaced the All list the link had opened, so the picker said All over the Open threads.
+    func testLinkThatArrivesDuringAScopeChangeShowsTheAllList() async {
+        let viewModel = OutreachViewModel()
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: [makeThreadSummary(id: 21), makeThreadSummary(id: 30, workflowState: "closed")],
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        viewModel.selectedScope = .all
+        await viewModel.refresh(using: client)
+        // The user picks Open, and a link to closed thread 30 arrives while that list loads.
+        await client.setThreadsHook { client in
+            await viewModel.openThread(id: 30, using: client)
+        }
+        viewModel.selectedScope = .open
+        await viewModel.refresh(using: client)
+
+        XCTAssertEqual(viewModel.selectedScope, .all)
+        XCTAssertEqual(viewModel.threads.map(\.id), [21, 30])
+        XCTAssertEqual(viewModel.selectedThreadID, 30)
+        XCTAssertEqual(viewModel.selectedThread?.id, 30)
+    }
 }
 
 private func makeAPIError(status: Int, code: String, message: String) -> APIError {
@@ -503,6 +529,8 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     /// Runs once inside the next follow-up request, before it answers, so a test can act while
     /// the request is out.
     private var followupHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
+    /// Runs once inside the next thread list request, before it answers.
+    private var threadsHook: (@Sendable (MockOutreachAPIClient) async -> Void)?
 
     init(
         mailboxes: [MailboxAccount] = [],
@@ -535,22 +563,37 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
         return mailboxes
     }
 
-    /// Pages through `threads` like the server. A cursor is the offset of the next page.
+    /// Pages through the threads `scope` lists, like the server. A cursor is the offset of the
+    /// next page.
     func fetchOutreachThreads(
         scope: OutreachScope,
         cursor: String?,
         limit: Int?
     ) async throws -> (threads: [OutreachThreadSummary], nextCursor: String?) {
-        _ = scope
         if let threadsError { throw threadsError }
-        let start = min(cursor.flatMap { Int($0) } ?? 0, threads.count)
-        let end = min(start + (limit ?? threads.count), threads.count)
-        return (Array(threads[start..<end]), end < threads.count ? String(end) : nil)
+        if let hook = threadsHook {
+            threadsHook = nil
+            await hook(self)
+        }
+        let listed = threads.filter { thread in
+            switch scope {
+            case .open: thread.workflowState != "closed"
+            case .closed: thread.workflowState == "closed"
+            case .all: true
+            }
+        }
+        let start = min(cursor.flatMap { Int($0) } ?? 0, listed.count)
+        let end = min(start + (limit ?? listed.count), listed.count)
+        return (Array(listed[start..<end]), end < listed.count ? String(end) : nil)
     }
 
     /// Replaces the threads the server lists from now on.
     func setThreads(_ newThreads: [OutreachThreadSummary]) {
         threads = newThreads
+    }
+
+    func setThreadsHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
+        threadsHook = hook
     }
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {
