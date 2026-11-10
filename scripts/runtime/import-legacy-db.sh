@@ -9,12 +9,14 @@
 # before it finishes. The source folder is never written. A running source server is dumped as it
 # is. A stopped one is cloned, and the clone runs on a free loopback port while it is dumped.
 #
-# The dump is restored into a new, empty database, immoradar_import, and the migrations run on it.
-# Bootstrap fills only empty tables, so it leaves the imported rows alone. When every source table
-# has at least its source row count, one transaction renames the engine's immoradar to
-# immoradar_pre_import_<UTC time> and immoradar_import to immoradar. Nothing is merged, and the
-# previous database stays until someone drops it. A failure before that rename drops
-# immoradar_import and leaves the engine's database as it was.
+# The dump is restored into a new, empty database, immoradar_import. Once the restore holds every
+# source table with at least its source row count, the migrations run on it, as the app would run
+# them at its next start. Bootstrap fills only empty tables, so it leaves the imported rows alone.
+# Then one transaction renames the engine's immoradar to immoradar_pre_import_<UTC time> and
+# immoradar_import to immoradar. Just before that, the engine's queue folder moves to
+# redis-pre-import-<UTC time>, because its jobs name rows of the database it belongs to. Nothing is
+# merged, and the previous database and queue stay until someone removes them. A failure before the
+# renames drops immoradar_import and leaves the engine's database and queue as they were.
 #
 # Written for the bash 3.2 that ships with macOS. Tools come from IMMORADAR_POSTGRES_BIN_DIR,
 # IMMORADAR_NODE_BIN and IMMORADAR_MIGRATE_SCRIPT when they are set, as in run-migrations.sh.
@@ -39,6 +41,7 @@ PG_BIN="${IMMORADAR_POSTGRES_BIN_DIR:-/opt/homebrew/opt/postgresql@17/bin}"
 NODE_BIN="${IMMORADAR_NODE_BIN:-$(command -v node || true)}"
 MIGRATE_SCRIPT="${IMMORADAR_MIGRATE_SCRIPT:-$REPO_ROOT/packages/db/dist/migrate.js}"
 PYTHON=/usr/bin/python3
+LSOF=/usr/sbin/lsof
 TAB=$'\t'
 
 # Never used for a server this script starts: the default Postgres port, the engine's own ports,
@@ -57,6 +60,12 @@ RUNTIME_SERVER_PID=""
 RUNTIME_PORT=""
 RUNTIME_DATA_DIR=""
 IMPORT_DB_CREATED=""
+RUNTIME_HAS_IMMORADAR=""
+PRE_IMPORT_DB=""
+QUEUE_DIR=""
+KEPT_QUEUE_DIR=""
+QUEUE_MOVED=""
+SWAP_STARTED=""
 SWAPPED=""
 
 say() {
@@ -98,6 +107,26 @@ absolute_path() {
   esac
 }
 
+# Prints where an absolute path really is: the part that exists, with every symlink in it resolved,
+# then the part that doesn't exist yet. Fails on a symlink whose target is missing, because creating
+# the path would create that target, wherever it points.
+physical_path() {
+  local path="$1" rest="" base
+  while [[ ! -d "$path" ]]; do
+    [[ ! -L "$path" ]] || return 1
+    rest="/${path##*/}$rest"
+    path="${path%/*}"
+    path="${path:-/}"
+  done
+  base="$(cd "$path" && pwd -P)" || return 1
+  printf '%s%s\n' "${base%/}" "$rest"
+}
+
+# True when the first physical path is the second or lies inside it.
+is_within() {
+  [[ "$1/" == "$2/"* ]]
+}
+
 # True while the PID is alive. A child that exited but wasn't reaped yet shows as a zombie.
 is_running() {
   local state
@@ -106,13 +135,23 @@ is_running() {
   [[ -n "$state" && "$state" != Z* ]]
 }
 
-# Prints the PIDs of postgres processes that run in the given folder. The postmaster and every
-# child it starts change into their data folder, so this finds a server whatever its postmaster.pid
-# says. lsof shows only this user's processes, and only this user can run a server on its folders.
-postgres_pids_in() {
-  lsof -a -c postgres -d cwd -Fpn 2>/dev/null |
-    FOLDER="$1" awk '/^p/ { pid = substr($0, 2) } /^n/ && substr($0, 2) == ENVIRON["FOLDER"] { print pid }' ||
+# Prints the PIDs of processes named <command> whose working folder is <folder>, or, with a third
+# argument, any folder inside it. Postgres and every child it starts change into their data folder,
+# and Redis into its own, so this finds a server whatever its pid file says. lsof shows only this
+# user's processes, and only this user can run a server on its folders.
+pids_in() {
+  "$LSOF" -a -c "$1" -d cwd -Fpn 2>/dev/null |
+    FOLDER="$2" UNDER="${3:-}" awk '
+      /^p/ { pid = substr($0, 2) }
+      /^n/ {
+        path = substr($0, 2)
+        if (path == ENVIRON["FOLDER"] || (ENVIRON["UNDER"] != "" && index(path, ENVIRON["FOLDER"] "/") == 1)) print pid
+      }' ||
     true
+}
+
+postgres_pids_in() {
+  pids_in postgres "$1"
 }
 
 # Prints one line of postmaster.pid: 1 PID, 4 port, 5 socket folder.
@@ -278,25 +317,68 @@ ORDER BY c.relname
 SQL
 }
 
+# Reads "<table> <source> <restored> <migrated> <status>" rows. A dash stands for an unknown count,
+# because read would merge empty tab-separated fields.
 print_counts() {
-  local table source imported status
-  printf '  %-40s %12s %12s\n' "Table" "Source" "Imported"
-  while IFS="$TAB" read -r table source imported status; do
+  local table source restored migrated status
+  printf '  %-40s %12s %12s %12s\n' "Table" "Source" "Restored" "Migrated"
+  while IFS="$TAB" read -r table source restored migrated status; do
     if [[ "$status" == ok ]]; then status=""; fi
-    printf '  %-40s %12s %12s  %s\n' "$table" "$source" "$imported" "$status"
+    printf '  %-40s %12s %12s %12s  %s\n' "$table" "$source" "$restored" "$migrated" "$status"
   done <"$1"
 }
 
+# Prints 1 when the renames have committed and 0 when they haven't, as the engine's Postgres sees
+# it, or nothing when it can't be asked. Only the renames create the database this looks for.
+swap_state() {
+  local name=immoradar
+  if [[ -n "$RUNTIME_HAS_IMMORADAR" ]]; then name="$PRE_IMPORT_DB"; fi
+  if [[ -n "$RUNTIME_SERVER_PID" ]] && is_running "$RUNTIME_SERVER_PID"; then
+    runtime_psql -d postgres -tAc "SELECT count(*) FROM pg_database WHERE datname = '$name'" 2>/dev/null || true
+  fi
+}
+
+# Moves the engine's queue folder back after the renames failed or never ran.
+restore_queue() {
+  [[ -n "$QUEUE_MOVED" ]] || return 0
+  if [[ ! -e "$QUEUE_DIR" ]] && mv "$KEPT_QUEUE_DIR" "$QUEUE_DIR"; then
+    QUEUE_MOVED=""
+    say "Moved the engine's queue back to $QUEUE_DIR." >&2
+  else
+    say "Couldn't move the engine's queue back from $KEPT_QUEUE_DIR to $QUEUE_DIR." >&2
+  fi
+}
+
 cleanup() {
-  local status=$?
+  local status=$? state=0
   set +e
   trap '' INT TERM HUP
-  if [[ -n "$IMPORT_DB_CREATED" && -z "$SWAPPED" && -n "$RUNTIME_SERVER_PID" ]] && is_running "$RUNTIME_SERVER_PID"; then
-    if runtime_psql -d postgres -c 'DROP DATABASE IF EXISTS immoradar_import WITH (FORCE)' >/dev/null 2>&1; then
-      say "Dropped immoradar_import. The engine's immoradar database is as it was." >&2
-    else
-      say "Couldn't drop immoradar_import. The next run drops it. The engine's immoradar database is as it was." >&2
-    fi
+  if [[ -n "$IMPORT_DB_CREATED" && -z "$SWAPPED" ]]; then
+    # A signal can arrive after the renames commit and before SWAPPED is set, so once the renames
+    # have started, the server decides.
+    if [[ -n "$SWAP_STARTED" ]]; then state="$(swap_state)"; fi
+    case "$state" in
+      1)
+        SWAPPED=1
+        say "The renames had committed, so immoradar holds the imported data." >&2
+        ;;
+      0)
+        if [[ -n "$RUNTIME_SERVER_PID" ]] && is_running "$RUNTIME_SERVER_PID"; then
+          if runtime_psql -d postgres -c 'DROP DATABASE IF EXISTS immoradar_import WITH (FORCE)' >/dev/null 2>&1; then
+            say "Dropped immoradar_import. The engine's immoradar database is as it was." >&2
+          else
+            say "Couldn't drop immoradar_import. The next run drops it. The engine's immoradar database is as it was." >&2
+          fi
+        fi
+        restore_queue
+        ;;
+      *)
+        say "Couldn't ask the engine's Postgres whether the renames committed. Run this again before you open ImmoRadar." >&2
+        ;;
+    esac
+  fi
+  if [[ $status -ne 0 && -n "$QUEUE_MOVED" ]]; then
+    say "The engine's previous queue is in $KEPT_QUEUE_DIR." >&2
   fi
   stop_server "$RUNTIME_SERVER_PID" "the engine's Postgres" "$RUNTIME_DATA_DIR"
   stop_server "$SOURCE_SERVER_PID" "the clone's Postgres" "$CLONE_DIR"
@@ -340,31 +422,50 @@ for tool in postgres psql pg_dump pg_restore createdb pg_isready; do
   [[ -x "$PG_BIN/$tool" ]] || fail "$tool isn't in $PG_BIN. Install Postgres with: brew install postgresql@17"
 done
 [[ -x "$PYTHON" ]] || fail "$PYTHON is missing. Install the Xcode command line tools with: xcode-select --install"
+[[ -x "$LSOF" ]] || fail "$LSOF is missing. This script uses it to tell whether a server runs in a folder."
+# Every check for a running server reads working folders through lsof. If lsof couldn't read them,
+# every check would pass.
+[[ "$("$LSOF" -a -p "$$" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')" == "$(pwd -P)" ]] ||
+  fail "lsof can't read this shell's working folder, so it couldn't tell whether a server runs in a folder."
 [[ -n "$NODE_BIN" && -x "$NODE_BIN" ]] || fail "Node isn't installed. Install it, or set IMMORADAR_NODE_BIN."
 [[ -f "$MIGRATE_SCRIPT" ]] || fail "The migration script is missing: $MIGRATE_SCRIPT. Build it with: npm run build"
 [[ -x "$SCRIPT_DIR/start-postgres.sh" && -x "$SCRIPT_DIR/run-migrations.sh" ]] ||
   fail "start-postgres.sh and run-migrations.sh must sit next to this script in $SCRIPT_DIR."
 PG_MAJOR="$(server_major_version)"
 
-RUNTIME_HOME="${RUNTIME_HOME%/}"
+while [[ "$RUNTIME_HOME" == */ ]]; do RUNTIME_HOME="${RUNTIME_HOME%/}"; done
 [[ -n "$RUNTIME_HOME" ]] || fail "--runtime-home can't be /."
 RUNTIME_HOME="$(absolute_path "$RUNTIME_HOME")"
+# The app puts engine.lock next to the runtime home as its path is written, so the path has to end
+# in the folder's own name.
+case "$RUNTIME_HOME/" in
+  */./* | */../*) fail "Give --runtime-home without . or .. in it." ;;
+esac
 RUNTIME_PARENT="$(dirname "$RUNTIME_HOME")"
+RUNTIME_DATA_DIR="$RUNTIME_HOME/postgres/data"
 
 SOURCE_DATA_DIR="$(absolute_path "$SOURCE_DATA_DIR")"
 [[ -d "$SOURCE_DATA_DIR" ]] || fail "The source folder doesn't exist: $SOURCE_DATA_DIR"
 [[ -f "$SOURCE_DATA_DIR/PG_VERSION" ]] || fail "$SOURCE_DATA_DIR isn't a Postgres data folder."
 SOURCE_DATA_DIR="$(cd "$SOURCE_DATA_DIR" && pwd -P)"
 
+# Nothing this script writes may land in the source folder: not the lock, the backups or the work
+# folder next to the runtime home, and not the engine's cluster. Physical paths are compared, so a
+# symlink such as runtime/postgres/data pointing at the source can't hide an overlap.
 mkdir -p "$RUNTIME_PARENT"
 RUNTIME_PARENT_REAL="$(cd "$RUNTIME_PARENT" && pwd -P)"
-RUNTIME_HOME_REAL="$RUNTIME_PARENT_REAL/$(basename "$RUNTIME_HOME")"
-case "$RUNTIME_PARENT_REAL/" in
-  "$SOURCE_DATA_DIR/"*) fail "The runtime home can't be inside the source folder." ;;
-esac
-case "$SOURCE_DATA_DIR/" in
-  "$RUNTIME_HOME_REAL/"*) fail "The source folder can't be inside the runtime home." ;;
-esac
+RUNTIME_HOME_REAL="$(physical_path "$RUNTIME_HOME")" ||
+  fail "$RUNTIME_HOME is a symlink to a folder that doesn't exist."
+RUNTIME_DATA_REAL="$(physical_path "$RUNTIME_DATA_DIR")" ||
+  fail "A symlink in $RUNTIME_DATA_DIR points to a folder that doesn't exist."
+if is_within "$RUNTIME_PARENT_REAL" "$SOURCE_DATA_DIR"; then
+  fail "The runtime home can't be inside the source folder."
+fi
+for engine_path in "$RUNTIME_HOME_REAL" "$RUNTIME_DATA_REAL"; do
+  if is_within "$engine_path" "$SOURCE_DATA_DIR" || is_within "$SOURCE_DATA_DIR" "$engine_path"; then
+    fail "The source folder and $engine_path overlap, so the engine's Postgres would write to the source."
+  fi
+done
 
 # ── Lock ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -413,20 +514,24 @@ mkdir "$WORK_DIR"
 
 # ── Engine data folder ──────────────────────────────────────────────────────────────────────────
 
-RUNTIME_DATA_DIR="$RUNTIME_HOME/postgres/data"
 if [[ -f "$RUNTIME_DATA_DIR/PG_VERSION" ]]; then
   [[ "$(cat "$RUNTIME_DATA_DIR/PG_VERSION")" == "$PG_MAJOR" ]] ||
     fail "The engine's cluster is Postgres $(cat "$RUNTIME_DATA_DIR/PG_VERSION"), and $PG_BIN holds Postgres $PG_MAJOR."
-  running="$(postgres_pids_in "$(cd "$RUNTIME_DATA_DIR" && pwd -P)")"
+  running="$(postgres_pids_in "$RUNTIME_DATA_REAL")"
   if [[ -n "$running" ]]; then
     fail "The engine's Postgres is still running (PID ${running%%$'\n'*}). Quit ImmoRadar, wait for it to stop, then run this again."
   fi
 else
   say "The engine has no Postgres cluster yet. start-postgres.sh creates one in $RUNTIME_DATA_DIR."
 fi
+running="$(pids_in redis-server "$RUNTIME_HOME_REAL/redis" under)"
+if [[ -n "$running" ]]; then
+  fail "The engine's Redis is still running (PID ${running%%$'\n'*}). Quit ImmoRadar, wait for it to stop, then run this again."
+fi
 
 # ── 1. Source ───────────────────────────────────────────────────────────────────────────────────
 
+SOURCE_LIVE=""
 running="$(postgres_pids_in "$SOURCE_DATA_DIR")"
 if [[ -n "$running" ]]; then
   pm_pid="$(pid_file_line "$SOURCE_DATA_DIR/postmaster.pid" 1)"
@@ -448,8 +553,18 @@ if [[ -n "$running" ]]; then
     fail "Postgres (PID $pm_pid) runs in $SOURCE_DATA_DIR but doesn't accept connections on port $SOURCE_PORT. Wait until it does, or stop it, then run this again."
   say "The source server is running (PID $pm_pid, port $SOURCE_PORT). Dumping from it directly."
   expected_data_dir="$SOURCE_DATA_DIR"
+  SOURCE_LIVE=1
 else
   if [[ -f "$SOURCE_DATA_DIR/postmaster.pid" ]]; then
+    # lsof shows no postgres in the folder. If the PID that postmaster.pid names is a postgres all
+    # the same, a clone could copy files that server is writing.
+    pm_pid="$(pid_file_line "$SOURCE_DATA_DIR/postmaster.pid" 1)"
+    if is_number "$pm_pid" && is_running "$pm_pid"; then
+      pm_name="$(ps -o comm= -p "$pm_pid" 2>/dev/null || true)"
+      if [[ "${pm_name##*/}" == postgres ]]; then
+        fail "postmaster.pid in $SOURCE_DATA_DIR names a running postgres (PID $pm_pid) that lsof doesn't show in the folder. Stop that server, then run this again."
+      fi
+    fi
     say "No server runs in $SOURCE_DATA_DIR. Its postmaster.pid is left over from an earlier run."
   fi
   # A symlink means some of the data, such as a tablespace or pg_wal, lives outside the folder, and
@@ -470,6 +585,10 @@ else
   say "Cloning $SOURCE_DATA_DIR into $WORK_DIR/source-data."
   CLONE_DIR="$WORK_DIR/source-data"
   cp -cRp "$SOURCE_DATA_DIR" "$CLONE_DIR"
+  # A server that started during the copy may have changed files the copy had passed already.
+  running="$(postgres_pids_in "$SOURCE_DATA_DIR")"
+  [[ -z "$running" ]] ||
+    fail "Postgres started in $SOURCE_DATA_DIR while it was copied (PID ${running%%$'\n'*}). Run this again to dump from that server directly."
   rm -f "$CLONE_DIR/postmaster.pid"
 
   SOURCE_PORT="$(free_port)" || fail "Couldn't find a free port."
@@ -518,7 +637,8 @@ if [[ "$(source_psql -d template1 -tAc "SELECT 1 FROM pg_database WHERE datname 
   exit 0
 fi
 
-# Counted before the dump, so on a running server the dump holds at least these rows.
+# Counted before the dump. A running server can add rows after the count, which the check after the
+# restore allows, and delete rows, which it doesn't.
 SOURCE_COUNTS="$WORK_DIR/source-counts.tsv"
 count_rows source_psql immoradar "$SOURCE_COUNTS"
 SOURCE_LISTINGS="$(awk -F "$TAB" '$1 == "listings" { print $2 }' "$SOURCE_COUNTS")"
@@ -536,6 +656,10 @@ RUNTIME_LOG="$WORK_DIR/engine-postgres.log"
 RUNTIME_SERVER_PID=$!
 say "Starting the engine's Postgres on port $RUNTIME_PORT."
 wait_until_ready "$RUNTIME_SERVER_PID" "$RUNTIME_PORT" postgres "$RUNTIME_DATA_DIR" "The engine's Postgres" "$RUNTIME_LOG"
+reported="$(runtime_psql -d postgres -tAc 'SHOW data_directory')"
+reported="$(cd "$reported" 2>/dev/null && pwd -P || printf '%s' "$reported")"
+[[ "$reported" == "$RUNTIME_DATA_REAL" ]] ||
+  fail "The server on port $RUNTIME_PORT serves $reported, not $RUNTIME_DATA_REAL."
 
 # Checked before the dump so that a refusal comes early. The data counted is the same.
 RUNTIME_HAS_IMMORADAR=""
@@ -562,11 +686,12 @@ free_kb="$(df -Pk "$RUNTIME_PARENT" | awk 'NR == 2 { print $4 }')"
 
 say "Dumping immoradar as $SOURCE_ROLE into $DUMP_FILE."
 DUMP_LOG="$WORK_DIR/pg_dump.log"
+# The dump moves into backups only once it is complete.
 "$PG_BIN/pg_dump" -Fc -w -h "$SOURCE_HOST" -p "$SOURCE_PORT" -U "$SOURCE_ROLE" -d immoradar \
-  -f "$DUMP_FILE.partial" >>"$DUMP_LOG" 2>&1 ||
+  -f "$WORK_DIR/immoradar.dump.partial" >>"$DUMP_LOG" 2>&1 ||
   fail "pg_dump failed. See $DUMP_LOG"
-chmod 600 "$DUMP_FILE.partial"
-mv "$DUMP_FILE.partial" "$DUMP_FILE"
+chmod 600 "$WORK_DIR/immoradar.dump.partial"
+mv "$WORK_DIR/immoradar.dump.partial" "$DUMP_FILE"
 
 if [[ -n "$SOURCE_SERVER_PID" ]]; then
   stop_server "$SOURCE_SERVER_PID" "the clone's Postgres" "$CLONE_DIR" || fail "The clone's Postgres didn't stop."
@@ -590,6 +715,29 @@ RESTORE_LOG="$WORK_DIR/pg_restore.log"
   --no-owner --no-privileges --exit-on-error "$DUMP_FILE" >>"$RESTORE_LOG" 2>&1 ||
   fail "pg_restore failed. See $RESTORE_LOG"
 
+# ── 4. Verify ───────────────────────────────────────────────────────────────────────────────────
+
+# The restore has to hold every source table with at least its row count. The migrations then run
+# as the app would run them at its next start. Some change rows on purpose (027 removes duplicate
+# market baselines), so their counts are reported rather than checked.
+RESTORED_COUNTS="$WORK_DIR/restored-counts.tsv"
+VERIFY_FILE="$WORK_DIR/verify.tsv"
+count_rows runtime_psql immoradar_import "$RESTORED_COUNTS"
+if ! awk -F "$TAB" -v OFS="$TAB" '
+  FILENAME == ARGV[1] { restored[$1] = $2; next }
+  {
+    if (!($1 in restored)) { print $1, $2, "-", "-", "missing"; bad = 1 }
+    else if (restored[$1] + 0 < $2 + 0) { print $1, $2, restored[$1], "-", "fewer rows"; bad = 1 }
+    else { print $1, $2, restored[$1], "-", "ok" }
+  }
+  END { exit bad }' "$RESTORED_COUNTS" "$SOURCE_COUNTS" >"$VERIFY_FILE"; then
+  print_counts "$VERIFY_FILE"
+  if [[ -n "$SOURCE_LIVE" ]]; then
+    fail "The restore into immoradar_import is missing tables or rows. The source server was running, so rows deleted between the count and the dump also count as missing. Run this again, or stop the source server first."
+  fi
+  fail "The restore into immoradar_import is missing tables or rows."
+fi
+
 say "Running the migrations on immoradar_import."
 MIGRATIONS_LOG="$WORK_DIR/migrations.log"
 /usr/bin/env \
@@ -611,33 +759,48 @@ else
   say "No migrations were pending."
 fi
 
-# ── 4. Verify ───────────────────────────────────────────────────────────────────────────────────
-
-IMPORT_COUNTS="$WORK_DIR/import-counts.tsv"
-VERIFY_FILE="$WORK_DIR/verify.tsv"
-count_rows runtime_psql immoradar_import "$IMPORT_COUNTS"
+MIGRATED_COUNTS="$WORK_DIR/migrated-counts.tsv"
+count_rows runtime_psql immoradar_import "$MIGRATED_COUNTS"
 if ! awk -F "$TAB" -v OFS="$TAB" '
-  FILENAME == ARGV[1] { imported[$1] = $2; next }
+  FILENAME == ARGV[1] { migrated[$1] = $2; next }
   {
-    if (!($1 in imported)) { print $1, $2, "-", "missing"; bad = 1 }
-    else if (imported[$1] + 0 < $2 + 0) { print $1, $2, imported[$1], "fewer rows"; bad = 1 }
-    else { print $1, $2, imported[$1], "ok" }
+    seen[$1] = 1
+    if (!($1 in migrated)) { print $1, $2, $3, "-", "dropped by the migrations"; bad = 1 }
+    else if (migrated[$1] + 0 != $3 + 0) { print $1, $2, $3, migrated[$1], "changed by the migrations" }
+    else { print $1, $2, $3, migrated[$1], "ok" }
   }
-  END { exit bad }' "$IMPORT_COUNTS" "$SOURCE_COUNTS" >"$VERIFY_FILE"; then
-  print_counts "$VERIFY_FILE"
-  fail "immoradar_import is missing tables or rows."
+  END {
+    for (table in migrated) if (!(table in seen)) print table, "-", "-", migrated[table], "added by the migrations"
+    exit bad
+  }' "$MIGRATED_COUNTS" "$VERIFY_FILE" >"$VERIFY_FILE.migrated"; then
+  print_counts "$VERIFY_FILE.migrated"
+  fail "The migrations dropped a table from immoradar_import."
 fi
+mv "$VERIFY_FILE.migrated" "$VERIFY_FILE"
 
 ilike="$(runtime_psql -d immoradar_import -tAc "SELECT 'KÜCHE' ILIKE '%küche%'")"
 [[ "$ilike" == t ]] || fail "ILIKE doesn't fold umlauts in immoradar_import, so keyword search would miss German words."
 
 # ── 5. Swap ─────────────────────────────────────────────────────────────────────────────────────
 
+# Jobs in the engine's queue name rows of its database, such as an alert or an outreach thread, and
+# the imported database uses the same IDs for other rows. So the queue folder moves aside first, and
+# Redis starts empty at the next launch. The workers add their schedules again when they start. If
+# the renames fail, the exit trap moves the folder back.
+QUEUE_DIR="$RUNTIME_HOME/redis"
+KEPT_QUEUE_DIR="$RUNTIME_HOME/redis-pre-import-$STAMP"
+if [[ -e "$QUEUE_DIR" || -L "$QUEUE_DIR" ]]; then
+  [[ ! -e "$KEPT_QUEUE_DIR" && ! -L "$KEPT_QUEUE_DIR" ]] || fail "$KEPT_QUEUE_DIR already exists."
+  mv "$QUEUE_DIR" "$KEPT_QUEUE_DIR" || fail "Couldn't move $QUEUE_DIR aside."
+  QUEUE_MOVED=1
+fi
+
 if [[ -n "$RUNTIME_HAS_IMMORADAR" ]]; then
   swap_sql="ALTER DATABASE immoradar RENAME TO $PRE_IMPORT_DB; ALTER DATABASE immoradar_import RENAME TO immoradar;"
 else
   swap_sql="ALTER DATABASE immoradar_import RENAME TO immoradar;"
 fi
+SWAP_STARTED=1
 runtime_psql -1 -d postgres -c "$swap_sql" >/dev/null || fail "Couldn't rename the databases."
 SWAPPED=1
 
@@ -648,11 +811,14 @@ fi
 say ""
 say "Import finished."
 print_counts "$VERIFY_FILE"
-say "  Tables:  $(wc -l <"$VERIFY_FILE" | tr -d ' '), each with at least its source row count"
+say "  Tables:  $(awk -F "$TAB" '$2 != "-"' "$VERIFY_FILE" | wc -l | tr -d ' ') from the source, each restored with at least its row count"
 say "  Backup:  $DUMP_FILE"
 if [[ -n "$RUNTIME_HAS_IMMORADAR" ]]; then
   say "  Kept:    the engine's previous database, as $PRE_IMPORT_DB"
 else
   say "  Kept:    nothing, because the engine had no immoradar database"
+fi
+if [[ -n "$QUEUE_MOVED" ]]; then
+  say "  Queue:   the engine's previous queue, in $KEPT_QUEUE_DIR"
 fi
 say "  Logs:    $WORK_DIR"
