@@ -195,7 +195,7 @@ final class CopilotChatRequestTests: XCTestCase {
         let history = CopilotChatRequest.history(from: messages)
 
         XCTAssertEqual(history.count, 3)
-        XCTAssertFalse(history[1].content.isEmpty)
+        XCTAssertEqual(history[1].content, "Shown as cards in the app:\nMarket statistics")
     }
 
     func testErrorEnvelopeMessageIsShown() {

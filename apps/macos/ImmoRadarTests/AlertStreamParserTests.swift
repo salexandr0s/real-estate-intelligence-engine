@@ -129,13 +129,24 @@ final class AlertStreamParserTests: XCTestCase {
         return try XCTUnwrap(AlertStreamService.alert(from: ServerSentEvent(type: "alert", data: payload)))
     }
 
+    /// The ids of the first `count` alerts, or of fewer when the rest don't arrive within two
+    /// seconds, so a lost alert fails the test instead of hanging it.
     @MainActor
     private static func ids(in stream: AsyncStream<Alert>, count: Int) async -> [Int] {
-        var ids: [Int] = []
-        for await alert in stream {
-            ids.append(alert.id)
-            if ids.count == count { break }
+        let reader = Task { @MainActor in
+            var ids: [Int] = []
+            for await alert in stream {
+                ids.append(alert.id)
+                if ids.count == count { break }
+            }
+            return ids
         }
-        return ids
+        // Cancelling the reader ends its wait for the next alert.
+        let deadline = Task {
+            try await Task.sleep(for: .seconds(2))
+            reader.cancel()
+        }
+        defer { deadline.cancel() }
+        return await reader.value
     }
 }
