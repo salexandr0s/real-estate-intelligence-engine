@@ -42,6 +42,9 @@ NODE_BIN="${IMMORADAR_NODE_BIN:-$(command -v node || true)}"
 MIGRATE_SCRIPT="${IMMORADAR_MIGRATE_SCRIPT:-$REPO_ROOT/packages/db/dist/migrate.js}"
 PYTHON=/usr/bin/python3
 LSOF=/usr/sbin/lsof
+# Under the C locale lsof prints every byte outside ASCII as \xNN, so a folder name with an umlaut
+# would never match. In a UTF-8 locale it prints names as they are.
+LSOF_LOCALE=en_US.UTF-8
 TAB=$'\t'
 
 # Never used for a server this script starts: the default Postgres port, the engine's own ports,
@@ -140,7 +143,7 @@ is_running() {
 # and Redis into its own, so this finds a server whatever its pid file says. lsof shows only this
 # user's processes, and only this user can run a server on its folders.
 pids_in() {
-  "$LSOF" -a -c "$1" -d cwd -Fpn 2>/dev/null |
+  LC_ALL="$LSOF_LOCALE" "$LSOF" -a -c "$1" -d cwd -Fpn 2>/dev/null |
     FOLDER="$2" UNDER="${3:-}" awk '
       /^p/ { pid = substr($0, 2) }
       /^n/ {
@@ -288,8 +291,12 @@ runtime_psql() {
   "$PG_BIN/psql" -X -w -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -p "$RUNTIME_PORT" -U postgres "$@"
 }
 
+# Exits when the engine's Postgres can't answer, so an error never reads as "no such database".
 runtime_database_exists() {
-  [[ "$(runtime_psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$1'")" == 1 ]]
+  local found
+  found="$(runtime_psql -d postgres -tAc "SELECT count(*) FROM pg_database WHERE datname = '$1'")" ||
+    fail "Couldn't ask the engine's Postgres whether $1 exists."
+  [[ "$found" == 1 ]]
 }
 
 # The first role that can connect. Homebrew names the superuser after the macOS account.
@@ -329,19 +336,29 @@ print_counts() {
 }
 
 # Prints 1 when the renames have committed and 0 when they haven't, as the engine's Postgres sees
-# it, or nothing when it can't be asked. Only the renames create the database this looks for.
+# it, or nothing when it can't be asked. immoradar_import exists from its creation until the renames
+# commit, so the answer doesn't depend on anything this script read earlier.
 swap_state() {
-  local name=immoradar
-  if [[ -n "$RUNTIME_HAS_IMMORADAR" ]]; then name="$PRE_IMPORT_DB"; fi
+  local left
   if [[ -n "$RUNTIME_SERVER_PID" ]] && is_running "$RUNTIME_SERVER_PID"; then
-    runtime_psql -d postgres -tAc "SELECT count(*) FROM pg_database WHERE datname = '$name'" 2>/dev/null || true
+    left="$(runtime_psql -d postgres -tAc "SELECT count(*) FROM pg_database WHERE datname = 'immoradar_import'" 2>/dev/null)" ||
+      return 0
+    case "$left" in
+      0) say 1 ;;
+      1) say 0 ;;
+    esac
   fi
 }
 
-# Moves the engine's queue folder back after the renames failed or never ran.
+# Moves the engine's queue folder back after the renames failed or never ran. QUEUE_MOVED is set
+# just before the move, so the folder may not have moved at all.
 restore_queue() {
   [[ -n "$QUEUE_MOVED" ]] || return 0
-  if [[ ! -e "$QUEUE_DIR" ]] && mv "$KEPT_QUEUE_DIR" "$QUEUE_DIR"; then
+  if [[ ! -e "$KEPT_QUEUE_DIR" && ! -L "$KEPT_QUEUE_DIR" ]]; then
+    QUEUE_MOVED=""
+    return 0
+  fi
+  if [[ ! -e "$QUEUE_DIR" && ! -L "$QUEUE_DIR" ]] && mv "$KEPT_QUEUE_DIR" "$QUEUE_DIR"; then
     QUEUE_MOVED=""
     say "Moved the engine's queue back to $QUEUE_DIR." >&2
   else
@@ -425,7 +442,7 @@ done
 [[ -x "$LSOF" ]] || fail "$LSOF is missing. This script uses it to tell whether a server runs in a folder."
 # Every check for a running server reads working folders through lsof. If lsof couldn't read them,
 # every check would pass.
-[[ "$("$LSOF" -a -p "$$" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')" == "$(pwd -P)" ]] ||
+[[ "$(LC_ALL="$LSOF_LOCALE" "$LSOF" -a -p "$$" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')" == "$(pwd -P)" ]] ||
   fail "lsof can't read this shell's working folder, so it couldn't tell whether a server runs in a folder."
 [[ -n "$NODE_BIN" && -x "$NODE_BIN" ]] || fail "Node isn't installed. Install it, or set IMMORADAR_NODE_BIN."
 [[ -f "$MIGRATE_SCRIPT" ]] || fail "The migration script is missing: $MIGRATE_SCRIPT. Build it with: npm run build"
@@ -458,6 +475,9 @@ RUNTIME_HOME_REAL="$(physical_path "$RUNTIME_HOME")" ||
   fail "$RUNTIME_HOME is a symlink to a folder that doesn't exist."
 RUNTIME_DATA_REAL="$(physical_path "$RUNTIME_DATA_DIR")" ||
   fail "A symlink in $RUNTIME_DATA_DIR points to a folder that doesn't exist."
+# Redis runs in a folder inside this one, so a symlinked redis folder is resolved too.
+RUNTIME_REDIS_REAL="$(physical_path "$RUNTIME_HOME_REAL/redis")" ||
+  fail "$RUNTIME_HOME/redis is a symlink to a folder that doesn't exist."
 if is_within "$RUNTIME_PARENT_REAL" "$SOURCE_DATA_DIR"; then
   fail "The runtime home can't be inside the source folder."
 fi
@@ -524,7 +544,7 @@ if [[ -f "$RUNTIME_DATA_DIR/PG_VERSION" ]]; then
 else
   say "The engine has no Postgres cluster yet. start-postgres.sh creates one in $RUNTIME_DATA_DIR."
 fi
-running="$(pids_in redis-server "$RUNTIME_HOME_REAL/redis" under)"
+running="$(pids_in redis-server "$RUNTIME_REDIS_REAL" under)"
 if [[ -n "$running" ]]; then
   fail "The engine's Redis is still running (PID ${running%%$'\n'*}). Quit ImmoRadar, wait for it to stop, then run this again."
 fi
@@ -632,7 +652,9 @@ source_psql -d template1 -tA -F "$TAB" -c "
     printf '  %-40s %s\n' "$name" "$size"
   done
 
-if [[ "$(source_psql -d template1 -tAc "SELECT 1 FROM pg_database WHERE datname = 'immoradar'")" != 1 ]]; then
+source_has_immoradar="$(source_psql -d template1 -tAc "SELECT count(*) FROM pg_database WHERE datname = 'immoradar'")" ||
+  fail "Couldn't list the databases in the source cluster."
+if [[ "$source_has_immoradar" != 1 ]]; then
   say "The source cluster has no immoradar database. Nothing to import."
   exit 0
 fi
@@ -666,8 +688,11 @@ RUNTIME_HAS_IMMORADAR=""
 RUNTIME_LISTINGS=0
 if runtime_database_exists immoradar; then
   RUNTIME_HAS_IMMORADAR=1
-  if [[ "$(runtime_psql -d immoradar -tAc "SELECT to_regclass('public.listings') IS NOT NULL")" == t ]]; then
-    RUNTIME_LISTINGS="$(runtime_psql -d immoradar -tAc 'SELECT count(*) FROM public.listings')"
+  has_listings="$(runtime_psql -d immoradar -tAc "SELECT to_regclass('public.listings') IS NOT NULL")" ||
+    fail "Couldn't read the engine's immoradar database."
+  if [[ "$has_listings" == t ]]; then
+    RUNTIME_LISTINGS="$(runtime_psql -d immoradar -tAc 'SELECT count(*) FROM public.listings')" ||
+      fail "Couldn't count the listings in the engine's immoradar database."
   fi
 fi
 if ((RUNTIME_LISTINGS > SOURCE_LISTINGS)); then
@@ -791,8 +816,9 @@ QUEUE_DIR="$RUNTIME_HOME/redis"
 KEPT_QUEUE_DIR="$RUNTIME_HOME/redis-pre-import-$STAMP"
 if [[ -e "$QUEUE_DIR" || -L "$QUEUE_DIR" ]]; then
   [[ ! -e "$KEPT_QUEUE_DIR" && ! -L "$KEPT_QUEUE_DIR" ]] || fail "$KEPT_QUEUE_DIR already exists."
-  mv "$QUEUE_DIR" "$KEPT_QUEUE_DIR" || fail "Couldn't move $QUEUE_DIR aside."
+  # Set first, so an interrupt that lands right after the move still reaches restore_queue.
   QUEUE_MOVED=1
+  mv "$QUEUE_DIR" "$KEPT_QUEUE_DIR" || fail "Couldn't move $QUEUE_DIR aside."
 fi
 
 if [[ -n "$RUNTIME_HAS_IMMORADAR" ]]; then
