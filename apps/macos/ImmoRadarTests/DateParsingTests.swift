@@ -487,6 +487,32 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedThreadID, 30)
         XCTAssertEqual(viewModel.selectedThread?.id, 30)
     }
+
+    /// A thread closed from a list with more pages stayed selected, as if it sat on a page not
+    /// loaded yet, though the Open scope no longer lists it.
+    func testThreadThatLeavesTheScopeLosesTheSelectionWhileMorePagesRemain() async {
+        let viewModel = OutreachViewModel()
+        let lastThreadID = 21 + OutreachViewModel.pageSize + 1
+        let client = MockOutreachAPIClient(
+            mailboxes: [makeMailbox()],
+            threads: (21...lastThreadID).map { makeThreadSummary(id: $0) },
+            thread: makeThread(id: 21),
+            listing: makeListing()
+        )
+
+        await viewModel.refresh(using: client)
+        // Thread 21 gets closed, so the Open scope leaves it out.
+        await client.setThreads(
+            [makeThreadSummary(id: 21, workflowState: "closed")]
+                + (22...lastThreadID).map { makeThreadSummary(id: $0) }
+        )
+        await client.setThread(makeThread(id: 21, workflowState: "closed"))
+        await viewModel.refresh(using: client)
+
+        XCTAssertNotNil(viewModel.nextCursor, "The Open list should still have more pages")
+        XCTAssertEqual(viewModel.selectedThreadID, 22)
+        XCTAssertEqual(viewModel.selectedThread?.id, 22)
+    }
 }
 
 private func makeAPIError(status: Int, code: String, message: String) -> APIError {
@@ -514,7 +540,7 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
     private let mailboxesError: Error?
     private var threads: [OutreachThreadSummary]
     private let threadsError: Error?
-    private let thread: OutreachThread
+    private var thread: OutreachThread
     private let threadError: Error?
     private let listing: Listing
     private let listingError: Error?
@@ -594,6 +620,11 @@ private actor MockOutreachAPIClient: OutreachAPIClient {
 
     func setThreadsHook(_ hook: @escaping @Sendable (MockOutreachAPIClient) async -> Void) {
         threadsHook = hook
+    }
+
+    /// Replaces the thread the server returns for its ID from now on.
+    func setThread(_ newThread: OutreachThread) {
+        thread = newThread
     }
 
     func fetchOutreachThread(id: Int) async throws -> OutreachThread {

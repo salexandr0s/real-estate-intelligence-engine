@@ -78,23 +78,18 @@ final class OutreachViewModel {
         // Reloading the scope shown keeps the user's place in it.
         let keepsPlace = listScope == selectedScope
         guard await loadList(using: client) else { return }
+        let loadID = listLoadID
 
         // A thread missing from the reloaded list may sit on a page not loaded yet, so it stays
         // selected while the server has more.
-        let nextSelection = resolvedSelectionID(keepsUnlistedSelection: keepsPlace && nextCursor != nil)
-        if nextSelection != selectedThreadID {
-            // A failed request belongs to the thread it was sent for, so Try Again mustn't send
-            // it for the next one.
-            actionFailure = nil
-        }
-        selectedThreadID = nextSelection
+        await select(resolvedSelectionID(keepsUnlistedSelection: keepsPlace && nextCursor != nil), using: client)
 
-        if let nextSelection {
-            await loadThread(id: nextSelection, using: client)
-        } else {
-            selectedThread = nil
-            selectedListing = nil
-            detailErrorMessage = nil
+        // Unless the thread left the scope, as a thread closed from Open does. Then the
+        // selection moves on, as it does on the last page.
+        if loadID == listLoadID, let scope = listScope, let thread = selectedThread,
+           thread.id == selectedThreadID, !scope.includes(thread),
+           !threads.contains(where: { $0.id == thread.id }) {
+            await select(threads.first?.id, using: client)
         }
     }
 
@@ -327,6 +322,23 @@ final class OutreachViewModel {
                 selectedListing = nil
             }
             detailErrorMessage = Self.message(for: error, fallback: "Couldn’t load this thread. Refresh and try again.")
+        }
+    }
+
+    /// Selects the thread with `id` and loads it, or clears the detail for nil. A failed request
+    /// belongs to the thread it was sent for, so it goes when the selection moves.
+    private func select(_ id: Int?, using client: any OutreachAPIClient) async {
+        if id != selectedThreadID {
+            actionFailure = nil
+        }
+        selectedThreadID = id
+
+        if let id {
+            await loadThread(id: id, using: client)
+        } else {
+            selectedThread = nil
+            selectedListing = nil
+            detailErrorMessage = nil
         }
     }
 
