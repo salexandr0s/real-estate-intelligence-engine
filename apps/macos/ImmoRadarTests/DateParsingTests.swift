@@ -346,8 +346,8 @@ final class OutreachViewModelTests: XCTestCase {
         await viewModel.performThreadAction(.pause, using: client)
         let fetchCount = await client.threadFetchCount()
 
-        XCTAssertEqual(viewModel.actionFailure?.message, "The thread changed in the meantime. Reload it and try again")
-        XCTAssertEqual(viewModel.actionFailure?.canTryAgain, false)
+        XCTAssertEqual(viewModel.shownActionFailure?.message, "The thread changed in the meantime. Reload it and try again")
+        XCTAssertEqual(viewModel.shownActionFailure?.canTryAgain, false)
         XCTAssertEqual(fetchCount, 2, "The 409 should reload the thread")
         XCTAssertNil(viewModel.actionInFlight)
     }
@@ -370,8 +370,8 @@ final class OutreachViewModelTests: XCTestCase {
         await viewModel.refresh(using: client)
         await viewModel.sendFollowup(using: client)
 
-        XCTAssertEqual(viewModel.actionFailure?.message, "Could not queue the follow-up. Try again in a moment")
-        XCTAssertEqual(viewModel.actionFailure?.canTryAgain, true)
+        XCTAssertEqual(viewModel.shownActionFailure?.message, "Could not queue the follow-up. Try again in a moment")
+        XCTAssertEqual(viewModel.shownActionFailure?.canTryAgain, true)
 
         await viewModel.tryFailedRequestAgain(using: client)
         let snapshot = await client.snapshot()
@@ -432,8 +432,8 @@ final class OutreachViewModelTests: XCTestCase {
     }
 
     /// A request could fail after the user picked another thread. The failure then showed under
-    /// that thread, and Try Again sent the request for it. Going back to its thread dropped the
-    /// failure, so the user never saw it.
+    /// that thread, and Try Again sent the request for it. Going back to its thread, or sending a
+    /// request on the other thread first, dropped the failure, so the user never saw it.
     func testFailureThatArrivesAfterPickingAnotherThreadStaysWithItsThread() async {
         let viewModel = OutreachViewModel()
         let client = MockOutreachAPIClient(
@@ -459,9 +459,12 @@ final class OutreachViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedThread?.id, 22)
         XCTAssertNil(viewModel.shownActionFailure)
 
+        // A request for thread 22 leaves thread 21's failure alone.
+        await viewModel.performThreadAction(.pause, using: client)
+
         // Back on thread 21, the failure shows, and Try Again sends the follow-up for it.
         await viewModel.selectThread(id: 21, using: client)
-        XCTAssertEqual(viewModel.shownActionFailure?.threadID, 21)
+        XCTAssertEqual(viewModel.shownActionFailure?.request, .followup)
         await viewModel.tryFailedRequestAgain(using: client)
         let snapshot = await client.snapshot()
 

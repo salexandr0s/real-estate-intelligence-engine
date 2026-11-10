@@ -63,8 +63,6 @@ enum OutreachThreadRequest: Equatable {
 /// A thread request that failed, with the server's reason.
 struct OutreachRequestFailure: Equatable {
     let request: OutreachThreadRequest
-    /// The thread the request was sent for, nil for a start.
-    let threadID: Int?
     /// The server's message, or a generic one when no answer came back.
     let message: String
     /// 409: the thread's state doesn't allow the request. It changed since it loaded or, for a
@@ -73,10 +71,9 @@ struct OutreachRequestFailure: Equatable {
     /// 503 `outreach_enqueue_failed`: the server couldn't queue the email.
     let enqueueFailed: Bool
 
-    init(request: OutreachThreadRequest, threadID: Int?, error: Error) {
+    init(request: OutreachThreadRequest, error: Error) {
         let apiError = error as? APIError
         self.request = request
-        self.threadID = threadID
         message = apiError.map { AppErrorPresentation.message(for: $0) } ?? "Try again in a moment."
         isConflict = apiError?.statusCode == 409
         enqueueFailed = apiError?.statusCode == 503 && apiError?.serverCode == "outreach_enqueue_failed"

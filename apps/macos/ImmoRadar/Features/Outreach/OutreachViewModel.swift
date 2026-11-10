@@ -40,9 +40,10 @@ final class OutreachViewModel {
     var detailErrorMessage: String?
     /// The mailbox sync the user asked for failed.
     var syncErrorMessage: String?
-    /// The last thread request the user sent failed. It stays until the next request or Dismiss,
-    /// also while another thread is selected, so the view reads `shownActionFailure`.
-    var actionFailure: OutreachRequestFailure?
+    /// Each thread's last failed request, kept until that thread's next request or Dismiss. A
+    /// request can fail after the user picked another thread, so the view reads
+    /// `shownActionFailure`.
+    private var actionFailures: [Int: OutreachRequestFailure] = [:]
     var hasLoaded = false
     /// The cursor of the next page of threads, nil on the last page.
     private(set) var nextCursor: String?
@@ -65,12 +66,11 @@ final class OutreachViewModel {
 
     var selectedMailbox: MailboxAccount? { mailboxes.first }
 
-    /// The failed request, while its thread is the one selected and on screen. Try Again sends it
-    /// for the thread on screen, so it mustn't show under another thread.
+    /// The failed request of the thread that is selected and on screen. Try Again sends it for the
+    /// thread on screen, so another thread's failure mustn't show.
     var shownActionFailure: OutreachRequestFailure? {
-        guard let actionFailure, let threadID = actionFailure.threadID,
-              threadID == selectedThreadID, threadID == selectedThread?.id else { return nil }
-        return actionFailure
+        guard let thread = selectedThread, thread.id == selectedThreadID else { return nil }
+        return actionFailures[thread.id]
     }
 
     func refresh(using client: any OutreachAPIClient) async {
@@ -203,7 +203,8 @@ final class OutreachViewModel {
     }
 
     func dismissActionFailure() {
-        actionFailure = nil
+        guard let thread = selectedThread else { return }
+        actionFailures[thread.id] = nil
     }
 
     /// Sends one request for the thread on screen. A success or a 409 reloads the list and the
@@ -216,14 +217,14 @@ final class OutreachViewModel {
     ) async {
         guard let thread = selectedThread, actionInFlight == nil else { return }
         actionInFlight = request
-        actionFailure = nil
+        actionFailures[thread.id] = nil
 
         do {
             try await operation(thread.id)
             await refresh(using: client)
         } catch {
-            let failure = OutreachRequestFailure(request: request, threadID: thread.id, error: error)
-            actionFailure = failure
+            let failure = OutreachRequestFailure(request: request, error: error)
+            actionFailures[thread.id] = failure
             if failure.isConflict {
                 await refresh(using: client)
             }
